@@ -8,7 +8,7 @@ await build({
   format: "esm",
   jsx: "transform",
   banner: { js: 'import React from "react";' },
-  external: ["react", "xlsx"],
+  external: ["react", "xlsx", "@supabase/supabase-js"],
   outfile: "dist-preview/import-planner.jsx",
 });
 console.log("built dist-preview/import-planner.jsx");

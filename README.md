@@ -14,6 +14,13 @@ Internal operations platform for Deck Kingdom Ltd. Module 1: import/shipment pla
 - `npm run build` - production build (what Vercel runs)
 - `npm run build:claude-preview` - single-file bundle for the Claude preview window
 
-## Deployment (Phase 2)
-Push to GitHub -> Vercel builds and deploys automatically. Data moves from
-browser storage to Supabase behind `src/data/storage.js`.
+## Deployment
+Push to GitHub -> Vercel builds and deploys automatically.
+
+## Data & auth (Phase 2)
+- Hosted app runs against Supabase (Postgres + logins). Schema: `supabase/migrations/`.
+- `src/data/storage.js` picks the adapter: Claude preview -> window.storage (design
+  mode), hosted -> Supabase relational adapter, otherwise localStorage.
+- Logins are created in Supabase (Authentication -> Users). Public sign-up should
+  be disabled. Roles live in `public.profiles` (admin/office/warehouse), ready for
+  row-level access rules.

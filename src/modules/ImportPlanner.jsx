@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import * as XLSX from "xlsx";
-import { storage } from "../data/storage.js";
+import { storage, storageMode } from "../data/storage.js";
+import { signOut, getSessionEmail } from "../data/auth.js";
 import {
   NAVY,
   GOLD,
@@ -660,7 +661,14 @@ export default function ImportPlanner() {
           <button onClick={() => restoreInput.current && restoreInput.current.click()} title="Restore from a backup file" style={{ ...btn, padding: "6px 10px", fontSize: 12.5, background: "transparent", color: "#8fa0c0", border: "1px dashed #33466b" }}>
             Restore
           </button>
-          {pinHash ? (
+          {storageMode === "supabase" ? (
+            <>
+              <span style={{ color: "#8fa0c0", fontSize: 12, alignSelf: "center" }}>{getSessionEmail()}</span>
+              <button onClick={() => signOut()} title="Sign out" style={{ ...btn, padding: "6px 10px", fontSize: 12.5, background: "transparent", color: "#8fa0c0", border: "1px dashed #33466b" }}>
+                Sign out
+              </button>
+            </>
+          ) : pinHash ? (
             <>
               <button onClick={() => { setPinEntry(""); setPinError(""); setLocked(true); }} title="Lock the planner now" style={{ ...btn, padding: "6px 10px", fontSize: 12.5, background: "transparent", color: "#8fa0c0", border: "1px dashed #33466b" }}>
                 Lock
