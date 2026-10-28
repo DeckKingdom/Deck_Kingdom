@@ -170,6 +170,8 @@ export default function ImportPlanner() {
     const n = blankInvoice(customerId, siteId);
     n.invNo = nextNumber(crm.invoices, "invNo", crm.numbering.invoice);
     n.raisedBy = me;
+    const cust = customerId && crm.customers.find((c) => c.id === customerId);
+    if (cust && cust.discountPct !== "" && cust.discountPct !== null) n.discountPct = cust.discountPct;
     updateCrm((c) => {
       c.invoices.unshift(n);
       c.numbering.invoice = (Number(n.invNo) || 0) + 1;

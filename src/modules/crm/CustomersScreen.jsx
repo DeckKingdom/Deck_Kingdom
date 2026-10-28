@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import { NAVY, GOLD, RED, prettyDate, prettyDateTime } from "../../lib/core.js";
 import {
   blankCustomer, blankSite, nextNumber, SOURCES,
-  invoiceTotals, gbp, isPaid, followUpDone, FOLLOWUP_FLAGS, FIELD_FORMATS,
+  invoiceTotals, gbp, isPaid, followUpDone, FOLLOWUP_FLAGS, FIELD_FORMATS, CONTACT_METHODS,
 } from "../../lib/crmCore.js";
 import { Icon, Chip, Modal, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
 
@@ -256,6 +256,7 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
                 <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 7 }}>
                   <Chip tone="navy">Account #{sel.accountNo || "—"}</Chip>
                   {sel.trader && <Chip tone="red" style={{ background: RED, color: "#fff", border: "none" }}>Trade</Chip>}
+                  {Number(sel.discountPct) > 0 && <Chip tone="gold">−{Number(sel.discountPct)}% discount</Chip>}
                   {sel.source && <Chip tone="navy">Source · {sel.source}</Chip>}
                 </div>
               </div>
@@ -283,6 +284,7 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
                 <FieldRow icon="mob" label="Mobile" value={sel.mobile} />
                 <FieldRow icon="phone" label="Landline" value={sel.landline} />
                 <FieldRow icon="mail" label="Email" value={sel.email} />
+                <FieldRow icon="share" label="Preferred contact" value={sel.contactMethod} />
                 <FieldRow icon="pin" label="Invoice address" value={[sel.address, sel.town, sel.postcode].filter(Boolean).join(", ")} />
               </div>
 
@@ -413,12 +415,27 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
             {custField("contact", "Contact name")}
             {custField("landline", "Landline")}
             {custField("mobile", "Mobile")}
-            {custField("email", "Email")}
+            {custField("email", "Email", {}, { gridColumn: "span 2" })}
             <div>
               <span style={lbl}>Source</span>
               <input style={inp} list="dk-sources" value={custDraft.source}
                 onChange={(e) => setCustDraft({ ...custDraft, source: e.target.value })}
                 onBlur={(e) => setCustDraft((d) => ({ ...d, source: FIELD_FORMATS.source(e.target.value) }))} />
+            </div>
+            <div>
+              <span style={lbl}>Preferred contact</span>
+              <select style={inp} value={custDraft.contactMethod}
+                onChange={(e) => setCustDraft({ ...custDraft, contactMethod: e.target.value })}>
+                <option value="">—</option>
+                {CONTACT_METHODS.map((m) => <option key={m} value={m}>{m}</option>)}
+              </select>
+            </div>
+            <div>
+              <span style={lbl}>Discount rate %</span>
+              <input style={{ ...inp, textAlign: "right" }} inputMode="decimal" placeholder="0"
+                title="Pulled through onto every new invoice for this customer"
+                value={custDraft.discountPct === null ? "" : custDraft.discountPct}
+                onChange={(e) => setCustDraft({ ...custDraft, discountPct: e.target.value })} />
             </div>
           </div>
           <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13.5, fontWeight: 700, margin: "14px 0" }}>

@@ -38,6 +38,13 @@ export default function run(React, renderToString) {
   assert(formatPhone("12345") === "12345", "short numbers left alone");
   assert(formatPostcode("ol6 6ug") === "OL6-6UG" && formatPostcode("bb18 6xy") === "BB18-6XY", "postcodes");
 
+  // discount pulls through the totals: 1392 goods, 5% = 69.60 off, +60 delivery = 1382.40
+  const dInv = { ...blankInvoice("c", "s"), discountPct: 5, deliveryCharge: "60" };
+  dInv.lines = [{ ...blankLine(), qty: 1, price: 1392 }];
+  const dt = invoiceTotals(dInv);
+  assert(Math.abs(dt.discount - 69.6) < 1e-9 && Math.abs(dt.total - 1382.4) < 1e-9, "discounted totals, got " + dt.discount + "/" + dt.total);
+  assert(Math.abs(dt.vat - 1382.4 / 6) < 1e-9, "VAT backed out of discounted total");
+
   const noop = () => {};
   const props = { crm, updateCrm: noop, askConfirm: noop, me: "jon@deckkingdom.co.uk", openInvoice: noop, newInvoiceFor: noop, goCustomer: noop };
 

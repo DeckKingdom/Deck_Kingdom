@@ -90,6 +90,7 @@ export function printInvoice(inv, cust, site) {
 <table><tr><th>Code</th><th>Description</th><th>Colour</th><th class="r">Qty</th><th class="r">Price inc VAT</th><th class="r">Total</th></tr>${lines}</table>
 <table class="totals">
   <tr><td>Goods (inc VAT)</td><td class="r">${gb(t.goods)}</td></tr>
+  ${t.discount > 0 ? `<tr><td>Discount (${t.discountPct}%)</td><td class="r">−${gb(t.discount)}</td></tr>` : ""}
   <tr><td>Delivery charge</td><td class="r">${gb(t.delivery)}</td></tr>
   <tr><td>of which VAT (${Number(inv.vatRate) || 20}%)</td><td class="r">${gb(t.vat)}</td></tr>
   <tr><td>Net</td><td class="r">${gb(t.net)}</td></tr>

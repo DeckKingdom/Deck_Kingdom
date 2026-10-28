@@ -257,7 +257,7 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
               <div style={{ flex: 1, minWidth: 0 }}>
                 <b style={{ fontSize: 15 }}>{cust.name}</b> <Chip>#{cust.accountNo || "—"}</Chip>
                 <div style={{ fontSize: 12, color: "#5a6a85", fontWeight: 600, marginTop: 2 }}>
-                  {[cust.mobile || cust.landline, cust.source, cust.trader ? "Trade" : ""].filter(Boolean).join(" · ")}
+                  {[cust.mobile || cust.landline, cust.contactMethod ? "prefers " + cust.contactMethod : "", cust.source, cust.trader ? "Trade" : "", Number(cust.discountPct) > 0 ? "−" + Number(cust.discountPct) + "%" : ""].filter(Boolean).join(" · ")}
                 </div>
               </div>
               <button style={abtn} title="Open account" onClick={() => goCustomer(cust.id)}><Icon name="user" /></button>
@@ -269,7 +269,7 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
               {custMatches.length > 0 && (
                 <div style={{ border: "1px solid #e6e9ef", borderRadius: 9, marginTop: 6, overflow: "hidden" }}>
                   {custMatches.map((c) => (
-                    <button key={c.id} onClick={() => { setInv((x) => { x.customerId = c.id; const fs = crm.sites.find((s) => s.customerId === c.id); x.siteId = fs ? fs.id : ""; }); setCustQuery(""); }}
+                    <button key={c.id} onClick={() => { setInv((x) => { x.customerId = c.id; const fs = crm.sites.find((s) => s.customerId === c.id); x.siteId = fs ? fs.id : ""; if (x.discountPct === "" || x.discountPct === null) x.discountPct = c.discountPct || ""; }); setCustQuery(""); }}
                       style={{ display: "block", width: "100%", textAlign: "left", background: "#fff", border: "none", borderBottom: "1px solid #f0f2f6", padding: "9px 12px", fontFamily: "inherit", fontSize: 13.5, cursor: "pointer" }}>
                       <b>{c.name || "Unnamed"}</b> <span style={{ color: "#5a6a85", fontWeight: 600 }}>#{c.accountNo || "—"} · {[c.town, c.postcode].filter(Boolean).join(" ")}</span>
                     </button>
@@ -530,6 +530,17 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
                 <span style={{ color: "#aeb9cf", fontWeight: 600 }}>{k}</span><b>{v}</b>
               </div>
             ))}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 0", borderBottom: "1px solid #ffffff1c", fontSize: 13.5 }}>
+              <span style={{ color: "#aeb9cf", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 6 }}>
+                Discount
+                <input style={{ width: 46, textAlign: "right", fontFamily: "inherit", fontSize: 12.5, fontWeight: 700, padding: "3px 6px", border: "1px solid #3a4f78", borderRadius: 6, background: "#ffffff12", color: "#fff" }}
+                  inputMode="decimal" placeholder="0" title="Set on the customer account; editable per invoice"
+                  value={inv.discountPct === null ? "" : inv.discountPct}
+                  onChange={(e) => setInv((x) => (x.discountPct = e.target.value))} />
+                <span style={{ fontSize: 11.5 }}>%</span>
+              </span>
+              <b style={{ color: t.discount > 0 ? "#f2a6b1" : "#aeb9cf" }}>{t.discount > 0 ? "−" + gbp(t.discount) : "—"}</b>
+            </div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 0", borderBottom: "1px solid #ffffff1c", fontSize: 13.5 }}>
               <span style={{ color: "#aeb9cf", fontWeight: 600 }}>Delivery charge</span>
               <input style={{ width: 92, textAlign: "right", fontFamily: "inherit", fontSize: 13.5, fontWeight: 700, padding: "5px 8px", border: "1px solid #3a4f78", borderRadius: 7, background: "#ffffff12", color: "#fff" }}

@@ -14,7 +14,7 @@ const intOrNull = (v) => {
   return isFinite(n) && v !== "" && v !== null && v !== undefined ? Math.round(n) : null;
 };
 
-const CUSTOMER_FIELDS = ["name", "address", "town", "postcode", "contact", "landline", "mobile", "email", "source", "created", "createdBy", "modifiedBy"];
+const CUSTOMER_FIELDS = ["name", "address", "town", "postcode", "contact", "landline", "mobile", "email", "source", "contactMethod", "created", "createdBy", "modifiedBy"];
 const SITE_FIELDS = ["name", "address", "town", "postcode", "contact", "landline", "mobile", "email", "notes"];
 const INV_TEXT = ["date", "orderRef", "jobType", "van", "deliveryDate", "deliveryTime", "paymentType", "paymentDate", "jobNotes", "raisedBy", "created", "siteId"];
 const FLAG_COLS = {
@@ -33,7 +33,7 @@ const FLAG_COLS = {
 const snake = (k) => k.replace(/[A-Z]/g, (m) => "_" + m.toLowerCase());
 
 const customerToRow = (c, i) => {
-  const row = { id: c.id, account_no: intOrNull(c.accountNo), trader: c.trader === true, position: i };
+  const row = { id: c.id, account_no: intOrNull(c.accountNo), trader: c.trader === true, discount_pct: num(c.discountPct), position: i };
   CUSTOMER_FIELDS.forEach((k) => (row[snake(k)] = str(c[k])));
   return row;
 };
@@ -51,6 +51,7 @@ const invToRow = (inv, i) => {
     customer_id: str(inv.customerId),
     delivery_completed: inv.deliveryCompleted === true,
     delivery_charge: num(inv.deliveryCharge),
+    discount_pct: num(inv.discountPct),
     weight_kg: num(inv.weightKg),
     vat_rate: isFinite(Number(inv.vatRate)) ? Number(inv.vatRate) : 20,
     vat_inclusive: inv.vatInclusive !== false,
@@ -184,7 +185,7 @@ async function loadAll() {
   const numbering = (settings.data && settings.data.value) || { account: 1, site: 1, invoice: 1 };
 
   const customers = cs.map((r) => {
-    const c = { id: r.id, accountNo: r.account_no, trader: r.trader === true, updatedAt: r.updated_at || "" };
+    const c = { id: r.id, accountNo: r.account_no, trader: r.trader === true, discountPct: nv(r.discount_pct), updatedAt: r.updated_at || "" };
     CUSTOMER_FIELDS.forEach((k) => (c[k] = nv(r[snake(k)])));
     return c;
   });
@@ -218,6 +219,7 @@ async function loadAll() {
       customerId: r.customer_id,
       deliveryCompleted: r.delivery_completed === true,
       deliveryCharge: nv(r.delivery_charge),
+      discountPct: nv(r.discount_pct),
       weightKg: nv(r.weight_kg),
       vatRate: Number(r.vat_rate),
       vatInclusive: r.vat_inclusive !== false,

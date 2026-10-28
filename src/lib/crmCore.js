@@ -4,6 +4,7 @@ import { uid, daysBetween, landedPerPiece } from "./core.js";
 export const JOB_TYPES = ["Delivery 1", "Delivery 2", "Collection", "Post", "Transfer"];
 export const PAYMENT_TYPES = ["COD", "Stripe", "Transfer", "Card", "Cash", "Post"];
 export const SOURCES = ["Website", "Market Place", "Repeat", "Transfer", "Word of Mouth", "Walk-in"];
+export const CONTACT_METHODS = ["Text", "WhatsApp", "WhatsApp Business", "Messenger", "Email", "Phone"];
 export const VANS = ["Van 1", "Van 2", "Van 3", "Sprinter", "Courier"];
 
 export const today = () => new Date().toISOString().slice(0, 10);
@@ -21,6 +22,8 @@ export const blankCustomer = () => ({
   email: "",
   source: "",
   trader: false,
+  discountPct: "",
+  contactMethod: "",
   created: today(),
   createdBy: "",
   modifiedBy: "",
@@ -57,6 +60,7 @@ export const blankInvoice = (customerId, siteId) => ({
   paymentType: "",
   paymentDate: "",
   deliveryCharge: "",
+  discountPct: "",
   vatRate: 20,
   vatInclusive: true,
   jobNotes: "",
@@ -204,11 +208,13 @@ export const nextNumber = (list, field, storedNext) => {
 // ===== invoice money (prices entered inc VAT; VAT backed out of the total) =====
 export const invoiceTotals = (inv) => {
   const goods = (inv.lines || []).reduce((t, l) => t + (Number(l.qty) || 0) * (Number(l.price) || 0), 0);
+  const discountPct = Number(inv.discountPct) || 0;
+  const discount = goods * (discountPct / 100);
   const delivery = Number(inv.deliveryCharge) || 0;
-  const total = goods + delivery;
+  const total = goods - discount + delivery;
   const rate = isFinite(Number(inv.vatRate)) ? Number(inv.vatRate) : 20;
   const vat = total - total / (1 + rate / 100);
-  return { goods, delivery, total, vat, net: total - vat };
+  return { goods, discountPct, discount, delivery, total, vat, net: total - vat };
 };
 
 export const gbp = (n) =>
