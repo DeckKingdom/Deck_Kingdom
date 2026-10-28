@@ -53,6 +53,42 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
 
   const sel = crm.customers.find((c) => c.id === selId) || null;
 
+  // type-ahead suggestions from existing records (helps against duplicates)
+  const SUGGEST_FIELDS = ["name", "address", "town", "postcode", "contact", "landline", "mobile", "email"];
+  const suggestions = useMemo(() => {
+    if (!custDraft) return null;
+    const out = {};
+    SUGGEST_FIELDS.forEach((k) => {
+      const seen = new Set();
+      crm.customers.forEach((c) => {
+        const v = String(c[k] || "").trim();
+        if (v) seen.add(v);
+      });
+      out[k] = [...seen].sort().slice(0, 2000);
+    });
+    return out;
+  }, [crm.customers, Boolean(custDraft)]);
+
+  // possible duplicates of what's being typed (exact name / phone digits / email)
+  const digits = (v) => String(v || "").replace(/\D/g, "");
+  const dupes = useMemo(() => {
+    if (!custDraft) return [];
+    const name = (custDraft.name || "").trim().toLowerCase();
+    const mob = digits(custDraft.mobile);
+    const land = digits(custDraft.landline);
+    const email = (custDraft.email || "").trim().toLowerCase();
+    return crm.customers
+      .filter((c) => c.id !== custDraft.id)
+      .filter((c) => {
+        if (name && (c.name || "").trim().toLowerCase() === name) return true;
+        if (mob.length > 6 && (digits(c.mobile) === mob || digits(c.landline) === mob)) return true;
+        if (land.length > 6 && (digits(c.landline) === land || digits(c.mobile) === land)) return true;
+        if (email && (c.email || "").trim().toLowerCase() === email) return true;
+        return false;
+      })
+      .slice(0, 3);
+  }, [crm.customers, custDraft]);
+
   // ===== actions =====
   const openCustDraft = (draft) => {
     setNoEdit(false);
@@ -151,6 +187,7 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
     <div style={wrapStyle}>
       <span style={lbl}>{label}</span>
       <input style={inp} value={custDraft[k] === null ? "" : custDraft[k]} {...props}
+        list={SUGGEST_FIELDS.includes(k) ? "dk-cust-" + k : undefined}
         onChange={(e) => setCustDraft({ ...custDraft, [k]: e.target.value })}
         onBlur={FIELD_FORMATS[k] ? (e) => setCustDraft((d) => ({ ...d, [k]: FIELD_FORMATS[k](e.target.value) })) : undefined} />
     </div>
@@ -400,6 +437,25 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
           }
           onClose={() => setCustDraft(null)}
         >
+          {suggestions && SUGGEST_FIELDS.map((k) => (
+            <datalist key={k} id={"dk-cust-" + k}>
+              {suggestions[k].map((v) => <option key={v} value={v} />)}
+            </datalist>
+          ))}
+          {dupes.length > 0 && (
+            <div style={{ background: "#C8102E10", border: "1px solid #ecc4cb", borderRadius: 8, padding: "8px 12px", marginBottom: 12, fontSize: 12.5, fontWeight: 600, color: "#8a0b20" }}>
+              <div style={{ marginBottom: 4 }}>Possible duplicate — same name, number or email as:</div>
+              {dupes.map((c) => (
+                <div key={c.id} style={{ display: "flex", gap: 8, alignItems: "center", padding: "3px 0", flexWrap: "wrap" }}>
+                  <b>#{c.accountNo || "—"} {c.name}</b>
+                  <span style={{ color: "#5a6a85" }}>{[c.town, c.postcode, c.mobile || c.landline].filter(Boolean).join(" · ")}</span>
+                  <button style={{ ...btn, padding: "3px 10px", fontSize: 12 }} onClick={() => { setCustDraft(null); setSelId(c.id); }}>
+                    Open that account instead
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
           {noConfirm && !noEdit && (
             <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", background: "#fff8e6", border: "1px solid #f4d78f", borderRadius: 8, padding: "8px 12px", marginBottom: 12, fontSize: 12.5, fontWeight: 600, color: "#6b5305" }}>
               <span style={{ flex: 1 }}>The account number is auto-generated and normally shouldn't be changed. Change it anyway?</span>
