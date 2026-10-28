@@ -7,7 +7,7 @@ import {
   blankCollection, blankCollectionItem, blankMovement, blankPick, nextNumber,
   skuIndex, gbp, VANS, today,
 } from "../../lib/crmCore.js";
-import { Icon, Chip, Modal, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
+import { Icon, Chip, Modal, selectAllProps, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
 import { printCollectionNote } from "./printDocs.js";
 
 const navyBtn = { ...btn, background: "transparent", border: "1px solid #3a4f78", color: "#fff" };
@@ -173,7 +173,7 @@ export default function CollectionsScreen({ crm, updateCrm, askConfirm, selId, s
   const field = (k, label, props = {}, style = {}) => (
     <div>
       <span style={lbl}>{label}</span>
-      <input style={{ ...inp, ...style }} value={coll[k] === null ? "" : coll[k]} {...props}
+      <input style={{ ...inp, ...style }} value={coll[k] === null ? "" : coll[k]} {...props} {...selectAllProps}
         onChange={(e) => setColl((t) => (t[k] = e.target.value))} />
     </div>
   );

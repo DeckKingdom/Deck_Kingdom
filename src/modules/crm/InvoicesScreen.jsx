@@ -7,7 +7,7 @@ import {
   JOB_TYPES, PAYMENT_TYPES, VANS, PREP_FLAGS, FOLLOWUP_FLAGS, today,
   skuIndex, invoiceCost, buildPicks, pickLandedCost, jobCost, blankPick,
 } from "../../lib/crmCore.js";
-import { Icon, Chip, Tg, Modal, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
+import { Icon, Chip, Tg, Modal, selectAllProps, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
 import { printInvoice, printJobSheet, printLoadingBill } from "./printDocs.js";
 
 const navyBtn = { ...btn, background: "transparent", border: "1px solid #3a4f78", color: "#fff" };
@@ -173,7 +173,7 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
   const field = (label, k, props = {}, style = {}) => (
     <div>
       <span style={lbl}>{label}</span>
-      <input style={{ ...inp, ...style }} value={inv[k] === null ? "" : inv[k]} {...props}
+      <input style={{ ...inp, ...style }} value={inv[k] === null ? "" : inv[k]} {...props} {...selectAllProps}
         onChange={(e) => setInv((x) => (x[k] = e.target.value))} />
     </div>
   );
@@ -361,19 +361,19 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
               {inv.lines.map((l) => (
                 <tr key={l.id}>
                   <td style={{ padding: "6px 6px", borderBottom: "1px solid #f0f2f6", width: 120 }}>
-                    <input style={{ ...inp, fontWeight: 700, fontSize: 12.5 }} list="dk-skus" value={l.code} onChange={(e) => setLine(l.id, "code", e.target.value)} />
+                    <input style={{ ...inp, fontWeight: 700, fontSize: 12.5 }} list="dk-skus" value={l.code} {...selectAllProps} onChange={(e) => setLine(l.id, "code", e.target.value)} />
                   </td>
                   <td style={{ padding: "6px 6px", borderBottom: "1px solid #f0f2f6", minWidth: 200 }}>
-                    <input style={inp} value={l.description} onChange={(e) => setLine(l.id, "description", e.target.value)} />
+                    <input style={inp} value={l.description} {...selectAllProps} onChange={(e) => setLine(l.id, "description", e.target.value)} />
                   </td>
                   <td style={{ padding: "6px 6px", borderBottom: "1px solid #f0f2f6", width: 130 }}>
-                    <input style={inp} value={l.colour} onChange={(e) => setLine(l.id, "colour", e.target.value)} />
+                    <input style={inp} value={l.colour} {...selectAllProps} onChange={(e) => setLine(l.id, "colour", e.target.value)} />
                   </td>
                   <td style={{ padding: "6px 6px", borderBottom: "1px solid #f0f2f6", width: 70 }}>
-                    <input style={numInp} inputMode="decimal" value={l.qty} onChange={(e) => setLine(l.id, "qty", e.target.value)} />
+                    <input style={numInp} inputMode="decimal" value={l.qty} {...selectAllProps} onChange={(e) => setLine(l.id, "qty", e.target.value)} />
                   </td>
                   <td style={{ padding: "6px 6px", borderBottom: "1px solid #f0f2f6", width: 100 }}>
-                    <input style={numInp} inputMode="decimal" value={l.price} onChange={(e) => setLine(l.id, "price", e.target.value)} />
+                    <input style={numInp} inputMode="decimal" value={l.price} {...selectAllProps} onChange={(e) => setLine(l.id, "price", e.target.value)} />
                   </td>
                   <td style={{ padding: "6px 6px", borderBottom: "1px solid #f0f2f6", textAlign: "right", fontWeight: 700, width: 90, whiteSpace: "nowrap" }}>
                     {((Number(l.qty) || 0) * (Number(l.price) || 0)).toLocaleString("en-GB", { minimumFractionDigits: 2 })}

@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import { NAVY, GOLD, RED, uid } from "../../lib/core.js";
 import { blankMasterProduct, blankComponent, allocatedBySku, gbp } from "../../lib/crmCore.js";
-import { Icon, Chip, Modal, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
+import { Icon, Chip, Modal, selectAllProps, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
 
 const numCell = { textAlign: "right", fontWeight: 700, whiteSpace: "nowrap" };
 const td = { padding: "8px 7px", borderBottom: "1px solid #f0f2f6", fontSize: 13 };
@@ -98,7 +98,7 @@ export default function MasterProductsScreen({ crm, updateCrm, askConfirm, plann
   const field = (k, label, props = {}, style = {}) => (
     <div>
       <span style={lbl}>{label}</span>
-      <input style={{ ...inp, ...style }} value={draft[k] === null ? "" : draft[k]} {...props}
+      <input style={{ ...inp, ...style }} value={draft[k] === null ? "" : draft[k]} {...props} {...selectAllProps}
         onChange={(e) => setDraft({ ...draft, [k]: e.target.value })} />
     </div>
   );

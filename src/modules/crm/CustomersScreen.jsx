@@ -6,7 +6,7 @@ import {
   blankCustomer, blankSite, nextNumber, SOURCES,
   invoiceTotals, gbp, isPaid, followUpDone, FOLLOWUP_FLAGS, FIELD_FORMATS, CONTACT_METHODS,
 } from "../../lib/crmCore.js";
-import { Icon, Chip, Modal, SuggestInput, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
+import { Icon, Chip, Modal, SuggestInput, selectAllProps, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
 
 const navyBtn = { ...btn, background: "transparent", border: "1px solid #3a4f78", color: "#fff" };
 
@@ -196,7 +196,7 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
         />
       ) : (
         <input style={inp} value={custDraft[k] === null ? "" : custDraft[k]} {...props}
-          onFocus={(e) => e.target.select()}
+          {...selectAllProps}
           onChange={(e) => setCustDraft({ ...custDraft, [k]: e.target.value })}
           onBlur={FIELD_FORMATS[k] ? (e) => setCustDraft((d) => ({ ...d, [k]: FIELD_FORMATS[k](e.target.value) })) : undefined} />
       )}
@@ -206,7 +206,7 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
     <div>
       <span style={lbl}>{label}</span>
       <input style={inp} value={siteDraft[k] === null ? "" : siteDraft[k]} {...props}
-        onFocus={(e) => e.target.select()}
+        {...selectAllProps}
         onChange={(e) => setSiteDraft({ ...siteDraft, [k]: e.target.value })}
         onBlur={FIELD_FORMATS[k] ? (e) => setSiteDraft((d) => ({ ...d, [k]: FIELD_FORMATS[k](e.target.value) })) : undefined} />
     </div>

@@ -97,6 +97,23 @@ export const goldBtn = { ...btn, background: GOLD, borderColor: GOLD };
 export const sect = { fontSize: 11.5, fontWeight: 700, color: "#8593a8", letterSpacing: 0.6, textTransform: "uppercase", margin: "0 0 10px" };
 export const lbl = { display: "block", fontSize: 11, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 4 };
 export const card = { background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, padding: "16px 18px", marginBottom: 14 };
+// Select-all on entry: clicking into a field highlights its whole contents so
+// typing replaces it. The browser re-places the caret on the mouse-up that
+// follows focus, so that first mouse-up is swallowed; a second click still
+// positions the cursor normally.
+export const selectAllProps = {
+  onFocus: (e) => {
+    e.target.select();
+    e.target.dataset.dkSel = "1";
+  },
+  onMouseUp: (e) => {
+    if (e.currentTarget.dataset.dkSel) {
+      delete e.currentTarget.dataset.dkSel;
+      e.preventDefault();
+    }
+  },
+};
+
 // FileMaker-style type-ahead: focus shows ALL stored options in a list under
 // the field (app data, not browser autofill); it reduces as you type.
 // Arrow keys highlight, Enter picks (then the modal's Enter-to-next advances),
@@ -131,7 +148,8 @@ export function SuggestInput({ value, onChange, options = [], format, inputStyle
         style={{ ...inp, ...inputStyle }}
         value={value === null || value === undefined ? "" : value}
         {...props}
-        onFocus={(e) => { e.target.select(); setOpen(true); setHi(-1); }}
+        onFocus={(e) => { selectAllProps.onFocus(e); setOpen(true); setHi(-1); }}
+        onMouseUp={selectAllProps.onMouseUp}
         onChange={(e) => { onChange(e.target.value); setOpen(true); setHi(-1); }}
         onBlur={(e) => {
           setTimeout(() => setOpen(false), 120);
