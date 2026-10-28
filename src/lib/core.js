@@ -127,6 +127,37 @@ export const stepPallets = (v, dir) => {
   return 0.25;
 };
 
+// ===== landed cost per piece (same maths as the Landed Costs tab) =====
+export const shipmentLandedBasis = (s) => {
+  let pieces = 0;
+  (s.lines || []).forEach((l) => (pieces += (Number(l.pallets) || 0) * (Number(l.qty) || 0)));
+  const depUsd = Number(s.depositUsd) || 0;
+  const depFx = Number(s.depositFx) || 0;
+  const balUsd = Number(s.balanceUsd) || 0;
+  const balFx = Number(s.balanceFx) || 0;
+  const paidGbp = (depFx > 0 ? depUsd / depFx : 0) + (balFx > 0 ? balUsd / balFx : 0);
+  const paidUsd = (depFx > 0 ? depUsd : 0) + (balFx > 0 ? balUsd : 0);
+  const fx = paidGbp > 0 ? paidUsd / paidGbp : 0;
+  return {
+    fx,
+    shipPerPc: pieces > 0 ? (Number(s.shippingGbp) || 0) / pieces : 0,
+    dutyPerPc: s.dutyOn !== false && pieces > 0 ? (Number(s.dutyGbp) || 0) / pieces : 0,
+    surchargeOn: s.surchargeOn !== false,
+  };
+};
+
+// Landed £/pc for one import product (optionally colour-matched) on one shipment.
+export const landedPerPiece = (s, productId, colour) => {
+  if (!s || !productId) return null;
+  const { fx, shipPerPc, dutyPerPc, surchargeOn } = shipmentLandedBasis(s);
+  if (fx <= 0) return null;
+  const lines = (s.lines || []).filter((l) => l.productId === productId);
+  if (!lines.length) return null;
+  const line = (colour && lines.find((l) => (l.colour || "").trim().toLowerCase() === String(colour).trim().toLowerCase())) || lines[0];
+  const gbp = (Number(line.cost) || 0) / fx;
+  return gbp + (surchargeOn ? gbp * 0.03 : 0) + dutyPerPc + shipPerPc;
+};
+
 export const money = (n) =>
   (isFinite(n) ? n : 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 export const int = (n) => (isFinite(n) ? n : 0).toLocaleString("en-US");

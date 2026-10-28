@@ -5,7 +5,7 @@ import { NAVY, GOLD, RED, uid, prettyDate, prettyDateTime } from "../../lib/core
 import {
   blankInvoice, blankLine, nextNumber, invoiceTotals, gbp, isPaid,
   JOB_TYPES, PAYMENT_TYPES, VANS, PREP_FLAGS, FOLLOWUP_FLAGS, today,
-  skuIndex, invoiceCost,
+  skuIndex, invoiceCost, buildPicks, pickLandedCost, jobCost, blankPick,
 } from "../../lib/crmCore.js";
 import { Icon, Chip, Tg, Modal, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
 import { printInvoice, printJobSheet, printLoadingBill } from "./printDocs.js";
@@ -20,7 +20,7 @@ const NoteBox = ({ children }) => (
   </div>
 );
 
-export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setSelId, goCustomer, me }) {
+export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setSelId, goCustomer, me, planner }) {
   const [search, setSearch] = useState("");
   const [custQuery, setCustQuery] = useState("");
   const [notice, setNotice] = useState("");
@@ -77,7 +77,7 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
     const site = siteById[inv.siteId];
     const ok =
       kind === "invoice" ? printInvoice(inv, cust, site)
-      : kind === "loading" ? printLoadingBill(inv, cust, site, crm)
+      : kind === "loading" ? printLoadingBill(inv, cust, site, crm, planner)
       : printJobSheet(inv, cust, site);
     if (!ok) setNotice("Printing is blocked in the design preview — it works on the live site (ops.deckkingdom.co.uk).");
   };
@@ -393,6 +393,130 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
           onClick={() => setInv((x) => x.lines.push(blankLine()))}>
           <Icon name="plus" />Add line
         </button>
+
+        {(() => {
+          const shipments = (planner && planner.shipments) || [];
+          const jc = jobCost(inv, crm, planner);
+          const setPick = (pid, k, v) =>
+            setInv((x) => {
+              const p = x.picks.find((y) => y.id === pid);
+              if (p) p[k] = v;
+            });
+          return (
+            <div style={{ background: "#f8f9fb", border: "1px solid #e6e9ef", borderRadius: 10, padding: "12px 14px", marginTop: 16 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                <p style={{ ...sect, margin: 0 }}>Loading &amp; job cost</p>
+                <span style={{ flex: 1 }} />
+                {inv.picks && inv.picks.length > 0 && (
+                  <button
+                    style={{ ...btn, padding: "6px 11px", fontSize: 12.5 }}
+                    onClick={() =>
+                      askConfirm({
+                        message: "Rebuild the pick list from the invoice lines? Batch references entered so far will be cleared.",
+                        confirmLabel: "Rebuild",
+                        danger: true,
+                        action: () => setInv((x) => (x.picks = buildPicks(x, crm))),
+                      })
+                    }
+                  >
+                    Rebuild from lines
+                  </button>
+                )}
+              </div>
+              {!inv.picks || inv.picks.length === 0 ? (
+                <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginTop: 10 }}>
+                  <span style={{ fontSize: 12.5, color: "#5a6a85", fontWeight: 600, flex: 1, minWidth: 220 }}>
+                    Build the pick list from the lines (kits pull their parts through). The warehouse then records which
+                    shipment or batch each SKU was loaded from, and the real landed cost flows into the job cost.
+                  </span>
+                  <button style={goldBtn} onClick={() => setInv((x) => (x.picks = buildPicks(x, crm)))}>
+                    <Icon name="box" stroke={NAVY} />Build pick list
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <div style={{ overflowX: "auto", marginTop: 8 }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, minWidth: 760 }}>
+                      <thead>
+                        <tr>
+                          {["SKU", "Description", "Qty", "Stock from (batch)", "Landed £/pc", "Line £", "Picked", ""].map((h, i) => (
+                            <th key={i} style={{ textAlign: i >= 2 && i <= 5 && i !== 3 ? "right" : "left", fontSize: 10.5, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", padding: "7px 6px", borderBottom: "2px solid #e6e9ef", whiteSpace: "nowrap" }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {inv.picks.map((p) => {
+                          const lc = pickLandedCost(p, crm, planner);
+                          return (
+                            <tr key={p.id}>
+                              <td style={{ padding: "6px 6px", borderBottom: "1px solid #eef0f4", fontWeight: 700, whiteSpace: "nowrap" }}>{p.sku || "—"}</td>
+                              <td style={{ padding: "6px 6px", borderBottom: "1px solid #eef0f4" }}>{p.description}{p.colour ? " · " + p.colour : ""}</td>
+                              <td style={{ padding: "6px 6px", borderBottom: "1px solid #eef0f4", width: 64 }}>
+                                <input style={{ ...numInp, padding: "4px 7px" }} inputMode="decimal" value={p.qty} onChange={(e) => setPick(p.id, "qty", e.target.value)} />
+                              </td>
+                              <td style={{ padding: "6px 6px", borderBottom: "1px solid #eef0f4", minWidth: 190 }}>
+                                <div style={{ display: "flex", gap: 5 }}>
+                                  <select style={{ ...inp, padding: "4px 7px", fontSize: 12.5 }} value={p.shipmentId} onChange={(e) => setPick(p.id, "shipmentId", e.target.value)}>
+                                    <option value="">— batch —</option>
+                                    {shipments.map((s) => (
+                                      <option key={s.id} value={s.id}>{s.name + (s.invoiceNo ? " · " + s.invoiceNo : "")}</option>
+                                    ))}
+                                  </select>
+                                  <input style={{ ...inp, padding: "4px 7px", fontSize: 12.5, width: 76 }} placeholder="or ref" title="Free-text batch ref for stock that didn't come from an import shipment" value={p.batchRef} onChange={(e) => setPick(p.id, "batchRef", e.target.value)} />
+                                </div>
+                              </td>
+                              <td style={{ padding: "6px 6px", borderBottom: "1px solid #eef0f4", textAlign: "right", whiteSpace: "nowrap" }}>
+                                {lc.perPc === null ? (
+                                  <Chip tone="red" style={{ fontSize: 10, padding: "1px 7px" }}>no cost</Chip>
+                                ) : (
+                                  <>
+                                    <b>{lc.perPc.toFixed(2)}</b>{" "}
+                                    <Chip tone={lc.source === "landed" ? "gold" : "grey"} style={{ fontSize: 10, padding: "1px 7px" }}
+                                      title={lc.source === "landed" ? "Real landed cost from the chosen shipment" : p.shipmentId ? "SKU not linked to an import product — using master cost" : "Master list cost — pick a batch for the landed figure"}>
+                                      {lc.source === "landed" ? "landed" : "master"}
+                                    </Chip>
+                                  </>
+                                )}
+                              </td>
+                              <td style={{ padding: "6px 6px", borderBottom: "1px solid #eef0f4", textAlign: "right", fontWeight: 700, whiteSpace: "nowrap" }}>
+                                {lc.perPc === null ? "—" : ((Number(p.qty) || 0) * lc.perPc).toFixed(2)}
+                              </td>
+                              <td style={{ padding: "6px 6px", borderBottom: "1px solid #eef0f4", textAlign: "center", width: 48 }}>
+                                <input type="checkbox" checked={p.picked} onChange={(e) => setPick(p.id, "picked", e.target.checked)} />
+                              </td>
+                              <td style={{ padding: "6px 2px", borderBottom: "1px solid #eef0f4", whiteSpace: "nowrap", textAlign: "right", width: 62 }}>
+                                <button style={{ ...abtn, width: 26, height: 26 }} title="Split this line across two batches"
+                                  onClick={() => setInv((x) => {
+                                    const i = x.picks.findIndex((y) => y.id === p.id);
+                                    if (i >= 0) x.picks.splice(i + 1, 0, { ...x.picks[i], ...blankPick(), sku: x.picks[i].sku, description: x.picks[i].description, colour: x.picks[i].colour, qty: "" });
+                                  })}>
+                                  <Icon name="plus" size={12} />
+                                </button>{" "}
+                                <button style={{ ...abtn, width: 26, height: 26 }} title="Remove"
+                                  onClick={() => setInv((x) => (x.picks = x.picks.filter((y) => y.id !== p.id)))}>
+                                  <Icon name="x" size={12} stroke={RED} />
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div style={{ display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap", marginTop: 10, fontSize: 12.5, fontWeight: 700 }}>
+                    <span>Actual job cost: <span style={{ background: "#fff", border: "1px solid #e6e9ef", borderRadius: 7, padding: "3px 9px" }}>{gbp(jc.total)}</span></span>
+                    <span style={{ color: t.net > 0 && jc.costed > 0 ? (t.net - jc.total > 0 ? "#28713e" : RED) : "#8593a8" }}>
+                      Margin: {t.net > 0 && jc.costed > 0 ? gbp(t.net - jc.total) + " (" + (((t.net - jc.total) / t.net) * 100).toFixed(0) + "% of net)" : "—"}
+                    </span>
+                    <span style={{ color: "#8593a8", fontWeight: 600 }}>
+                      {jc.landedLines} of {jc.of} lines at batch landed cost{jc.costed < jc.of ? " · " + (jc.of - jc.costed) + " uncosted" : ""}
+                    </span>
+                  </div>
+                </>
+              )}
+            </div>
+          );
+        })()}
 
         <div style={{ display: "flex", gap: 16, alignItems: "flex-start", flexWrap: "wrap", marginTop: 16 }}>
           <div style={{ flex: 1, minWidth: 240 }}>

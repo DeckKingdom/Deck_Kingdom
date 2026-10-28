@@ -1,5 +1,5 @@
 // CRM domain helpers: customers, sites, invoices, delivery schedule.
-import { uid, daysBetween } from "./core.js";
+import { uid, daysBetween, landedPerPiece } from "./core.js";
 
 export const JOB_TYPES = ["Delivery 1", "Delivery 2", "Collection", "Post", "Transfer"];
 export const PAYMENT_TYPES = ["COD", "Stripe", "Transfer", "Card", "Cash", "Post"];
@@ -75,6 +75,20 @@ export const blankInvoice = (customerId, siteId) => ({
     sampleFollowed: false,
   },
   lines: [],
+  picks: [],
+});
+
+// One row of the loading bill once it's being picked: which batch (shipment)
+// the stock actually came from, so real landed cost flows into the job cost.
+export const blankPick = () => ({
+  id: uid(),
+  sku: "",
+  description: "",
+  colour: "",
+  qty: "",
+  shipmentId: "",
+  batchRef: "",
+  picked: false,
 });
 
 export const blankLine = () => ({ id: uid(), code: "", description: "", colour: "", qty: "", price: "" });
@@ -133,6 +147,8 @@ export const normaliseCrm = (c) => {
     x.flags = { ...b.flags, ...(x.flags || {}) };
     x.lines = Array.isArray(x.lines) ? x.lines : [];
     x.lines.forEach((l) => Object.assign(l, { ...blankLine(), ...l, id: l.id || uid() }));
+    x.picks = Array.isArray(x.picks) ? x.picks : [];
+    x.picks.forEach((p) => Object.assign(p, { ...blankPick(), ...p, id: p.id || uid() }));
   });
   return d;
 };
@@ -277,6 +293,43 @@ export const invoiceCost = (inv, crm) => {
     }
   });
   return { cost, matched, of: (inv.lines || []).length };
+};
+
+// The pick list seeded from the invoice lines (kits already exploded).
+export const buildPicks = (inv, crm) =>
+  explodeInvoiceLines(inv, crm)
+    .filter((r) => r.kind !== "kit")
+    .map((r) => ({ ...blankPick(), sku: r.sku, description: r.description, colour: r.colour, qty: r.qty }));
+
+// Landed £/pc for one pick: the batch's real landed cost when the pick names a
+// shipment and the SKU is linked to an import product; master cost otherwise.
+export const pickLandedCost = (pick, crm, planner) => {
+  const mp = skuIndex(crm)[(pick.sku || "").trim().toLowerCase()];
+  if (mp && pick.shipmentId && planner) {
+    const s = (planner.shipments || []).find((x) => x.id === pick.shipmentId);
+    if (s && mp.importProductId) {
+      const lp = landedPerPiece(s, mp.importProductId, mp.colour);
+      if (lp !== null) return { perPc: lp, source: "landed" };
+    }
+  }
+  if (mp && mp.costGbp !== "" && mp.costGbp !== null) return { perPc: Number(mp.costGbp), source: "master" };
+  return { perPc: null, source: "none" };
+};
+
+// Actual job cost from the picked batches (landed where linked, master cost as fallback).
+export const jobCost = (inv, crm, planner) => {
+  let total = 0;
+  let costed = 0;
+  let landedLines = 0;
+  (inv.picks || []).forEach((p) => {
+    const { perPc, source } = pickLandedCost(p, crm, planner);
+    if (perPc !== null) {
+      total += (Number(p.qty) || 0) * perPc;
+      costed++;
+      if (source === "landed") landedLines++;
+    }
+  });
+  return { total, costed, landedLines, of: (inv.picks || []).length };
 };
 
 export const customerStats = (crm, customerId) => {

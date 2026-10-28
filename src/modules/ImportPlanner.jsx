@@ -766,7 +766,7 @@ export default function ImportPlanner() {
         (!crm ? (
           <div style={{ padding: 40, textAlign: "center", color: "#5a6a85", fontWeight: 600 }}>Loading master products…</div>
         ) : (
-          <MasterProductsScreen crm={crm} updateCrm={updateCrm} askConfirm={setConfirmBox} />
+          <MasterProductsScreen crm={crm} updateCrm={updateCrm} askConfirm={setConfirmBox} planner={data} />
         ))}
 
       {CRM_TABS.includes(tab) &&
@@ -798,6 +798,7 @@ export default function ImportPlanner() {
             setSelId={setSelInvoiceId}
             goCustomer={goCustomer}
             me={me}
+            planner={data}
           />
         ) : (
           <ScheduleScreen crm={crm} updateCrm={updateCrm} openInvoice={openInvoice} />

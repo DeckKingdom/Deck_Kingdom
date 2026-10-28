@@ -16,7 +16,7 @@ const marginPct = (p) => {
   return ((net - cost) / net) * 100;
 };
 
-export default function MasterProductsScreen({ crm, updateCrm, askConfirm }) {
+export default function MasterProductsScreen({ crm, updateCrm, askConfirm, planner }) {
   const [search, setSearch] = useState("");
   const [cat, setCat] = useState("");
   const [lowOnly, setLowOnly] = useState(false);
@@ -211,6 +211,15 @@ export default function MasterProductsScreen({ crm, updateCrm, askConfirm }) {
             {field("weightKg", "Weight kg / unit", { inputMode: "decimal" }, { textAlign: "right" })}
             {field("stock", "Stock on hand", { inputMode: "decimal" }, { textAlign: "right" })}
             {field("stockAlert", "Low-stock alert at", { inputMode: "decimal" }, { textAlign: "right" })}
+          </div>
+          <div style={{ marginTop: 12 }}>
+            <span style={lbl}>Linked import product — pulls real landed £/pc when a batch is picked on an invoice</span>
+            <select style={inp} value={draft.importProductId} onChange={(e) => setDraft({ ...draft, importProductId: e.target.value })}>
+              <option value="">— not linked —</option>
+              {((planner && planner.products) || []).map((p) => (
+                <option key={p.id} value={p.id}>{p.name + (p.supplier ? " · " + p.supplier : "")}</option>
+              ))}
+            </select>
           </div>
           {skuClash(draft) && (
             <div style={{ marginTop: 10, fontSize: 12.5, fontWeight: 700, color: RED }}>That SKU is already in use — each SKU must be unique.</div>

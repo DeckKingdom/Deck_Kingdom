@@ -5,7 +5,7 @@ import ScheduleScreen from "./ScheduleScreen.jsx";
 import HomeScreen from "../HomeScreen.jsx";
 import ActivityScreen from "./ActivityScreen.jsx";
 import MasterProductsScreen from "./MasterProductsScreen.jsx";
-import { emptyCrm, normaliseCrm, blankCustomer, blankSite, blankInvoice, blankLine, invoiceTotals, blankMasterProduct, explodeInvoiceLines, invoiceCost, allocatedBySku } from "../../lib/crmCore.js";
+import { emptyCrm, normaliseCrm, blankCustomer, blankSite, blankInvoice, blankLine, invoiceTotals, blankMasterProduct, explodeInvoiceLines, invoiceCost, allocatedBySku, buildPicks, pickLandedCost, jobCost } from "../../lib/crmCore.js";
 
 export default function run(React, renderToString) {
   const crm = normaliseCrm(emptyCrm());
@@ -65,6 +65,24 @@ export default function run(React, renderToString) {
   assert(Math.abs(ic.cost - 3 * (10 * 6.5 + 2 * 14)) < 0.001, "kit cost from components = 279, got " + ic.cost);
   const alloc = allocatedBySku(crm);
   assert(alloc["dk/1.8/fe/tk"] === 30 && alloc["dk/2.4/fp"] === 6, "allocation counts kit parts, got " + JSON.stringify(alloc));
+  // batch landed costing: shipment paid $3,000@1.25 + $7,000@1.4, 500 pcs, ship £500, duty £250
+  const shipment = {
+    id: "ship1", name: "Shipment 31", status: "Arrived",
+    depositUsd: 3000, depositFx: 1.25, balanceUsd: 7000, balanceFx: 1.4,
+    shippingGbp: 500, dutyGbp: 250, dutyOn: true, surchargeOn: true,
+    lines: [{ id: "sl1", productId: "ip1", colour: "Teak", pallets: 10, qty: 50, cost: 4 }],
+  };
+  const planner = { products: [{ id: "ip1", name: "1.8m Fence Board", supplier: "Veejoy" }], shipments: [shipment] };
+  board.importProductId = "ip1";
+  kitInv.picks = buildPicks(kitInv, crm);
+  assert(kitInv.picks.length === 2 && kitInv.picks[0].qty === 30, "picks built from exploded kit, got " + JSON.stringify(kitInv.picks.map((p) => [p.sku, p.qty])));
+  kitInv.picks[0].shipmentId = "ship1"; // boards from Shipment 31
+  const lc = pickLandedCost(kitInv.picks[0], crm, planner);
+  // fx = 10000/7400; £/pc = 4*0.74 = 2.96; +3% = 3.0488; +duty 0.5 +ship 1.0 = 4.5488
+  assert(lc.source === "landed" && Math.abs(lc.perPc - 4.5488) < 1e-9, "landed per pc 4.5488, got " + lc.source + " " + lc.perPc);
+  const jc = jobCost(kitInv, crm, planner);
+  // 30 boards x 4.5488 + 6 posts x master 14 = 136.464 + 84 = 220.464
+  assert(Math.abs(jc.total - 220.464) < 1e-9 && jc.landedLines === 1, "job cost 220.464 with 1 landed line, got " + jc.total + "/" + jc.landedLines);
   html = renderToString(React.createElement(MasterProductsScreen, { crm, updateCrm: noop, askConfirm: noop }));
   assert(html.includes("KIT/FENCE/TK") && html.includes("Allocated") && html.includes("KIT"), "master products table");
   console.log("smoke OK — all screens render, totals reconcile (1392 goods + 60 delivery = 1452 inc VAT, £242 VAT, £1210 net)");

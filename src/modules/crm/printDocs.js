@@ -1,7 +1,7 @@
 // Printable documents: customer invoice and warehouse/driver job sheet.
 // Opens a print window (browser's Save as PDF gives the PDF). Returns false
 // when the window can't be opened (e.g. inside the design preview sandbox).
-import { invoiceTotals, explodeInvoiceLines } from "../../lib/crmCore.js";
+import { invoiceTotals, explodeInvoiceLines, skuIndex } from "../../lib/crmCore.js";
 
 const esc = (s) =>
   String(s === null || s === undefined ? "" : s)
@@ -101,17 +101,41 @@ export function printInvoice(inv, cust, site) {
 }
 
 // Warehouse picking list: kit lines pull their component SKUs through.
-export function printLoadingBill(inv, cust, site, crm) {
-  const rows = explodeInvoiceLines(inv, crm);
+// Once the pick list has been built on the invoice (with batch refs), the
+// bill prints from it, including the batch each SKU was loaded from.
+export function printLoadingBill(inv, cust, site, crm, planner) {
+  const bySku = skuIndex(crm);
+  const shipName = (id) => {
+    const s = planner && (planner.shipments || []).find((x) => x.id === id);
+    return s ? s.name : "";
+  };
+  const hasPicks = inv.picks && inv.picks.length > 0;
+  const rows = hasPicks
+    ? inv.picks.map((p) => {
+        const mp = bySku[(p.sku || "").trim().toLowerCase()];
+        const q = Number(p.qty) || 0;
+        return {
+          kind: "line", sku: p.sku, description: p.description, colour: p.colour, qty: p.qty,
+          weightKg: mp && mp.weightKg !== "" && mp.weightKg !== null ? q * Number(mp.weightKg) : null,
+          batch: shipName(p.shipmentId) || p.batchRef || "",
+          picked: p.picked === true,
+        };
+      })
+    : explodeInvoiceLines(inv, crm);
   let totalKg = 0;
   let anyKg = false;
+  const batchCol = hasPicks;
   const body_rows = rows.map((r) => {
     if (r.kind === "kit")
-      return `<tr style="background:#f3f5f8"><td></td><td colspan="2"><b>${esc(r.sku)} — ${esc(r.description)}</b>${r.colour ? " · " + esc(r.colour) : ""} <span style="color:#8593a8">(kit × ${esc(r.qty)} — load the parts below)</span></td><td></td><td class="r big">${esc(r.qty)}</td></tr>`;
+      return `<tr style="background:#f3f5f8"><td></td><td colspan="${batchCol ? 3 : 2}"><b>${esc(r.sku)} — ${esc(r.description)}</b>${r.colour ? " · " + esc(r.colour) : ""} <span style="color:#8593a8">(kit × ${esc(r.qty)} — load the parts below)</span></td><td></td><td class="r big">${esc(r.qty)}</td></tr>`;
     if (r.weightKg !== null) { totalKg += r.weightKg; anyKg = true; }
     const indent = r.kind === "part" ? 'style="padding-left:26px"' : "";
-    return `<tr><td style="width:26px"><div style="width:16px;height:16px;border:2px solid #0B1F3F;border-radius:4px"></div></td>
+    const box = r.picked
+      ? '<div style="width:16px;height:16px;border:2px solid #0B1F3F;border-radius:4px;background:#0B1F3F;color:#F4B73E;font-size:12px;line-height:14px;text-align:center">✓</div>'
+      : '<div style="width:16px;height:16px;border:2px solid #0B1F3F;border-radius:4px"></div>';
+    return `<tr><td style="width:26px">${box}</td>
       <td ${indent}><b>${esc(r.sku)}</b></td><td>${esc(r.description)}${r.colour ? " · " + esc(r.colour) : ""}</td>
+      ${batchCol ? `<td><b>${esc(r.batch || "")}</b></td>` : ""}
       <td class="r">${r.weightKg !== null ? r.weightKg.toFixed(1) + " kg" : ""}</td><td class="r big">${esc(r.qty)}</td></tr>`;
   }).join("");
 
@@ -124,7 +148,7 @@ export function printLoadingBill(inv, cust, site, crm) {
 </div>
 ${site && site.notes ? `<div class="note">📍 ${esc(site.notes)}</div>` : ""}
 ${inv.jobNotes ? `<div class="note">📝 ${esc(inv.jobNotes)}</div>` : ""}
-<table><tr><th></th><th>SKU</th><th>Description</th><th class="r">Weight</th><th class="r">Qty to load</th></tr>${body_rows}</table>
+<table><tr><th></th><th>SKU</th><th>Description</th>${batchCol ? "<th>Batch / shipment</th>" : ""}<th class="r">Weight</th><th class="r">Qty to load</th></tr>${body_rows}</table>
 <div class="grid" style="margin-top:30px">
   <div class="blk"><h3>Picked by</h3><div style="border-bottom:1px solid #0B1F3F;height:34px"></div></div>
   <div class="blk"><h3>Checked by</h3><div style="border-bottom:1px solid #0B1F3F;height:34px"></div></div>

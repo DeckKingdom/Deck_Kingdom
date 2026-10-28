@@ -87,6 +87,19 @@ const lineToRow = (l, invoiceId, i) => ({
   position: i,
 });
 
+const pickToRow = (p, invoiceId, i) => ({
+  id: p.id,
+  invoice_id: invoiceId,
+  sku: str(p.sku),
+  description: str(p.description),
+  colour: str(p.colour),
+  qty: Number(p.qty) || 0,
+  shipment_id: str(p.shipmentId),
+  batch_ref: str(p.batchRef),
+  picked: p.picked === true,
+  position: i,
+});
+
 function rowsFromData(d) {
   const customers = new Map();
   const sites = new Map();
@@ -96,15 +109,17 @@ function rowsFromData(d) {
   const comps = new Map();
   (d.customers || []).forEach((c, i) => customers.set(c.id, customerToRow(c, i)));
   (d.sites || []).forEach((s, i) => sites.set(s.id, siteToRow(s, i)));
+  const picks = new Map();
   (d.invoices || []).forEach((inv, i) => {
     invoices.set(inv.id, invToRow(inv, i));
     (inv.lines || []).forEach((l, j) => items.set(l.id, lineToRow(l, inv.id, j)));
+    (inv.picks || []).forEach((p, j) => picks.set(p.id, pickToRow(p, inv.id, j)));
   });
   (d.masterProducts || []).forEach((p, i) => {
     mps.set(p.id, mpToRow(p, i));
     (p.components || []).forEach((c, j) => comps.set(c.id, compToRow(c, p.id, j)));
   });
-  return { customers, sites, invoices, items, mps, comps };
+  return { customers, sites, invoices, items, picks, mps, comps };
 }
 
 async function fetchAll(sb, table) {
@@ -124,11 +139,12 @@ let numberingSnapshot = null;
 
 async function loadAll() {
   const sb = await getSupabase();
-  const [cs, ss, is_, ls, mps_, comps_, settings] = await Promise.all([
+  const [cs, ss, is_, ls, ps_, mps_, comps_, settings] = await Promise.all([
     fetchAll(sb, "customers"),
     fetchAll(sb, "customer_sites"),
     fetchAll(sb, "invoices"),
     fetchAll(sb, "invoice_items"),
+    fetchAll(sb, "invoice_picks"),
     fetchAll(sb, "master_products"),
     fetchAll(sb, "product_components"),
     sb.from("crm_settings").select("*").eq("key", "numbering").maybeSingle(),
@@ -149,6 +165,14 @@ async function loadAll() {
     };
     SITE_FIELDS.forEach((k) => (s[k] = nv(r[k])));
     return s;
+  });
+  const picksByInv = {};
+  ps_.forEach((r) => {
+    (picksByInv[r.invoice_id] = picksByInv[r.invoice_id] || []).push({
+      id: r.id, sku: r.sku, description: r.description, colour: r.colour,
+      qty: nv(r.qty) === "" ? "" : Number(r.qty),
+      shipmentId: nv(r.shipment_id), batchRef: nv(r.batch_ref), picked: r.picked === true,
+    });
   });
   const linesByInv = {};
   ls.forEach((r) => {
@@ -172,6 +196,7 @@ async function loadAll() {
       updatedAt: r.updated_at || "",
       flags: {},
       lines: linesByInv[r.id] || [],
+      picks: picksByInv[r.id] || [],
     };
     INV_TEXT.forEach((k) => (inv[k] = nv(r[snake(k)])));
     Object.entries(FLAG_COLS).forEach(([k, col]) => (inv.flags[k] = r[col] === true));
@@ -220,6 +245,7 @@ async function saveAll(d) {
   const ds = diff(prev.sites, next.sites);
   const di = diff(prev.invoices, next.invoices);
   const dl = diff(prev.items, next.items);
+  const dp = diff(prev.picks || new Map(), next.picks);
   const dm = diff(prev.mps, next.mps);
   const dk = diff(prev.comps, next.comps);
 
@@ -230,6 +256,7 @@ async function saveAll(d) {
 
   // children first on delete, parents first on upsert
   if (dl.deletes.length) await run(sb.from("invoice_items").delete().in("id", dl.deletes));
+  if (dp.deletes.length) await run(sb.from("invoice_picks").delete().in("id", dp.deletes));
   if (di.deletes.length) await run(sb.from("invoices").delete().in("id", di.deletes));
   if (ds.deletes.length) await run(sb.from("customer_sites").delete().in("id", ds.deletes));
   if (dc.deletes.length) await run(sb.from("customers").delete().in("id", dc.deletes));
@@ -239,6 +266,7 @@ async function saveAll(d) {
   if (ds.upserts.length) await run(sb.from("customer_sites").upsert(ds.upserts));
   if (di.upserts.length) await run(sb.from("invoices").upsert(di.upserts));
   if (dl.upserts.length) await run(sb.from("invoice_items").upsert(dl.upserts));
+  if (dp.upserts.length) await run(sb.from("invoice_picks").upsert(dp.upserts));
   if (dm.upserts.length) await run(sb.from("master_products").upsert(dm.upserts));
   if (dk.upserts.length) await run(sb.from("product_components").upsert(dk.upserts));
 
