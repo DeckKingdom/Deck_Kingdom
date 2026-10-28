@@ -22,6 +22,13 @@ import {
   money,
   int,
 } from "../lib/core.js";
+import { blankInvoice, nextNumber } from "../lib/crmCore.js";
+import { useCrm } from "./crm/useCrm.js";
+import CustomersScreen from "./crm/CustomersScreen.jsx";
+import InvoicesScreen from "./crm/InvoicesScreen.jsx";
+import ScheduleScreen from "./crm/ScheduleScreen.jsx";
+
+const CRM_TABS = ["customers", "invoices", "schedule"];
 
 export default function ImportPlanner() {
   const [data, setData] = useState(null);
@@ -122,6 +129,40 @@ export default function ImportPlanner() {
   useEffect(() => {
     loadData();
   }, []);
+
+  // ===== CRM module (customers / invoices / schedule) =====
+  const [crmOn, setCrmOn] = useState(false);
+  const { crm, updateCrm, replaceCrm, crmError, loadCrm, crmSave } = useCrm(crmOn);
+  const [selCustomerId, setSelCustomerId] = useState(null);
+  const [selInvoiceId, setSelInvoiceId] = useState(null);
+
+  useEffect(() => {
+    if (CRM_TABS.includes(tab)) setCrmOn(true);
+  }, [tab]);
+
+  const me = storageMode === "supabase" ? getSessionEmail() || "" : "";
+
+  const openInvoice = (id) => {
+    setSelInvoiceId(id);
+    setTab("invoices");
+  };
+  const goCustomer = (id) => {
+    setSelCustomerId(id);
+    setTab("customers");
+  };
+  const newInvoiceFor = (customerId, siteId) => {
+    if (!crm) return;
+    const n = blankInvoice(customerId, siteId);
+    n.invNo = nextNumber(crm.invoices, "invNo", crm.numbering.invoice);
+    n.raisedBy = me;
+    updateCrm((c) => {
+      c.invoices.unshift(n);
+      c.numbering.invoice = (Number(n.invNo) || 0) + 1;
+      return c;
+    });
+    setSelInvoiceId(n.id);
+    setTab("invoices");
+  };
 
   useEffect(() => {
     if (!loaded.current || !data || !dirty.current) return;
@@ -487,8 +528,8 @@ export default function ImportPlanner() {
     setCopied(false);
     setCopyPanel({
       title: "Backup your data",
-      note: "Copy this text and keep it somewhere safe — your notes, an email to yourself, or paste it into the Claude chat. To restore, save it as a .json file and use the Restore button (or paste it to Claude, who can turn it into a restore file for you).",
-      text: JSON.stringify(data, null, 2),
+      note: "Copy this text and keep it somewhere safe — your notes, an email to yourself, or paste it into the Claude chat. To restore, save it as a .json file and use the Restore button (or paste it to Claude, who can turn it into a restore file for you)." + (crm ? " Includes the planner and the customer/invoice data." : " Open the Customers tab first if you also want customers and invoices included."),
+      text: JSON.stringify(crm ? { ...data, crm } : data, null, 2),
       download: null,
     });
   };
@@ -517,15 +558,27 @@ export default function ImportPlanner() {
     reader.onload = () => {
       try {
         const d = JSON.parse(reader.result);
-        if (!d || !Array.isArray(d.products) || !Array.isArray(d.shipments)) throw new Error("invalid");
+        const hasPlanner = d && Array.isArray(d.products) && Array.isArray(d.shipments);
+        const hasCrm = d && d.crm && typeof d.crm === "object";
+        if (!hasPlanner && !hasCrm) throw new Error("invalid");
+        const parts = [];
+        if (hasPlanner) parts.push(d.products.length + " products, " + d.shipments.length + " shipments");
+        if (hasCrm) parts.push((d.crm.customers || []).length + " customers, " + (d.crm.invoices || []).length + " invoices");
         setConfirmBox({
-          message: "Replace the current planner data with this backup? (" + d.products.length + " products, " + d.shipments.length + " shipments)",
+          message: "Replace the current data with this backup? (" + parts.join(" · ") + ")",
           confirmLabel: "Restore",
           danger: false,
           action: () => {
-            dirty.current = true;
-            setData(d);
-            setActiveId(d.shipments[0] ? d.shipments[0].id : null);
+            if (hasPlanner) {
+              dirty.current = true;
+              const { crm: _c, ...plannerOnly } = d;
+              setData(plannerOnly);
+              setActiveId(d.shipments[0] ? d.shipments[0].id : null);
+            }
+            if (hasCrm) {
+              setCrmOn(true);
+              replaceCrm(d.crm);
+            }
           },
         });
       } catch (e) {
@@ -625,10 +678,25 @@ export default function ImportPlanner() {
         </div>
         <div style={{ flex: 1, minWidth: 180 }}>
           <div style={{ color: "#fff", fontWeight: 700, fontSize: 17, lineHeight: 1.2 }}>Deck Kingdom</div>
-          <div style={{ color: GOLD, fontSize: 13, fontWeight: 600 }}>Import planner</div>
+          <div style={{ color: GOLD, fontSize: 13, fontWeight: 600 }}>Ops</div>
         </div>
         <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
           {[["overview", "Overview"], ["shipments", "Shipments"], ["landed", "Landed Costs"], ["completion", "Completion"]].map(([t, label]) => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              style={{
+                ...btn,
+                background: tab === t ? GOLD : "transparent",
+                color: tab === t ? NAVY : "#cfd6e4",
+                border: "1px solid " + (tab === t ? GOLD : "#33466b"),
+              }}
+            >
+              {label}
+            </button>
+          ))}
+          <div style={{ width: 1, alignSelf: "stretch", background: "#33466b", margin: "2px 6px" }} />
+          {[["customers", "Customers"], ["invoices", "Invoices"], ["schedule", "Schedule"]].map(([t, label]) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -693,8 +761,42 @@ export default function ImportPlanner() {
             }}
           />
         </div>
-        <span style={{ color: "#8fa0c0", fontSize: 12, minWidth: 48, textAlign: "right" }}>{saveState}</span>
+        <span style={{ color: "#8fa0c0", fontSize: 12, minWidth: 48, textAlign: "right" }}>{CRM_TABS.includes(tab) ? crmSave : saveState}</span>
       </div>
+
+      {CRM_TABS.includes(tab) &&
+        (crmError ? (
+          <div style={{ padding: 40, textAlign: "center" }}>
+            <p style={{ fontWeight: 700, fontSize: 17, marginBottom: 8 }}>Couldn't load the customer data</p>
+            <p style={{ fontSize: 14, color: "#5a6a85", marginBottom: 16 }}>Nothing has been changed or overwritten. This is usually temporary — try again.</p>
+            <button onClick={loadCrm} style={{ ...btn, background: GOLD, borderColor: GOLD }}>Retry</button>
+          </div>
+        ) : !crm ? (
+          <div style={{ padding: 40, textAlign: "center", color: "#5a6a85", fontWeight: 600 }}>Loading customers…</div>
+        ) : tab === "customers" ? (
+          <CustomersScreen
+            crm={crm}
+            updateCrm={updateCrm}
+            askConfirm={setConfirmBox}
+            selId={selCustomerId}
+            setSelId={setSelCustomerId}
+            openInvoice={openInvoice}
+            newInvoiceFor={newInvoiceFor}
+            me={me}
+          />
+        ) : tab === "invoices" ? (
+          <InvoicesScreen
+            crm={crm}
+            updateCrm={updateCrm}
+            askConfirm={setConfirmBox}
+            selId={selInvoiceId}
+            setSelId={setSelInvoiceId}
+            goCustomer={goCustomer}
+            me={me}
+          />
+        ) : (
+          <ScheduleScreen crm={crm} updateCrm={updateCrm} openInvoice={openInvoice} />
+        ))}
 
       {tab === "overview" && (
         <div style={{ padding: "18px 22px", maxWidth: 1100, margin: "0 auto" }}>
