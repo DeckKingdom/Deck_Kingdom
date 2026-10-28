@@ -1,10 +1,20 @@
 // Collapsible side navigation: grouped links to every layout, with the
-// account / backup actions in the footer. Collapsed, it shows icons only.
+// account / backup actions in the footer. The whole bar collapses to an
+// icon rail, and each section can be shut or expanded on its own.
+import { useState, useEffect } from "react";
 import { NAVY, GOLD } from "../lib/core.js";
 import { Icon } from "./crm/ui.jsx";
 
 export const NAV_SECTIONS = [
   { title: "", items: [["home", "Home", "home"]] },
+  {
+    title: "Sales",
+    items: [
+      ["customers", "Customers", "users"],
+      ["invoices", "Invoices", "doc"],
+      ["schedule", "Schedule", "cal"],
+    ],
+  },
   {
     title: "Imports",
     items: [
@@ -14,14 +24,6 @@ export const NAV_SECTIONS = [
       ["completion", "Completion", "flag"],
     ],
   },
-  {
-    title: "Sales",
-    items: [
-      ["customers", "Customers", "users"],
-      ["invoices", "Invoices", "doc"],
-      ["schedule", "Schedule", "cal"],
-    ],
-  },
   { title: "Catalogue", items: [["products", "Products", "box"]] },
   { title: "System", items: [["activity", "Activity", "clock"]] },
 ];
@@ -29,6 +31,14 @@ export const NAV_SECTIONS = [
 export const TAB_LABELS = Object.fromEntries(NAV_SECTIONS.flatMap((s) => s.items.map(([t, l]) => [t, l])));
 
 export default function Sidebar({ tab, setTab, open, footer }) {
+  const [shut, setShut] = useState({});
+
+  // never leave the active screen hidden inside a shut section
+  useEffect(() => {
+    const sec = NAV_SECTIONS.find((s) => s.title && s.items.some(([t]) => t === tab));
+    if (sec && shut[sec.title]) setShut((x) => ({ ...x, [sec.title]: false }));
+  }, [tab]);
+
   return (
     <aside
       className="no-print"
@@ -65,11 +75,23 @@ export default function Sidebar({ tab, setTab, open, footer }) {
           <div key={si} style={{ marginBottom: 6 }}>
             {sec.title &&
               (open ? (
-                <div style={{ fontSize: 10, fontWeight: 700, color: "#5f729a", letterSpacing: 1, textTransform: "uppercase", padding: "10px 10px 5px" }}>{sec.title}</div>
+                <button
+                  onClick={() => setShut((x) => ({ ...x, [sec.title]: !x[sec.title] }))}
+                  title={shut[sec.title] ? "Expand " + sec.title : "Collapse " + sec.title}
+                  style={{ display: "flex", alignItems: "center", gap: 6, width: "100%", background: "transparent", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 10, fontWeight: 700, color: "#5f729a", letterSpacing: 1, textTransform: "uppercase", padding: "10px 10px 5px" }}
+                >
+                  <span style={{ display: "inline-flex", transform: shut[sec.title] ? "none" : "rotate(90deg)", transition: "transform .15s ease" }}>
+                    <Icon name="chevright" size={11} stroke="#5f729a" width={3} />
+                  </span>
+                  {sec.title}
+                  {shut[sec.title] && sec.items.some(([t]) => t === tab) && (
+                    <span style={{ width: 6, height: 6, borderRadius: 99, background: GOLD, marginLeft: "auto" }} />
+                  )}
+                </button>
               ) : (
                 <div style={{ height: 1, background: "#24375f", margin: "9px 6px" }} />
               ))}
-            {sec.items.map(([t, label, icon]) => {
+            {open && sec.title && shut[sec.title] ? null : sec.items.map(([t, label, icon]) => {
               const on = tab === t;
               return (
                 <button
