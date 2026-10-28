@@ -1,0 +1,108 @@
+// Collapsible side navigation: grouped links to every layout, with the
+// account / backup actions in the footer. Collapsed, it shows icons only.
+import { NAVY, GOLD } from "../lib/core.js";
+import { Icon } from "./crm/ui.jsx";
+
+export const NAV_SECTIONS = [
+  { title: "", items: [["home", "Home", "home"]] },
+  {
+    title: "Imports",
+    items: [
+      ["overview", "Overview", "grid"],
+      ["shipments", "Shipments", "ship"],
+      ["landed", "Landed Costs", "pound"],
+      ["completion", "Completion", "flag"],
+    ],
+  },
+  {
+    title: "Sales",
+    items: [
+      ["customers", "Customers", "users"],
+      ["invoices", "Invoices", "doc"],
+      ["schedule", "Schedule", "cal"],
+    ],
+  },
+  { title: "Catalogue", items: [["products", "Products", "box"]] },
+];
+
+export const TAB_LABELS = Object.fromEntries(NAV_SECTIONS.flatMap((s) => s.items.map(([t, l]) => [t, l])));
+
+export default function Sidebar({ tab, setTab, open, footer }) {
+  return (
+    <aside
+      className="no-print"
+      style={{
+        width: open ? 218 : 62,
+        flex: "none",
+        background: NAVY,
+        position: "sticky",
+        top: 0,
+        height: "100vh",
+        overflowY: "auto",
+        overflowX: "hidden",
+        display: "flex",
+        flexDirection: "column",
+        transition: "width .18s ease",
+        boxShadow: "2px 0 8px rgba(11,31,63,0.25)",
+        zIndex: 26,
+      }}
+    >
+      <div style={{ padding: open ? "16px 14px 10px" : "16px 10px 10px", display: "flex", alignItems: "center", gap: 10, justifyContent: open ? "flex-start" : "center" }}>
+        <div style={{ width: 36, height: 36, borderRadius: 9, background: GOLD, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, color: NAVY, fontSize: 17, flex: "none" }}>
+          DK
+        </div>
+        {open && (
+          <div style={{ minWidth: 0 }}>
+            <div style={{ color: "#fff", fontWeight: 700, fontSize: 15.5, lineHeight: 1.15, whiteSpace: "nowrap" }}>Deck Kingdom</div>
+            <div style={{ color: GOLD, fontSize: 12, fontWeight: 700 }}>Ops</div>
+          </div>
+        )}
+      </div>
+
+      <nav style={{ padding: "4px 10px", flex: 1 }}>
+        {NAV_SECTIONS.map((sec, si) => (
+          <div key={si} style={{ marginBottom: 6 }}>
+            {sec.title &&
+              (open ? (
+                <div style={{ fontSize: 10, fontWeight: 700, color: "#5f729a", letterSpacing: 1, textTransform: "uppercase", padding: "10px 10px 5px" }}>{sec.title}</div>
+              ) : (
+                <div style={{ height: 1, background: "#24375f", margin: "9px 6px" }} />
+              ))}
+            {sec.items.map(([t, label, icon]) => {
+              const on = tab === t;
+              return (
+                <button
+                  key={t}
+                  onClick={() => setTab(t)}
+                  title={label}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 11,
+                    width: "100%",
+                    padding: open ? "9px 11px" : "9px 0",
+                    justifyContent: open ? "flex-start" : "center",
+                    borderRadius: 9,
+                    border: "none",
+                    cursor: "pointer",
+                    fontFamily: "inherit",
+                    fontSize: 13.5,
+                    fontWeight: 700,
+                    background: on ? GOLD : "transparent",
+                    color: on ? NAVY : "#cfd6e4",
+                    marginBottom: 2,
+                  }}
+                >
+                  <Icon name={icon} size={17} stroke={on ? NAVY : "#8fa0c0"} />
+                  {open && <span style={{ whiteSpace: "nowrap" }}>{label}</span>}
+                </button>
+              );
+            })}
+          </div>
+        ))}
+      </nav>
+
+      <div style={{ padding: "10px 10px 14px", borderTop: "1px solid #24375f" }}>{footer(open)}</div>
+    </aside>
+  );
+}

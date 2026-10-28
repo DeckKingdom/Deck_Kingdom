@@ -25,6 +25,16 @@ const PATHS = {
   bin: <path d="M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14M10 11v6M14 11v6" />,
   gear: <><circle cx="12" cy="12" r="3" /><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.5 4.5l2 2M17.5 17.5l2 2M19.5 4.5l-2 2M6.5 17.5l-2 2" /></>,
   x: <path d="M6 6l12 12M18 6L6 18" />,
+  home: <path d="M3 11l9-8 9 8M5 9.5V21h14V9.5M9.5 21v-6h5v6" />,
+  grid: <><rect x="3" y="3" width="7.5" height="7.5" rx="1.5" /><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5" /><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5" /><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5" /></>,
+  ship: <><path d="M3 15h18l-2.5 5h-13z" /><path d="M6 15v-5h12v5M12 10V5M12 5h4.5L12 8.5" /></>,
+  pound: <><circle cx="12" cy="12" r="9" /><path d="M9 16.5h6.5M9.5 16.5c1.2-1.6 1.3-5.2.6-6.8a2.6 2.6 0 015-1M8.5 12.5h5" /></>,
+  flag: <path d="M5 21V4M5 4h13l-2.5 4L18 12H5" />,
+  users: <><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20c0-3.5 3-5.5 6.5-5.5s6.5 2 6.5 5.5" /><circle cx="17.5" cy="9" r="2.6" /><path d="M17 14.6c2.6.5 4.5 2.3 4.5 5.4" /></>,
+  menu: <path d="M4 7h16M4 12h16M4 17h16" />,
+  chevleft: <path d="M14.5 6l-6 6 6 6" />,
+  lock: <><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V8a4 4 0 018 0v3" /></>,
+  logout: <path d="M9 21H4V3h5M15 16l4-4-4-4M19 12H9" />,
 };
 
 export const Icon = ({ name, size = 15, stroke = "#5a6a85", width = 2 }) => (

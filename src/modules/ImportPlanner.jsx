@@ -27,13 +27,17 @@ import { useCrm } from "./crm/useCrm.js";
 import CustomersScreen from "./crm/CustomersScreen.jsx";
 import InvoicesScreen from "./crm/InvoicesScreen.jsx";
 import ScheduleScreen from "./crm/ScheduleScreen.jsx";
+import Sidebar, { TAB_LABELS } from "./Sidebar.jsx";
+import HomeScreen from "./HomeScreen.jsx";
+import { Icon } from "./crm/ui.jsx";
 
 const CRM_TABS = ["customers", "invoices", "schedule"];
 
 export default function ImportPlanner() {
   const [data, setData] = useState(null);
   const [activeId, setActiveId] = useState(null);
-  const [tab, setTab] = useState("shipments");
+  const [tab, setTab] = useState("home");
+  const [sideOpen, setSideOpen] = useState(() => (typeof window === "undefined" ? true : window.innerWidth >= 950));
   const [saveState, setSaveState] = useState("");
   const [pop, setPop] = useState(null);
   const [loadError, setLoadError] = useState(false);
@@ -137,7 +141,7 @@ export default function ImportPlanner() {
   const [selInvoiceId, setSelInvoiceId] = useState(null);
 
   useEffect(() => {
-    if (CRM_TABS.includes(tab)) setCrmOn(true);
+    if (CRM_TABS.includes(tab) || tab === "home") setCrmOn(true);
   }, [tab]);
 
   const me = storageMode === "supabase" ? getSessionEmail() || "" : "";
@@ -623,6 +627,53 @@ export default function ImportPlanner() {
     }
   };
 
+  const footBtnStyle = (open) => ({
+    display: "flex", alignItems: "center", gap: 9, width: "100%",
+    justifyContent: open ? "flex-start" : "center", padding: open ? "8px 11px" : "8px 0",
+    borderRadius: 8, border: "none", background: "transparent", color: "#8fa0c0",
+    fontFamily: "inherit", fontSize: 12.5, fontWeight: 700, cursor: "pointer",
+  });
+
+  const sideFooter = (open) => (
+    <div>
+      {storageMode === "supabase" && open && (
+        <div style={{ color: "#5f729a", fontSize: 11, fontWeight: 700, padding: "0 11px 6px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={getSessionEmail() || ""}>
+          {getSessionEmail()}
+        </div>
+      )}
+      <button onClick={backupJson} title="Copy or download all data as a backup" style={footBtnStyle(open)}>
+        <Icon name="doc" size={15} stroke="#8fa0c0" />
+        {open && "Backup"}
+      </button>
+      <button onClick={() => restoreInput.current && restoreInput.current.click()} title="Restore from a backup file" style={footBtnStyle(open)}>
+        <Icon name="note" size={15} stroke="#8fa0c0" />
+        {open && "Restore"}
+      </button>
+      {storageMode === "supabase" ? (
+        <button onClick={() => signOut()} title="Sign out" style={footBtnStyle(open)}>
+          <Icon name="logout" size={15} stroke="#8fa0c0" />
+          {open && "Sign out"}
+        </button>
+      ) : pinHash ? (
+        <>
+          <button onClick={() => { setPinEntry(""); setPinError(""); setLocked(true); }} title="Lock the app now" style={footBtnStyle(open)}>
+            <Icon name="lock" size={15} stroke="#8fa0c0" />
+            {open && "Lock"}
+          </button>
+          <button onClick={() => { setPinError(""); setPinPanel(true); }} title="Change or remove the PIN" style={footBtnStyle(open)}>
+            <Icon name="gear" size={15} stroke="#8fa0c0" />
+            {open && "PIN"}
+          </button>
+        </>
+      ) : (
+        <button onClick={() => { setPinError(""); setPinPanel(true); }} title="Protect the app with a PIN" style={footBtnStyle(open)}>
+          <Icon name="lock" size={15} stroke="#8fa0c0" />
+          {open && "Set PIN"}
+        </button>
+      )}
+    </div>
+  );
+
   const inp = {
     fontFamily: "inherit",
     fontSize: 14,
@@ -672,97 +723,39 @@ export default function ImportPlanner() {
           input[type="date"]::-webkit-calendar-picker-indicator { display: none; }
         }`}</style>
 
-      <div ref={headerRef} className="no-print" style={{ background: NAVY, padding: "16px 22px", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", position: "sticky", top: 0, zIndex: 25, boxShadow: "0 2px 8px rgba(11,31,63,0.25)" }}>
-        <div style={{ width: 34, height: 34, borderRadius: 8, background: GOLD, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, color: NAVY, fontSize: 17 }}>
-          DK
-        </div>
-        <div style={{ flex: 1, minWidth: 180 }}>
-          <div style={{ color: "#fff", fontWeight: 700, fontSize: 17, lineHeight: 1.2 }}>Deck Kingdom</div>
-          <div style={{ color: GOLD, fontSize: 13, fontWeight: 600 }}>Ops</div>
-        </div>
-        <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-          {[["overview", "Overview"], ["shipments", "Shipments"], ["landed", "Landed Costs"], ["completion", "Completion"]].map(([t, label]) => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              style={{
-                ...btn,
-                background: tab === t ? GOLD : "transparent",
-                color: tab === t ? NAVY : "#cfd6e4",
-                border: "1px solid " + (tab === t ? GOLD : "#33466b"),
-              }}
-            >
-              {label}
+      <div style={{ display: "flex", alignItems: "stretch" }}>
+      <Sidebar tab={tab} setTab={setTab} open={sideOpen} footer={sideFooter} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+
+      <div ref={headerRef} className="no-print" style={{ background: NAVY, padding: "10px 16px", display: "flex", alignItems: "center", gap: 10, position: "sticky", top: 0, zIndex: 25, boxShadow: "0 2px 8px rgba(11,31,63,0.25)" }}>
+        <button onClick={() => setSideOpen((o) => !o)} title={sideOpen ? "Collapse the menu" : "Expand the menu"} style={{ background: "transparent", border: "1px solid #33466b", borderRadius: 8, width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flex: "none", padding: 0 }}>
+          <Icon name={sideOpen ? "chevleft" : "menu"} size={17} stroke="#cfd6e4" />
+        </button>
+        <span style={{ color: "#fff", fontWeight: 700, fontSize: 15.5, whiteSpace: "nowrap" }}>{TAB_LABELS[tab] || "Home"}</span>
+        <span style={{ flex: 1 }} />
+        <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+          {[["home", "Home", "home"], ["shipments", "Shipments", "ship"], ["customers", "Customers", "users"], ["invoices", "Invoices", "doc"], ["schedule", "Schedule", "cal"]].map(([t, label, icon]) => (
+            <button key={t} onClick={() => setTab(t)} title={label} style={{ width: 34, height: 34, borderRadius: 8, border: "1px solid " + (tab === t ? GOLD : "#33466b"), background: tab === t ? GOLD : "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flex: "none", padding: 0 }}>
+              <Icon name={icon} size={16} stroke={tab === t ? NAVY : "#cfd6e4"} />
             </button>
           ))}
-          <div style={{ width: 1, alignSelf: "stretch", background: "#33466b", margin: "2px 6px" }} />
-          {[["customers", "Customers"], ["invoices", "Invoices"], ["schedule", "Schedule"]].map(([t, label]) => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              style={{
-                ...btn,
-                background: tab === t ? GOLD : "transparent",
-                color: tab === t ? NAVY : "#cfd6e4",
-                border: "1px solid " + (tab === t ? GOLD : "#33466b"),
-              }}
-            >
-              {label}
-            </button>
-          ))}
-          <div style={{ width: 1, alignSelf: "stretch", background: "#33466b", margin: "2px 6px" }} />
-          <button
-            onClick={() => setTab("products")}
-            style={{
-              ...btn,
-              background: tab === "products" ? GOLD : "transparent",
-              color: tab === "products" ? NAVY : "#cfd6e4",
-              border: "1px solid " + (tab === "products" ? GOLD : "#33466b"),
-            }}
-          >
-            Products
-          </button>
-          <div style={{ width: 1, alignSelf: "stretch", background: "#33466b", margin: "2px 6px" }} />
-          <button onClick={backupJson} title="Copy or download all planner data as a backup" style={{ ...btn, padding: "6px 10px", fontSize: 12.5, background: "transparent", color: "#8fa0c0", border: "1px dashed #33466b" }}>
-            Backup
-          </button>
-          <button onClick={() => restoreInput.current && restoreInput.current.click()} title="Restore from a backup file" style={{ ...btn, padding: "6px 10px", fontSize: 12.5, background: "transparent", color: "#8fa0c0", border: "1px dashed #33466b" }}>
-            Restore
-          </button>
-          {storageMode === "supabase" ? (
-            <>
-              <span style={{ color: "#8fa0c0", fontSize: 12, alignSelf: "center" }}>{getSessionEmail()}</span>
-              <button onClick={() => signOut()} title="Sign out" style={{ ...btn, padding: "6px 10px", fontSize: 12.5, background: "transparent", color: "#8fa0c0", border: "1px dashed #33466b" }}>
-                Sign out
-              </button>
-            </>
-          ) : pinHash ? (
-            <>
-              <button onClick={() => { setPinEntry(""); setPinError(""); setLocked(true); }} title="Lock the planner now" style={{ ...btn, padding: "6px 10px", fontSize: 12.5, background: "transparent", color: "#8fa0c0", border: "1px dashed #33466b" }}>
-                Lock
-              </button>
-              <button onClick={() => { setPinError(""); setPinPanel(true); }} title="Change or remove the PIN" style={{ ...btn, padding: "6px 10px", fontSize: 12.5, background: "transparent", color: "#8fa0c0", border: "1px dashed #33466b" }}>
-                PIN
-              </button>
-            </>
-          ) : (
-            <button onClick={() => { setPinError(""); setPinPanel(true); }} title="Protect the planner with a PIN" style={{ ...btn, padding: "6px 10px", fontSize: 12.5, background: "transparent", color: "#8fa0c0", border: "1px dashed #33466b" }}>
-              Set PIN
-            </button>
-          )}
-          <input
-            ref={restoreInput}
-            type="file"
-            accept="application/json,.json"
-            style={{ display: "none" }}
-            onChange={(e) => {
-              restoreJson(e.target.files && e.target.files[0]);
-              e.target.value = "";
-            }}
-          />
         </div>
+        <input
+          ref={restoreInput}
+          type="file"
+          accept="application/json,.json"
+          style={{ display: "none" }}
+          onChange={(e) => {
+            restoreJson(e.target.files && e.target.files[0]);
+            e.target.value = "";
+          }}
+        />
         <span style={{ color: "#8fa0c0", fontSize: 12, minWidth: 48, textAlign: "right" }}>{CRM_TABS.includes(tab) ? crmSave : saveState}</span>
       </div>
+
+      {tab === "home" && (
+        <HomeScreen data={data} crm={crm} setTab={setTab} addShipment={addShipment} newInvoice={() => (crm ? newInvoiceFor("", "") : setTab("invoices"))} />
+      )}
 
       {CRM_TABS.includes(tab) &&
         (crmError ? (
@@ -1829,6 +1822,8 @@ export default function ImportPlanner() {
           </div>
         </div>
       )}
+      </div>
+      </div>
     </div>
   );
 }

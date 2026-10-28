@@ -2,6 +2,7 @@
 import CustomersScreen from "./CustomersScreen.jsx";
 import InvoicesScreen from "./InvoicesScreen.jsx";
 import ScheduleScreen from "./ScheduleScreen.jsx";
+import HomeScreen from "../HomeScreen.jsx";
 import { emptyCrm, normaliseCrm, blankCustomer, blankSite, blankInvoice, blankLine, invoiceTotals } from "../../lib/crmCore.js";
 
 export default function run(React, renderToString) {
@@ -39,5 +40,7 @@ export default function run(React, renderToString) {
   assert(html.includes("£1,452.00") && html.includes("£242.00") && html.includes("£1,210.00") && html.includes("Delivered"), "invoice entry totals");
   html = renderToString(React.createElement(ScheduleScreen, props));
   assert(html.includes("Bob") && html.includes("1 job"), "schedule shows the job");
+  html = renderToString(React.createElement(HomeScreen, { data: { products: [], shipments: [] }, crm, setTab: noop, addShipment: noop, newInvoice: noop }));
+  assert(html.includes("Customers") && html.includes("Delivery Schedule") && html.includes("Landed Costs"), "home screen tiles");
   console.log("smoke OK — all screens render, totals reconcile (1392 goods + 60 delivery = 1452 inc VAT, £242 VAT, £1210 net)");
 }
