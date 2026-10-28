@@ -1,4 +1,5 @@
 // Shared CRM UI: icon set, workflow toggles, chips, field styles.
+import { useState, useMemo } from "react";
 import { NAVY, GOLD } from "../../lib/core.js";
 
 const PATHS = {
@@ -96,6 +97,71 @@ export const goldBtn = { ...btn, background: GOLD, borderColor: GOLD };
 export const sect = { fontSize: 11.5, fontWeight: 700, color: "#8593a8", letterSpacing: 0.6, textTransform: "uppercase", margin: "0 0 10px" };
 export const lbl = { display: "block", fontSize: 11, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 4 };
 export const card = { background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, padding: "16px 18px", marginBottom: 14 };
+// FileMaker-style type-ahead: focus shows ALL stored options in a list under
+// the field (app data, not browser autofill); it reduces as you type.
+// Arrow keys highlight, Enter picks (then the modal's Enter-to-next advances),
+// clicking picks, blur applies the field's formatter.
+export function SuggestInput({ value, onChange, options = [], format, inputStyle, ...props }) {
+  const [open, setOpen] = useState(false);
+  const [hi, setHi] = useState(-1);
+
+  const filtered = useMemo(() => {
+    const q = String(value || "").trim().toLowerCase();
+    if (!q) return options.slice(0, 300);
+    const starts = [];
+    const contains = [];
+    for (const o of options) {
+      const lo = o.toLowerCase();
+      if (lo.startsWith(q)) starts.push(o);
+      else if (lo.includes(q)) contains.push(o);
+      if (starts.length + contains.length >= 300) break;
+    }
+    return [...starts, ...contains];
+  }, [value, options]);
+
+  const pick = (v) => {
+    onChange(v);
+    setOpen(false);
+    setHi(-1);
+  };
+
+  return (
+    <div style={{ position: "relative" }}>
+      <input
+        style={{ ...inp, ...inputStyle }}
+        value={value === null || value === undefined ? "" : value}
+        {...props}
+        onFocus={(e) => { e.target.select(); setOpen(true); setHi(-1); }}
+        onChange={(e) => { onChange(e.target.value); setOpen(true); setHi(-1); }}
+        onBlur={(e) => {
+          setTimeout(() => setOpen(false), 120);
+          if (format) onChange(format(e.target.value));
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "ArrowDown") { e.preventDefault(); setOpen(true); setHi((h) => Math.min(h + 1, filtered.length - 1)); }
+          else if (e.key === "ArrowUp") { e.preventDefault(); setHi((h) => Math.max(h - 1, -1)); }
+          else if (e.key === "Escape") { setOpen(false); setHi(-1); e.stopPropagation(); }
+          else if (e.key === "Enter") {
+            if (open && hi >= 0 && filtered[hi]) pick(filtered[hi]);
+            else setOpen(false);
+            // not prevented: the modal's Enter-to-next moves focus on
+          }
+        }}
+      />
+      {open && filtered.length > 0 && (
+        <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 70, background: "#fff", border: "1px solid #d5d9e0", borderRadius: 8, marginTop: 3, maxHeight: 218, overflowY: "auto", boxShadow: "0 10px 26px rgba(11,31,63,0.22)" }}>
+          {filtered.map((o, i) => (
+            <div key={o} onMouseDown={(e) => { e.preventDefault(); pick(o); }} onMouseEnter={() => setHi(i)}
+              style={{ padding: "6px 11px", fontSize: 13.5, fontWeight: 600, cursor: "pointer", background: i === hi ? GOLD : "#fff", color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              {o}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Enter moves to the next field (FileMaker style); the last field lands on the
 // save button (className "dk-save"), so a second Enter saves.
 export const enterToNext = (e) => {

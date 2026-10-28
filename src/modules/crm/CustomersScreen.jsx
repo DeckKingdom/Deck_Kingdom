@@ -6,7 +6,7 @@ import {
   blankCustomer, blankSite, nextNumber, SOURCES,
   invoiceTotals, gbp, isPaid, followUpDone, FOLLOWUP_FLAGS, FIELD_FORMATS, CONTACT_METHODS,
 } from "../../lib/crmCore.js";
-import { Icon, Chip, Modal, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
+import { Icon, Chip, Modal, SuggestInput, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
 
 const navyBtn = { ...btn, background: "transparent", border: "1px solid #3a4f78", color: "#fff" };
 
@@ -186,16 +186,27 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
   const custField = (k, label, props = {}, wrapStyle = {}) => (
     <div style={wrapStyle}>
       <span style={lbl}>{label}</span>
-      <input style={inp} value={custDraft[k] === null ? "" : custDraft[k]} {...props}
-        list={SUGGEST_FIELDS.includes(k) ? "dk-cust-" + k : undefined}
-        onChange={(e) => setCustDraft({ ...custDraft, [k]: e.target.value })}
-        onBlur={FIELD_FORMATS[k] ? (e) => setCustDraft((d) => ({ ...d, [k]: FIELD_FORMATS[k](e.target.value) })) : undefined} />
+      {SUGGEST_FIELDS.includes(k) ? (
+        <SuggestInput
+          value={custDraft[k]}
+          options={(suggestions && suggestions[k]) || []}
+          format={FIELD_FORMATS[k]}
+          onChange={(v) => setCustDraft((d) => ({ ...d, [k]: v }))}
+          {...props}
+        />
+      ) : (
+        <input style={inp} value={custDraft[k] === null ? "" : custDraft[k]} {...props}
+          onFocus={(e) => e.target.select()}
+          onChange={(e) => setCustDraft({ ...custDraft, [k]: e.target.value })}
+          onBlur={FIELD_FORMATS[k] ? (e) => setCustDraft((d) => ({ ...d, [k]: FIELD_FORMATS[k](e.target.value) })) : undefined} />
+      )}
     </div>
   );
   const siteField = (k, label, props = {}) => (
     <div>
       <span style={lbl}>{label}</span>
       <input style={inp} value={siteDraft[k] === null ? "" : siteDraft[k]} {...props}
+        onFocus={(e) => e.target.select()}
         onChange={(e) => setSiteDraft({ ...siteDraft, [k]: e.target.value })}
         onBlur={FIELD_FORMATS[k] ? (e) => setSiteDraft((d) => ({ ...d, [k]: FIELD_FORMATS[k](e.target.value) })) : undefined} />
     </div>
@@ -203,7 +214,6 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
 
   return (
     <div style={{ maxWidth: 1140, margin: "0 auto", padding: "18px 22px" }}>
-      <datalist id="dk-sources">{SOURCES.map((s) => <option key={s} value={s} />)}</datalist>
 
       {/* search / actions bar */}
       <div style={{ ...card, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "10px 14px" }}>
@@ -437,11 +447,6 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
           }
           onClose={() => setCustDraft(null)}
         >
-          {suggestions && SUGGEST_FIELDS.map((k) => (
-            <datalist key={k} id={"dk-cust-" + k}>
-              {suggestions[k].map((v) => <option key={v} value={v} />)}
-            </datalist>
-          ))}
           {dupes.length > 0 && (
             <div style={{ background: "#C8102E10", border: "1px solid #ecc4cb", borderRadius: 8, padding: "8px 12px", marginBottom: 12, fontSize: 12.5, fontWeight: 600, color: "#8a0b20" }}>
               <div style={{ marginBottom: 4 }}>Possible duplicate — same name, number or email as:</div>
@@ -474,9 +479,12 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
             {custField("email", "Email", {}, { gridColumn: "span 2" })}
             <div>
               <span style={lbl}>Source</span>
-              <input style={inp} list="dk-sources" value={custDraft.source}
-                onChange={(e) => setCustDraft({ ...custDraft, source: e.target.value })}
-                onBlur={(e) => setCustDraft((d) => ({ ...d, source: FIELD_FORMATS.source(e.target.value) }))} />
+              <SuggestInput
+                value={custDraft.source}
+                options={[...new Set([...SOURCES, ...crm.customers.map((c) => (c.source || "").trim()).filter(Boolean)])].sort()}
+                format={FIELD_FORMATS.source}
+                onChange={(v) => setCustDraft((d) => ({ ...d, source: v }))}
+              />
             </div>
             <div>
               <span style={lbl}>Preferred contact</span>
