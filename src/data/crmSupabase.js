@@ -96,8 +96,27 @@ const pickToRow = (p, invoiceId, i) => ({
   qty: Number(p.qty) || 0,
   shipment_id: str(p.shipmentId),
   batch_ref: str(p.batchRef),
+  unit_cost: num(p.unitCost),
   picked: p.picked === true,
   position: i,
+});
+
+const COLL_TEXT = ["supplier", "address", "town", "postcode", "contact", "phone", "date", "collectDate", "collectTime", "van", "postedAt", "assignedInvoiceId", "notes", "raisedBy"];
+
+const collToRow = (c, i) => {
+  const row = { id: c.id, collection_no: intOrNull(c.collectionNo), collected: c.collected === true, position: i };
+  COLL_TEXT.forEach((k) => (row[snake(k)] = str(c[k])));
+  return row;
+};
+
+const collItemToRow = (it, collectionId, i) => ({
+  id: it.id, collection_id: collectionId, sku: str(it.sku), description: str(it.description),
+  colour: str(it.colour), qty: Number(it.qty) || 0, unit_cost: num(it.unitCost), position: i,
+});
+
+const moveToRow = (m, i) => ({
+  id: m.id, at: m.at || new Date().toISOString(), master_product_id: str(m.mpId), sku: str(m.sku),
+  qty: Number(m.qty) || 0, unit_cost: num(m.unitCost), kind: str(m.kind), ref: str(m.ref), actor: str(m.actor), position: i,
 });
 
 function rowsFromData(d) {
@@ -119,7 +138,15 @@ function rowsFromData(d) {
     mps.set(p.id, mpToRow(p, i));
     (p.components || []).forEach((c, j) => comps.set(c.id, compToRow(c, p.id, j)));
   });
-  return { customers, sites, invoices, items, picks, mps, comps };
+  const colls = new Map();
+  const collItems = new Map();
+  (d.collections || []).forEach((c, i) => {
+    colls.set(c.id, collToRow(c, i));
+    (c.items || []).forEach((it, j) => collItems.set(it.id, collItemToRow(it, c.id, j)));
+  });
+  const moves = new Map();
+  (d.movements || []).forEach((m, i) => moves.set(m.id, moveToRow(m, i)));
+  return { customers, sites, invoices, items, picks, mps, comps, colls, collItems, moves };
 }
 
 async function fetchAll(sb, table) {
@@ -139,7 +166,7 @@ let numberingSnapshot = null;
 
 async function loadAll() {
   const sb = await getSupabase();
-  const [cs, ss, is_, ls, ps_, mps_, comps_, settings] = await Promise.all([
+  const [cs, ss, is_, ls, ps_, mps_, comps_, colls_, collItems_, moves_, settings] = await Promise.all([
     fetchAll(sb, "customers"),
     fetchAll(sb, "customer_sites"),
     fetchAll(sb, "invoices"),
@@ -147,6 +174,9 @@ async function loadAll() {
     fetchAll(sb, "invoice_picks"),
     fetchAll(sb, "master_products"),
     fetchAll(sb, "product_components"),
+    fetchAll(sb, "collections"),
+    fetchAll(sb, "collection_items"),
+    fetchAll(sb, "stock_movements"),
     sb.from("crm_settings").select("*").eq("key", "numbering").maybeSingle(),
   ]);
   if (settings.error) throw new Error(settings.error.message);
@@ -171,7 +201,7 @@ async function loadAll() {
     (picksByInv[r.invoice_id] = picksByInv[r.invoice_id] || []).push({
       id: r.id, sku: r.sku, description: r.description, colour: r.colour,
       qty: nv(r.qty) === "" ? "" : Number(r.qty),
-      shipmentId: nv(r.shipment_id), batchRef: nv(r.batch_ref), picked: r.picked === true,
+      shipmentId: nv(r.shipment_id), batchRef: nv(r.batch_ref), unitCost: nv(r.unit_cost), picked: r.picked === true,
     });
   });
   const linesByInv = {};
@@ -218,11 +248,28 @@ async function loadAll() {
     return p;
   });
 
-  const data = { customers, sites, invoices, masterProducts, numbering };
+  const itemsByColl = {};
+  collItems_.forEach((r) => {
+    (itemsByColl[r.collection_id] = itemsByColl[r.collection_id] || []).push({
+      id: r.id, sku: nv(r.sku), description: nv(r.description), colour: nv(r.colour),
+      qty: nv(r.qty) === "" ? "" : Number(r.qty), unitCost: nv(r.unit_cost),
+    });
+  });
+  const collections = colls_.map((r) => {
+    const c = { id: r.id, collectionNo: r.collection_no, collected: r.collected === true, items: itemsByColl[r.id] || [] };
+    COLL_TEXT.forEach((k) => (c[k] = nv(r[snake(k)])));
+    return c;
+  });
+  const movements = moves_.map((r) => ({
+    id: r.id, at: r.at || "", mpId: nv(r.master_product_id), sku: nv(r.sku),
+    qty: Number(r.qty) || 0, unitCost: nv(r.unit_cost), kind: nv(r.kind), ref: nv(r.ref), actor: nv(r.actor),
+  }));
+
+  const data = { customers, sites, invoices, masterProducts, collections, movements, numbering };
   snapshot = rowsFromData(data);
   numberingSnapshot = JSON.stringify(numbering);
 
-  if (!customers.length && !sites.length && !invoices.length && !masterProducts.length && !settings.data) return null;
+  if (!customers.length && !sites.length && !invoices.length && !masterProducts.length && !collections.length && !settings.data) return null;
   return data;
 }
 
@@ -248,6 +295,9 @@ async function saveAll(d) {
   const dp = diff(prev.picks || new Map(), next.picks);
   const dm = diff(prev.mps, next.mps);
   const dk = diff(prev.comps, next.comps);
+  const dco = diff(prev.colls || new Map(), next.colls);
+  const dci = diff(prev.collItems || new Map(), next.collItems);
+  const dmv = diff(prev.moves || new Map(), next.moves);
 
   const run = async (q) => {
     const { error } = await q;
@@ -267,8 +317,14 @@ async function saveAll(d) {
   if (di.upserts.length) await run(sb.from("invoices").upsert(di.upserts));
   if (dl.upserts.length) await run(sb.from("invoice_items").upsert(dl.upserts));
   if (dp.upserts.length) await run(sb.from("invoice_picks").upsert(dp.upserts));
+  if (dci.deletes.length) await run(sb.from("collection_items").delete().in("id", dci.deletes));
+  if (dco.deletes.length) await run(sb.from("collections").delete().in("id", dco.deletes));
+  if (dmv.deletes.length) await run(sb.from("stock_movements").delete().in("id", dmv.deletes));
   if (dm.upserts.length) await run(sb.from("master_products").upsert(dm.upserts));
   if (dk.upserts.length) await run(sb.from("product_components").upsert(dk.upserts));
+  if (dco.upserts.length) await run(sb.from("collections").upsert(dco.upserts));
+  if (dci.upserts.length) await run(sb.from("collection_items").upsert(dci.upserts));
+  if (dmv.upserts.length) await run(sb.from("stock_movements").upsert(dmv.upserts));
 
   const numbering = d.numbering || { account: 1, site: 1, invoice: 1 };
   if (JSON.stringify(numbering) !== numberingSnapshot) {

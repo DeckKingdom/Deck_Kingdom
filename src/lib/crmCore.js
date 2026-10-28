@@ -88,8 +88,34 @@ export const blankPick = () => ({
   qty: "",
   shipmentId: "",
   batchRef: "",
+  unitCost: "",
   picked: false,
 });
+
+export const blankCollection = () => ({
+  id: uid(),
+  collectionNo: null,
+  supplier: "",
+  address: "",
+  town: "",
+  postcode: "",
+  contact: "",
+  phone: "",
+  date: today(),
+  collectDate: "",
+  collectTime: "",
+  van: "",
+  collected: false,
+  postedAt: "",
+  assignedInvoiceId: "",
+  notes: "",
+  raisedBy: "",
+  items: [],
+});
+
+export const blankCollectionItem = () => ({ id: uid(), sku: "", description: "", colour: "", qty: "", unitCost: "" });
+
+export const blankMovement = () => ({ id: uid(), at: new Date().toISOString(), sku: "", mpId: "", qty: 0, unitCost: "", kind: "", ref: "" });
 
 export const blankLine = () => ({ id: uid(), code: "", description: "", colour: "", qty: "", price: "" });
 
@@ -120,7 +146,9 @@ export const emptyCrm = () => ({
   sites: [],
   invoices: [],
   masterProducts: [],
-  numbering: { account: 1, site: 1, invoice: 1 },
+  collections: [],
+  movements: [],
+  numbering: { account: 1, site: 1, invoice: 1, collection: 1 },
 });
 
 // Ensure older blobs gain any fields added later.
@@ -133,6 +161,15 @@ export const normaliseCrm = (c) => {
   if (!d.numbering.account) d.numbering.account = 1;
   if (!d.numbering.site) d.numbering.site = 1;
   if (!d.numbering.invoice) d.numbering.invoice = 1;
+  if (!d.numbering.collection) d.numbering.collection = 1;
+  d.collections = Array.isArray(d.collections) ? d.collections : [];
+  d.collections.forEach((x) => {
+    Object.assign(x, { ...blankCollection(), ...x, id: x.id || uid() });
+    x.items = Array.isArray(x.items) ? x.items : [];
+    x.items.forEach((c) => Object.assign(c, { ...blankCollectionItem(), ...c, id: c.id || uid() }));
+  });
+  d.movements = Array.isArray(d.movements) ? d.movements : [];
+  d.movements.forEach((m) => Object.assign(m, { ...blankMovement(), ...m, id: m.id || uid() }));
   d.masterProducts = Array.isArray(d.masterProducts) ? d.masterProducts : [];
   d.masterProducts.forEach((x) => {
     Object.assign(x, { ...blankMasterProduct(), ...x, id: x.id || uid() });
@@ -304,6 +341,9 @@ export const buildPicks = (inv, crm) =>
 // Landed £/pc for one pick: the batch's real landed cost when the pick names a
 // shipment and the SKU is linked to an import product; master cost otherwise.
 export const pickLandedCost = (pick, crm, planner) => {
+  if (pick.unitCost !== "" && pick.unitCost !== null && pick.unitCost !== undefined && isFinite(Number(pick.unitCost))) {
+    return { perPc: Number(pick.unitCost), source: "batch" };
+  }
   const mp = skuIndex(crm)[(pick.sku || "").trim().toLowerCase()];
   if (mp && pick.shipmentId && planner) {
     const s = (planner.shipments || []).find((x) => x.id === pick.shipmentId);
@@ -330,6 +370,45 @@ export const jobCost = (inv, crm, planner) => {
     }
   });
   return { total, costed, landedLines, of: (inv.picks || []).length };
+};
+
+// ===== stock =====
+export const TRADE_DISCOUNT = 0.1; // trade pricing = standard - 10%
+
+export const stockValuation = (crm) => {
+  let units = 0;
+  let costValue = 0;
+  let saleValue = 0;
+  let tradeValue = 0;
+  (crm.masterProducts || []).forEach((p) => {
+    const stock = p.stock === "" || p.stock === null ? 0 : Number(p.stock);
+    if (!isFinite(stock) || stock === 0) return;
+    units += stock;
+    if (p.costGbp !== "" && p.costGbp !== null) costValue += stock * Number(p.costGbp);
+    if (p.priceIncVat !== "" && p.priceIncVat !== null) {
+      saleValue += stock * Number(p.priceIncVat);
+      tradeValue += stock * Number(p.priceIncVat) * (1 - TRADE_DISCOUNT);
+    }
+  });
+  return { units, costValue, saleValue, tradeValue };
+};
+
+// Match an import shipment's lines to master SKUs (importProductId + colour),
+// with the landed £/pc, ready to post into stock.
+export const matchShipmentToStock = (s, crm) => {
+  const matched = [];
+  const unmatched = [];
+  (s.lines || []).forEach((l) => {
+    const pieces = (Number(l.pallets) || 0) * (Number(l.qty) || 0);
+    if (pieces <= 0) return;
+    const candidates = (crm.masterProducts || []).filter((p) => p.importProductId === l.productId);
+    const mp =
+      candidates.find((p) => (p.colour || "").trim().toLowerCase() === (l.colour || "").trim().toLowerCase()) ||
+      (candidates.length === 1 && !(candidates[0].colour || "").trim() ? candidates[0] : null);
+    if (mp) matched.push({ mp, line: l, qty: pieces, landed: landedPerPiece(s, l.productId, l.colour) });
+    else unmatched.push({ line: l, qty: pieces });
+  });
+  return { matched, unmatched };
 };
 
 export const customerStats = (crm, customerId) => {

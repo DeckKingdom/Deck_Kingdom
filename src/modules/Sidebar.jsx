@@ -25,9 +25,11 @@ export const NAV_SECTIONS = [
     ],
   },
   {
-    title: "Catalogue",
+    title: "Stock & catalogue",
     items: [
+      ["stock", "Stock", "layers"],
       ["catalogue", "Master Products", "tag"],
+      ["collections", "Collections", "truck"],
       ["products", "Import Products", "box"],
     ],
   },

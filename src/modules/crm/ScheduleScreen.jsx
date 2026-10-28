@@ -21,7 +21,9 @@ const dayLabel = (d) => {
   return x.toLocaleDateString("en-GB", { weekday: "long", day: "2-digit", month: "long", year: "numeric" });
 };
 
-export default function ScheduleScreen({ crm, updateCrm, openInvoice }) {
+const COLLECTION_BLUE = "#185FA5";
+
+export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollection }) {
   const [search, setSearch] = useState("");
   const [range, setRange] = useState("upcoming");
   const [van, setVan] = useState("");
@@ -48,8 +50,9 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice }) {
   const vans = useMemo(() => {
     const s = new Set();
     crm.invoices.forEach((i) => i.van && s.add(i.van));
+    (crm.collections || []).forEach((c) => c.van && s.add(c.van));
     return [...s].sort();
-  }, [crm.invoices]);
+  }, [crm.invoices, crm.collections]);
 
   const tod = today();
   const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
@@ -72,14 +75,30 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice }) {
     return i.deliveryDate >= weekAgo; // upcoming + last 7 days
   });
 
-  const dated = visible.filter((i) => i.deliveryDate).sort((a, b) => a.deliveryDate.localeCompare(b.deliveryDate) || (a.deliveryTime || "").localeCompare(b.deliveryTime || ""));
-  const pending = visible.filter((i) => !i.deliveryDate).sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+  // collections ride the same board: a van picking up from a UK supplier is a run too
+  const visibleColls = (crm.collections || []).filter((c) => {
+    if (hideDone && (c.postedAt || c.assignedInvoiceId)) return false;
+    if (van && c.van !== van) return false;
+    if (q && ![("col-" + (c.collectionNo || "")), c.supplier, c.postcode, c.van].some((v) => String(v || "").toLowerCase().includes(q))) return false;
+    if (!c.collectDate) return true;
+    if (range === "all") return true;
+    if (range === "today") return c.collectDate === tod;
+    if (range === "week") return c.collectDate >= tod && c.collectDate <= weekEnd;
+    return c.collectDate >= weekAgo;
+  });
+
+  const entries = [
+    ...visible.map((i) => ({ kind: "inv", date: i.deliveryDate, time: i.deliveryTime || "", obj: i })),
+    ...visibleColls.map((c) => ({ kind: "col", date: c.collectDate, time: c.collectTime || "", obj: c })),
+  ];
+  const dated = entries.filter((e) => e.date).sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
+  const pending = entries.filter((e) => !e.date).sort((a, b) => ((a.obj.date || "")).localeCompare(b.obj.date || ""));
 
   const groups = [];
-  dated.forEach((i) => {
+  dated.forEach((e) => {
     const g = groups[groups.length - 1];
-    if (g && g.date === i.deliveryDate) g.rows.push(i);
-    else groups.push({ date: i.deliveryDate, rows: [i] });
+    if (g && g.date === e.date) g.rows.push(e);
+    else groups.push({ date: e.date, rows: [e] });
   });
 
   const Row = ({ i }) => {
@@ -136,6 +155,51 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice }) {
     );
   };
 
+  const CollRow = ({ c }) => {
+    const done = Boolean(c.postedAt || c.assignedInvoiceId);
+    const items = (c.items || []).reduce((t, it) => t + (Number(it.qty) || 0), 0);
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: 12, background: "#fff", border: "1px solid #e6e9ef", borderRadius: 10, padding: "9px 12px 9px 0", marginBottom: 6, overflow: "hidden", flexWrap: "wrap" }}>
+        <div style={{ width: 4, alignSelf: "stretch", borderRadius: "4px 0 0 4px", margin: "-9px 0", background: COLLECTION_BLUE, flex: "none" }} />
+        <div style={{ flex: "1 1 190px", minWidth: 170 }}>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <button onClick={() => openCollection && openCollection(c.id)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit", fontWeight: 700, fontSize: 14, color: COLLECTION_BLUE }}>
+              COLLECTION — {c.supplier || "supplier"}
+            </button>
+            <span style={{ fontSize: 11.5, fontWeight: 700, color: COLLECTION_BLUE }}>COL-{c.collectionNo || "—"}</span>
+          </div>
+          <div style={{ fontSize: 11.5, color: "#5a6a85", fontWeight: 600, marginTop: 2 }}>
+            {[c.postcode, c.contact, c.phone].filter(Boolean).join(" · ") || "—"}
+          </div>
+        </div>
+        <div style={{ flex: "none", width: 96, fontSize: 12.5, fontWeight: 700, color: COLLECTION_BLUE }}>
+          Pick up
+          <div style={{ fontSize: 11, color: "#5a6a85", fontWeight: 600, marginTop: 1 }}>{c.van || "—"}</div>
+        </div>
+        <div style={{ flex: "none", width: 48, textAlign: "right", fontSize: 12.5, fontWeight: 700 }}>{items || "—"}<div style={{ fontSize: 10, color: "#8593a8", fontWeight: 600 }}>pcs</div></div>
+        <div style={{ flex: "none", width: 48, textAlign: "right", fontSize: 12.5, fontWeight: 700 }}>{c.collectTime || "—"}</div>
+        <div style={{ flex: "1 1 120px", fontSize: 12, fontWeight: 700 }}>
+          {done ? (
+            <Chip tone="green">{c.postedAt ? "In stock" : "On job"}</Chip>
+          ) : (
+            <label style={{ display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+              <input type="checkbox" checked={c.collected}
+                onChange={(e) => updateCrm((x) => {
+                  const t = x.collections.find((y) => y.id === c.id);
+                  if (t) t.collected = e.target.checked;
+                  return x;
+                })} />
+              Collected
+            </label>
+          )}
+        </div>
+        <div style={{ flex: "none", display: "flex", gap: 4, marginRight: 10 }}>
+          <button style={abtn} title="Open collection" onClick={() => openCollection && openCollection(c.id)}><Icon name="pen" /></button>
+        </div>
+      </div>
+    );
+  };
+
   const GroupHead = ({ label, meta, red }) => (
     <div style={{ display: "flex", alignItems: "center", gap: 12, background: red ? RED : NAVY, color: "#fff", borderRadius: 10, padding: "10px 16px", margin: "18px 0 8px", flexWrap: "wrap" }}>
       <b style={{ color: red ? "#fff" : GOLD, fontSize: 15 }}>{label}</b>
@@ -144,9 +208,16 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice }) {
   );
 
   const groupMeta = (rows) => {
-    const kg = rows.reduce((t, i) => t + (Number(i.weightKg) || 0), 0);
-    const vansUsed = [...new Set(rows.map((i) => i.van).filter(Boolean))];
-    return rows.length + (rows.length === 1 ? " job" : " jobs") + (kg ? " · " + kg.toLocaleString("en-GB") + " kg loading" : "") + (vansUsed.length ? " · " + vansUsed.join(" + ") : "");
+    const invs = rows.filter((e) => e.kind === "inv").map((e) => e.obj);
+    const cols = rows.filter((e) => e.kind === "col");
+    const kg = invs.reduce((t, i) => t + (Number(i.weightKg) || 0), 0);
+    const vansUsed = [...new Set(rows.map((e) => e.obj.van).filter(Boolean))];
+    return (
+      invs.length + (invs.length === 1 ? " job" : " jobs") +
+      (cols.length ? " · " + cols.length + (cols.length === 1 ? " collection" : " collections") : "") +
+      (kg ? " · " + kg.toLocaleString("en-GB") + " kg loading" : "") +
+      (vansUsed.length ? " · " + vansUsed.join(" + ") : "")
+    );
   };
 
   return (
@@ -173,9 +244,9 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice }) {
 
       {/* legend */}
       <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap", fontSize: 12, fontWeight: 600, color: "#5a6a85", margin: "0 0 4px 4px" }}>
-        {[["Ready to go", "green"], ["Prep outstanding", "amber"], ["Collection", "gold"], ["No date set", "red"]].map(([l, k]) => (
-          <span key={k} style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-            <span style={{ width: 10, height: 10, borderRadius: 999, background: STRIPE_COLOURS[k], display: "inline-block" }} />{l}
+        {[["Ready to go", STRIPE_COLOURS.green], ["Prep outstanding", STRIPE_COLOURS.amber], ["Customer collection", STRIPE_COLOURS.gold], ["Supplier collection", COLLECTION_BLUE], ["No date set", STRIPE_COLOURS.red]].map(([l, k]) => (
+          <span key={l} style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+            <span style={{ width: 10, height: 10, borderRadius: 999, background: k, display: "inline-block" }} />{l}
           </span>
         ))}
         <span style={{ marginLeft: 10 }}>Prep: booked · courier · parts ordered · parts ready · payment link</span>
@@ -191,14 +262,14 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice }) {
       {groups.map((g) => (
         <div key={g.date}>
           <GroupHead label={dayLabel(g.date)} meta={groupMeta(g.rows)} />
-          {g.rows.map((i) => <Row key={i.id} i={i} />)}
+          {g.rows.map((e) => (e.kind === "col" ? <CollRow key={e.obj.id} c={e.obj} /> : <Row key={e.obj.id} i={e.obj} />))}
         </div>
       ))}
 
       {pending.length > 0 && (
         <>
-          <GroupHead red label="Pending jobs — no delivery date" meta={pending.length + (pending.length === 1 ? " job" : " jobs") + " waiting to be booked in"} />
-          {pending.map((i) => <Row key={i.id} i={i} />)}
+          <GroupHead red label="Pending — no date booked" meta={pending.length + " waiting to be booked in"} />
+          {pending.map((e) => (e.kind === "col" ? <CollRow key={e.obj.id} c={e.obj} /> : <Row key={e.obj.id} i={e.obj} />))}
         </>
       )}
       <div style={{ height: 30 }} />

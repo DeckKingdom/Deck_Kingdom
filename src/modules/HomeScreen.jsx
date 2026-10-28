@@ -1,7 +1,7 @@
 // Home: the landing screen — live snapshot of both modules and big
 // jump-off tiles into every layout.
 import { NAVY, GOLD, RED, addMonths, prettyDate, STATUS_COLOURS } from "../lib/core.js";
-import { invoiceTotals, gbp, isPaid, today } from "../lib/crmCore.js";
+import { invoiceTotals, gbp, isPaid, today, stockValuation } from "../lib/crmCore.js";
 import { Icon, Chip, card, sect } from "./crm/ui.jsx";
 
 const Tile = ({ icon, label, note, onClick }) => (
@@ -111,7 +111,9 @@ export default function HomeScreen({ data, crm, setTab, addShipment, newInvoice 
         <div style={{ ...card, marginBottom: 0 }}>
           <p style={sect}>Catalogue</p>
           <div style={{ display: "grid", gap: 8 }}>
+            <Tile icon="layers" label="Stock" note={crm ? (() => { const v = stockValuation(crm); return v.units.toLocaleString("en-GB") + " units · " + gbp(v.costValue) + " at cost"; })() : "Loading…"} onClick={() => setTab("stock")} />
             <Tile icon="tag" label="Master Products" note={crm ? (crm.masterProducts || []).length.toLocaleString("en-GB") + " SKUs — stock, costs, kits" : "Loading…"} onClick={() => setTab("catalogue")} />
+            <Tile icon="truck" label="Collections" note={crm ? ((crm.collections || []).filter((c) => !c.postedAt && !c.assignedInvoiceId).length || "No") + " open supplier pick-ups" : "Loading…"} onClick={() => setTab("collections")} />
             <Tile icon="box" label="Import Products" note={data.products.length + " factory products"} onClick={() => setTab("products")} />
             <Tile icon="clock" label="Activity" note="Who changed what, and when" onClick={() => setTab("activity")} />
           </div>

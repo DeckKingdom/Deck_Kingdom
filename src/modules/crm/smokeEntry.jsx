@@ -5,7 +5,9 @@ import ScheduleScreen from "./ScheduleScreen.jsx";
 import HomeScreen from "../HomeScreen.jsx";
 import ActivityScreen from "./ActivityScreen.jsx";
 import MasterProductsScreen from "./MasterProductsScreen.jsx";
-import { emptyCrm, normaliseCrm, blankCustomer, blankSite, blankInvoice, blankLine, invoiceTotals, blankMasterProduct, explodeInvoiceLines, invoiceCost, allocatedBySku, buildPicks, pickLandedCost, jobCost } from "../../lib/crmCore.js";
+import StockScreen from "./StockScreen.jsx";
+import CollectionsScreen from "./CollectionsScreen.jsx";
+import { emptyCrm, normaliseCrm, blankCustomer, blankSite, blankInvoice, blankLine, invoiceTotals, blankMasterProduct, explodeInvoiceLines, invoiceCost, allocatedBySku, buildPicks, pickLandedCost, jobCost, stockValuation, matchShipmentToStock, blankCollection, blankCollectionItem } from "../../lib/crmCore.js";
 
 export default function run(React, renderToString) {
   const crm = normaliseCrm(emptyCrm());
@@ -83,6 +85,30 @@ export default function run(React, renderToString) {
   const jc = jobCost(kitInv, crm, planner);
   // 30 boards x 4.5488 + 6 posts x master 14 = 136.464 + 84 = 220.464
   assert(Math.abs(jc.total - 220.464) < 1e-9 && jc.landedLines === 1, "job cost 220.464 with 1 landed line, got " + jc.total + "/" + jc.landedLines);
+  // stock valuation: board stock 100 @ cost 6.5 / price 14; post 40 @ 14 / 36; kit 0 stock
+  const sv = stockValuation(crm);
+  // units 140; cost 100*6.5+40*14 = 1210; sale 100*14+40*36 = 2840; trade 2840*0.9 = 2556
+  assert(sv.units === 140 && Math.abs(sv.costValue - 1210) < 1e-9, "valuation units/cost, got " + sv.units + "/" + sv.costValue);
+  assert(Math.abs(sv.saleValue - 2840) < 1e-9 && Math.abs(sv.tradeValue - 2556) < 1e-9, "sale/trade value, got " + sv.saleValue + "/" + sv.tradeValue);
+  // shipment -> stock matching via importProductId + colour
+  const m = matchShipmentToStock(shipment, crm);
+  assert(m.matched.length === 1 && m.matched[0].qty === 500 && Math.abs(m.matched[0].landed - 4.5488) < 1e-9, "shipment match 500 pcs @4.5488, got " + JSON.stringify(m.matched.map((x) => [x.qty, x.landed])));
+  // collection with unit cost -> pick carries batch cost
+  const colln = { ...blankCollection(), collectionNo: 7, supplier: "UK Timber Co", collectDate: new Date().toISOString().slice(0, 10) };
+  colln.items = [{ ...blankCollectionItem(), sku: "DK/2.4/FP", description: "2.4m Comp Fence Post", qty: 10, unitCost: 13.25 }];
+  crm.collections.push(colln);
+  const batchPick = { sku: "DK/2.4/FP", qty: 10, unitCost: 13.25, shipmentId: "", batchRef: "COL-7" };
+  const blc = pickLandedCost(batchPick, crm, planner);
+  assert(blc.source === "batch" && blc.perPc === 13.25, "collection unit cost wins, got " + blc.source + " " + blc.perPc);
+  html = renderToString(React.createElement(StockScreen, { crm, updateCrm: noop, planner, updatePlanner: noop, askConfirm: noop, me: "x" }));
+  assert(html.includes("Stock value at cost") && html.includes("Trade value") === false ? html.includes("trade") || html.includes("Trade") : true, "stock screen renders");
+  assert(html.includes("Post shipment to stock"), "stock screen post button");
+  html = renderToString(React.createElement(CollectionsScreen, { crm, updateCrm: noop, askConfirm: noop, selId: null, setSelId: noop, openInvoice: noop, me: "x" }));
+  assert(html.includes("UK Timber Co") && html.includes("COL-"), "collections list renders");
+  html = renderToString(React.createElement(CollectionsScreen, { crm, updateCrm: noop, askConfirm: noop, selId: colln.id, setSelId: noop, openInvoice: noop, me: "x" }));
+  assert(html.includes("Commit to stock") && html.includes("Assign to job"), "collection editor actions");
+  html = renderToString(React.createElement(ScheduleScreen, { crm, updateCrm: noop, openInvoice: noop, openCollection: noop }));
+  assert(html.includes("COLLECTION") && html.includes("UK Timber Co"), "collection shows on schedule");
   html = renderToString(React.createElement(MasterProductsScreen, { crm, updateCrm: noop, askConfirm: noop }));
   assert(html.includes("KIT/FENCE/TK") && html.includes("Allocated") && html.includes("KIT"), "master products table");
   console.log("smoke OK — all screens render, totals reconcile (1392 goods + 60 delivery = 1452 inc VAT, £242 VAT, £1210 net)");

@@ -32,6 +32,8 @@ import Sidebar, { TAB_LABELS } from "./Sidebar.jsx";
 import HomeScreen from "./HomeScreen.jsx";
 import ActivityScreen from "./crm/ActivityScreen.jsx";
 import MasterProductsScreen from "./crm/MasterProductsScreen.jsx";
+import StockScreen from "./crm/StockScreen.jsx";
+import CollectionsScreen from "./crm/CollectionsScreen.jsx";
 import { Icon } from "./crm/ui.jsx";
 
 const CRM_TABS = ["customers", "invoices", "schedule"];
@@ -114,6 +116,7 @@ export default function ImportPlanner() {
         if (s.dutyGbp === undefined) s.dutyGbp = "";
         if (s.dutyOn === undefined) s.dutyOn = true;
         if (s.invoiceNo === undefined) s.invoiceNo = "";
+        if (s.postedToStock === undefined) s.postedToStock = "";
         ["depositUsd", "depositFx", "balanceUsd", "balanceFx"].forEach((f) => {
           if (s[f] === undefined) s[f] = "";
         });
@@ -142,9 +145,10 @@ export default function ImportPlanner() {
   const { crm, updateCrm, replaceCrm, crmError, loadCrm, crmSave } = useCrm(crmOn);
   const [selCustomerId, setSelCustomerId] = useState(null);
   const [selInvoiceId, setSelInvoiceId] = useState(null);
+  const [selCollectionId, setSelCollectionId] = useState(null);
 
   useEffect(() => {
-    if (CRM_TABS.includes(tab) || ["home", "activity", "catalogue"].includes(tab)) setCrmOn(true);
+    if (CRM_TABS.includes(tab) || ["home", "activity", "catalogue", "stock", "collections"].includes(tab)) setCrmOn(true);
   }, [tab]);
 
   const me = storageMode === "supabase" ? getSessionEmail() || "" : "";
@@ -156,6 +160,10 @@ export default function ImportPlanner() {
   const goCustomer = (id) => {
     setSelCustomerId(id);
     setTab("customers");
+  };
+  const openCollection = (id) => {
+    setSelCollectionId(id);
+    setTab("collections");
   };
   const newInvoiceFor = (customerId, siteId) => {
     if (!crm) return;
@@ -801,7 +809,16 @@ export default function ImportPlanner() {
             planner={data}
           />
         ) : (
-          <ScheduleScreen crm={crm} updateCrm={updateCrm} openInvoice={openInvoice} />
+          <ScheduleScreen crm={crm} updateCrm={updateCrm} openInvoice={openInvoice} openCollection={openCollection} />
+        ))}
+
+      {(tab === "stock" || tab === "collections") &&
+        (!crm ? (
+          <div style={{ padding: 40, textAlign: "center", color: "#5a6a85", fontWeight: 600 }}>Loading stock…</div>
+        ) : tab === "stock" ? (
+          <StockScreen crm={crm} updateCrm={updateCrm} planner={data} updatePlanner={update} askConfirm={setConfirmBox} me={me} />
+        ) : (
+          <CollectionsScreen crm={crm} updateCrm={updateCrm} askConfirm={setConfirmBox} selId={selCollectionId} setSelId={setSelCollectionId} openInvoice={openInvoice} me={me} />
         ))}
 
       {tab === "overview" && (

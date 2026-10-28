@@ -427,7 +427,7 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
             New records take whichever is higher: these, or the highest existing number + 1 — so an import of
             historical records moves the sequences on automatically.
           </p>
-          {[["account", "Next account #"], ["site", "Next site #"], ["invoice", "Next invoice #"]].map(([k, label]) => (
+          {[["account", "Next account #"], ["site", "Next site #"], ["invoice", "Next invoice #"], ["collection", "Next collection #"]].map(([k, label]) => (
             <div key={k} style={{ marginBottom: 10 }}>
               <span style={lbl}>{label}</span>
               <input style={inp} inputMode="numeric" value={numDraft[k]}
@@ -442,6 +442,7 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
                   account: Number(numDraft.account) || 1,
                   site: Number(numDraft.site) || 1,
                   invoice: Number(numDraft.invoice) || 1,
+                  collection: Number(numDraft.collection) || 1,
                 };
                 return c;
               });

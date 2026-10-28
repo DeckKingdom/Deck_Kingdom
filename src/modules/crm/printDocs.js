@@ -159,6 +159,32 @@ ${inv.jobNotes ? `<div class="note">📝 ${esc(inv.jobNotes)}</div>` : ""}
   return openDoc(shell("Loading bill " + (inv.invNo || ""), body));
 }
 
+// Driver's collection note for picking goods up from a UK supplier.
+export function printCollectionNote(coll) {
+  const items = (coll.items || []).map((it) => `
+    <tr><td style="width:26px"><div style="width:16px;height:16px;border:2px solid #0B1F3F;border-radius:4px"></div></td>
+    <td><b>${esc(it.sku)}</b></td><td>${esc(it.description)}${it.colour ? " · " + esc(it.colour) : ""}</td>
+    <td class="r big">${esc(it.qty)}</td></tr>`).join("");
+
+  const body = head("Collection note", "COL-" + (coll.collectionNo || "—"), pretty(coll.collectDate || coll.date)) + `
+<div class="grid">
+  ${addrBlock("Collect from", [coll.supplier, coll.address, [coll.town, coll.postcode].filter(Boolean).join(" ")])}
+  ${addrBlock("Supplier contact", [coll.contact, coll.phone])}
+  ${addrBlock("Collection", ["Date: " + pretty(coll.collectDate), coll.collectTime ? "Time: " + coll.collectTime : "", coll.van ? "Van: " + coll.van : ""])}
+  ${addrBlock("Return to", [COMPANY.name, COMPANY.address, COMPANY.phone])}
+</div>
+${coll.notes ? `<div class="note">📝 ${esc(coll.notes)}</div>` : ""}
+<table><tr><th></th><th>SKU</th><th>Description</th><th class="r">Qty to collect</th></tr>${items}</table>
+<div class="grid" style="margin-top:30px">
+  <div class="blk"><h3>Collected by (driver)</h3><div style="border-bottom:1px solid #0B1F3F;height:34px"></div></div>
+  <div class="blk"><h3>Released by (supplier)</h3><div style="border-bottom:1px solid #0B1F3F;height:34px"></div></div>
+  <div class="blk"><h3>Date / time</h3><div style="border-bottom:1px solid #0B1F3F;height:34px"></div></div>
+</div>
+<div class="foot">${esc(COMPANY.name)} · ${esc(COMPANY.phone)}</div>`;
+
+  return openDoc(shell("Collection note COL-" + (coll.collectionNo || ""), body));
+}
+
 export function printJobSheet(inv, cust, site) {
   const t = invoiceTotals(inv);
   const lines = (inv.lines || []).map((l) => `

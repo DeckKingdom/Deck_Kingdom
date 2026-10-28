@@ -6,7 +6,7 @@ import { getSupabase } from "./supabaseClient.js";
 const SHIP_FIELDS = {
   name: "name", status: "status", supplier: "supplier", created: "created",
   orderDate: "order_date", depositDate: "deposit_date", arrivedDate: "arrived_date",
-  balancePaidDate: "balance_paid_date", invoiceNo: "invoice_no",
+  balancePaidDate: "balance_paid_date", invoiceNo: "invoice_no", postedToStock: "posted_to_stock",
   surchargeOn: "surcharge_on", dutyOn: "duty_on",
   dutyGbp: "duty_gbp", shippingGbp: "shipping_gbp",
   depositUsd: "deposit_usd", depositFx: "deposit_fx",
@@ -83,7 +83,7 @@ async function loadAll() {
     id: r.id, name: r.name, status: r.status, supplier: r.supplier, created: r.created,
     orderDate: r.order_date, depositDate: r.deposit_date, arrivedDate: r.arrived_date,
     balancePaidDate: r.balance_paid_date, invoiceNo: r.invoice_no,
-    surchargeOn: r.surcharge_on, dutyOn: r.duty_on,
+    surchargeOn: r.surcharge_on, dutyOn: r.duty_on, postedToStock: nv(r.posted_to_stock),
     dutyGbp: nv(r.duty_gbp), shippingGbp: nv(r.shipping_gbp),
     depositUsd: nv(r.deposit_usd), depositFx: nv(r.deposit_fx),
     balanceUsd: nv(r.balance_usd), balanceFx: nv(r.balance_fx),
