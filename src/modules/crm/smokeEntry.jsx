@@ -7,7 +7,7 @@ import ActivityScreen from "./ActivityScreen.jsx";
 import MasterProductsScreen from "./MasterProductsScreen.jsx";
 import StockScreen from "./StockScreen.jsx";
 import CollectionsScreen from "./CollectionsScreen.jsx";
-import { emptyCrm, normaliseCrm, blankCustomer, blankSite, blankInvoice, blankLine, invoiceTotals, blankMasterProduct, explodeInvoiceLines, invoiceCost, allocatedBySku, buildPicks, pickLandedCost, jobCost, stockValuation, matchShipmentToStock, blankCollection, blankCollectionItem } from "../../lib/crmCore.js";
+import { emptyCrm, normaliseCrm, blankCustomer, blankSite, blankInvoice, blankLine, invoiceTotals, blankMasterProduct, explodeInvoiceLines, invoiceCost, allocatedBySku, buildPicks, pickLandedCost, jobCost, stockValuation, matchShipmentToStock, blankCollection, blankCollectionItem, titleCase, formatPhone, formatPostcode } from "../../lib/crmCore.js";
 
 export default function run(React, renderToString) {
   const crm = normaliseCrm(emptyCrm());
@@ -30,6 +30,13 @@ export default function run(React, renderToString) {
   assert(Math.abs(t.total - 1452) < 0.001, "total should be 1452, got " + t.total);
   assert(Math.abs(t.vat - 242) < 0.001, "vat should be 242, got " + t.vat);
   assert(Math.abs(t.net - 1210) < 0.001, "net should be 1210, got " + t.net);
+
+  // field formatting
+  assert(titleCase("old stone trough pub") === "Old Stone Trough Pub", "title case");
+  assert(formatPhone("07951728742") === "07951-728-742", "mobile 5-3-3, got " + formatPhone("07951728742"));
+  assert(formatPhone("0161 320 9664") === "0161-320-9664", "landline 4-3-4, got " + formatPhone("0161 320 9664"));
+  assert(formatPhone("12345") === "12345", "short numbers left alone");
+  assert(formatPostcode("ol6 6ug") === "OL6-6UG" && formatPostcode("bb18 6xy") === "BB18-6XY", "postcodes");
 
   const noop = () => {};
   const props = { crm, updateCrm: noop, askConfirm: noop, me: "jon@deckkingdom.co.uk", openInvoice: noop, newInvoiceFor: noop, goCustomer: noop };

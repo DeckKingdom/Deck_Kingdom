@@ -96,10 +96,24 @@ export const goldBtn = { ...btn, background: GOLD, borderColor: GOLD };
 export const sect = { fontSize: 11.5, fontWeight: 700, color: "#8593a8", letterSpacing: 0.6, textTransform: "uppercase", margin: "0 0 10px" };
 export const lbl = { display: "block", fontSize: 11, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 4 };
 export const card = { background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, padding: "16px 18px", marginBottom: 14 };
+// Enter moves to the next field (FileMaker style); the last field lands on the
+// save button (className "dk-save"), so a second Enter saves.
+export const enterToNext = (e) => {
+  if (e.key !== "Enter") return;
+  const t = e.target;
+  if (t.tagName === "TEXTAREA" || t.type === "checkbox" || t.tagName === "BUTTON") return;
+  const els = [...e.currentTarget.querySelectorAll("input:not([disabled]):not([type=checkbox]), select:not([disabled]), textarea:not([disabled]), button.dk-save")];
+  const i = els.indexOf(t);
+  if (i >= 0) {
+    e.preventDefault();
+    if (els[i + 1]) els[i + 1].focus();
+  }
+};
+
 export const Modal = ({ title, onClose, children, width = 560 }) => (
   <div style={{ position: "fixed", inset: 0, background: "rgba(11,31,63,0.45)", zIndex: 60, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "6vh 16px", overflowY: "auto" }}
     onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-    <div style={{ background: "#fff", borderRadius: 14, padding: "18px 20px", width: "100%", maxWidth: width, boxShadow: "0 18px 50px rgba(11,31,63,0.35)" }}>
+    <div onKeyDown={enterToNext} style={{ background: "#fff", borderRadius: 14, padding: "18px 20px", width: "100%", maxWidth: width, boxShadow: "0 18px 50px rgba(11,31,63,0.35)" }}>
       <div style={{ display: "flex", alignItems: "center", marginBottom: 14 }}>
         <b style={{ fontSize: 16, color: NAVY }}>{title}</b>
         <span style={{ flex: 1 }} />

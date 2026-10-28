@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import { NAVY, GOLD, RED, prettyDate, prettyDateTime } from "../../lib/core.js";
 import {
   blankCustomer, blankSite, nextNumber, SOURCES,
-  invoiceTotals, gbp, isPaid, followUpDone, FOLLOWUP_FLAGS,
+  invoiceTotals, gbp, isPaid, followUpDone, FOLLOWUP_FLAGS, FIELD_FORMATS,
 } from "../../lib/crmCore.js";
 import { Icon, Chip, Modal, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
 
@@ -33,6 +33,8 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
   const [search, setSearch] = useState("");
   const [custDraft, setCustDraft] = useState(null);
   const [siteDraft, setSiteDraft] = useState(null);
+  const [noEdit, setNoEdit] = useState(false); // account # unlocked for editing
+  const [noConfirm, setNoConfirm] = useState(false); // confirmation bar showing
   const [numPanel, setNumPanel] = useState(false);
   const [numDraft, setNumDraft] = useState(null);
 
@@ -52,8 +54,14 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
   const sel = crm.customers.find((c) => c.id === selId) || null;
 
   // ===== actions =====
+  const openCustDraft = (draft) => {
+    setNoEdit(false);
+    setNoConfirm(false);
+    setCustDraft(draft);
+  };
+
   const startNewCustomer = () =>
-    setCustDraft({ ...blankCustomer(), accountNo: nextNumber(crm.customers, "accountNo", crm.numbering.account), createdBy: me || "", _new: true });
+    openCustDraft({ ...blankCustomer(), accountNo: nextNumber(crm.customers, "accountNo", crm.numbering.account), createdBy: me || "", _new: true });
 
   const saveCustomer = () => {
     const d = custDraft;
@@ -139,18 +147,20 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
     : crm.customers;
   const shown = matches.slice(0, 50);
 
-  const custField = (k, label, props = {}) => (
-    <div>
+  const custField = (k, label, props = {}, wrapStyle = {}) => (
+    <div style={wrapStyle}>
       <span style={lbl}>{label}</span>
       <input style={inp} value={custDraft[k] === null ? "" : custDraft[k]} {...props}
-        onChange={(e) => setCustDraft({ ...custDraft, [k]: e.target.value })} />
+        onChange={(e) => setCustDraft({ ...custDraft, [k]: e.target.value })}
+        onBlur={FIELD_FORMATS[k] ? (e) => setCustDraft((d) => ({ ...d, [k]: FIELD_FORMATS[k](e.target.value) })) : undefined} />
     </div>
   );
-  const siteField = (k, label) => (
+  const siteField = (k, label, props = {}) => (
     <div>
       <span style={lbl}>{label}</span>
-      <input style={inp} value={siteDraft[k] === null ? "" : siteDraft[k]}
-        onChange={(e) => setSiteDraft({ ...siteDraft, [k]: e.target.value })} />
+      <input style={inp} value={siteDraft[k] === null ? "" : siteDraft[k]} {...props}
+        onChange={(e) => setSiteDraft({ ...siteDraft, [k]: e.target.value })}
+        onBlur={FIELD_FORMATS[k] ? (e) => setSiteDraft((d) => ({ ...d, [k]: FIELD_FORMATS[k](e.target.value) })) : undefined} />
     </div>
   );
 
@@ -260,7 +270,7 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
               <div style={{ display: "flex", gap: 8, flexBasis: "100%", marginTop: 2, flexWrap: "wrap" }}>
                 <button style={goldBtn} onClick={() => newInvoiceFor(sel.id, sites[0] ? sites[0].id : "")}><Icon name="plus" stroke={NAVY} />New invoice</button>
                 <button style={navyBtn} onClick={startNewSite}><Icon name="pin" stroke="#fff" />Add site</button>
-                <button style={navyBtn} onClick={() => setCustDraft({ ...sel })}><Icon name="pen" stroke="#fff" />Edit account</button>
+                <button style={navyBtn} onClick={() => openCustDraft({ ...sel })}><Icon name="pen" stroke="#fff" />Edit account</button>
                 <span style={{ flex: 1 }} />
                 <button style={{ ...navyBtn, border: "1px dashed #3a4f78", color: "#8fa0c0" }} onClick={() => removeCustomer(sel)}><Icon name="bin" stroke="#8fa0c0" />Delete</button>
               </div>
@@ -364,21 +374,51 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
 
       {/* ===== customer modal ===== */}
       {custDraft && (
-        <Modal title={custDraft._new ? "New customer" : "Edit account #" + (custDraft.accountNo || "")} onClose={() => setCustDraft(null)}>
+        <Modal
+          title={
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              {custDraft._new ? "New customer" : "Edit customer"}
+              {noEdit ? (
+                <input
+                  style={{ ...inp, width: 100, fontWeight: 700 }}
+                  inputMode="numeric"
+                  value={custDraft.accountNo === null ? "" : custDraft.accountNo}
+                  onChange={(e) => setCustDraft({ ...custDraft, accountNo: e.target.value.replace(/[^0-9]/g, "") })}
+                />
+              ) : (
+                <Chip style={{ fontSize: 13 }}>#{custDraft.accountNo || "—"}</Chip>
+              )}
+              {!noEdit && (
+                <button style={{ ...abtn, width: 26, height: 26 }} title="The account number is auto-generated — click to change it"
+                  onClick={() => setNoConfirm(true)}>
+                  <Icon name="pen" size={12} />
+                </button>
+              )}
+            </span>
+          }
+          onClose={() => setCustDraft(null)}
+        >
+          {noConfirm && !noEdit && (
+            <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", background: "#fff8e6", border: "1px solid #f4d78f", borderRadius: 8, padding: "8px 12px", marginBottom: 12, fontSize: 12.5, fontWeight: 600, color: "#6b5305" }}>
+              <span style={{ flex: 1 }}>The account number is auto-generated and normally shouldn't be changed. Change it anyway?</span>
+              <button style={{ ...btn, padding: "5px 11px", fontSize: 12.5 }} onClick={() => { setNoEdit(true); setNoConfirm(false); }}>Change it</button>
+              <button style={{ ...btn, padding: "5px 11px", fontSize: 12.5, background: GOLD, borderColor: GOLD }} onClick={() => setNoConfirm(false)}>Keep as is</button>
+            </div>
+          )}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12 }}>
-            {custField("name", "Name / business")}
-            {custField("accountNo", "Account #", { inputMode: "numeric" })}
-            {custField("contact", "Contact name")}
-            {custField("mobile", "Mobile")}
-            {custField("landline", "Landline")}
-            {custField("email", "Email")}
+            {custField("name", "Customer name / business", { autoFocus: true }, { gridColumn: "1 / -1" })}
             {custField("address", "Invoice address")}
             {custField("town", "Town")}
-            {custField("postcode", "Postcode")}
+            {custField("postcode", "Post code")}
+            {custField("contact", "Contact name")}
+            {custField("landline", "Landline")}
+            {custField("mobile", "Mobile")}
+            {custField("email", "Email")}
             <div>
               <span style={lbl}>Source</span>
               <input style={inp} list="dk-sources" value={custDraft.source}
-                onChange={(e) => setCustDraft({ ...custDraft, source: e.target.value })} />
+                onChange={(e) => setCustDraft({ ...custDraft, source: e.target.value })}
+                onBlur={(e) => setCustDraft((d) => ({ ...d, source: FIELD_FORMATS.source(e.target.value) }))} />
             </div>
           </div>
           <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13.5, fontWeight: 700, margin: "14px 0" }}>
@@ -387,7 +427,7 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
           </label>
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
             <button style={btn} onClick={() => setCustDraft(null)}>Cancel</button>
-            <button style={{ ...goldBtn, opacity: custDraft.name.trim() ? 1 : 0.5 }} onClick={saveCustomer}>Save</button>
+            <button className="dk-save" style={{ ...goldBtn, opacity: custDraft.name.trim() ? 1 : 0.5 }} onClick={saveCustomer}>Save</button>
           </div>
         </Modal>
       )}
@@ -396,14 +436,14 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
       {siteDraft && sel && (
         <Modal title={siteDraft._new ? "New site for " + (sel.name || "account") : "Edit site #" + (siteDraft.siteNo || "")} onClose={() => setSiteDraft(null)}>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12 }}>
-            {siteField("name", "Site name")}
-            {siteField("siteNo", "Site #")}
+            {siteField("name", "Site name", { autoFocus: true })}
+            {siteField("siteNo", "Site #", { inputMode: "numeric" })}
             {siteField("address", "Address")}
             {siteField("town", "Town")}
-            {siteField("postcode", "Postcode")}
+            {siteField("postcode", "Post code")}
             {siteField("contact", "Contact")}
-            {siteField("mobile", "Mobile")}
             {siteField("landline", "Landline")}
+            {siteField("mobile", "Mobile")}
             {siteField("email", "Email")}
           </div>
           <div style={{ marginTop: 12 }}>
@@ -415,7 +455,7 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
             <button style={btn} onClick={copyFromAccount}>Copy from account</button>
             <span style={{ flex: 1 }} />
             <button style={btn} onClick={() => setSiteDraft(null)}>Cancel</button>
-            <button style={goldBtn} onClick={saveSite}>Save</button>
+            <button className="dk-save" style={goldBtn} onClick={saveSite}>Save</button>
           </div>
         </Modal>
       )}

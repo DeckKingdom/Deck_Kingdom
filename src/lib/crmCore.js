@@ -252,6 +252,42 @@ export const daysSinceRaised = (inv) => {
 
 export const followUpDone = (inv) => FOLLOWUP_FLAGS.filter(([k]) => inv.flags && inv.flags[k]).length;
 
+// ===== field formatting (applied on blur, FileMaker style) =====
+export const titleCase = (s) =>
+  String(s || "").replace(/\S+/g, (w) => (/^[a-z]/.test(w) ? w[0].toUpperCase() + w.slice(1) : w));
+
+// 11-digit UK numbers: mobiles 07951-728-742 (5-3-3), landlines 0161-320-9664 (4-3-4)
+export const formatPhone = (s) => {
+  const d = String(s || "").replace(/\D/g, "");
+  if (d.length === 11)
+    return d.startsWith("07")
+      ? d.slice(0, 5) + "-" + d.slice(5, 8) + "-" + d.slice(8)
+      : d.slice(0, 4) + "-" + d.slice(4, 7) + "-" + d.slice(7);
+  return String(s || "").trim();
+};
+
+// OL6-6UG: outward-inward with a hyphen, uppercase
+export const formatPostcode = (s) => {
+  const c = String(s || "").replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+  if (c.length >= 5 && c.length <= 7) return c.slice(0, -3) + "-" + c.slice(-3);
+  return String(s || "").trim().toUpperCase();
+};
+
+// which formatter belongs to which field name, shared by the record modals
+export const FIELD_FORMATS = {
+  name: titleCase,
+  address: titleCase,
+  town: titleCase,
+  contact: titleCase,
+  supplier: titleCase,
+  source: titleCase,
+  landline: formatPhone,
+  mobile: formatPhone,
+  phone: formatPhone,
+  postcode: formatPostcode,
+  email: (s) => String(s || "").trim().toLowerCase(),
+};
+
 // ===== master products: SKU lookup, kit explosion, stock allocation =====
 export const skuIndex = (crm) => {
   const m = {};
