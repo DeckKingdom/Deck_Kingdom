@@ -114,8 +114,9 @@ export const selectAllProps = {
   },
 };
 
-// FileMaker-style type-ahead: focus shows ALL stored options in a list under
-// the field (app data, not browser autofill); it reduces as you type.
+// FileMaker-style type-ahead from app data (not browser autofill): the list
+// only appears once you TYPE, and reduces with each keystroke; just focusing
+// or selecting the field shows nothing (ArrowDown opens it on demand).
 // Arrow keys highlight, Enter picks (then the modal's Enter-to-next advances),
 // clicking picks, blur applies the field's formatter.
 export function SuggestInput({ value, onChange, options = [], format, inputStyle, ...props }) {
@@ -148,7 +149,7 @@ export function SuggestInput({ value, onChange, options = [], format, inputStyle
         style={{ ...inp, ...inputStyle }}
         value={value === null || value === undefined ? "" : value}
         {...props}
-        onFocus={(e) => { selectAllProps.onFocus(e); setOpen(true); setHi(-1); }}
+        onFocus={(e) => { selectAllProps.onFocus(e); setOpen(false); setHi(-1); }}
         onMouseUp={selectAllProps.onMouseUp}
         onChange={(e) => { onChange(e.target.value); setOpen(true); setHi(-1); }}
         onBlur={(e) => {
