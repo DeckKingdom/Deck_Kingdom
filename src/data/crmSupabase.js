@@ -116,12 +116,15 @@ async function loadAll() {
   const numbering = (settings.data && settings.data.value) || { account: 1, site: 1, invoice: 1 };
 
   const customers = cs.map((r) => {
-    const c = { id: r.id, accountNo: r.account_no, trader: r.trader === true };
+    const c = { id: r.id, accountNo: r.account_no, trader: r.trader === true, updatedAt: r.updated_at || "" };
     CUSTOMER_FIELDS.forEach((k) => (c[k] = nv(r[snake(k)])));
     return c;
   });
   const sites = ss.map((r) => {
-    const s = { id: r.id, customerId: r.customer_id, siteNo: r.site_no };
+    const s = {
+      id: r.id, customerId: r.customer_id, siteNo: r.site_no,
+      createdBy: nv(r.created_by), modifiedBy: nv(r.modified_by), updatedAt: r.updated_at || "",
+    };
     SITE_FIELDS.forEach((k) => (s[k] = nv(r[k])));
     return s;
   });
@@ -142,6 +145,9 @@ async function loadAll() {
       weightKg: nv(r.weight_kg),
       vatRate: Number(r.vat_rate),
       vatInclusive: r.vat_inclusive !== false,
+      createdBy: nv(r.created_by),
+      modifiedBy: nv(r.modified_by),
+      updatedAt: r.updated_at || "",
       flags: {},
       lines: linesByInv[r.id] || [],
     };
@@ -200,6 +206,16 @@ async function saveAll(d) {
   }
 
   snapshot = next;
+}
+
+// ===== audit log (read-only; the database triggers write it) =====
+export async function fetchAuditLog(limit = 200, beforeId = null) {
+  const sb = await getSupabase();
+  let q = sb.from("audit_log").select("*").order("id", { ascending: false }).limit(limit);
+  if (beforeId) q = q.lt("id", beforeId);
+  const { data, error } = await q;
+  if (error) throw new Error(error.message);
+  return data;
 }
 
 export const crmSupabaseStorage = {

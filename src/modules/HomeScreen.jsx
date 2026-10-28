@@ -112,6 +112,7 @@ export default function HomeScreen({ data, crm, setTab, addShipment, newInvoice 
           <p style={sect}>Catalogue</p>
           <div style={{ display: "grid", gap: 8 }}>
             <Tile icon="box" label="Products" note={data.products.length + " import products"} onClick={() => setTab("products")} />
+            <Tile icon="clock" label="Activity" note="Who changed what, and when" onClick={() => setTab("activity")} />
           </div>
           {nextIn && (
             <div style={{ marginTop: 12, background: "#f8f9fb", border: "1px solid #e6e9ef", borderRadius: 10, padding: "10px 13px" }}>

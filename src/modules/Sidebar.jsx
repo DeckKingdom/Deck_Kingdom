@@ -23,6 +23,7 @@ export const NAV_SECTIONS = [
     ],
   },
   { title: "Catalogue", items: [["products", "Products", "box"]] },
+  { title: "System", items: [["activity", "Activity", "clock"]] },
 ];
 
 export const TAB_LABELS = Object.fromEntries(NAV_SECTIONS.flatMap((s) => s.items.map(([t, l]) => [t, l])));

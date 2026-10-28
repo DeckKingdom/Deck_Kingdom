@@ -88,6 +88,7 @@ async function loadAll() {
     depositUsd: nv(r.deposit_usd), depositFx: nv(r.deposit_fx),
     balanceUsd: nv(r.balance_usd), balanceFx: nv(r.balance_fx),
     valueUsd: nv(r.value_usd), fxRate: nv(r.fx_rate),
+    modifiedBy: nv(r.modified_by), updatedAt: r.updated_at || "",
     lines: linesByShip[r.id] || [],
   }));
 

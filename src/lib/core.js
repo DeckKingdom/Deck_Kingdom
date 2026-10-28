@@ -77,6 +77,17 @@ export const prettyDate = (dateStr) => {
   return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 };
 
+export const prettyDateTime = (iso) => {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  return (
+    d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) +
+    ", " +
+    d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })
+  );
+};
+
 export const STATUSES = ["Planning", "Confirmed", "In production", "Shipped", "Arrived", "Paid"];
 export const STATUS_COLOURS = {
   Planning: "#F4B73E",

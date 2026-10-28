@@ -14,6 +14,7 @@ import {
   hashPin,
   daysBetween,
   prettyDate,
+  prettyDateTime,
   STATUSES,
   STATUS_COLOURS,
   stageTint,
@@ -29,6 +30,7 @@ import InvoicesScreen from "./crm/InvoicesScreen.jsx";
 import ScheduleScreen from "./crm/ScheduleScreen.jsx";
 import Sidebar, { TAB_LABELS } from "./Sidebar.jsx";
 import HomeScreen from "./HomeScreen.jsx";
+import ActivityScreen from "./crm/ActivityScreen.jsx";
 import { Icon } from "./crm/ui.jsx";
 
 const CRM_TABS = ["customers", "invoices", "schedule"];
@@ -141,7 +143,7 @@ export default function ImportPlanner() {
   const [selInvoiceId, setSelInvoiceId] = useState(null);
 
   useEffect(() => {
-    if (CRM_TABS.includes(tab) || tab === "home") setCrmOn(true);
+    if (CRM_TABS.includes(tab) || tab === "home" || tab === "activity") setCrmOn(true);
   }, [tab]);
 
   const me = storageMode === "supabase" ? getSessionEmail() || "" : "";
@@ -757,6 +759,8 @@ export default function ImportPlanner() {
         <HomeScreen data={data} crm={crm} setTab={setTab} addShipment={addShipment} newInvoice={() => (crm ? newInvoiceFor("", "") : setTab("invoices"))} />
       )}
 
+      {tab === "activity" && <ActivityScreen crm={crm} data={data} storageMode={storageMode} />}
+
       {CRM_TABS.includes(tab) &&
         (crmError ? (
           <div style={{ padding: 40, textAlign: "center" }}>
@@ -1038,6 +1042,11 @@ export default function ImportPlanner() {
                   placeholder="e.g. VJ-2026-0451"
                   style={{ ...inp, width: 140, fontSize: 12.5, padding: "4px 8px" }}
                 />
+                {active.updatedAt && (
+                  <span style={{ fontSize: 11.5, fontWeight: 600, color: "#8593a8", marginLeft: 8 }}>
+                    Updated {prettyDateTime(active.updatedAt)}{active.modifiedBy ? " by " + active.modifiedBy.split("@")[0] : ""}
+                  </span>
+                )}
               </div>
 
               <div style={{ background: "#fff", border: "1px solid #e6e9ef", borderRadius: 10, padding: "12px 16px", display: "flex", gap: 24, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 16 }}>

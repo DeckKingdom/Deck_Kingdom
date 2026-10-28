@@ -3,6 +3,7 @@ import CustomersScreen from "./CustomersScreen.jsx";
 import InvoicesScreen from "./InvoicesScreen.jsx";
 import ScheduleScreen from "./ScheduleScreen.jsx";
 import HomeScreen from "../HomeScreen.jsx";
+import ActivityScreen from "./ActivityScreen.jsx";
 import { emptyCrm, normaliseCrm, blankCustomer, blankSite, blankInvoice, blankLine, invoiceTotals } from "../../lib/crmCore.js";
 
 export default function run(React, renderToString) {
@@ -42,5 +43,9 @@ export default function run(React, renderToString) {
   assert(html.includes("Bob") && html.includes("1 job"), "schedule shows the job");
   html = renderToString(React.createElement(HomeScreen, { data: { products: [], shipments: [] }, crm, setTab: noop, addShipment: noop, newInvoice: noop }));
   assert(html.includes("Customers") && html.includes("Delivery Schedule") && html.includes("Landed Costs"), "home screen tiles");
+  html = renderToString(React.createElement(ActivityScreen, { crm, data: { products: [], shipments: [] }, storageMode: "local" }));
+  assert(html.includes("activity log"), "activity preview note");
+  html = renderToString(React.createElement(ActivityScreen, { crm, data: { products: [], shipments: [] }, storageMode: "supabase" }));
+  assert(html.includes("Everyone"), "activity live view shell");
   console.log("smoke OK — all screens render, totals reconcile (1392 goods + 60 delivery = 1452 inc VAT, £242 VAT, £1210 net)");
 }

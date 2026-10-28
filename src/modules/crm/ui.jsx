@@ -34,6 +34,7 @@ const PATHS = {
   menu: <path d="M4 7h16M4 12h16M4 17h16" />,
   chevleft: <path d="M14.5 6l-6 6 6 6" />,
   lock: <><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V8a4 4 0 018 0v3" /></>,
+  clock: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3.5 2" /></>,
   logout: <path d="M9 21H4V3h5M15 16l4-4-4-4M19 12H9" />,
 };
 

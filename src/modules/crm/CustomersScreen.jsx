@@ -1,7 +1,7 @@
 // Customers tab: searchable account list -> account view with sites and
 // invoice history, per the approved mockup.
 import { useState, useMemo } from "react";
-import { NAVY, GOLD, RED, prettyDate } from "../../lib/core.js";
+import { NAVY, GOLD, RED, prettyDate, prettyDateTime } from "../../lib/core.js";
 import {
   blankCustomer, blankSite, nextNumber, SOURCES,
   invoiceTotals, gbp, isPaid, followUpDone, FOLLOWUP_FLAGS,
@@ -291,6 +291,7 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
                       </div>
                       <div style={{ fontSize: 12.5, color: "#5a6a85", fontWeight: 600, marginTop: 2 }}>
                         {[s.address !== s.name ? s.address : "", s.town, s.postcode, s.mobile || s.landline].filter(Boolean).join(" · ")}
+                        {s.updatedAt ? <span style={{ color: "#aab3c2" }}> · updated {prettyDateTime(s.updatedAt)}{s.modifiedBy ? " by " + s.modifiedBy.split("@")[0] : ""}</span> : null}
                       </div>
                       {s.notes && <NoteBox>{s.notes}</NoteBox>}
                     </div>
@@ -302,7 +303,8 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
                   </div>
                 ))}
                 <div style={{ fontSize: 11.5, color: "#8593a8", fontWeight: 600, marginTop: 10 }}>
-                  Created {prettyDate(sel.created)}{sel.createdBy ? " by " + sel.createdBy : ""}{sel.modifiedBy ? " · Last modified by " + sel.modifiedBy : ""}
+                  Created {prettyDate(sel.created)}{sel.createdBy ? " by " + sel.createdBy.split("@")[0] : ""}
+                  {sel.updatedAt ? " · Updated " + prettyDateTime(sel.updatedAt) + (sel.modifiedBy ? " by " + sel.modifiedBy.split("@")[0] : "") : sel.modifiedBy ? " · Last modified by " + sel.modifiedBy.split("@")[0] : ""}
                 </div>
               </div>
             </div>

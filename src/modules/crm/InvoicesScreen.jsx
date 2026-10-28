@@ -1,7 +1,7 @@
 // Invoices tab: searchable list -> invoice entry screen per the approved
 // mockup. Prices are entered inc VAT; VAT is backed out of the total.
 import { useState, useMemo } from "react";
-import { NAVY, GOLD, RED, uid, prettyDate } from "../../lib/core.js";
+import { NAVY, GOLD, RED, uid, prettyDate, prettyDateTime } from "../../lib/core.js";
 import {
   blankInvoice, blankLine, nextNumber, invoiceTotals, gbp, isPaid,
   JOB_TYPES, PAYMENT_TYPES, VANS, PREP_FLAGS, FOLLOWUP_FLAGS, today,
@@ -209,7 +209,8 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
               : <Chip tone="red">Not booked</Chip>}
           </div>
           <div style={{ fontSize: 12.5, color: "#aeb9cf", fontWeight: 600, marginTop: 5 }}>
-            Raised {prettyDate(inv.created)}{inv.raisedBy ? " by " + inv.raisedBy : ""}
+            Raised {prettyDate(inv.created)}{inv.raisedBy ? " by " + inv.raisedBy.split("@")[0] : ""}
+            {inv.updatedAt ? " · Updated " + prettyDateTime(inv.updatedAt) + (inv.modifiedBy ? " by " + inv.modifiedBy.split("@")[0] : "") : ""}
           </div>
         </div>
         <span style={{ flex: 1 }} />
