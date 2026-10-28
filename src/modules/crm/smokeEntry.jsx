@@ -4,7 +4,8 @@ import InvoicesScreen from "./InvoicesScreen.jsx";
 import ScheduleScreen from "./ScheduleScreen.jsx";
 import HomeScreen from "../HomeScreen.jsx";
 import ActivityScreen from "./ActivityScreen.jsx";
-import { emptyCrm, normaliseCrm, blankCustomer, blankSite, blankInvoice, blankLine, invoiceTotals } from "../../lib/crmCore.js";
+import MasterProductsScreen from "./MasterProductsScreen.jsx";
+import { emptyCrm, normaliseCrm, blankCustomer, blankSite, blankInvoice, blankLine, invoiceTotals, blankMasterProduct, explodeInvoiceLines, invoiceCost, allocatedBySku } from "../../lib/crmCore.js";
 
 export default function run(React, renderToString) {
   const crm = normaliseCrm(emptyCrm());
@@ -47,5 +48,24 @@ export default function run(React, renderToString) {
   assert(html.includes("activity log"), "activity preview note");
   html = renderToString(React.createElement(ActivityScreen, { crm, data: { products: [], shipments: [] }, storageMode: "supabase" }));
   assert(html.includes("Everyone"), "activity live view shell");
+  // master products: kit explosion + costing + allocation
+  const board = { ...blankMasterProduct(), sku: "DK/1.8/FE/TK", name: "1.8m Fence Board", colour: "Teak", costGbp: 6.5, weightKg: 4, priceIncVat: 14, stock: 100, stockAlert: 10 };
+  const post = { ...blankMasterProduct(), sku: "DK/2.4/FP", name: "2.4m Comp Fence Post", costGbp: 14, weightKg: 12, priceIncVat: 36, stock: 40 };
+  const kit = { ...blankMasterProduct(), sku: "KIT/FENCE/TK", name: "Full Fence Panel Kit", colour: "Teak", isKit: true, priceIncVat: 180,
+    components: [ { id: "c1", componentId: board.id, qty: 10 }, { id: "c2", componentId: post.id, qty: 2 } ] };
+  crm.masterProducts.push(board, post, kit);
+  const kitInv = { ...blankInvoice(cust.id, site.id), invNo: 9999, deliveryDate: new Date().toISOString().slice(0, 10) };
+  kitInv.lines = [{ ...blankLine(), code: "KIT/FENCE/TK", description: "Full Fence Panel Kit", qty: 3, price: 180 }];
+  crm.invoices.push(kitInv);
+  const ex = explodeInvoiceLines(kitInv, crm);
+  assert(ex.length === 3 && ex[0].kind === "kit", "kit explodes to header + 2 parts, got " + JSON.stringify(ex.map((r) => r.kind)));
+  assert(ex[1].qty === 30 && ex[2].qty === 6, "kit part quantities 30 boards + 6 posts, got " + ex[1].qty + "/" + ex[2].qty);
+  assert(Math.abs(ex[1].weightKg - 120) < 0.001, "30 boards x 4kg = 120kg, got " + ex[1].weightKg);
+  const ic = invoiceCost(kitInv, crm);
+  assert(Math.abs(ic.cost - 3 * (10 * 6.5 + 2 * 14)) < 0.001, "kit cost from components = 279, got " + ic.cost);
+  const alloc = allocatedBySku(crm);
+  assert(alloc["dk/1.8/fe/tk"] === 30 && alloc["dk/2.4/fp"] === 6, "allocation counts kit parts, got " + JSON.stringify(alloc));
+  html = renderToString(React.createElement(MasterProductsScreen, { crm, updateCrm: noop, askConfirm: noop }));
+  assert(html.includes("KIT/FENCE/TK") && html.includes("Allocated") && html.includes("KIT"), "master products table");
   console.log("smoke OK — all screens render, totals reconcile (1392 goods + 60 delivery = 1452 inc VAT, £242 VAT, £1210 net)");
 }

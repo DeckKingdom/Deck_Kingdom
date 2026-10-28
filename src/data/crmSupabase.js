@@ -62,6 +62,20 @@ const invToRow = (inv, i) => {
   return row;
 };
 
+const MP_NUM = { priceIncVat: "price_inc_vat", costGbp: "cost_gbp", weightKg: "weight_kg", stock: "stock", stockAlert: "stock_alert" };
+const MP_TEXT = ["sku", "name", "colour", "family", "category", "unit", "notes", "importProductId"];
+
+const mpToRow = (p, i) => {
+  const row = { id: p.id, is_kit: p.isKit === true, active: p.active !== false, position: i };
+  MP_TEXT.forEach((k) => (row[snake(k)] = str(p[k])));
+  Object.entries(MP_NUM).forEach(([k, col]) => (row[col] = num(p[k])));
+  return row;
+};
+
+const compToRow = (c, kitId, i) => ({
+  id: c.id, kit_id: kitId, component_id: str(c.componentId), qty: Number(c.qty) || 0, position: i,
+});
+
 const lineToRow = (l, invoiceId, i) => ({
   id: l.id,
   invoice_id: invoiceId,
@@ -78,13 +92,19 @@ function rowsFromData(d) {
   const sites = new Map();
   const invoices = new Map();
   const items = new Map();
+  const mps = new Map();
+  const comps = new Map();
   (d.customers || []).forEach((c, i) => customers.set(c.id, customerToRow(c, i)));
   (d.sites || []).forEach((s, i) => sites.set(s.id, siteToRow(s, i)));
   (d.invoices || []).forEach((inv, i) => {
     invoices.set(inv.id, invToRow(inv, i));
     (inv.lines || []).forEach((l, j) => items.set(l.id, lineToRow(l, inv.id, j)));
   });
-  return { customers, sites, invoices, items };
+  (d.masterProducts || []).forEach((p, i) => {
+    mps.set(p.id, mpToRow(p, i));
+    (p.components || []).forEach((c, j) => comps.set(c.id, compToRow(c, p.id, j)));
+  });
+  return { customers, sites, invoices, items, mps, comps };
 }
 
 async function fetchAll(sb, table) {
@@ -104,11 +124,13 @@ let numberingSnapshot = null;
 
 async function loadAll() {
   const sb = await getSupabase();
-  const [cs, ss, is_, ls, settings] = await Promise.all([
+  const [cs, ss, is_, ls, mps_, comps_, settings] = await Promise.all([
     fetchAll(sb, "customers"),
     fetchAll(sb, "customer_sites"),
     fetchAll(sb, "invoices"),
     fetchAll(sb, "invoice_items"),
+    fetchAll(sb, "master_products"),
+    fetchAll(sb, "product_components"),
     sb.from("crm_settings").select("*").eq("key", "numbering").maybeSingle(),
   ]);
   if (settings.error) throw new Error(settings.error.message);
@@ -156,11 +178,26 @@ async function loadAll() {
     return inv;
   });
 
-  const data = { customers, sites, invoices, numbering };
+  const compsByKit = {};
+  comps_.forEach((r) => {
+    (compsByKit[r.kit_id] = compsByKit[r.kit_id] || []).push({ id: r.id, componentId: r.component_id, qty: Number(r.qty) });
+  });
+  const masterProducts = mps_.map((r) => {
+    const p = {
+      id: r.id, isKit: r.is_kit === true, active: r.active !== false,
+      createdBy: nv(r.created_by), modifiedBy: nv(r.modified_by), updatedAt: r.updated_at || "",
+      components: compsByKit[r.id] || [],
+    };
+    MP_TEXT.forEach((k) => (p[k] = nv(r[snake(k)])));
+    Object.entries(MP_NUM).forEach(([k, col]) => (p[k] = nv(r[col])));
+    return p;
+  });
+
+  const data = { customers, sites, invoices, masterProducts, numbering };
   snapshot = rowsFromData(data);
   numberingSnapshot = JSON.stringify(numbering);
 
-  if (!customers.length && !sites.length && !invoices.length && !settings.data) return null;
+  if (!customers.length && !sites.length && !invoices.length && !masterProducts.length && !settings.data) return null;
   return data;
 }
 
@@ -178,11 +215,13 @@ function diff(oldMap, newMap) {
 async function saveAll(d) {
   const sb = await getSupabase();
   const next = rowsFromData(d);
-  const prev = snapshot || { customers: new Map(), sites: new Map(), invoices: new Map(), items: new Map() };
+  const prev = snapshot || rowsFromData({});
   const dc = diff(prev.customers, next.customers);
   const ds = diff(prev.sites, next.sites);
   const di = diff(prev.invoices, next.invoices);
   const dl = diff(prev.items, next.items);
+  const dm = diff(prev.mps, next.mps);
+  const dk = diff(prev.comps, next.comps);
 
   const run = async (q) => {
     const { error } = await q;
@@ -194,10 +233,14 @@ async function saveAll(d) {
   if (di.deletes.length) await run(sb.from("invoices").delete().in("id", di.deletes));
   if (ds.deletes.length) await run(sb.from("customer_sites").delete().in("id", ds.deletes));
   if (dc.deletes.length) await run(sb.from("customers").delete().in("id", dc.deletes));
+  if (dk.deletes.length) await run(sb.from("product_components").delete().in("id", dk.deletes));
+  if (dm.deletes.length) await run(sb.from("master_products").delete().in("id", dm.deletes));
   if (dc.upserts.length) await run(sb.from("customers").upsert(dc.upserts));
   if (ds.upserts.length) await run(sb.from("customer_sites").upsert(ds.upserts));
   if (di.upserts.length) await run(sb.from("invoices").upsert(di.upserts));
   if (dl.upserts.length) await run(sb.from("invoice_items").upsert(dl.upserts));
+  if (dm.upserts.length) await run(sb.from("master_products").upsert(dm.upserts));
+  if (dk.upserts.length) await run(sb.from("product_components").upsert(dk.upserts));
 
   const numbering = d.numbering || { account: 1, site: 1, invoice: 1 };
   if (JSON.stringify(numbering) !== numberingSnapshot) {

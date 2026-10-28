@@ -31,6 +31,7 @@ import ScheduleScreen from "./crm/ScheduleScreen.jsx";
 import Sidebar, { TAB_LABELS } from "./Sidebar.jsx";
 import HomeScreen from "./HomeScreen.jsx";
 import ActivityScreen from "./crm/ActivityScreen.jsx";
+import MasterProductsScreen from "./crm/MasterProductsScreen.jsx";
 import { Icon } from "./crm/ui.jsx";
 
 const CRM_TABS = ["customers", "invoices", "schedule"];
@@ -143,7 +144,7 @@ export default function ImportPlanner() {
   const [selInvoiceId, setSelInvoiceId] = useState(null);
 
   useEffect(() => {
-    if (CRM_TABS.includes(tab) || tab === "home" || tab === "activity") setCrmOn(true);
+    if (CRM_TABS.includes(tab) || ["home", "activity", "catalogue"].includes(tab)) setCrmOn(true);
   }, [tab]);
 
   const me = storageMode === "supabase" ? getSessionEmail() || "" : "";
@@ -760,6 +761,13 @@ export default function ImportPlanner() {
       )}
 
       {tab === "activity" && <ActivityScreen crm={crm} data={data} storageMode={storageMode} />}
+
+      {tab === "catalogue" &&
+        (!crm ? (
+          <div style={{ padding: 40, textAlign: "center", color: "#5a6a85", fontWeight: 600 }}>Loading master products…</div>
+        ) : (
+          <MasterProductsScreen crm={crm} updateCrm={updateCrm} askConfirm={setConfirmBox} />
+        ))}
 
       {CRM_TABS.includes(tab) &&
         (crmError ? (

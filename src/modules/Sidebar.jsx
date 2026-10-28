@@ -24,7 +24,13 @@ export const NAV_SECTIONS = [
       ["completion", "Completion", "flag"],
     ],
   },
-  { title: "Catalogue", items: [["products", "Products", "box"]] },
+  {
+    title: "Catalogue",
+    items: [
+      ["catalogue", "Master Products", "tag"],
+      ["products", "Import Products", "box"],
+    ],
+  },
   { title: "System", items: [["activity", "Activity", "clock"]] },
 ];
 

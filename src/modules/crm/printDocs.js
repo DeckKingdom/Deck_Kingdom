@@ -1,7 +1,7 @@
 // Printable documents: customer invoice and warehouse/driver job sheet.
 // Opens a print window (browser's Save as PDF gives the PDF). Returns false
 // when the window can't be opened (e.g. inside the design preview sandbox).
-import { invoiceTotals } from "../../lib/crmCore.js";
+import { invoiceTotals, explodeInvoiceLines } from "../../lib/crmCore.js";
 
 const esc = (s) =>
   String(s === null || s === undefined ? "" : s)
@@ -98,6 +98,41 @@ export function printInvoice(inv, cust, site) {
 <div class="foot">Thank you for your order · ${esc(COMPANY.web)} · ${esc(COMPANY.phone)}</div>`;
 
   return openDoc(shell("Invoice " + (inv.invNo || ""), body));
+}
+
+// Warehouse picking list: kit lines pull their component SKUs through.
+export function printLoadingBill(inv, cust, site, crm) {
+  const rows = explodeInvoiceLines(inv, crm);
+  let totalKg = 0;
+  let anyKg = false;
+  const body_rows = rows.map((r) => {
+    if (r.kind === "kit")
+      return `<tr style="background:#f3f5f8"><td></td><td colspan="2"><b>${esc(r.sku)} — ${esc(r.description)}</b>${r.colour ? " · " + esc(r.colour) : ""} <span style="color:#8593a8">(kit × ${esc(r.qty)} — load the parts below)</span></td><td></td><td class="r big">${esc(r.qty)}</td></tr>`;
+    if (r.weightKg !== null) { totalKg += r.weightKg; anyKg = true; }
+    const indent = r.kind === "part" ? 'style="padding-left:26px"' : "";
+    return `<tr><td style="width:26px"><div style="width:16px;height:16px;border:2px solid #0B1F3F;border-radius:4px"></div></td>
+      <td ${indent}><b>${esc(r.sku)}</b></td><td>${esc(r.description)}${r.colour ? " · " + esc(r.colour) : ""}</td>
+      <td class="r">${r.weightKg !== null ? r.weightKg.toFixed(1) + " kg" : ""}</td><td class="r big">${esc(r.qty)}</td></tr>`;
+  }).join("");
+
+  const dest = site || cust || {};
+  const body = head("Loading bill", inv.invNo, pretty(inv.deliveryDate || inv.date)) + `
+<div class="grid">
+  ${addrBlock("Job", [cust && cust.name, inv.jobType, "Delivery: " + pretty(inv.deliveryDate) + (inv.deliveryTime ? " " + inv.deliveryTime : ""), inv.van ? "Van: " + inv.van : ""])}
+  ${addrBlock("Deliver to", [dest.name, dest.address !== dest.name ? dest.address : "", [dest.town, dest.postcode].filter(Boolean).join(" ")])}
+  ${addrBlock("Load", [anyKg ? "Approx " + totalKg.toFixed(0) + " kg (items with known weights)" : "", inv.weightKg ? "Recorded load: " + inv.weightKg + " kg" : ""])}
+</div>
+${site && site.notes ? `<div class="note">📍 ${esc(site.notes)}</div>` : ""}
+${inv.jobNotes ? `<div class="note">📝 ${esc(inv.jobNotes)}</div>` : ""}
+<table><tr><th></th><th>SKU</th><th>Description</th><th class="r">Weight</th><th class="r">Qty to load</th></tr>${body_rows}</table>
+<div class="grid" style="margin-top:30px">
+  <div class="blk"><h3>Picked by</h3><div style="border-bottom:1px solid #0B1F3F;height:34px"></div></div>
+  <div class="blk"><h3>Checked by</h3><div style="border-bottom:1px solid #0B1F3F;height:34px"></div></div>
+  <div class="blk"><h3>Date / time</h3><div style="border-bottom:1px solid #0B1F3F;height:34px"></div></div>
+</div>
+<div class="foot">${esc(COMPANY.name)} · ${esc(COMPANY.phone)}</div>`;
+
+  return openDoc(shell("Loading bill " + (inv.invNo || ""), body));
 }
 
 export function printJobSheet(inv, cust, site) {

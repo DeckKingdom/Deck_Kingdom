@@ -5,9 +5,10 @@ import { NAVY, GOLD, RED, uid, prettyDate, prettyDateTime } from "../../lib/core
 import {
   blankInvoice, blankLine, nextNumber, invoiceTotals, gbp, isPaid,
   JOB_TYPES, PAYMENT_TYPES, VANS, PREP_FLAGS, FOLLOWUP_FLAGS, today,
+  skuIndex, invoiceCost,
 } from "../../lib/crmCore.js";
 import { Icon, Chip, Tg, Modal, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
-import { printInvoice, printJobSheet } from "./printDocs.js";
+import { printInvoice, printJobSheet, printLoadingBill } from "./printDocs.js";
 
 const navyBtn = { ...btn, background: "transparent", border: "1px solid #3a4f78", color: "#fff" };
 const numInp = { ...inp, textAlign: "right" };
@@ -74,7 +75,10 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
   const tryPrint = (kind) => {
     const cust = custById[inv.customerId];
     const site = siteById[inv.siteId];
-    const ok = kind === "invoice" ? printInvoice(inv, cust, site) : printJobSheet(inv, cust, site);
+    const ok =
+      kind === "invoice" ? printInvoice(inv, cust, site)
+      : kind === "loading" ? printLoadingBill(inv, cust, site, crm)
+      : printJobSheet(inv, cust, site);
     if (!ok) setNotice("Printing is blocked in the design preview — it works on the live site (ops.deckkingdom.co.uk).");
   };
 
@@ -174,14 +178,33 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
     </div>
   );
 
+  const bySku = skuIndex(crm);
+
   const setLine = (lid, k, v) =>
     setInv((x) => {
       const l = x.lines.find((y) => y.id === lid);
-      if (l) l[k] = v;
+      if (!l) return;
+      l[k] = v;
+      // picking a known SKU fills the line in from the master list
+      if (k === "code") {
+        const mp = bySku[String(v || "").trim().toLowerCase()];
+        if (mp) {
+          l.description = mp.name;
+          if (mp.colour) l.colour = mp.colour;
+          if (mp.priceIncVat !== "" && mp.priceIncVat !== null) l.price = Number(mp.priceIncVat);
+        }
+      }
     });
+
+  const estCost = invoiceCost(inv, crm);
 
   return (
     <div style={{ maxWidth: 1140, margin: "0 auto", padding: "18px 22px" }}>
+      <datalist id="dk-skus">
+        {(crm.masterProducts || []).filter((p) => p.active !== false && p.sku).map((p) => (
+          <option key={p.id} value={p.sku}>{p.name + (p.colour ? " · " + p.colour : "")}</option>
+        ))}
+      </datalist>
       <datalist id="dk-jobtypes">{JOB_TYPES.map((s) => <option key={s} value={s} />)}</datalist>
       <datalist id="dk-paytypes">{PAYMENT_TYPES.map((s) => <option key={s} value={s} />)}</datalist>
       <datalist id="dk-vans">{VANS.map((s) => <option key={s} value={s} />)}</datalist>
@@ -217,6 +240,7 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <button style={navyBtn} onClick={() => tryPrint("invoice")}><Icon name="doc" stroke="#fff" />Invoice PDF</button>
           <button style={navyBtn} onClick={() => tryPrint("job")}><Icon name="truck" stroke="#fff" />Job sheet</button>
+          <button style={navyBtn} onClick={() => tryPrint("loading")}><Icon name="box" stroke="#fff" />Loading bill</button>
           <button style={{ ...navyBtn, border: "1px dashed #3a4f78", color: "#8fa0c0" }} onClick={() => removeInvoice(inv)}><Icon name="bin" stroke="#8fa0c0" />Delete</button>
         </div>
       </div>
@@ -337,7 +361,7 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
               {inv.lines.map((l) => (
                 <tr key={l.id}>
                   <td style={{ padding: "6px 6px", borderBottom: "1px solid #f0f2f6", width: 120 }}>
-                    <input style={{ ...inp, fontWeight: 700, fontSize: 12.5 }} value={l.code} onChange={(e) => setLine(l.id, "code", e.target.value)} />
+                    <input style={{ ...inp, fontWeight: 700, fontSize: 12.5 }} list="dk-skus" value={l.code} onChange={(e) => setLine(l.id, "code", e.target.value)} />
                   </td>
                   <td style={{ padding: "6px 6px", borderBottom: "1px solid #f0f2f6", minWidth: 200 }}>
                     <input style={inp} value={l.description} onChange={(e) => setLine(l.id, "description", e.target.value)} />
@@ -397,6 +421,12 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
               <span style={{ fontWeight: 700, letterSpacing: 0.5 }}>TOTAL</span>
               <span style={{ fontSize: 20, fontWeight: 700, background: GOLD, color: NAVY, borderRadius: 9, padding: "4px 14px" }}>{gbp(t.total)}</span>
             </div>
+            {estCost.matched > 0 && (
+              <div style={{ fontSize: 11, color: "#8fa0c0", fontWeight: 600, textAlign: "right", paddingTop: 7 }}>
+                Est. cost {gbp(estCost.cost)} · margin {t.net > 0 ? (((t.net - estCost.cost) / t.net) * 100).toFixed(0) + "%" : "—"}
+                {estCost.matched < estCost.of ? " (" + estCost.matched + " of " + estCost.of + " lines costed)" : ""}
+              </div>
+            )}
           </div>
         </div>
       </div>

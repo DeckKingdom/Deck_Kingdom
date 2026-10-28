@@ -79,10 +79,33 @@ export const blankInvoice = (customerId, siteId) => ({
 
 export const blankLine = () => ({ id: uid(), code: "", description: "", colour: "", qty: "", price: "" });
 
+export const blankMasterProduct = () => ({
+  id: uid(),
+  sku: "",
+  name: "",
+  colour: "",
+  family: "",
+  category: "",
+  unit: "each",
+  priceIncVat: "",
+  costGbp: "",
+  weightKg: "",
+  isKit: false,
+  stock: "",
+  stockAlert: "",
+  active: true,
+  notes: "",
+  importProductId: "",
+  components: [],
+});
+
+export const blankComponent = () => ({ id: uid(), componentId: "", qty: 1 });
+
 export const emptyCrm = () => ({
   customers: [],
   sites: [],
   invoices: [],
+  masterProducts: [],
   numbering: { account: 1, site: 1, invoice: 1 },
 });
 
@@ -96,6 +119,12 @@ export const normaliseCrm = (c) => {
   if (!d.numbering.account) d.numbering.account = 1;
   if (!d.numbering.site) d.numbering.site = 1;
   if (!d.numbering.invoice) d.numbering.invoice = 1;
+  d.masterProducts = Array.isArray(d.masterProducts) ? d.masterProducts : [];
+  d.masterProducts.forEach((x) => {
+    Object.assign(x, { ...blankMasterProduct(), ...x, id: x.id || uid() });
+    x.components = Array.isArray(x.components) ? x.components : [];
+    x.components.forEach((c) => Object.assign(c, { ...blankComponent(), ...c, id: c.id || uid() }));
+  });
   d.customers.forEach((x) => Object.assign(x, { ...blankCustomer(), ...x, id: x.id || uid() }));
   d.sites.forEach((x) => Object.assign(x, { ...blankSite(x.customerId), ...x, id: x.id || uid() }));
   d.invoices.forEach((x) => {
@@ -169,6 +198,86 @@ export const daysSinceRaised = (inv) => {
 };
 
 export const followUpDone = (inv) => FOLLOWUP_FLAGS.filter(([k]) => inv.flags && inv.flags[k]).length;
+
+// ===== master products: SKU lookup, kit explosion, stock allocation =====
+export const skuIndex = (crm) => {
+  const m = {};
+  (crm.masterProducts || []).forEach((p) => {
+    const k = (p.sku || "").trim().toLowerCase();
+    if (k && !m[k]) m[k] = p;
+  });
+  return m;
+};
+
+export const mpById = (crm) => {
+  const m = {};
+  (crm.masterProducts || []).forEach((p) => (m[p.id] = p));
+  return m;
+};
+
+// One invoice -> the physical pick list: kit lines pull their components through.
+export const explodeInvoiceLines = (inv, crm) => {
+  const bySku = skuIndex(crm);
+  const byId = mpById(crm);
+  const rows = [];
+  (inv.lines || []).forEach((l) => {
+    const qty = Number(l.qty) || 0;
+    const mp = bySku[(l.code || "").trim().toLowerCase()];
+    if (mp && mp.isKit && (mp.components || []).length) {
+      rows.push({ kind: "kit", sku: mp.sku, description: l.description || mp.name, colour: l.colour || mp.colour, qty, weightKg: null });
+      mp.components.forEach((c) => {
+        const comp = byId[c.componentId];
+        if (!comp) return;
+        const cq = qty * (Number(c.qty) || 0);
+        rows.push({ kind: "part", sku: comp.sku, description: comp.name, colour: comp.colour, qty: cq, weightKg: comp.weightKg !== "" && comp.weightKg !== null ? cq * Number(comp.weightKg) : null });
+      });
+    } else {
+      rows.push({ kind: "line", sku: l.code, description: l.description, colour: l.colour, qty, weightKg: mp && mp.weightKg !== "" && mp.weightKg !== null ? qty * Number(mp.weightKg) : null });
+    }
+  });
+  return rows;
+};
+
+// Stock promised to undelivered invoices, per SKU (kits counted as their parts).
+export const allocatedBySku = (crm) => {
+  const m = {};
+  (crm.invoices || []).forEach((inv) => {
+    if (inv.deliveryCompleted) return;
+    explodeInvoiceLines(inv, crm).forEach((r) => {
+      if (r.kind === "kit") return;
+      const k = (r.sku || "").trim().toLowerCase();
+      if (k) m[k] = (m[k] || 0) + r.qty;
+    });
+  });
+  return m;
+};
+
+// Estimated cost of an invoice from master-product unit costs (lines with a
+// matching SKU only; kits cost = sum of component costs when the kit has no cost).
+export const invoiceCost = (inv, crm) => {
+  const bySku = skuIndex(crm);
+  const byId = mpById(crm);
+  let cost = 0;
+  let matched = 0;
+  (inv.lines || []).forEach((l) => {
+    const qty = Number(l.qty) || 0;
+    const mp = bySku[(l.code || "").trim().toLowerCase()];
+    if (!mp) return;
+    let unit = mp.costGbp !== "" && mp.costGbp !== null ? Number(mp.costGbp) : null;
+    if (unit === null && mp.isKit && (mp.components || []).length) {
+      unit = 0;
+      mp.components.forEach((c) => {
+        const comp = byId[c.componentId];
+        if (comp && comp.costGbp !== "" && comp.costGbp !== null) unit += (Number(c.qty) || 0) * Number(comp.costGbp);
+      });
+    }
+    if (unit !== null) {
+      cost += qty * unit;
+      matched++;
+    }
+  });
+  return { cost, matched, of: (inv.lines || []).length };
+};
 
 export const customerStats = (crm, customerId) => {
   const invs = crm.invoices.filter((i) => i.customerId === customerId);

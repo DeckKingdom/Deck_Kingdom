@@ -36,6 +36,7 @@ const PATHS = {
   chevright: <path d="M9.5 6l6 6-6 6" />,
   lock: <><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V8a4 4 0 018 0v3" /></>,
   clock: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3.5 2" /></>,
+  tag: <><path d="M3 12V3h9l9 9-8.5 8.5L3 12z" /><circle cx="7.8" cy="7.8" r="1.6" /></>,
   logout: <path d="M9 21H4V3h5M15 16l4-4-4-4M19 12H9" />,
 };
 
