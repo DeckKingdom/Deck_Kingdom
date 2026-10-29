@@ -2281,6 +2281,40 @@ export const partAlternatives = (crm, sku) => {
   return (crm.masterProducts || []).filter((r) => r.active !== false && r.sku && r.sku !== sku && partKey(r.sku) === k && !r.isKit);
 };
 
+// Every supplier we could collect a part from. Same part = same master product
+// (length · category · sub-category · product) in the same colour. When a
+// supplier's version doesn't list that colour yet it is still offered, as a
+// row to be made (addColour) — picking it adds the colour to their version.
+// Returns [{ row, productId, addColour }].
+export const partSuppliers = (crm, planner, sku) => {
+  const lists = skuLists(crm);
+  const rows = crm.masterProducts || [];
+  const me = rows.find((r) => (r.sku || "").trim().toLowerCase() === String(sku || "").trim().toLowerCase());
+  const out = partAlternatives(crm, sku).map((row) => ({ row, productId: row.importProductId || "", addColour: "" }));
+  const products = (planner && planner.products) || [];
+  const mine = me && products.find((p) => p.id === me.importProductId);
+  const key = mine && masterKey(mine);
+  if (!key) return out;
+  const colour = String(me.colour || "").trim();
+  const seg = colourSeg(lists, colour);
+  products.forEach((q) => {
+    if (q.id === mine.id || q.isKit || masterKey(q) !== key) return;
+    if (out.some((o) => o.productId === q.id)) return;
+    const qRows = rows.filter((r) => r.importProductId === q.id && r.active !== false);
+    const hit = qRows.find((r) => String(r.colour || "").trim().toLowerCase() === colour.toLowerCase())
+      || (seg && seg !== "00" && qRows.find((r) => colourSeg(lists, r.colour) === seg));
+    if (hit) return out.push({ row: hit, productId: q.id, addColour: "" });
+    const want = numericSku(q, colour, lists);
+    if (!want || !colour) return;
+    out.push({
+      row: { id: "new:" + q.id, sku: want, name: q.name || mine.name, colour, importProductId: q.id,
+        costGbp: q.costGbp === "" || q.costGbp === null || q.costGbp === undefined ? "" : Number(q.costGbp) },
+      productId: q.id, addColour: colour,
+    });
+  });
+  return out;
+};
+
 // Keep the job's pick list in step: collection picks stay; stock picks are set
 // to need - coming for each part (batch details on existing picks are kept).
 export const reconcilePicks = (inv, crm) => {

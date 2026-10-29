@@ -4,14 +4,14 @@
 // supplier SKUs, linked to the job, on its pick list at the price paid.
 import { useState } from "react";
 import { NAVY, GOLD, RED } from "../../lib/core.js";
-import { stockCheck, partAlternatives, raiseShortfallCollections, skuLists, segLabel, gbp } from "../../lib/crmCore.js";
+import { stockCheck, partSuppliers, raiseShortfallCollections, skuLists, segLabel, gbp } from "../../lib/crmCore.js";
 import { Icon, Chip, Modal, card, inp, btn, goldBtn } from "./ui.jsx";
 
 const th = { textAlign: "left", fontSize: 10.5, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", padding: "6px 6px", borderBottom: "2px solid #e6e9ef", whiteSpace: "nowrap" };
 const td = { padding: "6px 6px", borderBottom: "1px solid #eef0f4", fontSize: 12.5 };
 const num = { ...td, textAlign: "right", whiteSpace: "nowrap" };
 
-export default function StockCheck({ inv, crm, planner, updateCrm, me, onRaised, openCollection }) {
+export default function StockCheck({ inv, crm, planner, updatePlanner, updateCrm, me, onRaised, openCollection }) {
   const [choices, setChoices] = useState(null); // modal state
   const rows = stockCheck(inv, crm);
   if (!rows.length) return null;
@@ -29,8 +29,8 @@ export default function StockCheck({ inv, crm, planner, updateCrm, me, onRaised,
   const openModal = () =>
     setChoices(
       short.map((r) => {
-        const alts = partAlternatives(crm, r.sku)
-          .map((row) => ({ row, supplier: supplierOf(row), cost: row.costGbp === "" || row.costGbp === null ? null : Number(row.costGbp) }))
+        const alts = partSuppliers(crm, planner, r.sku)
+          .map((x) => ({ ...x, supplier: supplierOf(x.row), cost: x.row.costGbp === "" || x.row.costGbp === null || x.row.costGbp === undefined ? null : Number(x.row.costGbp) }))
           .sort((a, b) => (a.cost === null) - (b.cost === null) || (a.cost || 0) - (b.cost || 0));
         return { part: r, alts, pick: alts.length ? alts[0].row.id : "", qty: r.short };
       })
@@ -41,9 +41,19 @@ export default function StockCheck({ inv, crm, planner, updateCrm, me, onRaised,
       .filter((c) => c.pick && Number(c.qty) > 0)
       .map((c) => {
         const a = c.alts.find((x) => x.row.id === c.pick);
-        return { row: a.row, qty: Number(c.qty), supplierName: a.supplier };
+        return { row: a.row, qty: Number(c.qty), supplierName: a.supplier, productId: a.productId, addColour: a.addColour };
       });
     if (!picked.length) return setChoices(null);
+    // a supplier whose version didn't list this colour yet gets it added (its stock row follows)
+    const adds = picked.filter((x) => x.addColour && x.productId);
+    if (adds.length && updatePlanner)
+      updatePlanner((d) => {
+        adds.forEach((x) => {
+          const q = (d.products || []).find((p) => p.id === x.productId);
+          if (q && !(q.colours || []).some((c) => c.toLowerCase() === x.addColour.toLowerCase())) q.colours = [...(q.colours || []), x.addColour];
+        });
+        return d;
+      });
     updateCrm((c) => {
       raiseShortfallCollections(c, inv.id, picked, me);
       return c;
@@ -109,12 +119,12 @@ export default function StockCheck({ inv, crm, planner, updateCrm, me, onRaised,
               {c.alts.length ? (
                 <select style={{ ...inp, fontSize: 13 }} value={c.pick} onChange={(e) => setChoices((x) => x.map((y, j) => (j === i ? { ...y, pick: e.target.value } : y)))}>
                   {c.alts.map((a) => (
-                    <option key={a.row.id} value={a.row.id}>{(a.supplier || "Supplier") + " — " + (a.cost === null ? "no cost set" : gbp(a.cost) + " each") + " · " + a.row.sku}</option>
+                    <option key={a.row.id} value={a.row.id}>{(a.supplier || "Supplier") + " — " + (a.cost === null ? "no cost set" : gbp(a.cost) + " each") + (a.addColour ? " · adds " + a.addColour + " to their version" : " · " + a.row.sku)}</option>
                   ))}
                   <option value="">Don't collect this one</option>
                 </select>
               ) : (
-                <div style={{ fontSize: 12, fontWeight: 600, color: "#a05f10" }}>No other supplier has this part on Products — add their version there.</div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: "#a05f10" }}>No other supplier has this product on Products — add their version there.</div>
               )}
               <input type="number" min="0" style={{ ...inp, textAlign: "right" }} value={c.qty} disabled={!c.alts.length}
                 onChange={(e) => setChoices((x) => x.map((y, j) => (j === i ? { ...y, qty: e.target.value } : y)))} />

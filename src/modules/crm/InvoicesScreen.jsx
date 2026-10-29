@@ -23,7 +23,7 @@ const NoteBox = ({ children }) => (
   </div>
 );
 
-export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setSelId, goCustomer, openQuote, openSample, openCollection, me, planner, filter, setFilter }) {
+export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setSelId, goCustomer, openQuote, openSample, openCollection, me, planner, updatePlanner, filter, setFilter }) {
   const [search, setSearch] = useState("");
   const [custQuery, setCustQuery] = useState("");
   const [notice, setNotice] = useState("");
@@ -376,7 +376,7 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
         <p style={sect}>Lines</p>
         <LinesEditor doc={inv} edit={setInv} crm={crm} />
 
-        <StockCheck inv={inv} crm={crm} planner={planner} updateCrm={updateCrm} me={me} openCollection={openCollection}
+        <StockCheck inv={inv} crm={crm} planner={planner} updatePlanner={updatePlanner} updateCrm={updateCrm} me={me} openCollection={openCollection}
           onRaised={(names) => setNotice((names.length > 1 ? "Collection notes raised with " : "Collection note raised with ") + names.join(" and ") + " — linked to this job and added to its pick list below. It's on the Collections screen ready to book a van.")} />
 
         {(() => {

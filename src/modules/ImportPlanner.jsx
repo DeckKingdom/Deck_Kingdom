@@ -1063,6 +1063,7 @@ export default function ImportPlanner() {
             openCollection={openCollection}
             me={me}
             planner={data}
+            updatePlanner={update}
             filter={invFilter}
             setFilter={setInvFilter}
           />
