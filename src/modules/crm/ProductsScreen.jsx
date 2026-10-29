@@ -202,6 +202,20 @@ export default function ProductsScreen({ planner, update, crm, updateCrm, remove
   );
 }
 
+// a kit's cost is its parts: each part's stock cost (average over its colours), else its UK cost
+function kitCostFromParts(p, products, rowsByProduct) {
+  let total = 0, any = false;
+  for (const k of p.kit || []) {
+    const part = products.find((x) => x.id === k.productId);
+    if (!part) continue;
+    const costs = (rowsByProduct[part.id] || []).map((r) => r.costGbp).filter((v) => v !== "" && v !== null && v !== undefined && !isNaN(Number(v))).map(Number);
+    const each = costs.length ? costs.reduce((a, b) => a + b, 0) / costs.length : part.costGbp !== "" && part.costGbp != null ? Number(part.costGbp) : null;
+    if (each === null) continue;
+    total += each * (Number(k.qty) || 0); any = true;
+  }
+  return any ? total : null;
+}
+
 // ===== colours: chosen ones as chips, add more from the colour list =====
 function ColourPicker({ p, lists, unknown, onChange }) {
   const cur = p.colours || [];
@@ -272,8 +286,11 @@ function Version({ p, lists, rows, rowsByProduct, products, setP, removeProduct,
           <ColourPicker p={p} lists={lists} unknown={unknownColours} onChange={(cols) => setP(p.id, "colours", cols.join(", "))} />
         </div>
         <div>
-          <span style={{ ...lbl, fontSize: 10 }}>UK cost £</span>
-          <input type="number" style={numI} value={p.costGbp === undefined || p.costGbp === null ? "" : p.costGbp} onChange={(e) => setP(p.id, "costGbp", e.target.value)} />
+          <span style={{ ...lbl, fontSize: 10 }}>{p.isKit ? "Parts cost £" : "UK cost £"}</span>
+          {p.isKit
+            ? <input style={{ ...numI, background: "#f4f6f9", color: "#5a6a85" }} disabled title="Worked out from the parts' costs — not stored on the kit"
+                value={(() => { const c = kitCostFromParts(p, products, rowsByProduct); return c === null ? "—" : c.toFixed(2); })()} />
+            : <input type="number" style={numI} value={p.costGbp === undefined || p.costGbp === null ? "" : p.costGbp} onChange={(e) => setP(p.id, "costGbp", e.target.value)} />}
         </div>
         <div>
           <span style={{ ...lbl, fontSize: 10 }}>Retail £ inc</span>
