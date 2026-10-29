@@ -4,7 +4,7 @@
 // supplier SKUs, linked to the job, on its pick list at the price paid.
 import { useState } from "react";
 import { NAVY, GOLD, RED } from "../../lib/core.js";
-import { stockCheck, partSuppliers, raiseShortfallCollections, skuLists, segLabel, gbp } from "../../lib/crmCore.js";
+import { stockCheck, partSuppliers, raiseShortfallCollections, supplierKey, skuLists, segLabel, gbp } from "../../lib/crmCore.js";
 import { Icon, Chip, Modal, card, inp, btn, goldBtn } from "./ui.jsx";
 
 const th = { textAlign: "left", fontSize: 10.5, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", padding: "6px 6px", borderBottom: "2px solid #e6e9ef", whiteSpace: "nowrap" };
@@ -26,7 +26,19 @@ export default function StockCheck({ inv, crm, planner, updatePlanner, updateCrm
   const colRefs = [...new Set((inv.picks || []).filter((p) => /^COL-/i.test(p.batchRef || "")).map((p) => p.batchRef))];
   const collByRef = Object.fromEntries((crm.collections || []).map((c) => ["COL-" + c.collectionNo, c]));
 
-  const suppliers = [...(crm.suppliers || [])].filter((x) => x.name && x.active !== false).sort((a, b) => a.name.localeCompare(b.name));
+  // only suppliers we actually buy products from (named on a product, or in the SKU supplier list)
+  const productSuppliers = [
+    ...((planner && planner.products) || []).map((p) => supplierKey(p.supplier)),
+    ...lists.supplier.map((x) => supplierKey(String(x.label || "").replace(/\(.*\)/, ""))),
+  ].filter((k) => k.length > 2);
+  const isProductSupplier = (name) => {
+    const k = supplierKey(name);
+    if (!k || k.startsWith("deckkingdom")) return false; // not ourselves
+    return productSuppliers.some((p) => p === k || k.startsWith(p) || p.startsWith(k));
+  };
+  const suppliers = [...(crm.suppliers || [])]
+    .filter((x) => x.name && x.active !== false && isProductSupplier(x.name))
+    .sort((a, b) => a.name.localeCompare(b.name));
   const openModal = () =>
     setChoices(
       short.map((r) => {
@@ -135,7 +147,7 @@ export default function StockCheck({ inv, crm, planner, updatePlanner, updateCrm
                   <select style={{ ...inp, fontSize: 13, borderColor: c.pick ? "#d5d9e0" : "#E8912D" }} value={c.pick}
                     title="No other supplier's version is on Products — pick who you're collecting it from"
                     onChange={(e) => setChoices((x) => x.map((y, j) => (j === i ? { ...y, pick: e.target.value } : y)))}>
-                    <option value="">Collect from… (no other version on Products)</option>
+                    <option value="">{suppliers.length ? "Collect from… (no other version on Products)" : "No product suppliers set up"}</option>
                     {suppliers.map((sp) => <option key={sp.id} value={"sup:" + sp.id}>{sp.name}</option>)}
                   </select>
                   <input type="number" min="0" step="0.01" placeholder="£ each" style={{ ...inp, textAlign: "right" }} value={c.cost}
