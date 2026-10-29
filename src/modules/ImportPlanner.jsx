@@ -787,7 +787,19 @@ export default function ImportPlanner() {
       </div>
 
       {tab === "home" && (
-        <HomeScreen data={data} crm={crm} setTab={setTab} addShipment={addShipment} newInvoice={() => (crm ? newInvoiceFor("", "") : setTab("invoices"))} />
+        <>
+          {crmError && (
+            <div style={{ maxWidth: 1140, margin: "14px auto 0", padding: "0 22px" }}>
+              <div style={{ background: "#C8102E10", border: "1px solid #ecc4cb", borderRadius: 10, padding: "10px 14px", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", fontSize: 13, fontWeight: 600, color: "#8a0b20" }}>
+                <span style={{ flex: 1 }}>
+                  Couldn't load the customer/stock data — usually a migration hasn't been run in Supabase yet (latest: 012_vans.sql). Nothing is lost.
+                </span>
+                <button onClick={loadCrm} style={{ ...btn, padding: "6px 12px", fontSize: 12.5, background: GOLD, borderColor: GOLD }}>Retry</button>
+              </div>
+            </div>
+          )}
+          <HomeScreen data={data} crm={crm} setTab={setTab} addShipment={addShipment} newInvoice={() => (crm ? newInvoiceFor("", "") : setTab("invoices"))} />
+        </>
       )}
 
       {tab === "activity" && <ActivityScreen crm={crm} data={data} storageMode={storageMode} />}
