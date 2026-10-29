@@ -1,9 +1,9 @@
 // Line entry shared by invoices and quotes: SKU type-ahead fills description,
 // colour and price from the products list; qty is a 1-100 dropdown (double-
 // click to type any amount). `edit(fn)` mutates the record that owns `lines`.
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { RED, NAVY } from "../../lib/core.js";
-import { blankLine, skuIndex, PRODUCT_SOURCES, skuSource, skuLists, skuOptionLabel } from "../../lib/crmCore.js";
+import { blankLine, skuIndex, PRODUCT_SOURCES, skuSource, skuLists, skuOptionLabel, colourSeg } from "../../lib/crmCore.js";
 import { Icon, SuggestInput, selectAllProps, inp, btn, abtn } from "./ui.jsx";
 
 const numInp = { ...inp, textAlign: "right" };
@@ -118,7 +118,12 @@ export default function LinesEditor({ doc, edit, crm, readOnly }) {
                       <input style={inp} value={l.description} {...selectAllProps} onChange={(e) => setLine(l.id, "description", e.target.value)} />
                     </td>
                     <td style={{ ...td, width: 130 }}>
-                      <input style={inp} value={l.colour} {...selectAllProps} onChange={(e) => setLine(l.id, "colour", e.target.value)} />
+                      <ColourSelect line={l} crm={crm} bySku={bySku} onPick={(colour, sku) => edit((x) => {
+                        const y = x.lines.find((z) => z.id === l.id);
+                        if (!y) return;
+                        y.colour = colour;
+                        if (sku) y.code = sku; // each colour has its own SKU, so the code follows the colour
+                      })} />
                     </td>
                     <td style={{ ...td, width: 100 }}>
                       <input style={numInp} inputMode="decimal" value={l.price} {...selectAllProps} onChange={(e) => setLine(l.id, "price", e.target.value)} />
@@ -140,6 +145,72 @@ export default function LinesEditor({ doc, edit, crm, readOnly }) {
           onClick={() => edit((x) => x.lines.push(blankLine()))}>
           <Icon name="plus" />Add line
         </button>
+      )}
+    </>
+  );
+}
+
+// Colour for a line: a radio list in a pop-out. When the line's SKU is a known
+// product it offers just that product's colours (and swaps the SKU to match);
+// otherwise every colour on the colour list.
+function ColourSelect({ line, crm, bySku, onPick }) {
+  const [box, setBox] = useState(null); // where to draw the pop-out (it sits outside the scrolling table)
+  const btnRef = useRef(null), popRef = useRef(null);
+  useEffect(() => {
+    if (!box) return;
+    const off = (e) => !(btnRef.current && btnRef.current.contains(e.target)) && !(popRef.current && popRef.current.contains(e.target)) && setBox(null);
+    const shut = () => setBox(null);
+    document.addEventListener("mousedown", off);
+    window.addEventListener("scroll", shut, true);
+    return () => { document.removeEventListener("mousedown", off); window.removeEventListener("scroll", shut, true); };
+  }, [box]);
+  const mp = bySku[String(line.code || "").trim().toLowerCase()];
+  const siblings = mp && mp.importProductId
+    ? (crm.masterProducts || []).filter((m) => m.importProductId === mp.importProductId && m.active !== false && (m.colour || "").trim())
+    : [];
+  const lists = skuLists(crm);
+  const opts = siblings.length
+    ? siblings.map((m) => ({ label: m.colour, sku: m.sku }))
+    : (lists.colour || []).filter((x) => x.code !== "00").map((x) => ({ label: x.label, sku: "" }));
+  const curSeg = colourSeg(lists, line.colour);
+  const isOn = (o) => String(o.label).toLowerCase() === String(line.colour || "").toLowerCase() || (!siblings.length && curSeg && colourSeg(lists, o.label) === curSeg);
+  const open = () => {
+    const r = btnRef.current.getBoundingClientRect();
+    const w = siblings.length ? Math.max(r.width, 180) : 300;
+    const below = window.innerHeight - r.bottom > 300;
+    setBox({ left: Math.min(r.left, window.innerWidth - w - 8), top: below ? r.bottom + 4 : undefined, bottom: below ? undefined : window.innerHeight - r.top + 4, width: w });
+  };
+  return (
+    <>
+      <button ref={btnRef} type="button" onClick={() => (box ? setBox(null) : open())}
+        style={{ ...inp, width: "100%", textAlign: "left", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, borderColor: box ? NAVY : !line.colour && siblings.length > 1 ? "#E8912D" : "#d5d9e0" }}>
+        <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: line.colour ? undefined : "#8593a8" }}>{line.colour || "Colour"}</span>
+        <span style={{ color: "#5a6a85", fontSize: 10 }}>▾</span>
+      </button>
+      {box && (
+        <div ref={popRef} style={{ position: "fixed", zIndex: 1000, left: box.left, top: box.top, bottom: box.bottom, width: box.width, background: "#fff", border: "1px solid #d5d9e0", borderRadius: 10, boxShadow: "0 10px 30px rgba(11,31,63,.18)", padding: 8 }}>
+          {siblings.length > 0 && <div style={{ fontSize: 10.5, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", padding: "2px 6px 6px" }}>Colours for this product</div>}
+          <div style={{ display: "grid", gridTemplateColumns: siblings.length ? "1fr" : "1fr 1fr", gap: "2px 8px", maxHeight: 280, overflowY: "auto" }}>
+            {opts.map((o) => {
+              const on = isOn(o);
+              return (
+                <label key={o.label + o.sku} onClick={() => { onPick(o.label, o.sku); setBox(null); }}
+                  style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 6px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: on ? 700 : 500, color: on ? NAVY : "#3a4a63", background: on ? "#eef1f6" : "transparent" }}>
+                  <span style={{ width: 15, height: 15, flex: "none", borderRadius: "50%", border: "2px solid " + (on ? NAVY : "#b8c0cc"), display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+                    {on && <span style={{ width: 7, height: 7, borderRadius: "50%", background: NAVY }} />}
+                  </span>
+                  {o.label}
+                </label>
+              );
+            })}
+          </div>
+          {line.colour && (
+            <div style={{ borderTop: "1px solid #eef0f4", marginTop: 6, paddingTop: 6 }}>
+              <button type="button" onClick={() => { onPick("", ""); setBox(null); }}
+                style={{ border: "none", background: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 700, color: "#8593a8", padding: "2px 6px" }}>No colour</button>
+            </div>
+          )}
+        </div>
       )}
     </>
   );
