@@ -145,7 +145,7 @@ export function printLoadingBill(inv, cust, site, crm, planner) {
 <div class="grid">
   ${addrBlock("Job", [cust && cust.name, inv.jobType, "Delivery: " + pretty(inv.deliveryDate) + (inv.deliveryTime ? " " + inv.deliveryTime : ""), inv.van ? "Van: " + inv.van : ""])}
   ${addrBlock("Deliver to", [dest.name, dest.address !== dest.name ? dest.address : "", [dest.town, dest.postcode].filter(Boolean).join(" ")])}
-  ${addrBlock("Load", [anyKg ? "Approx " + totalKg.toFixed(0) + " kg (items with known weights)" : "", inv.weightKg ? "Recorded load: " + inv.weightKg + " kg" : ""])}
+  ${addrBlock("Load", [anyKg ? "Approx " + totalKg.toFixed(0) + " kg (items with known weights)" : ""])}
 </div>
 ${site && site.notes ? `<div class="note">📍 ${esc(site.notes)}</div>` : ""}
 ${inv.jobNotes ? `<div class="note">📝 ${esc(inv.jobNotes)}</div>` : ""}

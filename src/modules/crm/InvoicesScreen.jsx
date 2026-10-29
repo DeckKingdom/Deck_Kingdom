@@ -5,7 +5,7 @@ import { NAVY, GOLD, RED, uid, prettyDate, prettyDateTime } from "../../lib/core
 import {
   blankInvoice, blankLine, nextNumber, invoiceTotals, gbp, isPaid,
   JOB_TYPES, PAYMENT_TYPES, PREP_FLAGS, FOLLOWUP_FLAGS, today, TIME_SLOTS, vanOptions,
-  skuIndex, invoiceCost, buildPicks, pickLandedCost, jobCost, blankPick,
+  skuIndex, invoiceCost, buildPicks, pickLandedCost, jobCost, blankPick, invoiceLoadKg,
   TRADE_COUNTER, TRADE_COUNTER_LABEL,
 } from "../../lib/crmCore.js";
 import { Icon, Chip, Tg, Modal, selectAllProps, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
@@ -327,7 +327,7 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
       <div style={card}>
         <p style={sect}>Job &amp; delivery</p>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(118px, 1fr))", gap: 12, marginBottom: 12 }}>
-          <div>
+          <div style={{ gridColumn: "span 2" }}>
             <span style={lbl}>Job type</span>
             <select style={inp} value={inv.jobType} onChange={(e) => setInv((x) => (x.jobType = e.target.value))}>
               {inv.jobType && !JOB_TYPES.includes(inv.jobType) && <option value={inv.jobType}>{inv.jobType}</option>}
@@ -352,12 +352,11 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
             </select>
           </div>
           {field("Order ref / PO", "orderRef")}
+          {field("Payment date", "paymentDate", { type: "date" })}
           <div>
             <span style={lbl}>Payment type</span>
             <input style={inp} list="dk-paytypes" value={inv.paymentType} onChange={(e) => setInv((x) => (x.paymentType = e.target.value))} />
           </div>
-          {field("Payment date", "paymentDate", { type: "date" })}
-          {field("Load kg", "weightKg", { inputMode: "decimal" }, { textAlign: "right" })}
         </div>
         <div style={{ display: "flex", gap: 5, alignItems: "center", flexWrap: "wrap" }}>
           <span style={{ ...lbl, marginBottom: 0, marginRight: 4 }}>Prep</span>
@@ -555,7 +554,18 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
             <textarea style={{ ...inp, resize: "vertical" }} rows={4} placeholder="Anything the driver or warehouse should know…"
               value={inv.jobNotes} onChange={(e) => setInv((x) => (x.jobNotes = e.target.value))} />
           </div>
-          <div style={{ background: NAVY, borderRadius: 12, padding: "6px 18px 12px", color: "#fff", minWidth: 280 }}>
+          <div style={{ minWidth: 280 }}>
+          {(() => {
+            const lk = invoiceLoadKg(inv, crm);
+            return (
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#f8f9fb", border: "1px solid #e6e9ef", borderRadius: 10, padding: "8px 16px", marginBottom: 8, fontSize: 13 }}
+                title="Summed from the master-product weights of the lines (kits as their parts)">
+                <span style={{ color: "#5a6a85", fontWeight: 600 }}>Load</span>
+                <b>{lk === null ? "—" : "≈ " + lk.toLocaleString("en-GB", { maximumFractionDigits: 0 }) + " kg"}</b>
+              </div>
+            );
+          })()}
+          <div style={{ background: NAVY, borderRadius: 12, padding: "6px 18px 12px", color: "#fff" }}>
             {[["Goods (inc VAT)", gbp(t.goods)]].map(([k, v]) => (
               <div key={k} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 0", borderBottom: "1px solid #ffffff1c", fontSize: 13.5 }}>
                 <span style={{ color: "#aeb9cf", fontWeight: 600 }}>{k}</span><b>{v}</b>
@@ -593,6 +603,7 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
                 {estCost.matched < estCost.of ? " (" + estCost.matched + " of " + estCost.of + " lines costed)" : ""}
               </div>
             )}
+          </div>
           </div>
         </div>
       </div>

@@ -458,6 +458,22 @@ export const explodeInvoiceLines = (inv, crm) => {
   return rows;
 };
 
+// Estimated load for an invoice from master-product weights (kits as parts);
+// falls back to a manually recorded weight (e.g. imported history).
+export const invoiceLoadKg = (inv, crm) => {
+  let kg = 0;
+  let any = false;
+  explodeInvoiceLines(inv, crm).forEach((r) => {
+    if (r.weightKg !== null && r.weightKg !== undefined) {
+      kg += r.weightKg;
+      any = true;
+    }
+  });
+  if (any) return kg;
+  const manual = Number(inv.weightKg);
+  return isFinite(manual) && inv.weightKg !== "" && inv.weightKg !== null ? manual : null;
+};
+
 // Stock promised to undelivered invoices, per SKU (kits counted as their parts).
 export const allocatedBySku = (crm) => {
   const m = {};

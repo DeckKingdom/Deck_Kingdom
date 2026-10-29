@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import { NAVY, GOLD, RED, prettyDate } from "../../lib/core.js";
 import {
-  invoiceTotals, gbp, isPaid, scheduleStatus, STRIPE_COLOURS, daysSinceRaised, isCollectionJob,
+  invoiceTotals, gbp, isPaid, scheduleStatus, STRIPE_COLOURS, daysSinceRaised, isCollectionJob, invoiceLoadKg,
   PREP_FLAGS, FOLLOWUP_FLAGS, today,
 } from "../../lib/crmCore.js";
 import { Icon, Chip, Tg, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
@@ -128,7 +128,7 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
           {i.jobType || "—"}
           <div style={{ fontSize: 11, color: "#5a6a85", fontWeight: 600, marginTop: 1 }}>{i.van || (isCollectionJob(i) ? "Customer pickup" : "—")}</div>
         </div>
-        <div style={{ flex: "none", width: 48, textAlign: "right", fontSize: 12.5, fontWeight: 700 }}>{i.weightKg ? Number(i.weightKg).toLocaleString("en-GB") : "—"}</div>
+        <div style={{ flex: "none", width: 48, textAlign: "right", fontSize: 12.5, fontWeight: 700 }}>{(() => { const lk = invoiceLoadKg(i, crm); return lk === null ? "—" : lk.toLocaleString("en-GB", { maximumFractionDigits: 0 }); })()}</div>
         <div style={{ flex: "none", width: 48, textAlign: "right", fontSize: 12.5, fontWeight: 700 }}>{i.deliveryTime || "—"}</div>
         <div style={{ display: "flex", gap: 4, flex: "none" }}>
           {PREP_FLAGS.map(([k, label, icon]) => (
@@ -210,7 +210,7 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
   const groupMeta = (rows) => {
     const invs = rows.filter((e) => e.kind === "inv").map((e) => e.obj);
     const cols = rows.filter((e) => e.kind === "col");
-    const kg = invs.reduce((t, i) => t + (Number(i.weightKg) || 0), 0);
+    const kg = invs.reduce((t, i) => t + (invoiceLoadKg(i, crm) || 0), 0);
     const vansUsed = [...new Set(rows.map((e) => e.obj.van).filter(Boolean))];
     return (
       invs.length + (invs.length === 1 ? " job" : " jobs") +
