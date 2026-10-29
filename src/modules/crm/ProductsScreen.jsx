@@ -5,6 +5,7 @@
 import React, { useState, useMemo } from "react";
 import { NAVY, GOLD, RED, uid } from "../../lib/core.js";
 import {
+  kitWeight,
   skuLists, productSkuBase, masterKey, productsInList, colourSeg, numericSku, segLabel, cleanCode, codeSource,
   DEFAULT_SKU_LISTS, gbp, kitPartsFor,
 } from "../../lib/crmCore.js";
@@ -339,11 +340,18 @@ function Version({ p, lists, rows, rowsByProduct, products, setP, removeProduct,
         <button style={{ ...abtn, color: RED, border: "none" }} title="Remove this version" onClick={() => removeProduct(p.id)}><Icon name="x" stroke={RED} /></button>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "110px 130px 150px minmax(200px,1fr) " + (isImport ? "80px 80px 80px 80px" : ""), gap: 8, alignItems: "end", marginTop: 8 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "110px 130px 150px minmax(200px,1fr) " + (p.isKit ? "100px" : isImport ? "80px 80px 80px 80px" : ""), gap: 8, alignItems: "end", marginTop: 8 }}>
         {segSelect("segLen", lists.length, "Length")}
         {segSelect("segCat", lists.category, "Category")}
         {segSelect("segSub", lists.sub, "Sub-category")}
         {segSelect("segProd", prodList, "Product", !p.segCat || !p.segSub)}
+        {p.isKit && (
+          <div title="Worked out from the parts' kg / pc × qty — used on the loading bill">
+            <span style={{ ...lbl, fontSize: 10 }}>Kit weight kg</span>
+            <input style={{ ...numI, background: "#f4f6f9", color: "#5a6a85" }} disabled
+              value={(() => { const w = kitWeight(p, products); return w ? String(w) : "—"; })()} />
+          </div>
+        )}
         {isImport && !p.isKit && (
           <>
             <div><span style={{ ...lbl, fontSize: 10 }}>Import $ / pc</span><input type="number" style={numI} value={p.cost} onChange={(e) => setP(p.id, "cost", e.target.value)} /></div>

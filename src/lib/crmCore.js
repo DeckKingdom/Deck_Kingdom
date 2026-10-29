@@ -1270,6 +1270,13 @@ export const segLabel = (list, code) => {
   return hit ? hit.label : "";
 };
 
+// A kit weighs what its parts weigh: each part's kg / pc × qty in the kit.
+export const kitWeight = (p, products) =>
+  Math.round((p.kit || []).reduce((t, k) => {
+    const part = (products || []).find((x) => x.id === k.productId);
+    return t + (part ? Number(part.weight) || 0 : 0) * (Number(k.qty) || 0);
+  }, 0) * 100) / 100;
+
 // Keeps the background stock/SKU table in step with the Products screen:
 // one row per product+colour, created and updated automatically. Stock and
 // batch costs are never touched. When a product has a code its rows take the
@@ -1302,7 +1309,7 @@ export const syncCatalogue = (crm, planner) => {
         colour: col,
         family: code ? skuFor(code, col) : p.name || "", // readable code alongside the numeric SKU
         category: p.category || "",
-        weightKg: Number(p.weight) > 0 ? Number(p.weight) : "",
+        weightKg: p.isKit ? kitWeight(p, products) || "" : Number(p.weight) > 0 ? Number(p.weight) : "",
         priceIncVat: Number(p.salePrice) > 0 ? Number(p.salePrice) : "",
       };
       const cur = byKey[p.id + "||" + lk];
