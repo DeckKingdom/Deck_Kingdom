@@ -12,7 +12,64 @@ export const TRADE_COUNTER = "__trade_counter__";
 export const TRADE_COUNTER_LABEL = "Trade counter collection";
 
 export const CONTACT_METHODS = ["Text", "WhatsApp", "WhatsApp Business", "Messenger", "Email", "Phone"];
-export const VANS = ["Van 1", "Van 2", "Van 3", "Sprinter", "Courier"];
+export const VANS = ["Vauxhall", "Renault", "Sprinter"];
+
+// delivery time slots, FileMaker order: AM / PM / TBC then quarter hours
+export const TIME_SLOTS = (() => {
+  const out = ["AM", "PM", "TBC"];
+  for (let h = 8; h <= 18; h++)
+    for (const m of ["00", "15", "30", "45"]) {
+      if (h === 18 && m !== "00") break;
+      out.push(String(h).padStart(2, "0") + ":" + m);
+    }
+  return out;
+})();
+
+// ===== vans (fleet) =====
+export const VAN_CHECK_ITEMS = [
+  ["tyres", "Tyres & pressures"],
+  ["lights", "Lights & indicators"],
+  ["oil", "Oil level"],
+  ["coolant", "Coolant & washer fluid"],
+  ["brakes", "Brakes & horn"],
+  ["bodywork", "Bodywork & mirrors"],
+  ["loadArea", "Load area, straps & tail lift"],
+];
+
+export const blankVan = () => ({
+  id: uid(),
+  name: "",
+  reg: "",
+  makeModel: "",
+  insurer: "",
+  policyNo: "",
+  insuranceRenewal: "",
+  motDue: "",
+  taxDue: "",
+  serviceDue: "",
+  notes: "",
+  active: true,
+  checks: [],
+});
+
+export const blankVanCheck = () => {
+  const c = { id: uid(), date: today(), by: "", mileage: "", defects: "" };
+  VAN_CHECK_ITEMS.forEach(([k]) => (c[k] = true));
+  return c;
+};
+
+// days until a stored date (negative = overdue), null when unset
+export const daysUntil = (dateStr) => {
+  if (!dateStr) return null;
+  const d = daysBetween(today(), dateStr);
+  return d === null ? null : d;
+};
+
+// the van names offered on invoices/collections: the fleet if defined, else defaults
+export const vanOptions = (crm) => {
+  const names = (crm.vans || []).filter((v) => v.active !== false && (v.name || "").trim()).map((v) => v.name.trim());
+  return names.length ? names : VANS;
+};
 
 export const today = () => new Date().toISOString().slice(0, 10);
 
@@ -159,6 +216,7 @@ export const emptyCrm = () => ({
   masterProducts: [],
   collections: [],
   movements: [],
+  vans: [],
   numbering: { account: 1, site: 1, invoice: 1, collection: 1 },
 });
 
@@ -181,6 +239,12 @@ export const normaliseCrm = (c) => {
   });
   d.movements = Array.isArray(d.movements) ? d.movements : [];
   d.movements.forEach((m) => Object.assign(m, { ...blankMovement(), ...m, id: m.id || uid() }));
+  d.vans = Array.isArray(d.vans) ? d.vans : [];
+  d.vans.forEach((v) => {
+    Object.assign(v, { ...blankVan(), ...v, id: v.id || uid() });
+    v.checks = Array.isArray(v.checks) ? v.checks : [];
+    v.checks.forEach((c) => Object.assign(c, { ...blankVanCheck(), ...c, id: c.id || uid(), date: c.date || "" }));
+  });
   d.masterProducts = Array.isArray(d.masterProducts) ? d.masterProducts : [];
   d.masterProducts.forEach((x) => {
     Object.assign(x, { ...blankMasterProduct(), ...x, id: x.id || uid() });

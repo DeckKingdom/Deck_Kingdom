@@ -1,7 +1,7 @@
 // Home: the landing screen — live snapshot of both modules and big
 // jump-off tiles into every layout.
 import { NAVY, GOLD, RED, addMonths, prettyDate, STATUS_COLOURS } from "../lib/core.js";
-import { invoiceTotals, gbp, isPaid, today, stockValuation } from "../lib/crmCore.js";
+import { invoiceTotals, gbp, isPaid, today, stockValuation, daysUntil } from "../lib/crmCore.js";
 import { Icon, Chip, card, sect } from "./crm/ui.jsx";
 
 const Tile = ({ icon, label, note, onClick }) => (
@@ -93,6 +93,10 @@ export default function HomeScreen({ data, crm, setTab, addShipment, newInvoice 
             <Tile icon="users" label="Customers" note={crm ? crm.customers.length.toLocaleString("en-GB") + " accounts" : "Loading…"} onClick={() => setTab("customers")} />
             <Tile icon="doc" label="Invoices" note={crm ? crm.invoices.length.toLocaleString("en-GB") + " raised" + (awaiting && awaiting.length ? " · " + awaiting.length + " awaiting payment" : "") : "Loading…"} onClick={() => setTab("invoices")} />
             <Tile icon="cal" label="Delivery Schedule" note={crm ? (todays ? todays + " out today" : "Nothing out today") + (pending ? " · " + pending + " to book in" : "") : "Loading…"} onClick={() => setTab("schedule")} />
+            <Tile icon="truck" label="Vans" note={crm ? (() => {
+              const due = (crm.vans || []).flatMap((v) => [v.insuranceRenewal, v.motDue, v.taxDue].map(daysUntil).filter((d) => d !== null && d <= 30));
+              return (crm.vans || []).length + " vans" + (due.length ? " · " + due.length + " renewal" + (due.length > 1 ? "s" : "") + " due soon" : "");
+            })() : "Loading…"} onClick={() => setTab("vans")} />
           </div>
         </div>
 

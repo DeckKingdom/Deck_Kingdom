@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import { NAVY, GOLD, RED, uid, prettyDate, prettyDateTime } from "../../lib/core.js";
 import {
   blankInvoice, blankLine, nextNumber, invoiceTotals, gbp, isPaid,
-  JOB_TYPES, PAYMENT_TYPES, VANS, PREP_FLAGS, FOLLOWUP_FLAGS, today,
+  JOB_TYPES, PAYMENT_TYPES, PREP_FLAGS, FOLLOWUP_FLAGS, today, TIME_SLOTS, vanOptions,
   skuIndex, invoiceCost, buildPicks, pickLandedCost, jobCost, blankPick,
   TRADE_COUNTER, TRADE_COUNTER_LABEL,
 } from "../../lib/crmCore.js";
@@ -229,7 +229,6 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
         ))}
       </datalist>
       <datalist id="dk-paytypes">{PAYMENT_TYPES.map((s) => <option key={s} value={s} />)}</datalist>
-      <datalist id="dk-vans">{VANS.map((s) => <option key={s} value={s} />)}</datalist>
 
       <button style={{ ...btn, marginBottom: 12 }} onClick={() => setSelId(null)}><Icon name="back" stroke={NAVY} />All invoices</button>
 
@@ -336,10 +335,21 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
             </select>
           </div>
           {field("Delivery date", "deliveryDate", { type: "date" })}
-          {field("Time", "deliveryTime", { placeholder: "e.g. 9:30" })}
           <div>
-            <span style={lbl}>Van / courier</span>
-            <input style={inp} list="dk-vans" value={inv.van} onChange={(e) => setInv((x) => (x.van = e.target.value))} />
+            <span style={lbl}>Time</span>
+            <select style={inp} value={inv.deliveryTime} onChange={(e) => setInv((x) => (x.deliveryTime = e.target.value))}>
+              <option value="">—</option>
+              {inv.deliveryTime && !TIME_SLOTS.includes(inv.deliveryTime) && <option value={inv.deliveryTime}>{inv.deliveryTime}</option>}
+              {TIME_SLOTS.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+          <div>
+            <span style={lbl}>Van</span>
+            <select style={inp} value={inv.van} onChange={(e) => setInv((x) => (x.van = e.target.value))}>
+              <option value="">—</option>
+              {inv.van && !vanOptions(crm).includes(inv.van) && <option value={inv.van}>{inv.van}</option>}
+              {vanOptions(crm).map((v) => <option key={v} value={v}>{v}</option>)}
+            </select>
           </div>
           {field("Order ref / PO", "orderRef")}
           <div>

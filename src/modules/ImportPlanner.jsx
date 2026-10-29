@@ -34,6 +34,7 @@ import ActivityScreen from "./crm/ActivityScreen.jsx";
 import MasterProductsScreen from "./crm/MasterProductsScreen.jsx";
 import StockScreen from "./crm/StockScreen.jsx";
 import CollectionsScreen from "./crm/CollectionsScreen.jsx";
+import VansScreen from "./crm/VansScreen.jsx";
 import { Icon } from "./crm/ui.jsx";
 
 const CRM_TABS = ["customers", "invoices", "schedule"];
@@ -149,7 +150,7 @@ export default function ImportPlanner() {
   const [invFilter, setInvFilter] = useState(null); // { customerId, outstanding }
 
   useEffect(() => {
-    if (CRM_TABS.includes(tab) || ["home", "activity", "catalogue", "stock", "collections"].includes(tab)) setCrmOn(true);
+    if (CRM_TABS.includes(tab) || ["home", "activity", "catalogue", "stock", "collections", "vans"].includes(tab)) setCrmOn(true);
   }, [tab]);
 
   const me = storageMode === "supabase" ? getSessionEmail() || "" : "";
@@ -778,6 +779,13 @@ export default function ImportPlanner() {
       )}
 
       {tab === "activity" && <ActivityScreen crm={crm} data={data} storageMode={storageMode} />}
+
+      {tab === "vans" &&
+        (!crm ? (
+          <div style={{ padding: 40, textAlign: "center", color: "#5a6a85", fontWeight: 600 }}>Loading vans…</div>
+        ) : (
+          <VansScreen crm={crm} updateCrm={updateCrm} askConfirm={setConfirmBox} me={me} />
+        ))}
 
       {tab === "catalogue" &&
         (!crm ? (

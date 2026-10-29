@@ -115,6 +115,21 @@ const collItemToRow = (it, collectionId, i) => ({
   colour: str(it.colour), qty: Number(it.qty) || 0, unit_cost: num(it.unitCost), position: i,
 });
 
+const VAN_TEXT = ["name", "reg", "makeModel", "insurer", "policyNo", "insuranceRenewal", "motDue", "taxDue", "serviceDue", "notes"];
+const CHECK_BOOLS = { tyres: "tyres", lights: "lights", oil: "oil", coolant: "coolant", brakes: "brakes", bodywork: "bodywork", loadArea: "load_area" };
+
+const vanToRow = (v, i) => {
+  const row = { id: v.id, active: v.active !== false, position: i };
+  VAN_TEXT.forEach((k) => (row[snake(k)] = str(v[k])));
+  return row;
+};
+
+const checkToRow = (c, vanId, i) => {
+  const row = { id: c.id, van_id: vanId, date: str(c.date), by_who: str(c.by), mileage: num(c.mileage), defects: str(c.defects), position: i };
+  Object.entries(CHECK_BOOLS).forEach(([k, col]) => (row[col] = c[k] !== false));
+  return row;
+};
+
 const moveToRow = (m, i) => ({
   id: m.id, at: m.at || new Date().toISOString(), master_product_id: str(m.mpId), sku: str(m.sku),
   qty: Number(m.qty) || 0, unit_cost: num(m.unitCost), kind: str(m.kind), ref: str(m.ref), actor: str(m.actor), position: i,
@@ -147,7 +162,13 @@ function rowsFromData(d) {
   });
   const moves = new Map();
   (d.movements || []).forEach((m, i) => moves.set(m.id, moveToRow(m, i)));
-  return { customers, sites, invoices, items, picks, mps, comps, colls, collItems, moves };
+  const vans = new Map();
+  const checks = new Map();
+  (d.vans || []).forEach((v, i) => {
+    vans.set(v.id, vanToRow(v, i));
+    (v.checks || []).forEach((c, j) => checks.set(c.id, checkToRow(c, v.id, j)));
+  });
+  return { customers, sites, invoices, items, picks, mps, comps, colls, collItems, moves, vans, checks };
 }
 
 async function fetchAll(sb, table) {
@@ -167,7 +188,7 @@ let numberingSnapshot = null;
 
 async function loadAll() {
   const sb = await getSupabase();
-  const [cs, ss, is_, ls, ps_, mps_, comps_, colls_, collItems_, moves_, settings] = await Promise.all([
+  const [cs, ss, is_, ls, ps_, mps_, comps_, colls_, collItems_, moves_, vans_, vanChecks_, settings] = await Promise.all([
     fetchAll(sb, "customers"),
     fetchAll(sb, "customer_sites"),
     fetchAll(sb, "invoices"),
@@ -178,6 +199,8 @@ async function loadAll() {
     fetchAll(sb, "collections"),
     fetchAll(sb, "collection_items"),
     fetchAll(sb, "stock_movements"),
+    fetchAll(sb, "vans"),
+    fetchAll(sb, "van_checks"),
     sb.from("crm_settings").select("*").eq("key", "numbering").maybeSingle(),
   ]);
   if (settings.error) throw new Error(settings.error.message);
@@ -267,7 +290,19 @@ async function loadAll() {
     qty: Number(r.qty) || 0, unitCost: nv(r.unit_cost), kind: nv(r.kind), ref: nv(r.ref), actor: nv(r.actor),
   }));
 
-  const data = { customers, sites, invoices, masterProducts, collections, movements, numbering };
+  const checksByVan = {};
+  vanChecks_.forEach((r) => {
+    const c = { id: r.id, date: nv(r.date), by: nv(r.by_who), mileage: nv(r.mileage), defects: nv(r.defects) };
+    Object.entries(CHECK_BOOLS).forEach(([k, col]) => (c[k] = r[col] !== false));
+    (checksByVan[r.van_id] = checksByVan[r.van_id] || []).push(c);
+  });
+  const vans = vans_.map((r) => {
+    const v = { id: r.id, active: r.active !== false, updatedAt: r.updated_at || "", modifiedBy: nv(r.modified_by), checks: checksByVan[r.id] || [] };
+    VAN_TEXT.forEach((k) => (v[k] = nv(r[snake(k)])));
+    return v;
+  });
+
+  const data = { customers, sites, invoices, masterProducts, collections, movements, vans, numbering };
   snapshot = rowsFromData(data);
   numberingSnapshot = JSON.stringify(numbering);
 
@@ -300,6 +335,8 @@ async function saveAll(d) {
   const dco = diff(prev.colls || new Map(), next.colls);
   const dci = diff(prev.collItems || new Map(), next.collItems);
   const dmv = diff(prev.moves || new Map(), next.moves);
+  const dv = diff(prev.vans || new Map(), next.vans);
+  const dvc = diff(prev.checks || new Map(), next.checks);
 
   const run = async (q) => {
     const { error } = await q;
@@ -327,6 +364,10 @@ async function saveAll(d) {
   if (dco.upserts.length) await run(sb.from("collections").upsert(dco.upserts));
   if (dci.upserts.length) await run(sb.from("collection_items").upsert(dci.upserts));
   if (dmv.upserts.length) await run(sb.from("stock_movements").upsert(dmv.upserts));
+  if (dvc.deletes.length) await run(sb.from("van_checks").delete().in("id", dvc.deletes));
+  if (dv.deletes.length) await run(sb.from("vans").delete().in("id", dv.deletes));
+  if (dv.upserts.length) await run(sb.from("vans").upsert(dv.upserts));
+  if (dvc.upserts.length) await run(sb.from("van_checks").upsert(dvc.upserts));
 
   const numbering = d.numbering || { account: 1, site: 1, invoice: 1 };
   if (JSON.stringify(numbering) !== numberingSnapshot) {

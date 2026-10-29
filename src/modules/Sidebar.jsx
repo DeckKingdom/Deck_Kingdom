@@ -13,6 +13,7 @@ export const NAV_SECTIONS = [
       ["customers", "Customers", "users"],
       ["invoices", "Invoices", "doc"],
       ["schedule", "Schedule", "cal"],
+      ["vans", "Vans", "truck"],
     ],
   },
   {

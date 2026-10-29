@@ -5,7 +5,7 @@ import { useState, useMemo } from "react";
 import { NAVY, GOLD, RED, prettyDate } from "../../lib/core.js";
 import {
   blankCollection, blankCollectionItem, blankMovement, blankPick, nextNumber,
-  skuIndex, gbp, VANS, today,
+  skuIndex, gbp, today, TIME_SLOTS, vanOptions,
 } from "../../lib/crmCore.js";
 import { Icon, Chip, Modal, selectAllProps, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
 import { printCollectionNote } from "./printDocs.js";
@@ -247,11 +247,21 @@ export default function CollectionsScreen({ crm, updateCrm, askConfirm, selId, s
           {field("town", "Town")}
           {field("postcode", "Postcode")}
           {field("collectDate", "Collect date", { type: "date" })}
-          {field("collectTime", "Time", { placeholder: "e.g. 10:00" })}
+          <div>
+            <span style={lbl}>Time</span>
+            <select style={inp} value={coll.collectTime} onChange={(e) => setColl((t) => (t.collectTime = e.target.value))}>
+              <option value="">—</option>
+              {coll.collectTime && !TIME_SLOTS.includes(coll.collectTime) && <option value={coll.collectTime}>{coll.collectTime}</option>}
+              {TIME_SLOTS.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
           <div>
             <span style={lbl}>Van</span>
-            <input style={inp} list="dk-vans" value={coll.van} onChange={(e) => setColl((t) => (t.van = e.target.value))} />
-            <datalist id="dk-vans">{VANS.map((v) => <option key={v} value={v} />)}</datalist>
+            <select style={inp} value={coll.van} onChange={(e) => setColl((t) => (t.van = e.target.value))}>
+              <option value="">—</option>
+              {coll.van && !vanOptions(crm).includes(coll.van) && <option value={coll.van}>{coll.van}</option>}
+              {vanOptions(crm).map((v) => <option key={v} value={v}>{v}</option>)}
+            </select>
           </div>
         </div>
         <label style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 13.5, fontWeight: 700, marginTop: 12 }}>

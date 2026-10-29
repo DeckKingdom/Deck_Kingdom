@@ -7,7 +7,8 @@ import ActivityScreen from "./ActivityScreen.jsx";
 import MasterProductsScreen from "./MasterProductsScreen.jsx";
 import StockScreen from "./StockScreen.jsx";
 import CollectionsScreen from "./CollectionsScreen.jsx";
-import { emptyCrm, normaliseCrm, blankCustomer, blankSite, blankInvoice, blankLine, invoiceTotals, blankMasterProduct, explodeInvoiceLines, invoiceCost, allocatedBySku, buildPicks, pickLandedCost, jobCost, stockValuation, matchShipmentToStock, blankCollection, blankCollectionItem, titleCase, formatPhone, formatPostcode } from "../../lib/crmCore.js";
+import VansScreen from "./VansScreen.jsx";
+import { emptyCrm, normaliseCrm, blankCustomer, blankSite, blankInvoice, blankLine, invoiceTotals, blankMasterProduct, explodeInvoiceLines, invoiceCost, allocatedBySku, buildPicks, pickLandedCost, jobCost, stockValuation, matchShipmentToStock, blankCollection, blankCollectionItem, titleCase, formatPhone, formatPostcode, TIME_SLOTS, blankVan, blankVanCheck } from "../../lib/crmCore.js";
 
 export default function run(React, renderToString) {
   const crm = normaliseCrm(emptyCrm());
@@ -44,6 +45,9 @@ export default function run(React, renderToString) {
   const dt = invoiceTotals(dInv);
   assert(Math.abs(dt.discount - 69.6) < 1e-9 && Math.abs(dt.total - 1382.4) < 1e-9, "discounted totals, got " + dt.discount + "/" + dt.total);
   assert(Math.abs(dt.vat - 1382.4 / 6) < 1e-9, "VAT backed out of discounted total");
+
+  assert(TIME_SLOTS[0] === "AM" && TIME_SLOTS[1] === "PM" && TIME_SLOTS[2] === "TBC" && TIME_SLOTS[3] === "08:00" && TIME_SLOTS[TIME_SLOTS.length - 1] === "18:00", "time slots sequence");
+  assert(TIME_SLOTS.includes("09:15") && TIME_SLOTS.includes("12:45"), "quarter-hour slots");
 
   const noop = () => {};
   const props = { crm, updateCrm: noop, askConfirm: noop, me: "jon@deckkingdom.co.uk", openInvoice: noop, newInvoiceFor: noop, goCustomer: noop };
@@ -125,5 +129,10 @@ export default function run(React, renderToString) {
   assert(html.includes("COLLECTION") && html.includes("UK Timber Co"), "collection shows on schedule");
   html = renderToString(React.createElement(MasterProductsScreen, { crm, updateCrm: noop, askConfirm: noop }));
   assert(html.includes("KIT/FENCE/TK") && html.includes("Allocated") && html.includes("KIT"), "master products table");
+  const van = { ...blankVan(), name: "Sprinter", reg: "DK71 VAN", insurer: "NFU", insuranceRenewal: "2026-11-15", motDue: "2026-11-02" };
+  van.checks = [{ ...blankVanCheck(), by: "Ian", mileage: 54210, lights: false, defects: "nearside indicator bulb" }];
+  crm.vans.push(van);
+  html = renderToString(React.createElement(VansScreen, { crm, updateCrm: noop, askConfirm: noop, me: "x" }));
+  assert(html.includes("Sprinter") && html.includes("Weekly check") && html.includes("Insurance"), "vans screen renders");
   console.log("smoke OK — all screens render, totals reconcile (1392 goods + 60 delivery = 1452 inc VAT, £242 VAT, £1210 net)");
 }
