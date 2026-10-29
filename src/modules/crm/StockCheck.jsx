@@ -26,13 +26,14 @@ export default function StockCheck({ inv, crm, planner, updatePlanner, updateCrm
   const colRefs = [...new Set((inv.picks || []).filter((p) => /^COL-/i.test(p.batchRef || "")).map((p) => p.batchRef))];
   const collByRef = Object.fromEntries((crm.collections || []).map((c) => ["COL-" + c.collectionNo, c]));
 
+  const suppliers = [...(crm.suppliers || [])].filter((x) => x.name && x.active !== false).sort((a, b) => a.name.localeCompare(b.name));
   const openModal = () =>
     setChoices(
       short.map((r) => {
-        const alts = partSuppliers(crm, planner, r.sku)
+        const alts = partSuppliers(crm, planner, r.sku, r.description, r.colour)
           .map((x) => ({ ...x, supplier: supplierOf(x.row), cost: x.row.costGbp === "" || x.row.costGbp === null || x.row.costGbp === undefined ? null : Number(x.row.costGbp) }))
           .sort((a, b) => (a.cost === null) - (b.cost === null) || (a.cost || 0) - (b.cost || 0));
-        return { part: r, alts, pick: alts.length ? alts[0].row.id : "", qty: r.short };
+        return { part: r, alts, pick: alts.length ? alts[0].row.id : "", qty: r.short, cost: "" };
       })
     );
 
@@ -40,6 +41,12 @@ export default function StockCheck({ inv, crm, planner, updatePlanner, updateCrm
     const picked = choices
       .filter((c) => c.pick && Number(c.qty) > 0)
       .map((c) => {
+        if (c.pick.startsWith("sup:")) {
+          // no catalogue version from anyone else: collect the same item from any supplier
+          const sup = suppliers.find((x) => "sup:" + x.id === c.pick);
+          const row = { id: "free:" + c.part.key, sku: c.part.sku, name: c.part.description, colour: c.part.colour || "", costGbp: c.cost === "" ? "" : Number(c.cost) };
+          return { row, qty: Number(c.qty), supplierName: sup ? sup.name : "" };
+        }
         const a = c.alts.find((x) => x.row.id === c.pick);
         return { row: a.row, qty: Number(c.qty), supplierName: a.supplier, productId: a.productId, addColour: a.addColour };
       });
@@ -124,16 +131,25 @@ export default function StockCheck({ inv, crm, planner, updatePlanner, updateCrm
                   <option value="">Don't collect this one</option>
                 </select>
               ) : (
-                <div style={{ fontSize: 12, fontWeight: 600, color: "#a05f10" }}>No other supplier has this product on Products — add their version there.</div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 76px", gap: 6 }}>
+                  <select style={{ ...inp, fontSize: 13, borderColor: c.pick ? "#d5d9e0" : "#E8912D" }} value={c.pick}
+                    title="No other supplier's version is on Products — pick who you're collecting it from"
+                    onChange={(e) => setChoices((x) => x.map((y, j) => (j === i ? { ...y, pick: e.target.value } : y)))}>
+                    <option value="">Collect from… (no other version on Products)</option>
+                    {suppliers.map((sp) => <option key={sp.id} value={"sup:" + sp.id}>{sp.name}</option>)}
+                  </select>
+                  <input type="number" min="0" step="0.01" placeholder="£ each" style={{ ...inp, textAlign: "right" }} value={c.cost}
+                    onChange={(e) => setChoices((x) => x.map((y, j) => (j === i ? { ...y, cost: e.target.value } : y)))} />
+                </div>
               )}
-              <input type="number" min="0" style={{ ...inp, textAlign: "right" }} value={c.qty} disabled={!c.alts.length}
+              <input type="number" min="0" style={{ ...inp, textAlign: "right" }} value={c.qty}
                 onChange={(e) => setChoices((x) => x.map((y, j) => (j === i ? { ...y, qty: e.target.value } : y)))} />
             </div>
           ))}
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 14 }}>
             <button style={btn} onClick={() => setChoices(null)}>Cancel</button>
             <button style={goldBtn} disabled={!choices.some((c) => c.pick && Number(c.qty) > 0)} onClick={confirm}>
-              <Icon name="truck" stroke={NAVY} />Raise collection note{new Set(choices.filter((c) => c.pick).map((c) => (c.alts.find((a) => a.row.id === c.pick) || {}).supplier)).size > 1 ? "s" : ""}
+              <Icon name="truck" stroke={NAVY} />Raise collection note{new Set(choices.filter((c) => c.pick).map((c) => c.pick.startsWith("sup:") ? c.pick : (c.alts.find((a) => a.row.id === c.pick) || {}).supplier)).size > 1 ? "s" : ""}
             </button>
           </div>
         </Modal>

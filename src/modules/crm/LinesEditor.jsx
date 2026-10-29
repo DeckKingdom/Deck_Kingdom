@@ -110,8 +110,11 @@ export default function LinesEditor({ doc, edit, crm, readOnly }) {
               : doc.lines.map((l) => (
                   <tr key={l.id}>
                     <td style={{ ...td, width: 130 }}>
-                      <SuggestInput value={l.code} options={skuOpts} listWidth={SKU_LIST_W} cols={SKU_COLS} inputStyle={{ fontWeight: 700, fontSize: 12.5 }} onChange={(v) => setLine(l.id, "code", v)} />
+                      <SuggestInput value={l.code} options={skuOpts} listWidth={SKU_LIST_W} cols={SKU_COLS}
+                        title={l.code && !bySku[String(l.code).trim().toLowerCase()] ? "Not a product code — pick it from the list so stock, cost and suppliers can be found" : undefined}
+                        inputStyle={{ fontWeight: 700, fontSize: 12.5, ...(l.code && !bySku[String(l.code).trim().toLowerCase()] ? { borderColor: "#E8912D", background: "#fff8e6" } : {}) }} onChange={(v) => setLine(l.id, "code", v)} />
                       {readableFor(bySku, l.code) && <div style={{ fontSize: 11, fontWeight: 700, color: "#5a6a85", marginTop: 3, letterSpacing: 0.2 }}>{readableFor(bySku, l.code)}</div>}
+                      {l.code && !bySku[String(l.code).trim().toLowerCase()] && <div style={{ fontSize: 10.5, fontWeight: 700, color: "#a05f10", marginTop: 3 }}>not a product code</div>}
                     </td>
                     <td style={{ ...td, width: 74 }}>
                       {Number(l.qty) > 100 || freeQty.has(l.id) ? (

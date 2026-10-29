@@ -1489,13 +1489,20 @@ export const mpById = (crm) => {
 };
 
 // One invoice -> the physical pick list: kit lines pull their components through.
+const looseRow = (crm, l) => {
+  const lc = (v) => String(v || "").trim().toLowerCase();
+  if (!lc(l.description)) return null;
+  const hits = (crm.masterProducts || []).filter((r) => r.active !== false && lc(r.name) === lc(l.description) && lc(r.colour) === lc(l.colour));
+  return hits.length === 1 ? hits[0] : null; // only when it's unambiguous
+};
 export const explodeInvoiceLines = (inv, crm) => {
   const bySku = skuIndex(crm);
   const byId = mpById(crm);
   const rows = [];
   (inv.lines || []).forEach((l) => {
     const qty = Number(l.qty) || 0;
-    const mp = bySku[(l.code || "").trim().toLowerCase()];
+    // a loosely typed code ("4.8") still finds its product by description + colour
+    const mp = bySku[(l.code || "").trim().toLowerCase()] || looseRow(crm, l);
     if (mp && mp.isKit && (mp.components || []).length) {
       rows.push({ kind: "kit", sku: mp.sku, description: l.description || mp.name, colour: l.colour || mp.colour, qty, weightKg: null });
       mp.components.forEach((c) => {
@@ -1505,7 +1512,7 @@ export const explodeInvoiceLines = (inv, crm) => {
         rows.push({ kind: "part", sku: comp.sku, description: comp.name, colour: comp.colour, qty: cq, weightKg: comp.weightKg !== "" && comp.weightKg !== null ? cq * Number(comp.weightKg) : null });
       });
     } else {
-      rows.push({ kind: "line", sku: l.code, description: l.description, colour: l.colour, qty, weightKg: mp && mp.weightKg !== "" && mp.weightKg !== null ? qty * Number(mp.weightKg) : null });
+      rows.push({ kind: "line", sku: mp ? mp.sku : l.code, description: l.description, colour: l.colour, qty, weightKg: mp && mp.weightKg !== "" && mp.weightKg !== null ? qty * Number(mp.weightKg) : null });
     }
   });
   return rows;
@@ -2286,17 +2293,22 @@ export const partAlternatives = (crm, sku) => {
 // supplier's version doesn't list that colour yet it is still offered, as a
 // row to be made (addColour) — picking it adds the colour to their version.
 // Returns [{ row, productId, addColour }].
-export const partSuppliers = (crm, planner, sku) => {
+export const partSuppliers = (crm, planner, sku, description, colourHint) => {
   const lists = skuLists(crm);
   const rows = crm.masterProducts || [];
-  const me = rows.find((r) => (r.sku || "").trim().toLowerCase() === String(sku || "").trim().toLowerCase());
-  const out = partAlternatives(crm, sku).map((row) => ({ row, productId: row.importProductId || "", addColour: "" }));
+  const lc = (v) => String(v || "").trim().toLowerCase();
+  // the line's stock row by SKU — or, when the code was typed loosely, by its description + colour
+  const me = rows.find((r) => lc(r.sku) === lc(sku))
+    || (description && rows.find((r) => r.active !== false && lc(r.name) === lc(description) && (!colourHint || lc(r.colour) === lc(colourHint) || colourSeg(lists, r.colour) === colourSeg(lists, colourHint))));
+  const out = partAlternatives(crm, me ? me.sku : sku).map((row) => ({ row, productId: row.importProductId || "", addColour: "" }));
   const products = (planner && planner.products) || [];
   const mine = me && products.find((p) => p.id === me.importProductId);
   const key = mine && masterKey(mine);
   if (!key) return out;
-  const colour = String(me.colour || "").trim();
+  const colour = String(me.colour || colourHint || "").trim();
   const seg = colourSeg(lists, colour);
+  // include this supplier's own row for the matched product when the line's code was loose
+  if (lc(me.sku) !== lc(sku) && !out.some((o) => o.row.id === me.id)) out.push({ row: me, productId: mine.id, addColour: "" });
   products.forEach((q) => {
     if (q.id === mine.id || q.isKit || masterKey(q) !== key) return;
     if (out.some((o) => o.productId === q.id)) return;
