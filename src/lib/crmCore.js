@@ -342,6 +342,7 @@ export const normaliseCrm = (c) => {
   d.taskLog = Array.isArray(d.taskLog) ? d.taskLog : [];
   d.staff = Array.isArray(d.staff) ? d.staff : [];
   if (!d.numbering.purchase) d.numbering.purchase = 1;
+  if (!d.numbering.supplier) d.numbering.supplier = 1;
   d.suppliers = Array.isArray(d.suppliers) ? d.suppliers : [];
   d.suppliers.forEach((x) => Object.assign(x, { ...blankSupplier(), ...x, id: x.id || uid() }));
   d.purchases = Array.isArray(d.purchases) ? d.purchases : [];
@@ -1209,7 +1210,15 @@ export const describeSchedule = (t) => {
 // usual category / payment method) and feed both Purchases and Collections.
 // Purchases follow the FileMaker layout: sub total entered ex VAT, VAT worked
 // out from the rate (or typed over for mixed-rate invoices), total = both.
-export const PURCHASE_CATEGORIES = ["Products", "Fixings & sundries", "Packaging", "Fuel", "Vehicle", "Tools & equipment", "Postage & couriers", "Marketing", "Website & software", "Premises & utilities", "Office", "Other"];
+export const PURCHASE_CATEGORIES = [
+  "Products", "Fixings & sundries", "Packaging", "Tools & equipment", "Couriers & freight",
+  "Fuel", "Vehicle", "Travel & subsistence", "Subcontractors & drivers", "Workwear",
+  "Premises & utilities", "Office & telecoms", "Website & software", "Marketing",
+  "Professional fees", "Bank, finance & fees", "Insurance", "Tax & government", "Other",
+];
+// supplier account numbers are 3-digit, as in FileMaker (001, 002 …)
+export const nextSupplierAccount = (crm) =>
+  String(nextNumber(crm.suppliers || [], "accountNo", crm.numbering && crm.numbering.supplier)).padStart(3, "0");
 export const PAYMENT_METHODS = ["Virgin Transfer", "Card", "Direct Debit", "Cash", "On account"];
 export const VAT_RATES = [20, 5, 0];
 

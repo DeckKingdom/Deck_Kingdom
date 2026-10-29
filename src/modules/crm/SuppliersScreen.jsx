@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { NAVY, GOLD, RED, prettyDate } from "../../lib/core.js";
 import {
   blankSupplier, supplierStats, purchaseTotals, purchaseIsPaid, poRef, gbp, findSupplierByName,
-  PURCHASE_CATEGORIES, PAYMENT_METHODS, FIELD_FORMATS,
+  PURCHASE_CATEGORIES, PAYMENT_METHODS, FIELD_FORMATS, nextSupplierAccount,
 } from "../../lib/crmCore.js";
 import { purchasesAvailable } from "../../data/crmStorage.js";
 import { Icon, Chip, Modal, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
@@ -21,8 +21,9 @@ export const PurchasesSchemaNotice = () => (
 
 // New / edit supplier. onSaved(supplier) lets other screens link the result.
 export function SupplierModal({ crm, updateCrm, me, draft, onClose, onSaved }) {
-  const [s, setS] = useState(() => ({ ...draft }));
-  const isNew = !(crm.suppliers || []).some((x) => x.id === s.id);
+  const isNew = !(crm.suppliers || []).some((x) => x.id === draft.id);
+  // new suppliers get the next account # (editable)
+  const [s, setS] = useState(() => ({ ...draft, accountNo: draft.accountNo || (isNew ? nextSupplierAccount(crm) : "") }));
   const dupe = isNew && s.name.trim() ? findSupplierByName(crm, s.name) : null;
   const set = (k, v) => setS((x) => ({ ...x, [k]: v }));
   const fmt = (k) => FIELD_FORMATS[k] && setS((x) => ({ ...x, [k]: FIELD_FORMATS[k](x[k]) }));
@@ -33,7 +34,11 @@ export function SupplierModal({ crm, updateCrm, me, draft, onClose, onSaved }) {
       c.suppliers = c.suppliers || [];
       const i = c.suppliers.findIndex((x) => x.id === clean.id);
       if (i >= 0) c.suppliers[i] = { ...c.suppliers[i], ...clean };
-      else c.suppliers.push({ ...clean, createdBy: me || "" });
+      else {
+        c.suppliers.push({ ...clean, createdBy: me || "" });
+        const n = Number(clean.accountNo);
+        if (isFinite(n) && n >= (Number(c.numbering.supplier) || 1)) c.numbering.supplier = n + 1;
+      }
       return c;
     });
     if (onSaved) onSaved(clean);
@@ -49,7 +54,7 @@ export function SupplierModal({ crm, updateCrm, me, draft, onClose, onSaved }) {
     <Modal title={isNew ? "New supplier" : "Edit supplier"} onClose={onClose} width={600}>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
         {f("name", "Supplier name", 2, { autoFocus: true })}
-        {f("accountNo", "Our account #")}
+        {f("accountNo", "Account #")}
         {f("address", "Address", 2)}
         {f("town", "Town")}
         {f("postcode", "Postcode")}
