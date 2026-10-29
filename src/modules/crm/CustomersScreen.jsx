@@ -360,7 +360,6 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
               </div>
               <div style={{ display: "flex", gap: 8, flexBasis: "100%", marginTop: 2, flexWrap: "wrap" }}>
                 <button style={goldBtn} onClick={() => newInvoiceFor(sel.id, sites[0] ? sites[0].id : "")}><Icon name="plus" stroke={NAVY} />New invoice</button>
-                <button style={navyBtn} onClick={startNewSite}><Icon name="pin" stroke="#fff" />Add site</button>
                 <button style={navyBtn} onClick={() => openCustDraft({ ...sel })}><Icon name="pen" stroke="#fff" />Edit account</button>
                 <span style={{ flex: 1 }} />
                 <button style={{ ...navyBtn, border: "1px dashed #3a4f78", color: "#8fa0c0" }} onClick={() => removeCustomer(sel)}><Icon name="bin" stroke="#8fa0c0" />Delete</button>
@@ -379,7 +378,13 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
               </div>
 
               <div style={{ ...card, marginBottom: 0 }}>
-                <p style={sect}>Sites ({sites.length})</p>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                  <button style={{ ...btn, padding: "7px 12px", fontSize: 13 }} onClick={startNewSite}>
+                    <Icon name="plus" stroke={NAVY} />Add site
+                  </button>
+                  <span style={{ flex: 1 }} />
+                  <p style={{ ...sect, margin: 0 }}>Sites ({sites.length})</p>
+                </div>
                 {sites.length === 0 && <div style={{ fontSize: 13, color: "#8593a8", fontWeight: 600 }}>No sites yet — add one for deliveries to a different address.</div>}
                 {sites.map((s) => (
                   <div key={s.id} style={{ border: "1px solid #e6e9ef", borderRadius: 12, padding: "13px 15px", display: "flex", gap: 12, alignItems: "flex-start", marginBottom: 10 }}>
