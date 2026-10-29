@@ -1696,7 +1696,7 @@ export default function ImportPlanner() {
       )}
 
       {tab === "products" && (
-        <div style={{ padding: "18px 22px", maxWidth: 1100, margin: "0 auto" }}>
+        <div style={{ padding: "18px 22px", maxWidth: 1480, margin: "0 auto" }}>
           <div style={{ display: "flex", alignItems: "center", marginBottom: 10, position: "sticky", top: headerH, zIndex: 16, background: "#f3f5f8", padding: "8px 0" }}>
             <h2 style={{ fontSize: 19, fontWeight: 700, margin: 0, flex: 1 }}>Products</h2>
             <button onClick={addProduct} style={{ ...btn, background: GOLD, border: "1px solid " + GOLD }}>
@@ -1704,18 +1704,18 @@ export default function ImportPlanner() {
             </button>
           </div>
           <div style={{ background: "#fff", borderRadius: 10, border: "1px solid #e6e9ef", padding: "4px 12px 12px", overflowX: "auto", overflowY: "auto", maxHeight: "max(320px, calc(100vh - " + (headerH + 150) + "px))" }}>
-            <table className="dk-sticky-table" style={{ width: "100%", borderCollapse: "collapse", minWidth: 880 }}>
+            <table className="dk-sticky-table" style={{ width: "100%", borderCollapse: "collapse", minWidth: 1400 }}>
               <thead>
                 <tr>
-                  <th style={{ ...th, width: "25%" }}>Product</th>
-                  <th style={{ ...th, width: "13%" }}>Category</th>
-                  <th style={{ ...th, width: "11%" }}>Supplier</th>
-                  <th style={{ ...th, width: "17%" }}>Colours (comma separated)</th>
-                  <th style={{ ...th, width: "8%", textAlign: "right", fontSize: 11.5 }}>Default qty / Plt / Ctn</th>
-                  <th style={{ ...th, width: "8%", textAlign: "right", fontSize: 11.5 }}>Default kg / pc</th>
-                  <th style={{ ...th, width: "7%", textAlign: "right", fontSize: 11.5 }}>Default m³ / Plt / Ctn</th>
-                  <th style={{ ...th, width: "8%", textAlign: "right", fontSize: 11.5 }}>Default $ / pc</th>
-                  <th style={{ ...th, width: "8%", textAlign: "right", fontSize: 11.5 }}>Retail £ / pc (inc VAT)</th>
+                  <th style={{ ...th, minWidth: 280 }}>Product</th>
+                  <th style={{ ...th, minWidth: 170 }}>Category</th>
+                  <th style={{ ...th, minWidth: 130 }}>Supplier</th>
+                  <th style={{ ...th, minWidth: 280 }}>Colours (comma separated)</th>
+                  <th style={{ ...th, minWidth: 86, textAlign: "right", fontSize: 11.5 }}>Default qty / Plt / Ctn</th>
+                  <th style={{ ...th, minWidth: 80, textAlign: "right", fontSize: 11.5 }}>Default kg / pc</th>
+                  <th style={{ ...th, minWidth: 80, textAlign: "right", fontSize: 11.5 }}>Default m³ / Plt / Ctn</th>
+                  <th style={{ ...th, minWidth: 86, textAlign: "right", fontSize: 11.5 }}>Default $ / pc</th>
+                  <th style={{ ...th, minWidth: 96, textAlign: "right", fontSize: 11.5 }}>Retail £ / pc (inc VAT)</th>
                   <th style={{ ...th, width: 34 }}></th>
                 </tr>
               </thead>
