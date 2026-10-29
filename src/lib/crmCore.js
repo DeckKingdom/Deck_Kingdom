@@ -1,7 +1,9 @@
 // CRM domain helpers: customers, sites, invoices, delivery schedule.
 import { uid, daysBetween, landedPerPiece } from "./core.js";
 
-export const JOB_TYPES = ["Delivery 1", "Delivery 2", "Collection", "Post", "Transfer"];
+export const JOB_TYPES = ["Delivery Run 1", "Delivery Run 2", "Delivery Run 3", "Customer Collection", "Evri", "Post Office", "Courier TG", "Returns"];
+// "collection" anywhere in the job type means the customer picks up — no van run
+export const isCollectionJob = (inv) => /collection/i.test(inv && inv.jobType ? inv.jobType : "");
 export const PAYMENT_TYPES = ["COD", "Stripe", "Transfer", "Card", "Cash", "Post"];
 export const SOURCES = ["Website", "Market Place", "Repeat", "Transfer", "Word of Mouth", "Walk-in"];
 // sentinel siteId for walk-in/trade-counter jobs: no delivery site, the
@@ -56,7 +58,7 @@ export const blankInvoice = (customerId, siteId) => ({
   siteId: siteId || "",
   date: today(),
   orderRef: "",
-  jobType: "Delivery 1",
+  jobType: "Delivery Run 1",
   van: "",
   weightKg: "",
   deliveryDate: "",
@@ -247,7 +249,7 @@ export const isPaid = (inv) => Boolean(inv.paymentDate);
 // green = prep complete (courier n/a for collections; payment link or payment taken), amber = outstanding.
 export const scheduleStatus = (inv) => {
   if (!inv.deliveryDate) return "red";
-  if (inv.jobType === "Collection") return "gold";
+  if (isCollectionJob(inv)) return "gold";
   const f = inv.flags || {};
   const prepDone =
     f.booked && f.partsOrdered && f.partsReady && (f.courier || inv.van) && (f.paymentLink || isPaid(inv));

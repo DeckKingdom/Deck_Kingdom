@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import { NAVY, GOLD, RED, prettyDate } from "../../lib/core.js";
 import {
-  invoiceTotals, gbp, isPaid, scheduleStatus, STRIPE_COLOURS, daysSinceRaised,
+  invoiceTotals, gbp, isPaid, scheduleStatus, STRIPE_COLOURS, daysSinceRaised, isCollectionJob,
   PREP_FLAGS, FOLLOWUP_FLAGS, today,
 } from "../../lib/crmCore.js";
 import { Icon, Chip, Tg, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
@@ -124,15 +124,15 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
             {i.raisedBy && <span>by {i.raisedBy.split("@")[0]}</span>}
           </div>
         </div>
-        <div style={{ flex: "none", width: 96, fontSize: 12.5, fontWeight: 700, color: i.jobType === "Collection" ? "#9a7408" : NAVY }}>
+        <div style={{ flex: "none", width: 96, fontSize: 12.5, fontWeight: 700, color: isCollectionJob(i) ? "#9a7408" : NAVY }}>
           {i.jobType || "—"}
-          <div style={{ fontSize: 11, color: "#5a6a85", fontWeight: 600, marginTop: 1 }}>{i.van || (i.jobType === "Collection" ? "Customer pickup" : "—")}</div>
+          <div style={{ fontSize: 11, color: "#5a6a85", fontWeight: 600, marginTop: 1 }}>{i.van || (isCollectionJob(i) ? "Customer pickup" : "—")}</div>
         </div>
         <div style={{ flex: "none", width: 48, textAlign: "right", fontSize: 12.5, fontWeight: 700 }}>{i.weightKg ? Number(i.weightKg).toLocaleString("en-GB") : "—"}</div>
         <div style={{ flex: "none", width: 48, textAlign: "right", fontSize: 12.5, fontWeight: 700 }}>{i.deliveryTime || "—"}</div>
         <div style={{ display: "flex", gap: 4, flex: "none" }}>
           {PREP_FLAGS.map(([k, label, icon]) => (
-            <Tg key={k} on={i.flags[k]} na={k === "courier" && i.jobType === "Collection" && !i.flags[k]} title={label} icon={icon} onClick={() => setFlag(i.id, k)} />
+            <Tg key={k} on={i.flags[k]} na={k === "courier" && isCollectionJob(i) && !i.flags[k]} title={label} icon={icon} onClick={() => setFlag(i.id, k)} />
           ))}
         </div>
         <div style={{ display: "flex", gap: 4, flex: "none" }}>
