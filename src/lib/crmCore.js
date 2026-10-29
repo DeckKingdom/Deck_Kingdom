@@ -4,6 +4,11 @@ import { uid, daysBetween, landedPerPiece } from "./core.js";
 export const JOB_TYPES = ["Delivery 1", "Delivery 2", "Collection", "Post", "Transfer"];
 export const PAYMENT_TYPES = ["COD", "Stripe", "Transfer", "Card", "Cash", "Post"];
 export const SOURCES = ["Website", "Market Place", "Repeat", "Transfer", "Word of Mouth", "Walk-in"];
+// sentinel siteId for walk-in/trade-counter jobs: no delivery site, the
+// customer collects from the warehouse
+export const TRADE_COUNTER = "__trade_counter__";
+export const TRADE_COUNTER_LABEL = "Trade counter collection";
+
 export const CONTACT_METHODS = ["Text", "WhatsApp", "WhatsApp Business", "Messenger", "Email", "Phone"];
 export const VANS = ["Van 1", "Van 2", "Van 3", "Sprinter", "Courier"];
 

@@ -23,7 +23,7 @@ import {
   money,
   int,
 } from "../lib/core.js";
-import { blankInvoice, nextNumber } from "../lib/crmCore.js";
+import { blankInvoice, nextNumber, TRADE_COUNTER } from "../lib/crmCore.js";
 import { useCrm } from "./crm/useCrm.js";
 import CustomersScreen from "./crm/CustomersScreen.jsx";
 import InvoicesScreen from "./crm/InvoicesScreen.jsx";
@@ -176,6 +176,7 @@ export default function ImportPlanner() {
     const n = blankInvoice(customerId, siteId);
     n.invNo = nextNumber(crm.invoices, "invNo", crm.numbering.invoice);
     n.raisedBy = me;
+    if (siteId === TRADE_COUNTER) n.jobType = "Collection";
     const cust = customerId && crm.customers.find((c) => c.id === customerId);
     if (cust && cust.discountPct !== "" && cust.discountPct !== null) n.discountPct = cust.discountPct;
     updateCrm((c) => {

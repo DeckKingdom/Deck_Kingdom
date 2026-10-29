@@ -6,6 +6,7 @@ import {
   blankInvoice, blankLine, nextNumber, invoiceTotals, gbp, isPaid,
   JOB_TYPES, PAYMENT_TYPES, VANS, PREP_FLAGS, FOLLOWUP_FLAGS, today,
   skuIndex, invoiceCost, buildPicks, pickLandedCost, jobCost, blankPick,
+  TRADE_COUNTER, TRADE_COUNTER_LABEL,
 } from "../../lib/crmCore.js";
 import { Icon, Chip, Tg, Modal, selectAllProps, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
 import { printInvoice, printJobSheet, printLoadingBill } from "./printDocs.js";
@@ -315,6 +316,7 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
               <select style={{ ...inp, fontWeight: 700 }} value={inv.siteId} disabled={!cust}
                 onChange={(e) => setInv((x) => (x.siteId = e.target.value))}>
                 <option value="">{cust ? "Invoice address — " + [cust.address, cust.postcode].filter(Boolean).join(", ") : "Pick the customer first"}</option>
+                <option value={TRADE_COUNTER}>{TRADE_COUNTER_LABEL} — collected from the warehouse</option>
                 {sites.map((s) => (
                   <option key={s.id} value={s.id}>
                     {"Site #" + (s.siteNo || "—") + " — " + [s.name || s.address, s.postcode].filter(Boolean).join(", ")}

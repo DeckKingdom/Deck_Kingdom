@@ -5,6 +5,7 @@ import { NAVY, GOLD, RED, prettyDate, prettyDateTime } from "../../lib/core.js";
 import {
   blankCustomer, blankSite, nextNumber, SOURCES,
   invoiceTotals, gbp, isPaid, followUpDone, FOLLOWUP_FLAGS, FIELD_FORMATS, CONTACT_METHODS,
+  TRADE_COUNTER, TRADE_COUNTER_LABEL,
 } from "../../lib/crmCore.js";
 import { Icon, Chip, Modal, SuggestInput, selectAllProps, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
 
@@ -319,6 +320,7 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
         const owing = invs.filter((i) => !isPaid(i));
         const owed = owing.reduce((t, i) => t + invoiceTotals(i).total, 0);
         const siteName = (id) => {
+          if (id === TRADE_COUNTER) return TRADE_COUNTER_LABEL;
           const s = crm.sites.find((x) => x.id === id);
           return s ? (s.name || s.address || "Site " + (s.siteNo || "")) : "";
         };
@@ -359,7 +361,6 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
                 </button>
               </div>
               <div style={{ display: "flex", gap: 8, flexBasis: "100%", marginTop: 2, flexWrap: "wrap" }}>
-                <button style={goldBtn} title="Invoice to the account's invoice address — use a site row's + for a site delivery" onClick={() => newInvoiceFor(sel.id, "")}><Icon name="plus" stroke={NAVY} />New invoice</button>
                 <button style={navyBtn} onClick={() => openCustDraft({ ...sel })}><Icon name="pen" stroke="#fff" />Edit account</button>
                 <span style={{ flex: 1 }} />
                 <button style={{ ...navyBtn, border: "1px dashed #3a4f78", color: "#8fa0c0" }} onClick={() => removeCustomer(sel)}><Icon name="bin" stroke="#8fa0c0" />Delete</button>
@@ -381,6 +382,10 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
                   <button style={{ ...btn, padding: "7px 12px", fontSize: 13 }} onClick={startNewSite}>
                     <Icon name="plus" stroke={NAVY} />Add site
+                  </button>
+                  <button style={{ ...goldBtn, padding: "7px 12px", fontSize: 13 }} title="Raise an invoice collected from the trade counter — no delivery site"
+                    onClick={() => newInvoiceFor(sel.id, TRADE_COUNTER)}>
+                    <Icon name="plus" stroke={NAVY} />Trade counter inv
                   </button>
                   <span style={{ flex: 1 }} />
                   <p style={{ ...sect, margin: 0 }}>Sites ({sites.length})</p>
