@@ -187,7 +187,7 @@ export function SuggestInput({ value, onChange, options = [], format, inputStyle
       />
       {open && filtered.length > 0 && rect && (
         <div style={(() => {
-          const width = Math.min(Math.max(rect.width, 280), typeof window !== "undefined" ? window.innerWidth - 16 : 600);
+          const width = Math.min(Math.max(rect.width, 460), typeof window !== "undefined" ? window.innerWidth - 16 : 600);
           const left = Math.max(8, Math.min(rect.left, (typeof window !== "undefined" ? window.innerWidth : 1200) - width - 8));
           return { position: "fixed", left, top: rect.bottom + 3, width, zIndex: 90, background: "#fff", border: "1px solid #d5d9e0", borderRadius: 8, maxHeight: 218, overflowY: "auto", boxShadow: "0 10px 26px rgba(11,31,63,0.22)" };
         })()}>
