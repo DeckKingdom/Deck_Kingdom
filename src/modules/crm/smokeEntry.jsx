@@ -4,11 +4,10 @@ import InvoicesScreen from "./InvoicesScreen.jsx";
 import ScheduleScreen from "./ScheduleScreen.jsx";
 import HomeScreen from "../HomeScreen.jsx";
 import ActivityScreen from "./ActivityScreen.jsx";
-import MasterProductsScreen from "./MasterProductsScreen.jsx";
 import StockScreen from "./StockScreen.jsx";
 import CollectionsScreen from "./CollectionsScreen.jsx";
 import VansScreen from "./VansScreen.jsx";
-import { emptyCrm, normaliseCrm, blankCustomer, blankSite, blankInvoice, blankLine, invoiceTotals, blankMasterProduct, explodeInvoiceLines, invoiceCost, allocatedBySku, buildPicks, pickLandedCost, jobCost, stockValuation, matchShipmentToStock, blankCollection, blankCollectionItem, titleCase, formatPhone, formatPostcode, TIME_SLOTS, blankVan, blankVanCheck, vanReminders, mondayOf, today } from "../../lib/crmCore.js";
+import { emptyCrm, normaliseCrm, blankCustomer, blankSite, blankInvoice, blankLine, invoiceTotals, blankMasterProduct, explodeInvoiceLines, invoiceCost, allocatedBySku, buildPicks, pickLandedCost, jobCost, stockValuation, matchShipmentToStock, blankCollection, blankCollectionItem, titleCase, formatPhone, formatPostcode, TIME_SLOTS, blankVan, blankVanCheck, vanReminders, mondayOf, today, syncMasterFromProducts } from "../../lib/crmCore.js";
 
 export default function run(React, renderToString) {
   const crm = normaliseCrm(emptyCrm());
@@ -127,8 +126,17 @@ export default function run(React, renderToString) {
   assert(html.includes("Commit to stock") && html.includes("Assign to job"), "collection editor actions");
   html = renderToString(React.createElement(ScheduleScreen, { crm, updateCrm: noop, openInvoice: noop, openCollection: noop }));
   assert(html.includes("COLLECTION") && html.includes("UK Timber Co"), "collection shows on schedule");
-  html = renderToString(React.createElement(MasterProductsScreen, { crm, updateCrm: noop, askConfirm: noop }));
-  assert(html.includes("KIT/FENCE/TK") && html.includes("Allocated") && html.includes("KIT"), "master products table");
+  // auto-sync: products screen drives the stock rows
+  {
+    const syncPlanner = { products: [{ id: "ipX", name: "Decking Board 4.8m", colours: ["Anthracite", "Silver"], weight: 10.5, salePrice: 29.5, category: "Decking" }] };
+    const before = crm.masterProducts.length;
+    const synced = syncMasterFromProducts(crm, syncPlanner);
+    assert(synced && synced.length === before + 2, "sync creates one row per colour, got " + (synced && synced.length));
+    const row = synced.find((m) => m.importProductId === "ipX" && m.colour === "Anthracite");
+    assert(row && row.sku.includes("DECK") && row.weightKg === 10.5 && row.priceIncVat === 29.5, "synced row carries sku/weight/price, got " + JSON.stringify(row && [row.sku, row.weightKg, row.priceIncVat]));
+    crm.masterProducts = synced;
+    assert(syncMasterFromProducts(crm, syncPlanner) === null, "second sync is a no-op");
+  }
   const van = { ...blankVan(), name: "Sprinter", reg: "DK71 VAN", insurer: "NFU", insuranceRenewal: "2026-11-15", motDue: "2026-11-02" };
   van.checks = [{ ...blankVanCheck(), by: "Ian", mileage: 54210, lights: false, defects: "nearside indicator bulb" }];
   crm.vans.push(van);

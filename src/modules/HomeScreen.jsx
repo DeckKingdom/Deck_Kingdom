@@ -116,9 +116,8 @@ export default function HomeScreen({ data, crm, setTab, addShipment, newInvoice 
           <p style={sect}>Catalogue</p>
           <div style={{ display: "grid", gap: 8 }}>
             <Tile icon="layers" label="Stock" note={crm ? (() => { const v = stockValuation(crm); return v.units.toLocaleString("en-GB") + " units · " + gbp(v.costValue) + " at cost"; })() : "Loading…"} onClick={() => setTab("stock")} />
-            <Tile icon="tag" label="Master Products" note={crm ? (crm.masterProducts || []).length.toLocaleString("en-GB") + " SKUs — stock, costs, kits" : "Loading…"} onClick={() => setTab("catalogue")} />
             <Tile icon="truck" label="Collections" note={crm ? ((crm.collections || []).filter((c) => !c.postedAt && !c.assignedInvoiceId).length || "No") + " open supplier pick-ups" : "Loading…"} onClick={() => setTab("collections")} />
-            <Tile icon="box" label="Import Products" note={data.products.length + " factory products"} onClick={() => setTab("products")} />
+            <Tile icon="box" label="Products" note={data.products.length + " products"} onClick={() => setTab("products")} />
             <Tile icon="clock" label="Activity" note="Who changed what, and when" onClick={() => setTab("activity")} />
           </div>
           {nextIn && (

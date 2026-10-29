@@ -419,6 +419,80 @@ export const FIELD_FORMATS = {
   email: (s) => String(s || "").trim().toLowerCase(),
 };
 
+// ===== auto-generated SKUs: the stock table mirrors the Products screen =====
+const skuPart = (name) => {
+  let size = "";
+  const words = [];
+  String(name || "").split(/\s+/).forEach((w) => {
+    const m = w.match(/^(\d+(?:\.\d+)?)m$/i);
+    if (m) size = m[1].replace(".", "");
+    else {
+      const a = w.replace(/[^A-Za-z]/g, "");
+      if (a) words.push(a.toUpperCase());
+    }
+  });
+  const base = words.slice(0, 2).map((w) => w.slice(0, 4)).join("") || "PROD";
+  return base + (size ? "/" + size : "");
+};
+
+export const genSku = (name, colour, taken) => {
+  const col = String(colour || "").replace(/[^A-Za-z]/g, "").toUpperCase().slice(0, 3);
+  let sku = skuPart(name) + (col ? "/" + col : "");
+  let n = 2;
+  const base = sku;
+  while (taken.has(sku.toLowerCase())) sku = base + "-" + n++;
+  return sku;
+};
+
+// Keeps the background stock/SKU table in step with the Products screen:
+// one row per product+colour, created and updated automatically. Stock and
+// batch costs are never touched. Returns the new array, or null if in step.
+export const syncMasterFromProducts = (crm, planner) => {
+  const products = (planner && planner.products) || [];
+  if (!products.length) return null;
+  const next = JSON.parse(JSON.stringify(crm.masterProducts || []));
+  const byKey = {};
+  next.forEach((m) => {
+    if (m.importProductId) byKey[m.importProductId + "||" + (m.colour || "").trim().toLowerCase()] = m;
+  });
+  const taken = new Set(next.map((m) => (m.sku || "").toLowerCase()));
+  let changed = false;
+  products.forEach((p) => {
+    const colours = p.colours && p.colours.length ? p.colours : [""];
+    const seen = new Set();
+    colours.forEach((colRaw) => {
+      const col = String(colRaw || "").trim();
+      const lk = col.toLowerCase();
+      if (seen.has(lk)) return;
+      seen.add(lk);
+      const want = {
+        name: p.name || "",
+        colour: col,
+        family: p.name || "",
+        category: p.category || "",
+        weightKg: Number(p.weight) > 0 ? Number(p.weight) : "",
+        priceIncVat: Number(p.salePrice) > 0 ? Number(p.salePrice) : "",
+      };
+      const cur = byKey[p.id + "||" + lk];
+      if (!cur) {
+        const sku = genSku(p.name, col, taken);
+        taken.add(sku.toLowerCase());
+        next.push({ ...blankMasterProduct(), ...want, sku, importProductId: p.id, unit: "each" });
+        changed = true;
+      } else {
+        Object.entries(want).forEach(([k, v]) => {
+          if (k === "priceIncVat" && v === "" && cur[k] !== "") return; // keep a price once set
+          if (cur[k] !== v) {
+            cur[k] = v;
+            changed = true;
+          }
+        });
+      }
+    });
+  });
+  return changed ? next : null;
+};
+
 // ===== master products: SKU lookup, kit explosion, stock allocation =====
 export const skuIndex = (crm) => {
   const m = {};

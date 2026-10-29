@@ -23,7 +23,7 @@ import {
   money,
   int,
 } from "../lib/core.js";
-import { blankInvoice, nextNumber, TRADE_COUNTER, vanReminders } from "../lib/crmCore.js";
+import { blankInvoice, nextNumber, TRADE_COUNTER, vanReminders, syncMasterFromProducts } from "../lib/crmCore.js";
 import { useCrm } from "./crm/useCrm.js";
 import CustomersScreen from "./crm/CustomersScreen.jsx";
 import InvoicesScreen from "./crm/InvoicesScreen.jsx";
@@ -31,7 +31,6 @@ import ScheduleScreen from "./crm/ScheduleScreen.jsx";
 import Sidebar, { TAB_LABELS } from "./Sidebar.jsx";
 import HomeScreen from "./HomeScreen.jsx";
 import ActivityScreen from "./crm/ActivityScreen.jsx";
-import MasterProductsScreen from "./crm/MasterProductsScreen.jsx";
 import StockScreen from "./crm/StockScreen.jsx";
 import CollectionsScreen from "./crm/CollectionsScreen.jsx";
 import VansScreen from "./crm/VansScreen.jsx";
@@ -103,6 +102,7 @@ export default function ImportPlanner() {
         if (p.supplier === undefined) p.supplier = "";
         if (p.category === undefined) p.category = "";
         if (p.cbm === undefined) p.cbm = 0;
+        if (p.salePrice === undefined) p.salePrice = "";
       });
       d.shipments.forEach((s) => {
         if (s.orderDate === undefined) s.orderDate = s.created || new Date().toISOString().slice(0, 10);
@@ -151,7 +151,7 @@ export default function ImportPlanner() {
   const [remindersClosed, setRemindersClosed] = useState(false); // closed for this visit
 
   useEffect(() => {
-    if (CRM_TABS.includes(tab) || ["home", "activity", "catalogue", "stock", "collections", "vans"].includes(tab)) setCrmOn(true);
+    if (CRM_TABS.includes(tab) || ["home", "activity", "stock", "collections", "vans", "products"].includes(tab)) setCrmOn(true);
   }, [tab]);
 
   const me = storageMode === "supabase" ? getSessionEmail() || "" : "";
@@ -168,6 +168,17 @@ export default function ImportPlanner() {
     setSelCollectionId(id);
     setTab("collections");
   };
+  // keep the background stock/SKU rows in step with the Products screen
+  useEffect(() => {
+    if (!crm || !data) return;
+    const synced = syncMasterFromProducts(crm, data);
+    if (synced)
+      updateCrm((c) => {
+        c.masterProducts = synced;
+        return c;
+      });
+  }, [crm, data]);
+
   const dueReminders = crm ? vanReminders(crm) : [];
   const snoozeReminders = () => {
     const tod = new Date().toISOString().slice(0, 10);
@@ -636,7 +647,7 @@ export default function ImportPlanner() {
       const p = d.products.find((x) => x.id === pid);
       if (!p) return d;
       if (field === "colours") p.colours = value.split(",").map((c) => c.trim()).filter(Boolean);
-      else if (field === "qty" || field === "cost" || field === "weight" || field === "cbm") p[field] = value === "" ? "" : Number(value);
+      else if (field === "qty" || field === "cost" || field === "weight" || field === "cbm" || field === "salePrice") p[field] = value === "" ? "" : Number(value);
       else p[field] = value;
       return d;
     });
@@ -809,13 +820,6 @@ export default function ImportPlanner() {
           <div style={{ padding: 40, textAlign: "center", color: "#5a6a85", fontWeight: 600 }}>Loading vans…</div>
         ) : (
           <VansScreen crm={crm} updateCrm={updateCrm} askConfirm={setConfirmBox} me={me} />
-        ))}
-
-      {tab === "catalogue" &&
-        (!crm ? (
-          <div style={{ padding: 40, textAlign: "center", color: "#5a6a85", fontWeight: 600 }}>Loading master products…</div>
-        ) : (
-          <MasterProductsScreen crm={crm} updateCrm={updateCrm} askConfirm={setConfirmBox} planner={data} />
         ))}
 
       {CRM_TABS.includes(tab) &&
@@ -1694,7 +1698,7 @@ export default function ImportPlanner() {
       {tab === "products" && (
         <div style={{ padding: "18px 22px", maxWidth: 1100, margin: "0 auto" }}>
           <div style={{ display: "flex", alignItems: "center", marginBottom: 10, position: "sticky", top: headerH, zIndex: 16, background: "#f3f5f8", padding: "8px 0" }}>
-            <h2 style={{ fontSize: 19, fontWeight: 700, margin: 0, flex: 1 }}>Product range</h2>
+            <h2 style={{ fontSize: 19, fontWeight: 700, margin: 0, flex: 1 }}>Products</h2>
             <button onClick={addProduct} style={{ ...btn, background: GOLD, border: "1px solid " + GOLD }}>
               + Add product
             </button>
@@ -1711,6 +1715,7 @@ export default function ImportPlanner() {
                   <th style={{ ...th, width: "8%", textAlign: "right", fontSize: 11.5 }}>Default kg / pc</th>
                   <th style={{ ...th, width: "7%", textAlign: "right", fontSize: 11.5 }}>Default m³ / Plt / Ctn</th>
                   <th style={{ ...th, width: "8%", textAlign: "right", fontSize: 11.5 }}>Default $ / pc</th>
+                  <th style={{ ...th, width: "8%", textAlign: "right", fontSize: 11.5 }}>Sale £ / pc (inc VAT)</th>
                   <th style={{ ...th, width: 34 }}></th>
                 </tr>
               </thead>
@@ -1758,6 +1763,9 @@ export default function ImportPlanner() {
                     <td style={td}>
                       <input type="number" min="0" step="0.01" value={p.cost} onChange={(e) => setProduct(p.id, "cost", e.target.value)} style={num} />
                     </td>
+                    <td style={td}>
+                      <input type="number" min="0" step="0.01" value={p.salePrice === undefined ? "" : p.salePrice} onChange={(e) => setProduct(p.id, "salePrice", e.target.value)} style={num} />
+                    </td>
                     <td style={{ ...td, textAlign: "center" }}>
                       <button onClick={() => removeProduct(p.id)} title="Remove product" style={{ ...btn, padding: "4px 9px", color: RED, border: "none", background: "transparent" }}>
                         ✕
@@ -1779,7 +1787,7 @@ export default function ImportPlanner() {
             ))}
           </datalist>
           <p style={{ fontSize: 12.5, color: "#5a6a85", marginTop: 10 }}>
-            Set up your full range here once — I've seeded it with a couple of examples to edit. New shipment lines pull qty per pallet and cost from these defaults, and picking a supplier on a shipment filters its product dropdowns to that supplier's products.
+            Set up your full range here once. Shipment lines pull qty per pallet and $ cost from these defaults; the sale £ feeds the Stock valuations and invoice lines. Every product + colour automatically gets a stock row (with its own code) on the Stock screen — no separate product list to maintain.
           </p>
         </div>
       )}

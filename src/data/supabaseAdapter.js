@@ -25,6 +25,7 @@ let snapshot = null;
 const productToRow = (p, i) => ({
   id: p.id, name: str(p.name), colours: p.colours || [], qty: Number(p.qty) || 0,
   cost: Number(p.cost) || 0, weight: Number(p.weight) || 0, cbm: Number(p.cbm) || 0,
+  sale_price: num(p.salePrice),
   supplier: str(p.supplier), category: str(p.category), position: i,
 });
 
@@ -71,6 +72,7 @@ async function loadAll() {
   const products = p.data.map((r) => ({
     id: r.id, name: r.name, colours: r.colours || [], qty: Number(r.qty), cost: Number(r.cost),
     weight: Number(r.weight), cbm: Number(r.cbm), supplier: r.supplier, category: r.category,
+    salePrice: nv(r.sale_price),
   }));
   const linesByShip = {};
   l.data.forEach((r) => {

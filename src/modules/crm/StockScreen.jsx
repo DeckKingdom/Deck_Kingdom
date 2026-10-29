@@ -176,8 +176,8 @@ export default function StockScreen({ crm, updateCrm, planner, updatePlanner, as
           </table>
         </div>
         <p style={{ fontSize: 12, color: "#5a6a85", fontWeight: 600, marginTop: 10, marginBottom: 0 }}>
-          Sale values are at list prices inc VAT; trade = standard −10%. Stock changes here come from posting
-          shipments/collections, or editing stock on Master Products — every change is in the Activity log.
+          Sale values come from each product's sale £/pc on the Products screen (inc VAT); trade = standard −10%.
+          Stock moves by posting shipments/collections or editing the stock column here — every change is in the Activity log.
         </p>
       </div>
 
@@ -219,7 +219,7 @@ export default function StockScreen({ crm, updateCrm, planner, updatePlanner, as
                   {match.unmatched.length > 0 && (
                     <div style={{ marginTop: 10, background: "#C8102E10", border: "1px solid #ecc4cb", borderRadius: 8, padding: "8px 11px", fontSize: 12.5, fontWeight: 600, color: RED }}>
                       Not matched to a master SKU (won't be posted): {match.unmatched.map((u) => ((planner.products || []).find((p) => p.id === u.line.productId) || {}).name + (u.line.colour ? " " + u.line.colour : "")).filter(Boolean).join(", ") || "some lines"}.
-                      Link those on Master Products (import product + matching colour) and post again later — or adjust stock by hand.
+                      Add that product/colour on the Products screen and post again later — or adjust stock by hand.
                     </div>
                   )}
                   <label style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 13, fontWeight: 700, margin: "12px 0" }}>

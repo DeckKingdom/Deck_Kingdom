@@ -28,9 +28,8 @@ export const NAV_SECTIONS = [
     title: "Stock & catalogue",
     items: [
       ["stock", "Stock", "layers"],
-      ["catalogue", "Master Products", "tag"],
       ["collections", "Collections", "truck"],
-      ["products", "Import Products", "box"],
+      ["products", "Products", "box"],
     ],
   },
   { title: "Fleet", items: [["vans", "Vans", "truck"]] },
