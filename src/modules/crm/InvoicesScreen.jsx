@@ -245,10 +245,7 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
       <div style={{ background: "linear-gradient(135deg,#0B1F3F 0%,#13294f 100%)", borderRadius: 14, padding: "16px 22px", color: "#fff", marginBottom: 14, display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
         <div>
           <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-            <h2 style={{ margin: 0, fontSize: 19 }}>Invoice&nbsp;
-              <input style={{ ...inp, display: "inline-block", width: 86, fontWeight: 700, background: "#ffffff12", border: "1px solid #3a4f78", color: "#fff" }} inputMode="numeric"
-                value={inv.invNo === null ? "" : inv.invNo} onChange={(e) => setInv((x) => (x.invNo = e.target.value.replace(/[^0-9]/g, "")))} />
-            </h2>
+            <h2 style={{ margin: 0, fontSize: 19 }}>Invoice #{inv.invNo || "—"}</h2>
             {inv.deliveryCompleted && isPaid(inv) ? <Chip tone="green" style={{ background: "#3FA55C", color: "#fff", border: "none" }}>Delivered · Paid</Chip>
               : isPaid(inv) ? <Chip tone="green">Paid</Chip>
               : inv.deliveryDate ? <Chip tone="gold">Booked</Chip>
@@ -278,7 +275,7 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
                 {(cust.name || "?").trim().charAt(0).toUpperCase() || "?"}
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <b style={{ fontSize: 15 }}>{cust.name}</b> <Chip>#{cust.accountNo || "—"}</Chip>
+                <Chip>#{cust.accountNo || "—"}</Chip> <b style={{ fontSize: 15 }}>{cust.name}</b>
                 <div style={{ fontSize: 12, color: "#5a6a85", fontWeight: 600, marginTop: 2 }}>
                   {[cust.mobile || cust.landline, cust.contactMethod ? "prefers " + cust.contactMethod : "", cust.source, cust.trader ? "Trade" : "", Number(cust.discountPct) > 0 ? "−" + Number(cust.discountPct) + "%" : ""].filter(Boolean).join(" · ")}
                 </div>
