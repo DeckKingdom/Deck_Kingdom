@@ -219,23 +219,63 @@ function kitCostFromParts(p, products, rowsByProduct) {
 // ===== colours: chosen ones as chips, add more from the colour list =====
 function ColourPicker({ p, lists, unknown, onChange }) {
   const cur = p.colours || [];
-  const has = new Set(cur.map((c) => c.toLowerCase()));
-  const opts = (lists.colour || []).filter((x) => x.code !== "00" && !has.has(String(x.label).toLowerCase()));
+  const [open, setOpen] = useState(false);
+  const ref = React.useRef(null);
+  React.useEffect(() => {
+    if (!open) return;
+    const off = (e) => ref.current && !ref.current.contains(e.target) && setOpen(false);
+    document.addEventListener("mousedown", off);
+    return () => document.removeEventListener("mousedown", off);
+  }, [open]);
+  // colours match the list by number, so "Black" ticks "Black/Charcoal" through its aliases
+  const segOf = (c) => colourSeg(lists, c);
+  const has = new Set(cur.map(segOf).filter(Boolean));
+  // chosen colours sit at the top when the panel opens, the rest in list order
+  const [order, setOrder] = useState([]);
+  React.useEffect(() => { if (open) setOrder(cur.map(segOf).filter(Boolean)); }, [open]);
+  const all = (lists.colour || []).filter((x) => x.code !== "00");
+  const opts = [...all.filter((x) => order.includes(x.code)), ...all.filter((x) => !order.includes(x.code))];
+  const toggle = (x) => onChange(has.has(x.code) ? cur.filter((c) => segOf(c) !== x.code) : [...cur, x.label]);
+  const dropUnknown = (c) => onChange(cur.filter((y) => y !== c));
+  const dot = (on) => (
+    <span style={{ width: 15, height: 15, flex: "none", borderRadius: "50%", border: "2px solid " + (on ? NAVY : "#b8c0cc"), display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+      {on && <span style={{ width: 7, height: 7, borderRadius: "50%", background: NAVY }} />}
+    </span>
+  );
   return (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: 4, alignItems: "center", minHeight: 34, border: "1px solid " + (unknown.length ? RED : "#d5d9e0"), borderRadius: 8, padding: "3px 4px", background: "#fff" }}>
-      {cur.map((c) => (
-        <span key={c} style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 12, fontWeight: 700, padding: "2px 4px 2px 8px", borderRadius: 999,
-          background: unknown.includes(c) ? "#fdecef" : "#eef1f6", color: unknown.includes(c) ? RED : NAVY }}>
-          {c}
-          <button onClick={() => onChange(cur.filter((x) => x !== c))} title={"Remove " + c}
-            style={{ border: "none", background: "none", cursor: "pointer", padding: 0, lineHeight: 1, color: "#8593a8", fontSize: 14 }}>×</button>
+    <div ref={ref} style={{ position: "relative" }}>
+      <button type="button" onClick={() => setOpen((o) => !o)}
+        style={{ ...sm, width: "100%", textAlign: "left", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, borderColor: unknown.length ? RED : open ? NAVY : "#d5d9e0" }}>
+        <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: cur.length ? 700 : 400, color: cur.length ? NAVY : "#8593a8" }}>
+          {cur.length ? cur.join(", ") : "No colour — one stock row"}
         </span>
-      ))}
-      <select value="" onChange={(e) => e.target.value && onChange([...cur, e.target.value])}
-        style={{ flex: 1, minWidth: 90, border: "none", background: "transparent", fontFamily: "inherit", fontSize: 12.5, color: "#5a6a85", padding: "4px 2px", outline: "none", cursor: "pointer" }}>
-        <option value="">{cur.length ? "+ add colour" : "No colour — pick to add"}</option>
-        {opts.map((x) => <option key={x.code} value={x.label}>{x.label}</option>)}
-      </select>
+        <span style={{ color: "#5a6a85", fontSize: 10 }}>▾</span>
+      </button>
+      {open && (
+        <div style={{ position: "absolute", zIndex: 30, top: "calc(100% + 4px)", left: 0, width: 300, background: "#fff", border: "1px solid #d5d9e0", borderRadius: 10, boxShadow: "0 10px 30px rgba(11,31,63,.18)", padding: 10 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "2px 8px", maxHeight: 260, overflowY: "auto" }}>
+            {opts.map((x) => {
+              const on = has.has(x.code);
+              return (
+                <label key={x.code} onClick={() => toggle(x)}
+                  style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 6px", borderRadius: 6, cursor: "pointer", fontSize: 12.5, fontWeight: on ? 700 : 500, color: on ? NAVY : "#3a4a63", background: on ? "#eef1f6" : "transparent" }}>
+                  {dot(on)}{x.label}
+                </label>
+              );
+            })}
+            {unknown.map((c) => (
+              <label key={"u" + c} onClick={() => dropUnknown(c)} title="Not in the colour list — add it under SKU lists"
+                style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 6px", borderRadius: 6, cursor: "pointer", fontSize: 12.5, fontWeight: 700, color: RED, background: "#fdecef" }}>
+                {dot(true)}{c}
+              </label>
+            ))}
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8, paddingTop: 8, borderTop: "1px solid #eef0f4" }}>
+            <button type="button" onClick={() => onChange([])} style={{ border: "none", background: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 700, color: "#8593a8" }}>Clear</button>
+            <button type="button" onClick={() => setOpen(false)} style={{ ...goldBtn, padding: "5px 14px", fontSize: 12.5 }}>Done</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
