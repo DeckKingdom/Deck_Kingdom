@@ -23,12 +23,13 @@ import {
   money,
   int,
 } from "../lib/core.js";
-import { blankInvoice, blankQuote, nextNumber, TRADE_COUNTER, vanReminders, syncMasterFromProducts } from "../lib/crmCore.js";
+import { blankInvoice, blankQuote, blankSample, blankSampleItem, nextNumber, TRADE_COUNTER, vanReminders, syncMasterFromProducts, syncSampleConversions } from "../lib/crmCore.js";
 import { useCrm } from "./crm/useCrm.js";
 import CustomersScreen from "./crm/CustomersScreen.jsx";
 import InvoicesScreen from "./crm/InvoicesScreen.jsx";
 import QuotesScreen from "./crm/QuotesScreen.jsx";
-import { quotesAvailable } from "../data/crmStorage.js";
+import SamplesScreen from "./crm/SamplesScreen.jsx";
+import { quotesAvailable, samplesAvailable } from "../data/crmStorage.js";
 import ScheduleScreen from "./crm/ScheduleScreen.jsx";
 import Sidebar, { TAB_LABELS } from "./Sidebar.jsx";
 import HomeScreen from "./HomeScreen.jsx";
@@ -38,7 +39,7 @@ import CollectionsScreen from "./crm/CollectionsScreen.jsx";
 import VansScreen from "./crm/VansScreen.jsx";
 import { Icon } from "./crm/ui.jsx";
 
-const CRM_TABS = ["customers", "quotes", "invoices", "schedule"];
+const CRM_TABS = ["customers", "samples", "quotes", "invoices", "schedule"];
 
 export default function ImportPlanner() {
   const [data, setData] = useState(null);
@@ -151,6 +152,7 @@ export default function ImportPlanner() {
   const [selCollectionId, setSelCollectionId] = useState(null);
   const [selQuoteId, setSelQuoteId] = useState(null);
   const [quoteFilter, setQuoteFilter] = useState(null); // { customerId }
+  const [selSampleId, setSelSampleId] = useState(null);
   const [invFilter, setInvFilter] = useState(null); // { customerId, outstanding }
   const [remindersClosed, setRemindersClosed] = useState(false); // closed for this visit
 
@@ -163,6 +165,29 @@ export default function ImportPlanner() {
   const openInvoice = (id) => {
     setSelInvoiceId(id);
     setTab("invoices");
+  };
+  const openSample = (id) => {
+    setSelSampleId(id);
+    setTab("samples");
+  };
+  const newSampleFor = (customerId) => {
+    if (!crm) return;
+    if (!samplesAvailable()) {
+      setSelSampleId(null);
+      setTab("samples"); // shows the "run the SQL" notice
+      return;
+    }
+    const n = blankSample(customerId);
+    n.sampleNo = nextNumber(crm.samples || [], "sampleNo", crm.numbering.sample);
+    n.raisedBy = me;
+    n.items = [blankSampleItem()];
+    updateCrm((c) => {
+      c.samples.unshift(n);
+      c.numbering.sample = (Number(n.sampleNo) || 0) + 1;
+      return c;
+    });
+    setSelSampleId(n.id);
+    setTab("samples");
   };
   const openQuote = (id) => {
     setSelQuoteId(id);
@@ -206,6 +231,17 @@ export default function ImportPlanner() {
         return c;
       });
   }, [crm, data]);
+
+  // credit each sample request with the order it led to (stored on the sample)
+  useEffect(() => {
+    if (!crm) return;
+    const synced = syncSampleConversions(crm);
+    if (synced)
+      updateCrm((c) => {
+        c.samples = synced;
+        return c;
+      });
+  }, [crm]);
 
   const dueReminders = crm ? vanReminders(crm) : [];
   const snoozeReminders = () => {
@@ -807,7 +843,7 @@ export default function ImportPlanner() {
         <span style={{ color: "#fff", fontWeight: 700, fontSize: 15.5, whiteSpace: "nowrap" }}>{TAB_LABELS[tab] || "Home"}</span>
         <span style={{ flex: 1 }} />
         <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-          {[["home", "Home", "home"], ["shipments", "Shipments", "ship"], ["customers", "Customers", "users"], ["quotes", "Quotes", "tag"], ["invoices", "Invoices", "doc"], ["schedule", "Schedule", "cal"]].map(([t, label, icon]) => (
+          {[["home", "Home", "home"], ["shipments", "Shipments", "ship"], ["customers", "Customers", "users"], ["samples", "Samples", "leaf"], ["quotes", "Quotes", "tag"], ["invoices", "Invoices", "doc"], ["schedule", "Schedule", "cal"]].map(([t, label, icon]) => (
             <button key={t} onClick={() => setTab(t)} title={label} style={{ width: 34, height: 34, borderRadius: 8, border: "1px solid " + (tab === t ? GOLD : "#33466b"), background: tab === t ? GOLD : "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flex: "none", padding: 0 }}>
               <Icon name={icon} size={16} stroke={tab === t ? NAVY : "#cfd6e4"} />
             </button>
@@ -871,7 +907,20 @@ export default function ImportPlanner() {
             newInvoiceFor={newInvoiceFor}
             openQuote={openQuote}
             newQuoteFor={newQuoteFor}
+            openSample={openSample}
+            newSampleFor={newSampleFor}
             onOutstanding={showOutstanding}
+            me={me}
+          />
+        ) : tab === "samples" ? (
+          <SamplesScreen
+            crm={crm}
+            updateCrm={updateCrm}
+            askConfirm={setConfirmBox}
+            selId={selSampleId}
+            setSelId={setSelSampleId}
+            goCustomer={goCustomer}
+            openInvoice={openInvoice}
             me={me}
           />
         ) : tab === "quotes" ? (
@@ -896,6 +945,7 @@ export default function ImportPlanner() {
             setSelId={setSelInvoiceId}
             goCustomer={goCustomer}
             openQuote={openQuote}
+            openSample={openSample}
             me={me}
             planner={data}
             filter={invFilter}

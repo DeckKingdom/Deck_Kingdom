@@ -12,6 +12,8 @@ const TABLE_LABELS = {
   invoice_items: "Invoice line",
   quotes: "Quote",
   quote_items: "Quote line",
+  samples: "Sample request",
+  sample_items: "Sample item",
   products: "Product",
   shipments: "Shipment",
   shipment_lines: "Shipment line",
@@ -64,12 +66,13 @@ export default function ActivityScreen({ crm, data, storageMode }) {
   }, []);
 
   const byId = useMemo(() => {
-    const m = { customers: {}, customer_sites: {}, invoices: {}, quotes: {}, products: {}, shipments: {} };
+    const m = { customers: {}, customer_sites: {}, invoices: {}, quotes: {}, samples: {}, products: {}, shipments: {} };
     if (crm) {
       crm.customers.forEach((c) => (m.customers[c.id] = c.name || "Account #" + (c.accountNo || "—")));
       crm.sites.forEach((s) => (m.customer_sites[s.id] = s.name || s.address || "Site #" + (s.siteNo || "—")));
       crm.invoices.forEach((i) => (m.invoices[i.id] = "#" + (i.invNo || "—")));
       (crm.quotes || []).forEach((q) => (m.quotes[q.id] = "Q-" + (q.quoteNo || "—")));
+      (crm.samples || []).forEach((x) => (m.samples[x.id] = "S-" + (x.sampleNo || "—")));
     }
     if (data) {
       data.products.forEach((p) => (m.products[p.id] = p.name));
@@ -86,6 +89,7 @@ export default function ActivityScreen({ crm, data, storageMode }) {
       fmtVal(pick(c, "name")) !== "—" ? fmtVal(pick(c, "name"))
       : pick(c, "inv_no") !== undefined ? "#" + fmtVal(pick(c, "inv_no"))
       : pick(c, "quote_no") !== undefined ? "Q-" + fmtVal(pick(c, "quote_no"))
+      : pick(c, "sample_no") !== undefined ? "S-" + fmtVal(pick(c, "sample_no"))
       : fmtVal(pick(c, "description")) !== "—" ? fmtVal(pick(c, "description"))
       : pick(c, "key") !== undefined ? fmtVal(pick(c, "key"))
       : e.record_id ? e.record_id.slice(0, 8) : "—"

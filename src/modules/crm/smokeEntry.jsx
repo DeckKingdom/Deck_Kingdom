@@ -8,6 +8,9 @@ import StockScreen from "./StockScreen.jsx";
 import CollectionsScreen from "./CollectionsScreen.jsx";
 import VansScreen from "./VansScreen.jsx";
 import QuotesScreen from "./QuotesScreen.jsx";
+import SamplesScreen from "./SamplesScreen.jsx";
+import { blankSample, blankSampleItem, syncSampleConversions, sampleStatus, sampleStats, sampleInvoice } from "../../lib/crmCore.js";
+import { addDays as addD } from "../../lib/core.js";
 import { blankQuote, quoteTotals, quoteStatus, convertQuoteToInvoice, duplicateQuote, quoteInvoice, quoteIsOpen, nextNumber } from "../../lib/crmCore.js";
 import { emptyCrm, normaliseCrm, blankCustomer, blankSite, blankInvoice, blankLine, invoiceTotals, blankMasterProduct, explodeInvoiceLines, invoiceCost, allocatedBySku, buildPicks, pickLandedCost, jobCost, stockValuation, matchShipmentToStock, blankCollection, blankCollectionItem, titleCase, formatPhone, formatPostcode, weightedCost, batchBreakdown, applyInvoiceStockDeduction, commitCollectionItem, assignCollectionItem, itemPending, TIME_SLOTS, blankVan, blankVanCheck, vanReminders, mondayOf, today, syncMasterFromProducts } from "../../lib/crmCore.js";
 
@@ -246,6 +249,72 @@ export default function run(React, renderToString) {
     assert(html.includes("From quote Q-101"), "invoice links back to its quote");
     html = renderToString(React.createElement(CustomersScreen, { crm: qc, updateCrm: noop, askConfirm: noop, selId: cust.id, setSelId: noop, openInvoice: noop, newInvoiceFor: noop, openQuote: noop, newQuoteFor: noop, me: "x" }));
     assert(html.includes("Quotes (") && html.includes("Q-101") && html.includes("Converted"), "customer account lists quotes");
+  }
+  // ===== samples & conversion attribution =====
+  {
+    const sc = normaliseCrm({ customers: [cust, { ...blankCustomer(), id: "c2", name: "Sue" }], sites: [site], invoices: [] });
+    assert(Array.isArray(sc.samples) && sc.numbering.sample === 1, "samples normalised");
+    const d0 = addD(today(), -100);
+    const mkInv = (id, date, extra = {}) => ({ ...blankInvoice(cust.id, ""), id: String(id), invNo: id, date, lines: [{ ...blankLine(), qty: 10, price: 20 }], ...extra });
+    const s1 = { ...blankSample(cust.id), id: "s1", sampleNo: 1, date: d0, items: [{ ...blankSampleItem(), description: "Decking board", colour: "Ash Grey" }] };
+    const s2 = { ...blankSample(cust.id), id: "s2", sampleNo: 2, date: addD(d0, 40) };
+    const s3 = { ...blankSample("c2"), id: "s3", sampleNo: 3, date: addD(today(), -300) };
+    sc.samples.push(s1, s2, s3);
+    sc.invoices.push(
+      mkInv(10, addD(d0, -5)),                                   // before the sample: never counts
+      mkInv(11, addD(d0, 10), { paymentType: "Sample" }),        // the sample order itself: not a sale
+      mkInv(12, addD(d0, 20)),                                   // first real order -> s1
+      mkInv(13, addD(d0, 50)),                                   // after s2 -> s2
+      { ...mkInv(14, addD(today(), -5)), customerId: "c2" },      // Sue ordered 295 days after: outside window
+    );
+    let synced = syncSampleConversions(sc);
+    assert(synced, "sync finds conversions");
+    sc.samples = synced;
+    const by = (id) => sc.samples.find((x) => x.id === id);
+    assert(by("s1").convertedInvoiceId === "12", "s1 credited with first sale after it, got " + by("s1").convertedInvoiceId);
+    assert(by("s2").convertedInvoiceId === "13", "s2 credited with order after the 2nd request (no double count)");
+    assert(by("s3").convertedInvoiceId === "" && sampleStatus(by("s3"), sc) === "Lapsed", "outside the window -> Lapsed");
+    assert(syncSampleConversions(sc) === null, "sync is stable once stored");
+    // manual override + no sale
+    by("s1").linkManual = true; by("s1").convertedInvoiceId = "13";
+    sc.samples = syncSampleConversions(sc) || sc.samples;
+    assert(by("s1").convertedInvoiceId === "13" && sampleInvoice(by("s1"), sc).invNo === 13 && syncSampleConversions(sc) === null, "pinned invoice respected");
+    by("s1").linkManual = false;
+    sc.samples = syncSampleConversions(sc) || sc.samples;
+    assert(by("s1").convertedInvoiceId === "12", "back to automatic");
+    by("s2").outcome = "lost";
+    sc.samples = syncSampleConversions(sc) || sc.samples;
+    assert(by("s2").convertedInvoiceId === "" && sampleStatus(by("s2"), sc) === "No sale", "no sale clears credit");
+    by("s2").outcome = "";
+    sc.samples = syncSampleConversions(sc) || sc.samples;
+    // deleting the invoice removes the credit
+    sc.invoices = sc.invoices.filter((i) => i.id !== "12");
+    sc.samples = syncSampleConversions(sc) || sc.samples;
+    assert(by("s1").convertedInvoiceId === "13" || by("s1").convertedInvoiceId === "", "re-matched after delete");
+    sc.invoices.push(mkInv(12, addD(d0, 20)));
+    sc.samples = syncSampleConversions(sc) || sc.samples;
+    const st = sampleStats(sc.samples, sc);
+    assert(st.requests === 3 && st.converted === 2 && Math.abs(st.revenue - 400) < 0.01 && st.avgDays === 15, "stats " + JSON.stringify(st));
+    // statuses for the work lists
+    const fresh = { ...blankSample(cust.id), id: "s4", sampleNo: 4 };
+    sc.samples.push(fresh);
+    assert(sampleStatus(fresh, sc) === "To send", "new request is To send");
+    fresh.dispatchedDate = addD(today(), -8); fresh.followUpDate = addD(today(), -1);
+    assert(sampleStatus(fresh, sc) === "Follow-up due", "follow-up due");
+    fresh.followedUp = true;
+    assert(sampleStatus(fresh, sc) === "Followed up", "followed up");
+
+    const sprops = { crm: sc, updateCrm: noop, askConfirm: noop, setSelId: noop, goCustomer: noop, openInvoice: noop, me: "x" };
+    html = renderToString(React.createElement(SamplesScreen, { ...sprops, selId: null }));
+    assert(html.includes("Sample requests") && html.includes("Sales from samples") && html.includes("By month requested"), "samples list renders");
+    html = renderToString(React.createElement(SamplesScreen, { ...sprops, selId: "s1" }));
+    assert(html.includes("S-1") && html.includes("Ordered — invoice #12") && html.includes("Decking board"), "sample entry renders converted");
+    html = renderToString(React.createElement(SamplesScreen, { ...sprops, selId: "s4" }));
+    assert(html.includes("Watching for an order"), "open sample renders");
+    html = renderToString(React.createElement(InvoicesScreen, { crm: sc, updateCrm: noop, askConfirm: noop, selId: "12", setSelId: noop, goCustomer: noop, openQuote: noop, openSample: noop, me: "x", planner: { products: [], shipments: [] }, filter: null, setFilter: noop }));
+    assert(html.includes("From sample S-1"), "invoice shows its sample");
+    html = renderToString(React.createElement(CustomersScreen, { crm: sc, updateCrm: noop, askConfirm: noop, selId: cust.id, setSelId: noop, openInvoice: noop, newInvoiceFor: noop, openQuote: noop, newQuoteFor: noop, openSample: noop, newSampleFor: noop, me: "x" }));
+    assert(html.includes("Sample requests (") && html.includes("Log sample"), "customer account lists samples");
   }
   console.log("smoke OK — all screens render, totals reconcile (1392 goods + 60 delivery = 1452 inc VAT, £242 VAT, £1210 net)");
 }

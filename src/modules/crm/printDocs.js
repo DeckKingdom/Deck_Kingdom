@@ -134,6 +134,20 @@ ${String(q.notes || "").trim() ? `<div class="note">${esc(q.notes).replace(/\n/g
   return openDoc(shell("Quote Q-" + (q.quoteNo || ""), body));
 }
 
+// Sample dispatch slip: big address block for the envelope + what to pack.
+export function printSampleSlip(smp, cust) {
+  const items = (smp.items || []).map((it) => `<tr><td class="r" style="width:50px"><b>${esc(it.qty)}</b></td><td>${esc(it.description)}</td><td>${esc(it.colour)}</td><td>${esc(it.size)}</td></tr>`).join("");
+  const addr = cust ? [cust.name, cust.address, cust.town, cust.postcode].filter(Boolean) : [];
+  const body = head("Sample", "S-" + (smp.sampleNo || "—"), pretty(smp.date)) + `
+<div style="border:2px dashed #0B1F3F;border-radius:12px;padding:18px 22px;margin-bottom:18px;max-width:420px">
+  ${addr.map((l, i) => `<div class="${i === 0 ? "big" : ""}" style="font-size:${i === 0 ? 18 : 15}px;font-weight:${i === 0 ? 700 : 600}">${esc(l)}</div>`).join("")}
+</div>
+<table><tr><th class="r">Qty</th><th>Sample</th><th>Colour</th><th>Size</th></tr>${items}</table>
+${smp.dispatchMethod ? `<div class="sub">Dispatch: ${esc(smp.dispatchMethod)}${smp.trackingRef ? " · " + esc(smp.trackingRef) : ""}</div>` : ""}
+<div class="foot">Thanks for requesting samples · questions or ready to order? ${esc(COMPANY.phone)} · ${esc(COMPANY.email)}</div>`;
+  return openDoc(shell("Sample S-" + (smp.sampleNo || ""), body));
+}
+
 // Warehouse picking list: kit lines pull their component SKUs through.
 // Once the pick list has been built on the invoice (with batch refs), the
 // bill prints from it, including the batch each SKU was loaded from.

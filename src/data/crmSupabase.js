@@ -55,6 +55,23 @@ const quoteLineToRow = (l, quoteId, i) => ({
   qty: Number(l.qty) || 0, price: Number(l.price) || 0, position: i,
 });
 
+// Sample requests (017_samples.sql): same tolerance as quotes.
+let samplesReady = false;
+export const samplesSchemaReady = () => samplesReady;
+
+const SAMPLE_TEXT = ["customerId", "date", "source", "dispatchMethod", "dispatchedDate", "trackingRef", "followUpDate", "followedUpDate", "project", "notes", "outcome", "lostReason", "convertedInvoiceId", "convertedAt", "raisedBy", "created"];
+
+const sampleToRow = (x, i) => {
+  const row = { id: x.id, sample_no: intOrNull(x.sampleNo), followed_up: x.followedUp === true, link_manual: x.linkManual === true, position: i };
+  SAMPLE_TEXT.forEach((k) => (row[snake(k)] = str(x[k])));
+  return row;
+};
+
+const sampleItemToRow = (it, sampleId, i) => ({
+  id: it.id, sample_id: sampleId, description: str(it.description), colour: str(it.colour),
+  size: str(it.size) || "Free", qty: Number(it.qty) || 0, position: i,
+});
+
 const snake = (k) => k.replace(/[A-Z]/g, (m) => "_" + m.toLowerCase());
 
 const customerToRow = (c, i) => {
@@ -202,7 +219,14 @@ function rowsFromData(d) {
       quotes.set(q.id, quoteToRow(q, i));
       (q.lines || []).forEach((l, j) => quoteItems.set(l.id, quoteLineToRow(l, q.id, j)));
     });
-  return { customers, sites, invoices, items, picks, mps, comps, colls, collItems, moves, vans, checks, quotes, quoteItems };
+  const samples = new Map();
+  const sampleItems = new Map();
+  if (samplesReady)
+    (d.samples || []).forEach((x, i) => {
+      samples.set(x.id, sampleToRow(x, i));
+      (x.items || []).forEach((it, j) => sampleItems.set(it.id, sampleItemToRow(it, x.id, j)));
+    });
+  return { customers, sites, invoices, items, picks, mps, comps, colls, collItems, moves, vans, checks, quotes, quoteItems, samples, sampleItems };
 }
 
 async function fetchAll(sb, table) {
@@ -222,7 +246,7 @@ let settingsSnapshot = {};
 
 async function loadAll() {
   const sb = await getSupabase();
-  const [cs, ss, is_, ls, ps_, mps_, comps_, colls_, collItems_, moves_, vans_, vanChecks_, settings, quoteData] = await Promise.all([
+  const [cs, ss, is_, ls, ps_, mps_, comps_, colls_, collItems_, moves_, vans_, vanChecks_, settings, quoteData, sampleData] = await Promise.all([
     fetchAll(sb, "customers"),
     fetchAll(sb, "customer_sites"),
     fetchAll(sb, "invoices"),
@@ -250,7 +274,16 @@ async function loadAll() {
         return null;
       }
     })(),
+    (async () => {
+      try {
+        const [sm, si] = await Promise.all([fetchAll(sb, "samples"), fetchAll(sb, "sample_items")]);
+        return { sm, si };
+      } catch (e) {
+        return null;
+      }
+    })(),
   ]);
+  samplesReady = sampleData !== null;
   quotesReady = quoteData !== null;
 
   const settingRow = (key) => settings.find((r) => r.key === key);
@@ -371,11 +404,27 @@ async function loadAll() {
     return q;
   });
 
-  const data = { customers, sites, invoices, masterProducts, collections, movements, vans, numbering, reminders, quotes };
+  const itemsBySample = {};
+  ((sampleData && sampleData.si) || []).forEach((r) => {
+    (itemsBySample[r.sample_id] = itemsBySample[r.sample_id] || []).push({
+      id: r.id, description: nv(r.description), colour: nv(r.colour), size: nv(r.size) || "Free", qty: nv(r.qty) === "" ? "" : Number(r.qty),
+    });
+  });
+  const samples = ((sampleData && sampleData.sm) || []).map((r) => {
+    const x = {
+      id: r.id, sampleNo: r.sample_no, followedUp: r.followed_up === true, linkManual: r.link_manual === true,
+      createdBy: nv(r.created_by), modifiedBy: nv(r.modified_by), updatedAt: r.updated_at || "",
+      items: itemsBySample[r.id] || [],
+    };
+    SAMPLE_TEXT.forEach((k) => (x[k] = nv(r[snake(k)])));
+    return x;
+  });
+
+  const data = { customers, sites, invoices, masterProducts, collections, movements, vans, numbering, reminders, quotes, samples };
   snapshot = rowsFromData(data);
   settingsSnapshot = { numbering: JSON.stringify(numbering), reminders: JSON.stringify(reminders) };
 
-  if (!customers.length && !sites.length && !invoices.length && !masterProducts.length && !collections.length && !vans.length && !quotes.length && !settings.length) return null;
+  if (!customers.length && !sites.length && !invoices.length && !masterProducts.length && !collections.length && !vans.length && !quotes.length && !samples.length && !settings.length) return null;
   return data;
 }
 
@@ -408,6 +457,8 @@ async function saveAll(d) {
   const dvc = diff(prev.checks || new Map(), next.checks);
   const dq = diff(prev.quotes || new Map(), next.quotes);
   const dqi = diff(prev.quoteItems || new Map(), next.quoteItems);
+  const dsm = diff(prev.samples || new Map(), next.samples);
+  const dsi = diff(prev.sampleItems || new Map(), next.sampleItems);
 
   const run = async (q) => {
     const { error } = await q;
@@ -444,6 +495,12 @@ async function saveAll(d) {
     if (dq.deletes.length) await run(sb.from("quotes").delete().in("id", dq.deletes));
     if (dq.upserts.length) await run(sb.from("quotes").upsert(dq.upserts));
     if (dqi.upserts.length) await run(sb.from("quote_items").upsert(dqi.upserts));
+  }
+  if (samplesReady) {
+    if (dsi.deletes.length) await run(sb.from("sample_items").delete().in("id", dsi.deletes));
+    if (dsm.deletes.length) await run(sb.from("samples").delete().in("id", dsm.deletes));
+    if (dsm.upserts.length) await run(sb.from("samples").upsert(dsm.upserts));
+    if (dsi.upserts.length) await run(sb.from("sample_items").upsert(dsi.upserts));
   }
 
   const settingsToSave = {

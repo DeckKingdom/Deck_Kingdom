@@ -307,7 +307,8 @@ export const emptyCrm = () => ({
   vans: [],
   reminders: {},
   quotes: [],
-  numbering: { account: 1, site: 1, invoice: 1, collection: 1, quote: 1 },
+  samples: [],
+  numbering: { account: 1, site: 1, invoice: 1, collection: 1, quote: 1, sample: 1 },
 });
 
 // Ensure older blobs gain any fields added later.
@@ -322,6 +323,13 @@ export const normaliseCrm = (c) => {
   if (!d.numbering.invoice) d.numbering.invoice = 1;
   if (!d.numbering.collection) d.numbering.collection = 1;
   if (!d.numbering.quote) d.numbering.quote = 1;
+  if (!d.numbering.sample) d.numbering.sample = 1;
+  d.samples = Array.isArray(d.samples) ? d.samples : [];
+  d.samples.forEach((x) => {
+    Object.assign(x, { ...blankSample(x.customerId), ...x, id: x.id || uid() });
+    x.items = Array.isArray(x.items) ? x.items : [];
+    x.items.forEach((it) => Object.assign(it, { ...blankSampleItem(), ...it, id: it.id || uid() }));
+  });
   d.quotes = Array.isArray(d.quotes) ? d.quotes : [];
   d.quotes.forEach((x) => {
     Object.assign(x, { ...blankQuote(x.customerId, x.siteId), ...x, id: x.id || uid() });
@@ -876,4 +884,129 @@ export const duplicateQuote = (c, quoteId, actor, newId) => {
   c.quotes.unshift(n);
   c.numbering.quote = (Number(n.quoteNo) || 0) + 1;
   return n;
+};
+
+// ===== sample requests & conversion tracking =====
+// Each request (S-n) belongs to a customer account. A sale is credited to the
+// sample automatically: the customer's first real invoice dated on/after the
+// request, within SAMPLE_WINDOW_DAYS and before their next sample request (so
+// one sale is never counted twice). The link is stored on the sample record;
+// staff can pin a different invoice by hand, or mark the request as no sale.
+export const SAMPLE_WINDOW_DAYS = 180;
+export const SAMPLE_FOLLOWUP_DAYS = 7;
+export const SAMPLE_SOURCES = ["Website", "Phone", "Showroom", "Email", "Market Place", "Social", "Trade"];
+export const SAMPLE_DISPATCH = ["Royal Mail", "Evri", "Collected", "Showroom hand-out", "With a delivery"];
+export const SAMPLE_SIZES = ["Free", "Large"];
+export const sampleRef = (s) => "S-" + (s && s.sampleNo ? s.sampleNo : "—");
+
+export const blankSampleItem = () => ({ id: uid(), description: "", colour: "", size: "Free", qty: 1 });
+
+export const blankSample = (customerId) => ({
+  id: uid(),
+  sampleNo: null,
+  customerId: customerId || "",
+  date: today(),
+  source: "Website",
+  dispatchMethod: "",
+  dispatchedDate: "",
+  trackingRef: "",
+  followUpDate: "",
+  followedUp: false,
+  followedUpDate: "",
+  project: "",
+  notes: "",
+  outcome: "",        // "" | "lost"
+  lostReason: "",
+  convertedInvoiceId: "",
+  convertedAt: "",
+  linkManual: false,  // invoice pinned by hand: auto-matching leaves it alone
+  raisedBy: "",
+  created: today(),
+  items: [],
+});
+
+// Invoices that count as a sale: money taken for goods, not a sample order itself.
+export const isSaleInvoice = (inv) =>
+  invoiceTotals(inv).total > 0 && !/sample/i.test(inv.paymentType || "") && !/sample/i.test(inv.jobType || "");
+
+export const sampleInvoice = (s, crm) =>
+  s && s.convertedInvoiceId ? (crm.invoices || []).find((i) => i.id === s.convertedInvoiceId) || null : null;
+
+// Work out every sample's credited invoice. Returns a new samples array when
+// any stored link changes, otherwise null (so it can run on every data change).
+export const syncSampleConversions = (crm) => {
+  const samples = crm.samples || [];
+  if (!samples.length) return null;
+  const invById = {};
+  const invsByCust = {};
+  (crm.invoices || []).forEach((i) => {
+    invById[i.id] = i;
+    if (isSaleInvoice(i)) (invsByCust[i.customerId] = invsByCust[i.customerId] || []).push(i);
+  });
+  Object.values(invsByCust).forEach((l) => l.sort((a, b) => (a.date || "").localeCompare(b.date || "") || (Number(a.invNo) || 0) - (Number(b.invNo) || 0)));
+  const byCust = {};
+  samples.forEach((s) => (byCust[s.customerId] = byCust[s.customerId] || []).push(s));
+  Object.values(byCust).forEach((l) => l.sort((a, b) => (a.date || "").localeCompare(b.date || "") || (Number(a.sampleNo) || 0) - (Number(b.sampleNo) || 0)));
+
+  const want = {};
+  samples.forEach((s) => {
+    if (s.linkManual) {
+      const inv = invById[s.convertedInvoiceId];
+      want[s.id] = inv ? { id: inv.id, at: inv.date || "" } : { id: "", at: "" };
+      return;
+    }
+    if (s.outcome === "lost" || !s.customerId || !s.date) return (want[s.id] = { id: "", at: "" });
+    const list = byCust[s.customerId];
+    const next = list[list.indexOf(s) + 1];
+    let end = addDays(s.date, SAMPLE_WINDOW_DAYS);
+    if (next && next.date && next.date > s.date && next.date < end) end = next.date;
+    const hit = (invsByCust[s.customerId] || []).find((i) => (i.date || "") >= s.date && (i.date || "") < end);
+    want[s.id] = hit ? { id: hit.id, at: hit.date || "" } : { id: "", at: "" };
+  });
+  let changed = false;
+  const out = samples.map((s) => {
+    const w = want[s.id];
+    if (w && (s.convertedInvoiceId !== w.id || s.convertedAt !== w.at)) {
+      changed = true;
+      return { ...s, convertedInvoiceId: w.id, convertedAt: w.at };
+    }
+    return s;
+  });
+  return changed ? out : null;
+};
+
+// Converted / No sale / Lapsed / To send / Follow-up due / Followed up / Sent
+export const sampleStatus = (s, crm) => {
+  if (sampleInvoice(s, crm)) return "Converted";
+  if (s.outcome === "lost") return "No sale";
+  if (s.date && addDays(s.date, SAMPLE_WINDOW_DAYS) < today()) return "Lapsed";
+  if (!s.dispatchedDate) return "To send";
+  if (s.followedUp) return "Followed up";
+  if (s.followUpDate && s.followUpDate <= today()) return "Follow-up due";
+  return "Sent";
+};
+export const SAMPLE_TONES = { Converted: "green", "No sale": "red", Lapsed: "grey", "To send": "red", "Follow-up due": "amber", "Followed up": "gold", Sent: "grey" };
+export const sampleIsOpen = (s, crm) => ["To send", "Sent", "Follow-up due", "Followed up"].includes(sampleStatus(s, crm));
+
+// Conversion figures for a set of sample requests
+export const sampleStats = (list, crm) => {
+  let converted = 0, revenue = 0, days = 0, lost = 0, open = 0;
+  list.forEach((s) => {
+    const inv = sampleInvoice(s, crm);
+    if (inv) {
+      converted++;
+      revenue += invoiceTotals(inv).total;
+      const d = daysBetween(s.date, inv.date);
+      if (d !== null) days += d;
+    } else if (sampleIsOpen(s, crm)) open++;
+    else lost++;
+  });
+  const decided = converted + lost;
+  return {
+    requests: list.length, converted, lost, open, revenue,
+    rate: list.length ? converted / list.length : null,       // of all requests
+    decidedRate: decided ? converted / decided : null,         // of those no longer in play
+    avgDays: converted ? Math.round(days / converted) : null,
+    perSample: list.length ? revenue / list.length : null,
+  };
 };

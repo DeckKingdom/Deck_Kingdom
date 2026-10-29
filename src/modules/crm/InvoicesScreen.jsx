@@ -6,7 +6,7 @@ import {
   blankInvoice, blankLine, nextNumber, invoiceTotals, gbp, isPaid,
   JOB_TYPES, PAYMENT_TYPES, PREP_FLAGS, FOLLOWUP_FLAGS, today, TIME_SLOTS, vanOptions,
   skuIndex, invoiceCost, buildPicks, pickLandedCost, jobCost, blankPick, invoiceLoadKg, applyInvoiceStockDeduction,
-  TRADE_COUNTER, TRADE_COUNTER_LABEL, quoteRef,
+  TRADE_COUNTER, TRADE_COUNTER_LABEL, quoteRef, sampleRef,
 } from "../../lib/crmCore.js";
 import { Icon, Chip, Tg, Modal, selectAllProps, SuggestInput, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
 import { printInvoice, printJobSheet, printLoadingBill } from "./printDocs.js";
@@ -22,7 +22,7 @@ const NoteBox = ({ children }) => (
   </div>
 );
 
-export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setSelId, goCustomer, openQuote, me, planner, filter, setFilter }) {
+export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setSelId, goCustomer, openQuote, openSample, me, planner, filter, setFilter }) {
   const [search, setSearch] = useState("");
   const [custQuery, setCustQuery] = useState("");
   const [notice, setNotice] = useState("");
@@ -234,6 +234,12 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
                 </button>
               ) : null;
             })()}
+            {(crm.samples || []).filter((x) => x.convertedInvoiceId === inv.id).map((x) => (
+              <button key={x.id} onClick={() => openSample && openSample(x.id)} title="This order is credited to a sample request"
+                style={{ fontFamily: "inherit", fontSize: 11.5, fontWeight: 700, padding: "3px 10px", borderRadius: 999, background: "#3FA55C33", border: "1px solid #3FA55C", color: "#8fe0a6", cursor: "pointer" }}>
+                {"From sample " + sampleRef(x)}
+              </button>
+            ))}
           </div>
           <div style={{ fontSize: 12.5, color: "#aeb9cf", fontWeight: 600, marginTop: 5 }}>
             Raised {prettyDate(inv.created)}{inv.raisedBy ? " by " + inv.raisedBy.split("@")[0] : ""}

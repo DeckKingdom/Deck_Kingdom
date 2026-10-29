@@ -11,6 +11,7 @@ export const NAV_SECTIONS = [
     title: "Sales",
     items: [
       ["customers", "Customers", "users"],
+      ["samples", "Samples", "leaf"],
       ["quotes", "Quotes", "tag"],
       ["invoices", "Invoices", "doc"],
       ["schedule", "Schedule", "cal"],

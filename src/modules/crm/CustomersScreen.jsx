@@ -5,7 +5,7 @@ import { NAVY, GOLD, RED, prettyDate, prettyDateTime } from "../../lib/core.js";
 import {
   blankCustomer, blankSite, nextNumber, SOURCES,
   invoiceTotals, gbp, isPaid, followUpDone, FOLLOWUP_FLAGS, FIELD_FORMATS, CONTACT_METHODS,
-  TRADE_COUNTER, TRADE_COUNTER_LABEL, quoteTotals, quoteStatus, quoteInvoice, quoteRef, QUOTE_TONES,
+  TRADE_COUNTER, TRADE_COUNTER_LABEL, quoteTotals, quoteStatus, quoteInvoice, quoteRef, QUOTE_TONES, sampleRef, sampleStatus, sampleInvoice, SAMPLE_TONES,
 } from "../../lib/crmCore.js";
 import { Icon, Chip, Modal, SuggestInput, selectAllProps, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
 
@@ -30,7 +30,7 @@ const NoteBox = ({ children }) => (
   </div>
 );
 
-export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, setSelId, openInvoice, newInvoiceFor, openQuote, newQuoteFor, onOutstanding, me }) {
+export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, setSelId, openInvoice, newInvoiceFor, openQuote, newQuoteFor, openSample, newSampleFor, onOutstanding, me }) {
   const [search, setSearch] = useState("");
   const [custDraft, setCustDraft] = useState(null);
   const [siteDraft, setSiteDraft] = useState(null);
@@ -54,6 +54,13 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
     Object.values(m).forEach((list) => list.sort((a, b) => (b.date || "").localeCompare(a.date || "") || (Number(b.quoteNo) || 0) - (Number(a.quoteNo) || 0)));
     return m;
   }, [crm.quotes]);
+
+  const samplesByCust = useMemo(() => {
+    const m = {};
+    (crm.samples || []).forEach((x) => (m[x.customerId] = m[x.customerId] || []).push(x));
+    Object.values(m).forEach((list) => list.sort((a, b) => (b.date || "").localeCompare(a.date || "")));
+    return m;
+  }, [crm.samples]);
 
   const sitesByCust = useMemo(() => {
     const m = {};
@@ -134,7 +141,7 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
       return;
     }
     askConfirm({
-      message: "Delete account #" + (cust.accountNo || "—") + " — " + (cust.name || "unnamed") + "? Its sites" + ((quotesByCust[cust.id] || []).length ? " and " + quotesByCust[cust.id].length + " quote(s)" : "") + " will be removed too.",
+      message: "Delete account #" + (cust.accountNo || "—") + " — " + (cust.name || "unnamed") + "? Its sites" + ((quotesByCust[cust.id] || []).length ? ", " + quotesByCust[cust.id].length + " quote(s)" : "") + ((samplesByCust[cust.id] || []).length ? ", " + samplesByCust[cust.id].length + " sample request(s)" : "") + " will be removed too.",
       confirmLabel: "Delete",
       danger: true,
       action: () =>
@@ -142,6 +149,7 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
           c.customers = c.customers.filter((x) => x.id !== cust.id);
           c.sites = c.sites.filter((x) => x.customerId !== cust.id);
           c.quotes = (c.quotes || []).filter((x) => x.customerId !== cust.id);
+          c.samples = (c.samples || []).filter((x) => x.customerId !== cust.id);
           return c;
         }) || setSelId(null),
     });
@@ -375,6 +383,11 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
                     <Icon name="tag" stroke={GOLD} />New quote
                   </button>
                 )}
+                {newSampleFor && (
+                  <button style={navyBtn} onClick={() => newSampleFor(sel.id)}>
+                    <Icon name="leaf" stroke="#fff" />Log sample
+                  </button>
+                )}
                 <span style={{ flex: 1 }} />
                 <button style={{ ...navyBtn, border: "1px dashed #3a4f78", color: "#8fa0c0" }} onClick={() => removeCustomer(sel)}><Icon name="bin" stroke="#8fa0c0" />Delete</button>
               </div>
@@ -434,6 +447,51 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
                 </div>
               </div>
             </div>
+
+            {(samplesByCust[sel.id] || []).length > 0 && (
+              <div style={{ ...card, marginTop: 14 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                  <p style={{ ...sect, margin: 0 }}>Sample requests ({samplesByCust[sel.id].length})</p>
+                  <span style={{ flex: 1 }} />
+                  <button style={{ ...btn, padding: "6px 11px", fontSize: 12.5 }} onClick={() => newSampleFor(sel.id)}><Icon name="plus" stroke={NAVY} />Log sample</button>
+                </div>
+                <div style={{ overflowX: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 600 }}>
+                    <thead>
+                      <tr>
+                        {["Date", "Sample", "Samples", "Status", "Order", ""].map((h, i) => (
+                          <th key={i} style={{ textAlign: "left", fontSize: 11, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", padding: "8px 8px", borderBottom: "2px solid #e6e9ef", whiteSpace: "nowrap" }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {samplesByCust[sel.id].map((x) => {
+                        const st = sampleStatus(x, crm);
+                        const si = sampleInvoice(x, crm);
+                        return (
+                          <tr key={x.id}>
+                            <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", whiteSpace: "nowrap" }}>{prettyDate(x.date)}</td>
+                            <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6" }}>
+                              <button onClick={() => openSample(x.id)} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontWeight: 700, color: "#185FA5", fontSize: 13, padding: 0 }}>{sampleRef(x)}</button>
+                            </td>
+                            <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", color: "#5a6a85", fontWeight: 600 }}>
+                              {(x.items || []).map((it) => [it.colour, it.description].filter(Boolean).join(" ")).filter(Boolean).join(", ") || "—"}
+                            </td>
+                            <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6" }}><Chip tone={SAMPLE_TONES[st]}>{st}</Chip></td>
+                            <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6" }}>
+                              {si ? <button onClick={() => openInvoice(si.id)} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontWeight: 700, color: "#185FA5", fontSize: 13, padding: 0 }}>{"#" + (si.invNo || "—")}</button> : <span style={{ color: "#aab3c2" }}>—</span>}
+                            </td>
+                            <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", textAlign: "right" }}>
+                              <button style={abtn} title="Open sample request" onClick={() => openSample(x.id)}><Icon name="pen" /></button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
 
             {(() => {
               const qs = quotesByCust[sel.id] || [];
@@ -699,7 +757,7 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
             New records take whichever is higher: these, or the highest existing number + 1 — so an import of
             historical records moves the sequences on automatically.
           </p>
-          {[["account", "Next account #"], ["site", "Next site #"], ["quote", "Next quote # (Q-)"], ["invoice", "Next invoice #"], ["collection", "Next collection #"]].map(([k, label]) => (
+          {[["account", "Next account #"], ["site", "Next site #"], ["sample", "Next sample # (S-)"], ["quote", "Next quote # (Q-)"], ["invoice", "Next invoice #"], ["collection", "Next collection #"]].map(([k, label]) => (
             <div key={k} style={{ marginBottom: 10 }}>
               <span style={lbl}>{label}</span>
               <input style={inp} inputMode="numeric" value={numDraft[k]}
@@ -716,6 +774,7 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
                   invoice: Number(numDraft.invoice) || 1,
                   collection: Number(numDraft.collection) || 1,
                   quote: Number(numDraft.quote) || 1,
+                  sample: Number(numDraft.sample) || 1,
                 };
                 return c;
               });
