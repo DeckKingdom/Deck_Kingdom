@@ -51,7 +51,7 @@ export default function run(React, renderToString) {
   let html = renderToString(React.createElement(CustomersScreen, { ...props, selId: null, setSelId: noop }));
   assert(html.includes("New customer") && html.includes("Bob"), "customers list");
   html = renderToString(React.createElement(CustomersScreen, { ...props, selId: cust.id, setSelId: noop }));
-  ["Account #","2670","Site #","10710","rear car park","1,452.00"].forEach((s)=>{ if(!html.includes(s)) console.error("missing:", s); }); assert(["Account #","2670","Site #","10710","rear car park","1,452.00"].every((s)=>html.includes(s)), "account view");
+  ["Account #","2670","10710","rear car park","1,452.00"].forEach((s)=>{ if(!html.includes(s)) console.error("missing:", s); }); assert(["Account #","2670","10710","rear car park","1,452.00"].every((s)=>html.includes(s)), "account view");
   html = renderToString(React.createElement(InvoicesScreen, { ...props, selId: null, setSelId: noop }));
   assert(html.includes("4228") && html.includes("Paid"), "invoice list");
   html = renderToString(React.createElement(InvoicesScreen, { ...props, selId: inv.id, setSelId: noop }));

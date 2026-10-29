@@ -397,9 +397,9 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
                       <Icon name="pin" size={17} stroke={GOLD} />
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                      <div style={{ display: "flex", gap: 7, alignItems: "baseline", flexWrap: "wrap" }}>
+                        <span style={{ color: "#8593a8", fontWeight: 700, fontSize: 12.5 }}>#{s.siteNo || "—"}</span>
                         <b style={{ fontSize: 14 }}>{s.name || s.address || "Unnamed site"}</b>
-                        <Chip>Site #{s.siteNo || "—"}</Chip>
                       </div>
                       <div style={{ fontSize: 12.5, color: "#5a6a85", fontWeight: 600, marginTop: 2 }}>
                         {[s.address !== s.name ? s.address : "", s.town, s.postcode, s.mobile || s.landline].filter(Boolean).join(" · ")}

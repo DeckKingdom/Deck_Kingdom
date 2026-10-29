@@ -275,7 +275,7 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
                 {(cust.name || "?").trim().charAt(0).toUpperCase() || "?"}
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <Chip>#{cust.accountNo || "—"}</Chip> <b style={{ fontSize: 15 }}>{cust.name}</b>
+<span style={{ color: "#8593a8", fontWeight: 700, fontSize: 12.5 }}>#{cust.accountNo || "—"}</span> <b style={{ fontSize: 15 }}>{cust.name}</b>
                 <div style={{ fontSize: 12, color: "#5a6a85", fontWeight: 600, marginTop: 2 }}>
                   {[cust.mobile || cust.landline, cust.contactMethod ? "prefers " + cust.contactMethod : "", cust.source, cust.trader ? "Trade" : "", Number(cust.discountPct) > 0 ? "−" + Number(cust.discountPct) + "%" : ""].filter(Boolean).join(" · ")}
                 </div>
