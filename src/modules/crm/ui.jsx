@@ -1,5 +1,5 @@
 // Shared CRM UI: icon set, workflow toggles, chips, field styles.
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { NAVY, GOLD } from "../../lib/core.js";
 
 const PATHS = {
@@ -126,6 +126,13 @@ export const selectAllProps = {
 export function SuggestInput({ value, onChange, options = [], format, inputStyle, ...props }) {
   const [open, setOpen] = useState(false);
   const [hi, setHi] = useState(-1);
+  const inputRef = useRef(null);
+  const [rect, setRect] = useState(null);
+
+  // the list is fixed to the viewport so scrollable tables/modals can't clip it
+  const syncRect = () => {
+    if (inputRef.current) setRect(inputRef.current.getBoundingClientRect());
+  };
 
   const optVal = (o) => (typeof o === "string" ? o : o.value);
   const optLabel = (o) => (typeof o === "string" ? o : o.label === undefined ? o.value : o.label);
@@ -154,20 +161,21 @@ export function SuggestInput({ value, onChange, options = [], format, inputStyle
   return (
     <div style={{ position: "relative" }}>
       <input
+        ref={inputRef}
         style={{ ...inp, ...inputStyle }}
         value={value === null || value === undefined ? "" : value}
         autoComplete="one-time-code"
         spellCheck={false}
         {...props}
-        onFocus={(e) => { selectAllProps.onFocus(e); setOpen(false); setHi(-1); }}
+        onFocus={(e) => { selectAllProps.onFocus(e); setOpen(false); setHi(-1); syncRect(); }}
         onMouseUp={selectAllProps.onMouseUp}
-        onChange={(e) => { onChange(e.target.value); setOpen(true); setHi(-1); }}
+        onChange={(e) => { onChange(e.target.value); setOpen(true); setHi(-1); syncRect(); }}
         onBlur={(e) => {
           setTimeout(() => setOpen(false), 120);
           if (format) onChange(format(e.target.value));
         }}
         onKeyDown={(e) => {
-          if (e.key === "ArrowDown") { e.preventDefault(); setOpen(true); setHi((h) => Math.min(h + 1, filtered.length - 1)); }
+          if (e.key === "ArrowDown") { e.preventDefault(); setOpen(true); syncRect(); setHi((h) => Math.min(h + 1, filtered.length - 1)); }
           else if (e.key === "ArrowUp") { e.preventDefault(); setHi((h) => Math.max(h - 1, -1)); }
           else if (e.key === "Escape") { setOpen(false); setHi(-1); e.stopPropagation(); }
           else if (e.key === "Enter") {
@@ -177,8 +185,12 @@ export function SuggestInput({ value, onChange, options = [], format, inputStyle
           }
         }}
       />
-      {open && filtered.length > 0 && (
-        <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 70, background: "#fff", border: "1px solid #d5d9e0", borderRadius: 8, marginTop: 3, maxHeight: 218, overflowY: "auto", boxShadow: "0 10px 26px rgba(11,31,63,0.22)" }}>
+      {open && filtered.length > 0 && rect && (
+        <div style={(() => {
+          const width = Math.min(Math.max(rect.width, 280), typeof window !== "undefined" ? window.innerWidth - 16 : 600);
+          const left = Math.max(8, Math.min(rect.left, (typeof window !== "undefined" ? window.innerWidth : 1200) - width - 8));
+          return { position: "fixed", left, top: rect.bottom + 3, width, zIndex: 90, background: "#fff", border: "1px solid #d5d9e0", borderRadius: 8, maxHeight: 218, overflowY: "auto", boxShadow: "0 10px 26px rgba(11,31,63,0.22)" };
+        })()}>
           {filtered.map((o, i) => (
             <div key={optVal(o)} onMouseDown={(e) => { e.preventDefault(); pick(o); }} onMouseEnter={() => setHi(i)}
               style={{ padding: "6px 11px", fontSize: 13.5, fontWeight: 600, cursor: "pointer", background: i === hi ? GOLD : "#fff", color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
