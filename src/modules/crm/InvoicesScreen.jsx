@@ -8,7 +8,7 @@ import {
   skuIndex, invoiceCost, buildPicks, pickLandedCost, jobCost, blankPick, invoiceLoadKg,
   TRADE_COUNTER, TRADE_COUNTER_LABEL,
 } from "../../lib/crmCore.js";
-import { Icon, Chip, Tg, Modal, selectAllProps, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
+import { Icon, Chip, Tg, Modal, selectAllProps, SuggestInput, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
 import { printInvoice, printJobSheet, printLoadingBill } from "./printDocs.js";
 
 const navyBtn = { ...btn, background: "transparent", border: "1px solid #3a4f78", color: "#fff" };
@@ -225,7 +225,9 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
     <div style={{ maxWidth: 1140, margin: "0 auto", padding: "18px 22px" }}>
       <datalist id="dk-skus">
         {(crm.masterProducts || []).filter((p) => p.active !== false && p.sku).map((p) => (
-          <option key={p.id} value={p.sku}>{p.name + (p.colour ? " · " + p.colour : "")}</option>
+          <option key={p.id} value={p.sku}>
+            {p.name + (p.colour ? " · " + p.colour : "") + (p.priceIncVat !== "" && p.priceIncVat !== null ? " — £" + Number(p.priceIncVat).toFixed(2) : "")}
+          </option>
         ))}
       </datalist>
       <datalist id="dk-paytypes">{PAYMENT_TYPES.map((s) => <option key={s} value={s} />)}</datalist>
@@ -399,8 +401,14 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
                   <td style={{ padding: "6px 6px", borderBottom: "1px solid #f0f2f6", width: 130 }}>
                     <input style={inp} value={l.colour} {...selectAllProps} onChange={(e) => setLine(l.id, "colour", e.target.value)} />
                   </td>
-                  <td style={{ padding: "6px 6px", borderBottom: "1px solid #f0f2f6", width: 70 }}>
-                    <input style={numInp} inputMode="decimal" value={l.qty} {...selectAllProps} onChange={(e) => setLine(l.id, "qty", e.target.value)} />
+                  <td style={{ padding: "6px 6px", borderBottom: "1px solid #f0f2f6", width: 74 }}>
+                    <SuggestInput
+                      value={l.qty}
+                      options={Array.from({ length: 20 }, (_, i) => String(i + 1))}
+                      inputStyle={{ textAlign: "right" }}
+                      inputMode="decimal"
+                      onChange={(v) => setLine(l.id, "qty", v)}
+                    />
                   </td>
                   <td style={{ padding: "6px 6px", borderBottom: "1px solid #f0f2f6", width: 100 }}>
                     <input style={numInp} inputMode="decimal" value={l.price} {...selectAllProps} onChange={(e) => setLine(l.id, "price", e.target.value)} />

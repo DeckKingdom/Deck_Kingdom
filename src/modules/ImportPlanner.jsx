@@ -1715,7 +1715,7 @@ export default function ImportPlanner() {
                   <th style={{ ...th, width: "8%", textAlign: "right", fontSize: 11.5 }}>Default kg / pc</th>
                   <th style={{ ...th, width: "7%", textAlign: "right", fontSize: 11.5 }}>Default m³ / Plt / Ctn</th>
                   <th style={{ ...th, width: "8%", textAlign: "right", fontSize: 11.5 }}>Default $ / pc</th>
-                  <th style={{ ...th, width: "8%", textAlign: "right", fontSize: 11.5 }}>Sale £ / pc (inc VAT)</th>
+                  <th style={{ ...th, width: "8%", textAlign: "right", fontSize: 11.5 }}>Retail £ / pc (inc VAT)</th>
                   <th style={{ ...th, width: 34 }}></th>
                 </tr>
               </thead>
@@ -1787,7 +1787,7 @@ export default function ImportPlanner() {
             ))}
           </datalist>
           <p style={{ fontSize: 12.5, color: "#5a6a85", marginTop: 10 }}>
-            Set up your full range here once. Shipment lines pull qty per pallet and $ cost from these defaults; the sale £ feeds the Stock valuations and invoice lines. Every product + colour automatically gets a stock row (with its own code) on the Stock screen — no separate product list to maintain.
+            Set up your full range here once. Shipment lines pull qty per pallet and $ cost from these defaults; the retail £ feeds the Stock valuations and invoice lines. Every product + colour automatically gets a stock row (with its own code) on the Stock screen — no separate product list to maintain.
           </p>
         </div>
       )}
