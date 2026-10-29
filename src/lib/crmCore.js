@@ -1,5 +1,5 @@
 // CRM domain helpers: customers, sites, invoices, delivery schedule.
-import { uid, daysBetween, landedPerPiece } from "./core.js";
+import { uid, daysBetween, landedPerPiece, addDays } from "./core.js";
 
 export const JOB_TYPES = ["Delivery Run 1", "Delivery Run 2", "Delivery Run 3", "Customer Collection", "Evri", "Post Office", "Courier TG", "Returns"];
 // "collection" anywhere in the job type means the customer picks up — no van run
@@ -182,6 +182,7 @@ export const blankInvoice = (customerId, siteId) => ({
   jobNotes: "",
   raisedBy: "",
   stockDeducted: "",
+  quoteId: "",
   created: today(),
   flags: {
     booked: false,
@@ -305,7 +306,8 @@ export const emptyCrm = () => ({
   movements: [],
   vans: [],
   reminders: {},
-  numbering: { account: 1, site: 1, invoice: 1, collection: 1 },
+  quotes: [],
+  numbering: { account: 1, site: 1, invoice: 1, collection: 1, quote: 1 },
 });
 
 // Ensure older blobs gain any fields added later.
@@ -319,6 +321,13 @@ export const normaliseCrm = (c) => {
   if (!d.numbering.site) d.numbering.site = 1;
   if (!d.numbering.invoice) d.numbering.invoice = 1;
   if (!d.numbering.collection) d.numbering.collection = 1;
+  if (!d.numbering.quote) d.numbering.quote = 1;
+  d.quotes = Array.isArray(d.quotes) ? d.quotes : [];
+  d.quotes.forEach((x) => {
+    Object.assign(x, { ...blankQuote(x.customerId, x.siteId), ...x, id: x.id || uid() });
+    x.lines = Array.isArray(x.lines) ? x.lines : [];
+    x.lines.forEach((l) => Object.assign(l, { ...blankLine(), ...l, id: l.id || uid() }));
+  });
   d.collections = Array.isArray(d.collections) ? d.collections : [];
   d.collections.forEach((x) => {
     Object.assign(x, { ...blankCollection(), ...x, id: x.id || uid() });
@@ -778,4 +787,93 @@ export const customerStats = (crm, customerId) => {
     if (i.date && i.date > last) last = i.date;
   });
   return { count: invs.length, lifetime, lastOrder: last };
+};
+
+// ===== quotations =====
+// A quote is an invoice-in-waiting: same lines, prices (inc VAT), discount and
+// delivery charge, on its own number sequence (Q-n). Converting it raises a
+// real invoice carrying everything across, and the two stay linked both ways.
+export const QUOTE_VALID_DAYS = 30;
+export const QUOTE_STATUSES = ["Draft", "Sent", "Accepted", "Declined"];
+export const quoteRef = (q) => "Q-" + (q && q.quoteNo ? q.quoteNo : "—");
+
+export const blankQuote = (customerId, siteId) => ({
+  id: uid(),
+  quoteNo: null,
+  customerId: customerId || "",
+  siteId: siteId || "",
+  date: today(),
+  validUntil: addDays(today(), QUOTE_VALID_DAYS),
+  status: "Draft",
+  sentDate: "",
+  deliveryCharge: "",
+  discountPct: "",
+  vatRate: 20,
+  notes: "",
+  internalNotes: "",
+  raisedBy: "",
+  created: today(),
+  convertedInvoiceId: "",
+  convertedAt: "",
+  lines: [],
+});
+
+// same money rules as an invoice
+export const quoteTotals = (q) => invoiceTotals(q);
+
+// The invoice a quote became — null if never converted or that invoice has
+// since been deleted (the quote then reopens as Accepted, ready to convert again).
+export const quoteInvoice = (q, crm) =>
+  q && q.convertedInvoiceId ? (crm.invoices || []).find((i) => i.id === q.convertedInvoiceId) || null : null;
+
+// Displayed status: Converted / Declined / Accepted / Expired / Sent / Draft
+export const quoteStatus = (q, crm) => {
+  if (quoteInvoice(q, crm)) return "Converted";
+  if (q.status === "Declined") return "Declined";
+  if (q.status === "Accepted") return "Accepted";
+  if (q.validUntil && q.validUntil < today()) return "Expired";
+  return q.status === "Sent" ? "Sent" : "Draft";
+};
+export const QUOTE_TONES = { Draft: "grey", Sent: "amber", Accepted: "gold", Converted: "green", Declined: "red", Expired: "grey" };
+// still in play: worth chasing
+export const quoteIsOpen = (q, crm) => ["Draft", "Sent", "Accepted"].includes(quoteStatus(q, crm));
+
+// Turn a quote into a sale. Mutates the crm copy passed in (inside updateCrm):
+// pushes the new invoice, moves the invoice sequence on, marks the quote
+// Accepted + linked. Returns the invoice, or null if it can't convert.
+export const convertQuoteToInvoice = (c, quoteId, actor, newId) => {
+  const q = (c.quotes || []).find((x) => x.id === quoteId);
+  if (!q || !q.customerId || quoteInvoice(q, c)) return null;
+  const inv = blankInvoice(q.customerId, q.siteId);
+  if (newId) inv.id = newId;
+  inv.invNo = nextNumber(c.invoices, "invNo", c.numbering.invoice);
+  inv.raisedBy = actor || "";
+  inv.quoteId = q.id;
+  if (q.siteId === TRADE_COUNTER) inv.jobType = "Customer Collection";
+  inv.deliveryCharge = q.deliveryCharge;
+  inv.discountPct = q.discountPct;
+  inv.vatRate = q.vatRate;
+  inv.jobNotes = [q.notes, q.internalNotes].filter((x) => String(x || "").trim()).join("\n");
+  inv.lines = (q.lines || []).map((l) => ({ ...blankLine(), code: l.code, description: l.description, colour: l.colour, qty: l.qty, price: l.price }));
+  c.invoices.unshift(inv);
+  c.numbering.invoice = (Number(inv.invNo) || 0) + 1;
+  q.status = "Accepted";
+  q.convertedInvoiceId = inv.id;
+  q.convertedAt = today();
+  return inv;
+};
+
+// A fresh draft copy (new number, today's dates) — for revising a quote
+export const duplicateQuote = (c, quoteId, actor, newId) => {
+  const q = (c.quotes || []).find((x) => x.id === quoteId);
+  if (!q) return null;
+  const n = blankQuote(q.customerId, q.siteId);
+  if (newId) n.id = newId;
+  n.quoteNo = nextNumber(c.quotes, "quoteNo", c.numbering.quote);
+  n.raisedBy = actor || "";
+  ["deliveryCharge", "discountPct", "vatRate", "notes", "internalNotes"].forEach((k) => (n[k] = q[k]));
+  n.lines = (q.lines || []).map((l) => ({ ...l, id: uid() }));
+  c.quotes.unshift(n);
+  c.numbering.quote = (Number(n.quoteNo) || 0) + 1;
+  return n;
 };

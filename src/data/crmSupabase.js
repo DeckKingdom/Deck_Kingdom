@@ -30,6 +30,31 @@ const FLAG_COLS = {
   sampleFollowed: "f_sample_followed",
 };
 
+// Quotes live in their own tables (016_quotes.sql). Until that SQL has been
+// run they're simply absent: the rest of the CRM loads and saves as before.
+let quotesReady = false;
+export const quotesSchemaReady = () => quotesReady;
+
+const QUOTE_TEXT = ["customerId", "siteId", "date", "validUntil", "status", "sentDate", "notes", "internalNotes", "raisedBy", "created", "convertedInvoiceId", "convertedAt"];
+
+const quoteToRow = (q, i) => {
+  const row = {
+    id: q.id,
+    quote_no: intOrNull(q.quoteNo),
+    delivery_charge: num(q.deliveryCharge),
+    discount_pct: num(q.discountPct),
+    vat_rate: isFinite(Number(q.vatRate)) ? Number(q.vatRate) : 20,
+    position: i,
+  };
+  QUOTE_TEXT.forEach((k) => (row[snake(k)] = str(q[k])));
+  return row;
+};
+
+const quoteLineToRow = (l, quoteId, i) => ({
+  id: l.id, quote_id: quoteId, code: str(l.code), description: str(l.description), colour: str(l.colour),
+  qty: Number(l.qty) || 0, price: Number(l.price) || 0, position: i,
+});
+
 const snake = (k) => k.replace(/[A-Z]/g, (m) => "_" + m.toLowerCase());
 
 const customerToRow = (c, i) => {
@@ -60,6 +85,7 @@ const invToRow = (inv, i) => {
   INV_TEXT.forEach((k) => (row[snake(k)] = str(inv[k])));
   const f = inv.flags || {};
   Object.entries(FLAG_COLS).forEach(([k, col]) => (row[col] = f[k] === true));
+  if (quotesReady) row.quote_id = str(inv.quoteId);
   return row;
 };
 
@@ -169,7 +195,14 @@ function rowsFromData(d) {
     vans.set(v.id, vanToRow(v, i));
     (v.checks || []).forEach((c, j) => checks.set(c.id, checkToRow(c, v.id, j)));
   });
-  return { customers, sites, invoices, items, picks, mps, comps, colls, collItems, moves, vans, checks };
+  const quotes = new Map();
+  const quoteItems = new Map();
+  if (quotesReady)
+    (d.quotes || []).forEach((q, i) => {
+      quotes.set(q.id, quoteToRow(q, i));
+      (q.lines || []).forEach((l, j) => quoteItems.set(l.id, quoteLineToRow(l, q.id, j)));
+    });
+  return { customers, sites, invoices, items, picks, mps, comps, colls, collItems, moves, vans, checks, quotes, quoteItems };
 }
 
 async function fetchAll(sb, table) {
@@ -189,7 +222,7 @@ let settingsSnapshot = {};
 
 async function loadAll() {
   const sb = await getSupabase();
-  const [cs, ss, is_, ls, ps_, mps_, comps_, colls_, collItems_, moves_, vans_, vanChecks_, settings] = await Promise.all([
+  const [cs, ss, is_, ls, ps_, mps_, comps_, colls_, collItems_, moves_, vans_, vanChecks_, settings, quoteData] = await Promise.all([
     fetchAll(sb, "customers"),
     fetchAll(sb, "customer_sites"),
     fetchAll(sb, "invoices"),
@@ -208,7 +241,17 @@ async function loadAll() {
       if (error) throw new Error(error.message);
       return data;
     })(),
+    (async () => {
+      // tolerant: a missing quotes table (SQL not run yet) must not stop the CRM loading
+      try {
+        const [q, qi] = await Promise.all([fetchAll(sb, "quotes"), fetchAll(sb, "quote_items")]);
+        return { q, qi };
+      } catch (e) {
+        return null;
+      }
+    })(),
   ]);
+  quotesReady = quoteData !== null;
 
   const settingRow = (key) => settings.find((r) => r.key === key);
   const numbering = (settingRow("numbering") || {}).value || { account: 1, site: 1, invoice: 1 };
@@ -261,6 +304,7 @@ async function loadAll() {
       picks: picksByInv[r.id] || [],
     };
     INV_TEXT.forEach((k) => (inv[k] = nv(r[snake(k)])));
+    inv.quoteId = nv(r.quote_id);
     Object.entries(FLAG_COLS).forEach(([k, col]) => (inv.flags[k] = r[col] === true));
     return inv;
   });
@@ -310,11 +354,28 @@ async function loadAll() {
     return v;
   });
 
-  const data = { customers, sites, invoices, masterProducts, collections, movements, vans, numbering, reminders };
+  const linesByQuote = {};
+  ((quoteData && quoteData.qi) || []).forEach((r) => {
+    (linesByQuote[r.quote_id] = linesByQuote[r.quote_id] || []).push({
+      id: r.id, code: nv(r.code), description: nv(r.description), colour: nv(r.colour),
+      qty: nv(r.qty) === "" ? "" : Number(r.qty), price: nv(r.price) === "" ? "" : Number(r.price),
+    });
+  });
+  const quotes = ((quoteData && quoteData.q) || []).map((r) => {
+    const q = {
+      id: r.id, quoteNo: r.quote_no, deliveryCharge: nv(r.delivery_charge), discountPct: nv(r.discount_pct),
+      vatRate: Number(r.vat_rate), createdBy: nv(r.created_by), modifiedBy: nv(r.modified_by), updatedAt: r.updated_at || "",
+      lines: linesByQuote[r.id] || [],
+    };
+    QUOTE_TEXT.forEach((k) => (q[k] = nv(r[snake(k)])));
+    return q;
+  });
+
+  const data = { customers, sites, invoices, masterProducts, collections, movements, vans, numbering, reminders, quotes };
   snapshot = rowsFromData(data);
   settingsSnapshot = { numbering: JSON.stringify(numbering), reminders: JSON.stringify(reminders) };
 
-  if (!customers.length && !sites.length && !invoices.length && !masterProducts.length && !collections.length && !vans.length && !settings.length) return null;
+  if (!customers.length && !sites.length && !invoices.length && !masterProducts.length && !collections.length && !vans.length && !quotes.length && !settings.length) return null;
   return data;
 }
 
@@ -345,6 +406,8 @@ async function saveAll(d) {
   const dmv = diff(prev.moves || new Map(), next.moves);
   const dv = diff(prev.vans || new Map(), next.vans);
   const dvc = diff(prev.checks || new Map(), next.checks);
+  const dq = diff(prev.quotes || new Map(), next.quotes);
+  const dqi = diff(prev.quoteItems || new Map(), next.quoteItems);
 
   const run = async (q) => {
     const { error } = await q;
@@ -376,6 +439,12 @@ async function saveAll(d) {
   if (dv.deletes.length) await run(sb.from("vans").delete().in("id", dv.deletes));
   if (dv.upserts.length) await run(sb.from("vans").upsert(dv.upserts));
   if (dvc.upserts.length) await run(sb.from("van_checks").upsert(dvc.upserts));
+  if (quotesReady) {
+    if (dqi.deletes.length) await run(sb.from("quote_items").delete().in("id", dqi.deletes));
+    if (dq.deletes.length) await run(sb.from("quotes").delete().in("id", dq.deletes));
+    if (dq.upserts.length) await run(sb.from("quotes").upsert(dq.upserts));
+    if (dqi.upserts.length) await run(sb.from("quote_items").upsert(dqi.upserts));
+  }
 
   const settingsToSave = {
     numbering: d.numbering || { account: 1, site: 1, invoice: 1 },

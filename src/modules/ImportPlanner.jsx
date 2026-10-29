@@ -23,10 +23,12 @@ import {
   money,
   int,
 } from "../lib/core.js";
-import { blankInvoice, nextNumber, TRADE_COUNTER, vanReminders, syncMasterFromProducts } from "../lib/crmCore.js";
+import { blankInvoice, blankQuote, nextNumber, TRADE_COUNTER, vanReminders, syncMasterFromProducts } from "../lib/crmCore.js";
 import { useCrm } from "./crm/useCrm.js";
 import CustomersScreen from "./crm/CustomersScreen.jsx";
 import InvoicesScreen from "./crm/InvoicesScreen.jsx";
+import QuotesScreen from "./crm/QuotesScreen.jsx";
+import { quotesAvailable } from "../data/crmStorage.js";
 import ScheduleScreen from "./crm/ScheduleScreen.jsx";
 import Sidebar, { TAB_LABELS } from "./Sidebar.jsx";
 import HomeScreen from "./HomeScreen.jsx";
@@ -36,7 +38,7 @@ import CollectionsScreen from "./crm/CollectionsScreen.jsx";
 import VansScreen from "./crm/VansScreen.jsx";
 import { Icon } from "./crm/ui.jsx";
 
-const CRM_TABS = ["customers", "invoices", "schedule"];
+const CRM_TABS = ["customers", "quotes", "invoices", "schedule"];
 
 export default function ImportPlanner() {
   const [data, setData] = useState(null);
@@ -147,6 +149,8 @@ export default function ImportPlanner() {
   const [selCustomerId, setSelCustomerId] = useState(null);
   const [selInvoiceId, setSelInvoiceId] = useState(null);
   const [selCollectionId, setSelCollectionId] = useState(null);
+  const [selQuoteId, setSelQuoteId] = useState(null);
+  const [quoteFilter, setQuoteFilter] = useState(null); // { customerId }
   const [invFilter, setInvFilter] = useState(null); // { customerId, outstanding }
   const [remindersClosed, setRemindersClosed] = useState(false); // closed for this visit
 
@@ -159,6 +163,30 @@ export default function ImportPlanner() {
   const openInvoice = (id) => {
     setSelInvoiceId(id);
     setTab("invoices");
+  };
+  const openQuote = (id) => {
+    setSelQuoteId(id);
+    setTab("quotes");
+  };
+  const newQuoteFor = (customerId, siteId) => {
+    if (!crm) return;
+    if (!quotesAvailable()) {
+      setSelQuoteId(null);
+      setTab("quotes"); // shows the "run the SQL" notice
+      return;
+    }
+    const n = blankQuote(customerId, siteId);
+    n.quoteNo = nextNumber(crm.quotes || [], "quoteNo", crm.numbering.quote);
+    n.raisedBy = me;
+    const cust = customerId && crm.customers.find((c) => c.id === customerId);
+    if (cust && cust.discountPct !== "" && cust.discountPct !== null) n.discountPct = cust.discountPct;
+    updateCrm((c) => {
+      c.quotes.unshift(n);
+      c.numbering.quote = (Number(n.quoteNo) || 0) + 1;
+      return c;
+    });
+    setSelQuoteId(n.id);
+    setTab("quotes");
   };
   const goCustomer = (id) => {
     setSelCustomerId(id);
@@ -779,7 +807,7 @@ export default function ImportPlanner() {
         <span style={{ color: "#fff", fontWeight: 700, fontSize: 15.5, whiteSpace: "nowrap" }}>{TAB_LABELS[tab] || "Home"}</span>
         <span style={{ flex: 1 }} />
         <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-          {[["home", "Home", "home"], ["shipments", "Shipments", "ship"], ["customers", "Customers", "users"], ["invoices", "Invoices", "doc"], ["schedule", "Schedule", "cal"]].map(([t, label, icon]) => (
+          {[["home", "Home", "home"], ["shipments", "Shipments", "ship"], ["customers", "Customers", "users"], ["quotes", "Quotes", "tag"], ["invoices", "Invoices", "doc"], ["schedule", "Schedule", "cal"]].map(([t, label, icon]) => (
             <button key={t} onClick={() => setTab(t)} title={label} style={{ width: 34, height: 34, borderRadius: 8, border: "1px solid " + (tab === t ? GOLD : "#33466b"), background: tab === t ? GOLD : "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flex: "none", padding: 0 }}>
               <Icon name={icon} size={16} stroke={tab === t ? NAVY : "#cfd6e4"} />
             </button>
@@ -841,8 +869,23 @@ export default function ImportPlanner() {
             setSelId={setSelCustomerId}
             openInvoice={openInvoice}
             newInvoiceFor={newInvoiceFor}
+            openQuote={openQuote}
+            newQuoteFor={newQuoteFor}
             onOutstanding={showOutstanding}
             me={me}
+          />
+        ) : tab === "quotes" ? (
+          <QuotesScreen
+            crm={crm}
+            updateCrm={updateCrm}
+            askConfirm={setConfirmBox}
+            selId={selQuoteId}
+            setSelId={setSelQuoteId}
+            goCustomer={goCustomer}
+            openInvoice={openInvoice}
+            me={me}
+            filter={quoteFilter}
+            setFilter={setQuoteFilter}
           />
         ) : tab === "invoices" ? (
           <InvoicesScreen
@@ -852,6 +895,7 @@ export default function ImportPlanner() {
             selId={selInvoiceId}
             setSelId={setSelInvoiceId}
             goCustomer={goCustomer}
+            openQuote={openQuote}
             me={me}
             planner={data}
             filter={invFilter}

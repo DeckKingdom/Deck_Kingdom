@@ -1,7 +1,7 @@
 // Printable documents: customer invoice and warehouse/driver job sheet.
 // Opens a print window (browser's Save as PDF gives the PDF). Returns false
 // when the window can't be opened (e.g. inside the design preview sandbox).
-import { invoiceTotals, explodeInvoiceLines, skuIndex } from "../../lib/crmCore.js";
+import { invoiceTotals, explodeInvoiceLines, skuIndex, TRADE_COUNTER } from "../../lib/crmCore.js";
 
 const esc = (s) =>
   String(s === null || s === undefined ? "" : s)
@@ -99,6 +99,39 @@ export function printInvoice(inv, cust, site) {
 <div class="foot">Thank you for your order · ${esc(COMPANY.web)} · ${esc(COMPANY.phone)}</div>`;
 
   return openDoc(shell("Invoice " + (inv.invNo || ""), body));
+}
+
+// Customer quotation: same layout as the invoice, with validity and notes.
+export function printQuote(q, cust, site) {
+  const t = invoiceTotals(q);
+  const lines = (q.lines || []).map((l) => `
+    <tr><td><b>${esc(l.code)}</b></td><td>${esc(l.description)}</td><td>${esc(l.colour)}</td>
+    <td class="r">${esc(l.qty)}</td><td class="r">${gb(Number(l.price) || 0)}</td>
+    <td class="r"><b>${gb((Number(l.qty) || 0) * (Number(l.price) || 0))}</b></td></tr>`).join("");
+  const deliverTo = q.siteId === TRADE_COUNTER
+    ? addrBlock("Collection", ["Collected from our warehouse", COMPANY.address])
+    : site ? addrBlock("Deliver to", [site.name, site.address !== site.name ? site.address : "", [site.town, site.postcode].filter(Boolean).join(" ")]) : "";
+
+  const body = head("Quotation", "Q-" + (q.quoteNo || "—"), pretty(q.date)) + `
+<div class="grid">
+  ${addrBlock("Quote for", [cust && cust.name, cust && cust.address, cust && [cust.town, cust.postcode].filter(Boolean).join(" "), cust && (cust.mobile || cust.landline), cust && cust.email])}
+  ${deliverTo}
+  ${addrBlock("Details", ["Account #" + ((cust && cust.accountNo) || "—"), "Quote date: " + pretty(q.date), q.validUntil ? "Valid until: " + pretty(q.validUntil) : ""])}
+</div>
+<table><tr><th>Code</th><th>Description</th><th>Colour</th><th class="r">Qty</th><th class="r">Price inc VAT</th><th class="r">Total</th></tr>${lines}</table>
+<table class="totals">
+  <tr><td>Goods (inc VAT)</td><td class="r">${gb(t.goods)}</td></tr>
+  ${t.discount > 0 ? `<tr><td>Discount (${t.discountPct}%)</td><td class="r">−${gb(t.discount)}</td></tr>` : ""}
+  <tr><td>Delivery charge</td><td class="r">${gb(t.delivery)}</td></tr>
+  <tr><td>of which VAT (${Number(q.vatRate) || 20}%)</td><td class="r">${gb(t.vat)}</td></tr>
+  <tr><td>Net</td><td class="r">${gb(t.net)}</td></tr>
+  <tr class="final"><td>QUOTE TOTAL</td><td class="r">${gb(t.total)}</td></tr>
+</table>
+${String(q.notes || "").trim() ? `<div class="note">${esc(q.notes).replace(/\n/g, "<br>")}</div>` : ""}
+<div class="sub">${q.validUntil ? "This quotation is valid until " + esc(pretty(q.validUntil)) + ". " : ""}Prices include VAT. To go ahead, call ${esc(COMPANY.phone)} or email ${esc(COMPANY.email)} quoting Q-${esc(q.quoteNo || "")}.</div>
+<div class="foot">Thank you for your enquiry · ${esc(COMPANY.web)} · ${esc(COMPANY.phone)}</div>`;
+
+  return openDoc(shell("Quote Q-" + (q.quoteNo || ""), body));
 }
 
 // Warehouse picking list: kit lines pull their component SKUs through.

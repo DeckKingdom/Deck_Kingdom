@@ -5,7 +5,7 @@ import { NAVY, GOLD, RED, prettyDate, prettyDateTime } from "../../lib/core.js";
 import {
   blankCustomer, blankSite, nextNumber, SOURCES,
   invoiceTotals, gbp, isPaid, followUpDone, FOLLOWUP_FLAGS, FIELD_FORMATS, CONTACT_METHODS,
-  TRADE_COUNTER, TRADE_COUNTER_LABEL,
+  TRADE_COUNTER, TRADE_COUNTER_LABEL, quoteTotals, quoteStatus, quoteInvoice, quoteRef, QUOTE_TONES,
 } from "../../lib/crmCore.js";
 import { Icon, Chip, Modal, SuggestInput, selectAllProps, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
 
@@ -30,7 +30,7 @@ const NoteBox = ({ children }) => (
   </div>
 );
 
-export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, setSelId, openInvoice, newInvoiceFor, onOutstanding, me }) {
+export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, setSelId, openInvoice, newInvoiceFor, openQuote, newQuoteFor, onOutstanding, me }) {
   const [search, setSearch] = useState("");
   const [custDraft, setCustDraft] = useState(null);
   const [siteDraft, setSiteDraft] = useState(null);
@@ -47,6 +47,13 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
     Object.values(m).forEach((list) => list.sort((a, b) => (b.date || "").localeCompare(a.date || "")));
     return m;
   }, [crm.invoices]);
+
+  const quotesByCust = useMemo(() => {
+    const m = {};
+    (crm.quotes || []).forEach((q) => (m[q.customerId] = m[q.customerId] || []).push(q));
+    Object.values(m).forEach((list) => list.sort((a, b) => (b.date || "").localeCompare(a.date || "") || (Number(b.quoteNo) || 0) - (Number(a.quoteNo) || 0)));
+    return m;
+  }, [crm.quotes]);
 
   const sitesByCust = useMemo(() => {
     const m = {};
@@ -127,13 +134,14 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
       return;
     }
     askConfirm({
-      message: "Delete account #" + (cust.accountNo || "—") + " — " + (cust.name || "unnamed") + "? Its sites will be removed too.",
+      message: "Delete account #" + (cust.accountNo || "—") + " — " + (cust.name || "unnamed") + "? Its sites" + ((quotesByCust[cust.id] || []).length ? " and " + quotesByCust[cust.id].length + " quote(s)" : "") + " will be removed too.",
       confirmLabel: "Delete",
       danger: true,
       action: () =>
         updateCrm((c) => {
           c.customers = c.customers.filter((x) => x.id !== cust.id);
           c.sites = c.sites.filter((x) => x.customerId !== cust.id);
+          c.quotes = (c.quotes || []).filter((x) => x.customerId !== cust.id);
           return c;
         }) || setSelId(null),
     });
@@ -362,6 +370,11 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
               </div>
               <div style={{ display: "flex", gap: 8, flexBasis: "100%", marginTop: 2, flexWrap: "wrap" }}>
                 <button style={navyBtn} onClick={() => openCustDraft({ ...sel })}><Icon name="pen" stroke="#fff" />Edit account</button>
+                {newQuoteFor && (
+                  <button style={{ ...navyBtn, borderColor: GOLD, color: GOLD }} onClick={() => newQuoteFor(sel.id, (sites[0] && sites[0].id) || "")}>
+                    <Icon name="tag" stroke={GOLD} />New quote
+                  </button>
+                )}
                 <span style={{ flex: 1 }} />
                 <button style={{ ...navyBtn, border: "1px dashed #3a4f78", color: "#8fa0c0" }} onClick={() => removeCustomer(sel)}><Icon name="bin" stroke="#8fa0c0" />Delete</button>
               </div>
@@ -408,6 +421,7 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
                       {s.notes && <NoteBox>{s.notes}</NoteBox>}
                     </div>
                     <div style={{ display: "flex", gap: 5 }}>
+                      {newQuoteFor && <button style={abtn} title="New quote for this site" onClick={() => newQuoteFor(sel.id, s.id)}><Icon name="tag" /></button>}
                       <button style={abtn} title="New invoice for this site" onClick={() => newInvoiceFor(sel.id, s.id)}><Icon name="plus" /></button>
                       <button style={abtn} title="Edit site" onClick={() => openSiteDraft({ ...s })}><Icon name="pen" /></button>
                       <button style={abtn} title="Remove site" onClick={() => removeSite(s)}><Icon name="bin" /></button>
@@ -420,6 +434,61 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
                 </div>
               </div>
             </div>
+
+            {(() => {
+              const qs = quotesByCust[sel.id] || [];
+              return (
+                <div style={{ ...card, marginTop: 14 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                    <p style={{ ...sect, margin: 0 }}>Quotes ({qs.length})</p>
+                    <span style={{ flex: 1 }} />
+                    {newQuoteFor && (
+                      <button style={{ ...btn, padding: "6px 11px", fontSize: 12.5 }} onClick={() => newQuoteFor(sel.id, (sites[0] && sites[0].id) || "")}>
+                        <Icon name="plus" stroke={NAVY} />New quote
+                      </button>
+                    )}
+                  </div>
+                  {qs.length === 0 ? (
+                    <div style={{ fontSize: 13, color: "#8593a8", fontWeight: 600 }}>No quotes yet.</div>
+                  ) : (
+                    <div style={{ overflowX: "auto" }}>
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 640 }}>
+                        <thead>
+                          <tr>
+                            {["Date", "Quote", "Site", "Total £", "Valid until", "Status", ""].map((h, i) => (
+                              <th key={i} style={{ textAlign: i === 3 ? "right" : "left", fontSize: 11, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", padding: "8px 8px", borderBottom: "2px solid #e6e9ef", whiteSpace: "nowrap" }}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {qs.map((q) => {
+                            const st = quoteStatus(q, crm);
+                            const qi = quoteInvoice(q, crm);
+                            return (
+                              <tr key={q.id}>
+                                <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", whiteSpace: "nowrap" }}>{prettyDate(q.date)}</td>
+                                <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6" }}>
+                                  <button onClick={() => openQuote(q.id)} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontWeight: 700, color: "#185FA5", fontSize: 13, padding: 0 }}>{quoteRef(q)}</button>
+                                </td>
+                                <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", fontWeight: 600 }}>{q.siteId === TRADE_COUNTER ? "Trade counter" : siteName(q.siteId) || "Invoice address"}</td>
+                                <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", textAlign: "right", fontWeight: 700 }}>{quoteTotals(q).total.toLocaleString("en-GB", { minimumFractionDigits: 2 })}</td>
+                                <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", whiteSpace: "nowrap" }}>{q.validUntil ? prettyDate(q.validUntil) : "—"}</td>
+                                <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6" }}>
+                                  <Chip tone={QUOTE_TONES[st]}>{st}{qi ? " · #" + (qi.invNo || "—") : ""}</Chip>
+                                </td>
+                                <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", textAlign: "right" }}>
+                                  <button style={abtn} title="Open quote" onClick={() => openQuote(q.id)}><Icon name="pen" /></button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             <div style={{ ...card, marginTop: 14 }}>
               <p style={sect}>Invoice history ({invs.length})</p>
@@ -630,7 +699,7 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
             New records take whichever is higher: these, or the highest existing number + 1 — so an import of
             historical records moves the sequences on automatically.
           </p>
-          {[["account", "Next account #"], ["site", "Next site #"], ["invoice", "Next invoice #"], ["collection", "Next collection #"]].map(([k, label]) => (
+          {[["account", "Next account #"], ["site", "Next site #"], ["quote", "Next quote # (Q-)"], ["invoice", "Next invoice #"], ["collection", "Next collection #"]].map(([k, label]) => (
             <div key={k} style={{ marginBottom: 10 }}>
               <span style={lbl}>{label}</span>
               <input style={inp} inputMode="numeric" value={numDraft[k]}
@@ -646,6 +715,7 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
                   site: Number(numDraft.site) || 1,
                   invoice: Number(numDraft.invoice) || 1,
                   collection: Number(numDraft.collection) || 1,
+                  quote: Number(numDraft.quote) || 1,
                 };
                 return c;
               });

@@ -7,6 +7,8 @@ import ActivityScreen from "./ActivityScreen.jsx";
 import StockScreen from "./StockScreen.jsx";
 import CollectionsScreen from "./CollectionsScreen.jsx";
 import VansScreen from "./VansScreen.jsx";
+import QuotesScreen from "./QuotesScreen.jsx";
+import { blankQuote, quoteTotals, quoteStatus, convertQuoteToInvoice, duplicateQuote, quoteInvoice, quoteIsOpen, nextNumber } from "../../lib/crmCore.js";
 import { emptyCrm, normaliseCrm, blankCustomer, blankSite, blankInvoice, blankLine, invoiceTotals, blankMasterProduct, explodeInvoiceLines, invoiceCost, allocatedBySku, buildPicks, pickLandedCost, jobCost, stockValuation, matchShipmentToStock, blankCollection, blankCollectionItem, titleCase, formatPhone, formatPostcode, weightedCost, batchBreakdown, applyInvoiceStockDeduction, commitCollectionItem, assignCollectionItem, itemPending, TIME_SLOTS, blankVan, blankVanCheck, vanReminders, mondayOf, today, syncMasterFromProducts } from "../../lib/crmCore.js";
 
 export default function run(React, renderToString) {
@@ -194,5 +196,56 @@ export default function run(React, renderToString) {
   }
   html = renderToString(React.createElement(VansScreen, { crm, updateCrm: noop, askConfirm: noop, me: "x" }));
   assert(html.includes("Sprinter") && html.includes("Weekly check") && html.includes("Insurance"), "vans screen renders");
+  // ===== quotes =====
+  {
+    const qc = normaliseCrm(JSON.parse(JSON.stringify(crm)));
+    assert(Array.isArray(qc.quotes) && qc.numbering.quote === 1, "quotes normalised + numbering");
+    const qt = { ...blankQuote(cust.id, site.id), quoteNo: 101, deliveryCharge: "60", discountPct: "10" };
+    qt.lines = inv.lines.map((l) => ({ ...l, id: l.id + "q" }));
+    qc.quotes.push(qt);
+    const tq = quoteTotals(qt);
+    assert(Math.abs(tq.goods - 1392) < 0.001 && Math.abs(tq.discount - 139.2) < 0.001 && Math.abs(tq.total - 1312.8) < 0.001, "quote totals: " + JSON.stringify(tq));
+    assert(quoteStatus(qt, qc) === "Draft" && quoteIsOpen(qt, qc), "new quote is an open draft");
+    const old = { ...blankQuote(cust.id, ""), quoteNo: 99, validUntil: "2020-01-01" };
+    qc.quotes.push(old);
+    assert(quoteStatus(old, qc) === "Expired" && !quoteIsOpen(old, qc), "past validity -> Expired");
+
+    // convert
+    const before = qc.invoices.length;
+    const nextInv = nextNumber(qc.invoices, "invNo", qc.numbering.invoice);
+    const made = convertQuoteToInvoice(qc, qt.id, "jon", "fixed-id");
+    assert(made && made.id === "fixed-id" && qc.invoices.length === before + 1, "conversion adds an invoice");
+    assert(made.invNo === nextInv && qc.numbering.invoice === nextInv + 1, "invoice sequence moves on");
+    assert(made.customerId === cust.id && made.siteId === site.id && made.quoteId === qt.id, "invoice linked to customer, site and quote");
+    assert(made.lines.length === 4 && made.lines[0].id !== qt.lines[0].id, "lines copied with fresh ids");
+    assert(Math.abs(invoiceTotals(made).total - tq.total) < 0.001, "invoice total matches the quote");
+    assert(quoteStatus(qt, qc) === "Converted" && quoteInvoice(qt, qc) === made, "quote shows Converted");
+    assert(convertQuoteToInvoice(qc, qt.id, "jon") === null, "can't convert twice");
+    const nocust = { ...blankQuote("", ""), quoteNo: 102 };
+    qc.quotes.push(nocust);
+    assert(convertQuoteToInvoice(qc, nocust.id, "jon") === null, "needs a customer");
+    // quote lines never touch stock allocation
+    const allocBefore = JSON.stringify(allocatedBySku({ ...qc, invoices: qc.invoices.filter((i) => i.id !== made.id) }));
+    assert(allocBefore === JSON.stringify(allocatedBySku({ ...qc, quotes: [], invoices: qc.invoices.filter((i) => i.id !== made.id) })), "quotes don't allocate stock");
+    // deleting the invoice reopens the quote
+    qc.invoices = qc.invoices.filter((i) => i.id !== made.id);
+    assert(quoteStatus(qt, qc) === "Accepted", "orphaned quote reopens as Accepted");
+    // duplicate
+    const dup = duplicateQuote(qc, qt.id, "jon", "dup-id");
+    assert(dup.id === "dup-id" && dup.status === "Draft" && dup.quoteNo === 103 && dup.lines.length === 4 && dup.lines[0].id !== qt.lines[0].id, "duplicate is a fresh draft");
+
+    const qprops = { crm: qc, updateCrm: noop, askConfirm: noop, setSelId: noop, goCustomer: noop, openInvoice: noop, me: "x", filter: null, setFilter: noop };
+    html = renderToString(React.createElement(QuotesScreen, { ...qprops, selId: null }));
+    assert(html.includes("Q-103") && html.includes("Open value") && html.includes("New quote"), "quotes list renders");
+    html = renderToString(React.createElement(QuotesScreen, { ...qprops, selId: qt.id }));
+    assert(html.includes("Q-101") && html.includes("Convert to invoice") && html.includes("Old Stone Trough Pub"), "quote entry renders");
+    const conv2 = convertQuoteToInvoice(qc, qt.id, "jon", "inv-2");
+    html = renderToString(React.createElement(QuotesScreen, { ...qprops, selId: qt.id }));
+    assert(html.includes("Open invoice #") && html.includes("locked"), "converted quote locks");
+    html = renderToString(React.createElement(InvoicesScreen, { crm: qc, updateCrm: noop, askConfirm: noop, selId: conv2.id, setSelId: noop, goCustomer: noop, openQuote: noop, me: "x", planner: { products: [], shipments: [] }, filter: null, setFilter: noop }));
+    assert(html.includes("From quote Q-101"), "invoice links back to its quote");
+    html = renderToString(React.createElement(CustomersScreen, { crm: qc, updateCrm: noop, askConfirm: noop, selId: cust.id, setSelId: noop, openInvoice: noop, newInvoiceFor: noop, openQuote: noop, newQuoteFor: noop, me: "x" }));
+    assert(html.includes("Quotes (") && html.includes("Q-101") && html.includes("Converted"), "customer account lists quotes");
+  }
   console.log("smoke OK — all screens render, totals reconcile (1392 goods + 60 delivery = 1452 inc VAT, £242 VAT, £1210 net)");
 }
