@@ -127,22 +127,26 @@ export function SuggestInput({ value, onChange, options = [], format, inputStyle
   const [open, setOpen] = useState(false);
   const [hi, setHi] = useState(-1);
 
+  const optVal = (o) => (typeof o === "string" ? o : o.value);
+  const optLabel = (o) => (typeof o === "string" ? o : o.label === undefined ? o.value : o.label);
+
   const filtered = useMemo(() => {
     const q = String(value || "").trim().toLowerCase();
     if (!q) return options.slice(0, 300);
     const starts = [];
     const contains = [];
     for (const o of options) {
-      const lo = o.toLowerCase();
-      if (lo.startsWith(q)) starts.push(o);
-      else if (lo.includes(q)) contains.push(o);
+      const lv = optVal(o).toLowerCase();
+      const ll = optLabel(o).toLowerCase();
+      if (lv.startsWith(q) || ll.startsWith(q)) starts.push(o);
+      else if (lv.includes(q) || ll.includes(q)) contains.push(o);
       if (starts.length + contains.length >= 300) break;
     }
     return [...starts, ...contains];
   }, [value, options]);
 
-  const pick = (v) => {
-    onChange(v);
+  const pick = (o) => {
+    onChange(optVal(o));
     setOpen(false);
     setHi(-1);
   };
@@ -176,9 +180,9 @@ export function SuggestInput({ value, onChange, options = [], format, inputStyle
       {open && filtered.length > 0 && (
         <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 70, background: "#fff", border: "1px solid #d5d9e0", borderRadius: 8, marginTop: 3, maxHeight: 218, overflowY: "auto", boxShadow: "0 10px 26px rgba(11,31,63,0.22)" }}>
           {filtered.map((o, i) => (
-            <div key={o} onMouseDown={(e) => { e.preventDefault(); pick(o); }} onMouseEnter={() => setHi(i)}
+            <div key={optVal(o)} onMouseDown={(e) => { e.preventDefault(); pick(o); }} onMouseEnter={() => setHi(i)}
               style={{ padding: "6px 11px", fontSize: 13.5, fontWeight: 600, cursor: "pointer", background: i === hi ? GOLD : "#fff", color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-              {o}
+              {optLabel(o)}
             </div>
           ))}
         </div>

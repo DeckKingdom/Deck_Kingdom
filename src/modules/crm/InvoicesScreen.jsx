@@ -8,7 +8,7 @@ import {
   skuIndex, invoiceCost, buildPicks, pickLandedCost, jobCost, blankPick, invoiceLoadKg,
   TRADE_COUNTER, TRADE_COUNTER_LABEL,
 } from "../../lib/crmCore.js";
-import { Icon, Chip, Tg, Modal, selectAllProps, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
+import { Icon, Chip, Tg, Modal, selectAllProps, SuggestInput, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
 import { printInvoice, printJobSheet, printLoadingBill } from "./printDocs.js";
 
 const navyBtn = { ...btn, background: "transparent", border: "1px solid #3a4f78", color: "#fff" };
@@ -204,6 +204,17 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
 
   const bySku = skuIndex(crm);
 
+  const skuOpts = useMemo(
+    () =>
+      (crm.masterProducts || [])
+        .filter((p) => p.active !== false && p.sku)
+        .map((p) => ({
+          value: p.sku,
+          label: p.sku + " — " + p.name + (p.colour ? " · " + p.colour : "") + (p.priceIncVat !== "" && p.priceIncVat !== null ? " · £" + Number(p.priceIncVat).toFixed(2) : ""),
+        })),
+    [crm.masterProducts]
+  );
+
   const setLine = (lid, k, v) =>
     setInv((x) => {
       const l = x.lines.find((y) => y.id === lid);
@@ -224,13 +235,6 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
 
   return (
     <div style={{ maxWidth: 1140, margin: "0 auto", padding: "18px 22px" }}>
-      <datalist id="dk-skus">
-        {(crm.masterProducts || []).filter((p) => p.active !== false && p.sku).map((p) => (
-          <option key={p.id} value={p.sku}>
-            {p.name + (p.colour ? " · " + p.colour : "") + (p.priceIncVat !== "" && p.priceIncVat !== null ? " — £" + Number(p.priceIncVat).toFixed(2) : "")}
-          </option>
-        ))}
-      </datalist>
       <datalist id="dk-paytypes">{PAYMENT_TYPES.map((s) => <option key={s} value={s} />)}</datalist>
 
       <button style={{ ...btn, marginBottom: 12 }} onClick={() => setSelId(null)}><Icon name="back" stroke={NAVY} />All invoices</button>
@@ -393,18 +397,26 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
             <tbody>
               {inv.lines.map((l) => (
                 <tr key={l.id}>
-                  <td style={{ padding: "6px 6px", borderBottom: "1px solid #f0f2f6", width: 120 }}>
-                    <input style={{ ...inp, fontWeight: 700, fontSize: 12.5 }} list="dk-skus" value={l.code} {...selectAllProps} onChange={(e) => setLine(l.id, "code", e.target.value)} />
+                  <td style={{ padding: "6px 6px", borderBottom: "1px solid #f0f2f6", width: 130 }}>
+                    <SuggestInput
+                      value={l.code}
+                      options={skuOpts}
+                      inputStyle={{ fontWeight: 700, fontSize: 12.5 }}
+                      onChange={(v) => setLine(l.id, "code", v)}
+                    />
                   </td>
                   <td style={{ padding: "6px 6px", borderBottom: "1px solid #f0f2f6", width: 74 }}>
                     {Number(l.qty) > 100 || freeQty.has(l.id) ? (
-                      <input style={numInp} inputMode="decimal" autoFocus={freeQty.has(l.id)} value={l.qty} {...selectAllProps}
-                        onChange={(e) => setLine(l.id, "qty", e.target.value)}
-                        onBlur={(e) => {
-                          const n = Number(e.target.value);
-                          if (Number.isInteger(n) && n >= 1 && n <= 100)
-                            setFreeQty((f) => { const x = new Set(f); x.delete(l.id); return x; });
-                        }} />
+                      <div style={{ position: "relative" }}>
+                        <input style={{ ...numInp, paddingRight: 20 }} inputMode="decimal" autoFocus={freeQty.has(l.id)} value={l.qty} {...selectAllProps}
+                          onChange={(e) => setLine(l.id, "qty", e.target.value)}
+                          onBlur={(e) => {
+                            const n = Number(e.target.value);
+                            if (Number.isInteger(n) && n >= 1 && n <= 100)
+                              setFreeQty((f) => { const x = new Set(f); x.delete(l.id); return x; });
+                          }} />
+                        <span style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: "#5a6a85", fontSize: 10 }}>▾</span>
+                      </div>
                     ) : (
                       <select style={inp} title="Double-click to type a quantity" value={l.qty === "" || l.qty === null ? "" : String(l.qty)}
                         onDoubleClick={() => setFreeQty((f) => new Set(f).add(l.id))}
