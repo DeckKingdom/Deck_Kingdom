@@ -2307,6 +2307,22 @@ export const reconcilePicks = (inv, crm) => {
   return inv.picks;
 };
 
+// Pick lists follow their invoice: for every job not yet delivered that has a
+// pick list, re-net it against the current lines and kit recipes (batch refs,
+// ticks and collection lines are kept). Returns { invoiceId: picks } for the
+// ones that changed, or null.
+export const syncOpenPicks = (crm) => {
+  const out = {};
+  const sig = (ps) => JSON.stringify((ps || []).map((p) => [p.id, p.sku, Number(p.qty) || 0, p.shipmentId || "", p.batchRef || "", p.picked === true]));
+  (crm.invoices || []).forEach((inv) => {
+    if (inv.deliveryCompleted || !(inv.picks || []).length) return;
+    const copy = { ...inv, picks: (inv.picks || []).map((p) => ({ ...p })) };
+    const next = reconcilePicks(copy, crm);
+    if (sig(next) !== sig(inv.picks)) out[inv.id] = next;
+  });
+  return Object.keys(out).length ? out : null;
+};
+
 // Raise collection notes for a job's shortfall. choices: [{ row (the supplier's
 // stock row to collect), qty, supplierName }] — grouped into one collection per
 // supplier, every line assigned to the job and added to its pick list at cost.

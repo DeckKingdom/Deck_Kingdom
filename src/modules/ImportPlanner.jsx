@@ -23,7 +23,7 @@ import {
   money,
   int,
 } from "../lib/core.js";
-import { blankInvoice, blankQuote, blankSample, blankSampleItem, nextNumber, TRADE_COUNTER, vanReminders, syncCatalogue, renameSkus, syncSampleConversions, cleanCode, codeSource, PRODUCT_SOURCES, dueScheduledFor, setTaskDone, describeSchedule, today as todayStr, newPurchaseFor } from "../lib/crmCore.js";
+import { blankInvoice, blankQuote, blankSample, blankSampleItem, nextNumber, TRADE_COUNTER, vanReminders, syncCatalogue, renameSkus, syncOpenPicks, syncSampleConversions, cleanCode, codeSource, PRODUCT_SOURCES, dueScheduledFor, setTaskDone, describeSchedule, today as todayStr, newPurchaseFor } from "../lib/crmCore.js";
 import { useCrm } from "./crm/useCrm.js";
 import CustomersScreen from "./crm/CustomersScreen.jsx";
 import InvoicesScreen from "./crm/InvoicesScreen.jsx";
@@ -288,6 +288,18 @@ export default function ImportPlanner() {
         return c;
       });
   }, [crm, data]);
+
+  // open jobs' pick lists follow their lines and kit recipes, so the loading
+  // bill always has every part (nobody has to press "rebuild")
+  useEffect(() => {
+    if (!crm) return;
+    const picks = syncOpenPicks(crm);
+    if (picks)
+      updateCrm((c) => {
+        c.invoices.forEach((i) => { if (picks[i.id]) i.picks = picks[i.id]; });
+        return c;
+      });
+  }, [crm]);
 
   // credit each sample request with the order it led to (stored on the sample)
   useEffect(() => {
