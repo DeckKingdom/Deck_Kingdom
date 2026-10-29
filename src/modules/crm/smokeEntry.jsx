@@ -55,7 +55,7 @@ export default function run(React, renderToString) {
   html = renderToString(React.createElement(InvoicesScreen, { ...props, selId: null, setSelId: noop }));
   assert(html.includes("4228") && html.includes("Paid"), "invoice list");
   html = renderToString(React.createElement(InvoicesScreen, { ...props, selId: inv.id, setSelId: noop }));
-  assert(html.includes("£1,452.00") && html.includes("£242.00") && html.includes("£1,210.00") && html.includes("Delivered"), "invoice entry totals");
+  assert(html.includes("£1,452.00") && html.includes("£242.00") && html.includes("£1,210.00"), "invoice entry totals");
   html = renderToString(React.createElement(ScheduleScreen, props));
   assert(html.includes("Bob") && html.includes("1 job"), "schedule shows the job");
   html = renderToString(React.createElement(HomeScreen, { data: { products: [], shipments: [] }, crm, setTab: noop, addShipment: noop, newInvoice: noop }));

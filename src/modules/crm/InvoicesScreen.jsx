@@ -245,11 +245,10 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
       <div style={{ background: "linear-gradient(135deg,#0B1F3F 0%,#13294f 100%)", borderRadius: 14, padding: "16px 22px", color: "#fff", marginBottom: 14, display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
         <div>
           <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-            <h2 style={{ margin: 0, fontSize: 19 }}>Invoice #{inv.invNo || "—"}</h2>
-            {inv.deliveryCompleted && isPaid(inv) ? <Chip tone="green" style={{ background: "#3FA55C", color: "#fff", border: "none" }}>Delivered · Paid</Chip>
-              : isPaid(inv) ? <Chip tone="green">Paid</Chip>
-              : inv.deliveryDate ? <Chip tone="gold">Booked</Chip>
-              : <Chip tone="red">Not booked</Chip>}
+            <h2 style={{ margin: 0, fontSize: 19 }}>
+              Invoice #{inv.invNo || "—"}
+              <span style={{ color: "#aeb9cf", fontWeight: 600, fontSize: 14, marginLeft: 12 }}>{prettyDate(inv.date)}</span>
+            </h2>
           </div>
           <div style={{ fontSize: 12.5, color: "#aeb9cf", fontWeight: 600, marginTop: 5 }}>
             Raised {prettyDate(inv.created)}{inv.raisedBy ? " by " + inv.raisedBy.split("@")[0] : ""}
@@ -275,7 +274,7 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
                 {(cust.name || "?").trim().charAt(0).toUpperCase() || "?"}
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-<span style={{ color: "#8593a8", fontWeight: 700, fontSize: 12.5 }}>#{cust.accountNo || "—"}</span> <b style={{ fontSize: 15 }}>{cust.name}</b>
+<b style={{ fontSize: 15 }}>{cust.name}</b>
                 <div style={{ fontSize: 12, color: "#5a6a85", fontWeight: 600, marginTop: 2 }}>
                   {[cust.mobile || cust.landline, cust.contactMethod ? "prefers " + cust.contactMethod : "", cust.source, cust.trader ? "Trade" : "", Number(cust.discountPct) > 0 ? "−" + Number(cust.discountPct) + "%" : ""].filter(Boolean).join(" · ")}
                 </div>
@@ -330,7 +329,6 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
       <div style={card}>
         <p style={sect}>Job &amp; delivery</p>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(118px, 1fr))", gap: 12, marginBottom: 12 }}>
-          {field("Invoice date", "date", { type: "date" })}
           <div>
             <span style={lbl}>Job type</span>
             <input style={inp} list="dk-jobtypes" value={inv.jobType} onChange={(e) => setInv((x) => (x.jobType = e.target.value))} />
