@@ -23,13 +23,14 @@ import {
   money,
   int,
 } from "../lib/core.js";
-import { blankInvoice, blankQuote, blankSample, blankSampleItem, nextNumber, TRADE_COUNTER, vanReminders, syncMasterFromProducts, syncSampleConversions } from "../lib/crmCore.js";
+import { blankInvoice, blankQuote, blankSample, blankSampleItem, nextNumber, TRADE_COUNTER, vanReminders, syncMasterFromProducts, syncSampleConversions, dueScheduledFor, setTaskDone, describeSchedule, today as todayStr } from "../lib/crmCore.js";
 import { useCrm } from "./crm/useCrm.js";
 import CustomersScreen from "./crm/CustomersScreen.jsx";
 import InvoicesScreen from "./crm/InvoicesScreen.jsx";
 import QuotesScreen from "./crm/QuotesScreen.jsx";
 import SamplesScreen from "./crm/SamplesScreen.jsx";
-import { quotesAvailable, samplesAvailable } from "../data/crmStorage.js";
+import TasksScreen from "./crm/TasksScreen.jsx";
+import { quotesAvailable, samplesAvailable, tasksAvailable } from "../data/crmStorage.js";
 import ScheduleScreen from "./crm/ScheduleScreen.jsx";
 import Sidebar, { TAB_LABELS } from "./Sidebar.jsx";
 import HomeScreen from "./HomeScreen.jsx";
@@ -174,7 +175,7 @@ export default function ImportPlanner() {
   const [remindersClosed, setRemindersClosed] = useState(false); // closed for this visit
 
   useEffect(() => {
-    if (CRM_TABS.includes(tab) || ["home", "activity", "stock", "collections", "vans", "products"].includes(tab)) setCrmOn(true);
+    if (CRM_TABS.includes(tab) || ["home", "tasks", "activity", "stock", "collections", "vans", "products"].includes(tab)) setCrmOn(true);
   }, [tab]);
 
   const me = storageMode === "supabase" ? getSessionEmail() || "" : "";
@@ -259,6 +260,25 @@ export default function ImportPlanner() {
         return c;
       });
   }, [crm]);
+
+  // scheduled rota tasks due for the logged-in person pop up once per visit;
+  // "Not today" hides them until tomorrow on this device
+  const [taskPopClosed, setTaskPopClosed] = useState(false);
+  const snoozeKey = "dk-task-snooze:" + (me || "").toLowerCase();
+  const taskSnoozedToday = (() => {
+    try {
+      return window.localStorage.getItem(snoozeKey) === todayStr();
+    } catch (e) {
+      return false;
+    }
+  })();
+  const dueTasks = crm && me && tasksAvailable() ? dueScheduledFor(crm, me, todayStr()) : [];
+  const snoozeTasks = () => {
+    try {
+      window.localStorage.setItem(snoozeKey, todayStr());
+    } catch (e) {}
+    setTaskPopClosed(true);
+  };
 
   const dueReminders = crm ? vanReminders(crm) : [];
   const snoozeReminders = () => {
@@ -860,7 +880,7 @@ export default function ImportPlanner() {
         <span style={{ color: "#fff", fontWeight: 700, fontSize: 15.5, whiteSpace: "nowrap" }}>{TAB_LABELS[tab] || "Home"}</span>
         <span style={{ flex: 1 }} />
         <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-          {[["home", "Home", "home"], ["shipments", "Shipments", "ship"], ["customers", "Customers", "users"], ["invoices", "Invoices", "doc"], ["quotes", "Quotes", "tag"], ["samples", "Samples", "leaf"], ["schedule", "Delivery Schedule", "cal"]].map(([t, label, icon]) => (
+          {[["home", "Home", "home"], ["overview", "Imports", "ship"], ["customers", "Customers", "users"], ["invoices", "Invoices", "doc"], ["quotes", "Quotes", "tag"], ["samples", "Samples", "leaf"], ["schedule", "Delivery Schedule", "cal"]].map(([t, label, icon]) => (
             <button key={t} onClick={() => setTab(t)} title={label} style={{ width: 34, height: 34, borderRadius: 8, border: "1px solid " + (tab === t ? GOLD : "#33466b"), background: tab === t ? GOLD : "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flex: "none", padding: 0 }}>
               <Icon name={icon} size={16} stroke={tab === t ? NAVY : "#cfd6e4"} />
             </button>
@@ -891,9 +911,16 @@ export default function ImportPlanner() {
               </div>
             </div>
           )}
-          <HomeScreen data={data} crm={crm} setTab={setTab} addShipment={addShipment} newInvoice={() => (crm ? newInvoiceFor("", "") : setTab("invoices"))} />
+          <HomeScreen data={data} crm={crm} updateCrm={updateCrm} me={me} askConfirm={setConfirmBox} setTab={setTab} addShipment={addShipment} newInvoice={() => (crm ? newInvoiceFor("", "") : setTab("invoices"))} />
         </>
       )}
+
+      {tab === "tasks" &&
+        (!crm ? (
+          <div style={{ padding: 40, textAlign: "center", color: "#5a6a85", fontWeight: 600 }}>Loading tasks…</div>
+        ) : (
+          <TasksScreen crm={crm} updateCrm={updateCrm} askConfirm={setConfirmBox} me={me} goHome={() => setTab("home")} />
+        ))}
 
       {tab === "activity" && <ActivityScreen crm={crm} data={data} storageMode={storageMode} />}
 
@@ -1937,6 +1964,47 @@ export default function ImportPlanner() {
               <button onClick={snoozeReminders} style={btn}>Snooze for a week</button>
               <span style={{ flex: 1 }} />
               <button onClick={() => setRemindersClosed(true)} style={{ ...btn, border: "none", color: "#8593a8" }}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {dueTasks.length > 0 && !taskPopClosed && !taskSnoozedToday && !locked && (remindersClosed || dueReminders.length === 0) && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 55, background: "rgba(11,31,63,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+          <div style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 540, overflow: "hidden", boxShadow: "0 24px 70px rgba(11,31,63,0.5)" }}>
+            <div style={{ background: "linear-gradient(135deg,#0B1F3F 0%,#13294f 100%)", padding: "18px 22px", display: "flex", alignItems: "center", gap: 12 }}>
+              <span style={{ width: 40, height: 40, borderRadius: 10, background: GOLD, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Icon name="cal" size={20} stroke={NAVY} />
+              </span>
+              <div>
+                <div style={{ color: "#fff", fontWeight: 700, fontSize: 18 }}>Your scheduled tasks</div>
+                <div style={{ color: "#aeb9cf", fontSize: 12.5, fontWeight: 600 }}>
+                  {dueTasks.length} due — tick them off as you go
+                </div>
+              </div>
+            </div>
+            <div style={{ padding: "12px 22px", maxHeight: "46vh", overflowY: "auto" }}>
+              {dueTasks.map(({ task: t, occ, overdueDays }) => (
+                <div key={t.id} style={{ display: "flex", gap: 11, alignItems: "center", padding: "10px 0", borderBottom: "1px solid #f0f2f6" }}>
+                  <button title="Done" onClick={() => updateCrm((c) => { setTaskDone(c, t.id, occ.date, me, true); return c; })}
+                    style={{ width: 26, height: 26, borderRadius: 7, border: "2px solid #c9d0db", background: "#fff", cursor: "pointer", flex: "none" }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 14.5, fontWeight: 700, color: NAVY }}>{t.title}</div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: overdueDays > 0 ? RED : "#5a6a85" }}>
+                      {describeSchedule(t)}{overdueDays > 0 ? " · due " + prettyDate(occ.date) : " · due today"}
+                    </div>
+                    {t.notes && <div style={{ fontSize: 12, color: "#8593a8", fontWeight: 600, marginTop: 2 }}>{t.notes}</div>}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: 8, padding: "6px 22px 18px", flexWrap: "wrap" }}>
+              <button onClick={() => { setTaskPopClosed(true); setTab("home"); }} style={{ ...btn, background: GOLD, borderColor: GOLD, fontWeight: 700 }}>
+                See my list
+              </button>
+              <button onClick={snoozeTasks} style={btn}>Not today</button>
+              <span style={{ flex: 1 }} />
+              <button onClick={() => setTaskPopClosed(true)} style={{ ...btn, border: "none", color: "#8593a8" }}>Remind me later</button>
             </div>
           </div>
         </div>

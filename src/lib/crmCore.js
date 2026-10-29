@@ -70,7 +70,7 @@ export const mondayOf = (dateStr) => {
   const d = new Date(dateStr + "T00:00:00");
   if (isNaN(d.getTime())) return "";
   d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
-  return d.toISOString().slice(0, 10);
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
 };
 
 export const RENEWAL_FIELDS = [
@@ -123,7 +123,11 @@ export const vanOptions = (crm) => {
   return names.length ? names : VANS;
 };
 
-export const today = () => new Date().toISOString().slice(0, 10);
+// local calendar date (toISOString would give yesterday between midnight and 1am in BST)
+export const today = () => {
+  const d = new Date();
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+};
 
 export const blankCustomer = () => ({
   id: uid(),
@@ -308,6 +312,9 @@ export const emptyCrm = () => ({
   reminders: {},
   quotes: [],
   samples: [],
+  tasks: [],
+  taskLog: [],
+  staff: [],
   numbering: { account: 1, site: 1, invoice: 1, collection: 1, quote: 1, sample: 1 },
 });
 
@@ -324,6 +331,13 @@ export const normaliseCrm = (c) => {
   if (!d.numbering.collection) d.numbering.collection = 1;
   if (!d.numbering.quote) d.numbering.quote = 1;
   if (!d.numbering.sample) d.numbering.sample = 1;
+  d.tasks = Array.isArray(d.tasks) ? d.tasks : [];
+  d.tasks.forEach((x) => {
+    Object.assign(x, { ...blankTask(x.kind), ...x, id: x.id || uid() });
+    x.assignees = Array.isArray(x.assignees) ? x.assignees : [];
+  });
+  d.taskLog = Array.isArray(d.taskLog) ? d.taskLog : [];
+  d.staff = Array.isArray(d.staff) ? d.staff : [];
   d.samples = Array.isArray(d.samples) ? d.samples : [];
   d.samples.forEach((x) => {
     Object.assign(x, { ...blankSample(x.customerId), ...x, id: x.id || uid() });
@@ -1009,4 +1023,175 @@ export const sampleStats = (list, crm) => {
     avgDays: converted ? Math.round(days / converted) : null,
     perSample: list.length ? revenue / list.length : null,
   };
+};
+
+// ===== tasks =====
+// Three kinds:
+//  daily     — a personal to-do prompt list: repeats every working day (or every
+//              day), or a one-off for a single date. Each person ticks their own.
+//  project   — a small job for spare time: status, priority, optional target date.
+//  scheduled — weekly / fortnightly / monthly on a set day; pops up for whoever
+//              is due. With several people and "rotate" on, each occurrence goes
+//              to the next person on the rota. One tick completes the occurrence.
+// Nobody assigned = everyone. Completions live in taskLog (taskId + period + who).
+export const TASK_KINDS = [["daily", "Daily list"], ["project", "Projects"], ["scheduled", "Scheduled"]];
+export const TASK_REPEATS = [["workdays", "Every working day (Mon–Fri)"], ["everyday", "Every day"], ["once", "One day only"]];
+export const TASK_FREQS = [["weekly", "Weekly"], ["fortnightly", "Every 2 weeks"], ["monthly", "Monthly"]];
+export const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+export const PROJECT_STATUSES = ["To do", "In progress", "Done"];
+export const PRIORITIES = ["Low", "Normal", "High"];
+
+export const blankTask = (kind) => ({
+  id: uid(),
+  kind: kind || "daily",
+  title: "",
+  notes: "",
+  assignees: [],
+  rotate: false,
+  repeat: "workdays",
+  onDate: today(),
+  frequency: "weekly",
+  weekday: 0,          // 0 = Monday
+  monthDay: 1,         // 1-31 (clamped to the month's length)
+  startDate: today(),
+  status: "To do",
+  priority: "Normal",
+  dueDate: "",
+  active: true,
+  createdBy: "",
+  created: today(),
+});
+
+export const blankTaskLog = () => ({ id: uid(), taskId: "", period: "", doneBy: "", doneAt: "" });
+
+const dow = (dateStr) => (new Date(dateStr + "T00:00:00").getDay() + 6) % 7; // Mon=0
+const lastDayOf = (y, m) => new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+const ymd = (y, m, d) => y + "-" + String(m + 1).padStart(2, "0") + "-" + String(d).padStart(2, "0");
+const monthOcc = (y, m, day) => ymd(y, m, Math.min(Number(day) || 1, lastDayOf(y, m)));
+
+// Most recent occurrence of a scheduled task on or before `onDay`:
+// { date, index } (index counts occurrences from the start, for the rota), or null.
+export const scheduledOccurrence = (t, onDay) => {
+  const day = onDay || today();
+  const start = t.startDate || day;
+  if (day < start) return null;
+  if (t.frequency === "monthly") {
+    const [sy, sm] = start.split("-").map(Number);
+    let first = monthOcc(sy, sm - 1, t.monthDay);
+    let fy = sy, fm = sm - 1;
+    if (first < start) { fm += 1; if (fm > 11) { fm = 0; fy += 1; } first = monthOcc(fy, fm, t.monthDay); }
+    if (day < first) return null;
+    const [dy, dm] = day.split("-").map(Number);
+    let y = dy, m = dm - 1;
+    let occ = monthOcc(y, m, t.monthDay);
+    if (occ > day) { m -= 1; if (m < 0) { m = 11; y -= 1; } occ = monthOcc(y, m, t.monthDay); }
+    return { date: occ, index: (y - fy) * 12 + (m - fm) };
+  }
+  const step = t.frequency === "fortnightly" ? 14 : 7;
+  const first = addDays(start, (((Number(t.weekday) || 0) - dow(start)) + 7) % 7);
+  if (day < first) return null;
+  const k = Math.floor(daysBetween(first, day) / step);
+  return { date: addDays(first, k * step), index: k };
+};
+
+// The next occurrence after today (for "next due" displays)
+export const nextScheduled = (t, fromDay) => {
+  let d = addDays(fromDay || today(), 1);
+  for (let i = 0; i < 400; i++, d = addDays(d, 1)) {
+    const o = scheduledOccurrence(t, d);
+    if (o && o.date === d) return o;
+  }
+  return null;
+};
+
+const lc = (s) => String(s || "").trim().toLowerCase();
+
+// Who an occurrence belongs to: everyone listed, or the rota's turn.
+export const occurrenceAssignees = (t, occ) => {
+  const list = t.assignees || [];
+  if (!list.length) return [];
+  if (t.rotate && occ && list.length > 1) return [list[occ.index % list.length]];
+  return list;
+};
+
+const isFor = (assignees, user) => !assignees.length || !user || assignees.some((a) => lc(a) === lc(user));
+
+export const isWorkday = (d) => dow(d) < 5;
+
+// Daily items showing for a user on a day
+export const dailyTasksFor = (crm, user, day) => {
+  const d = day || today();
+  return (crm.tasks || []).filter((t) => {
+    if (t.kind !== "daily" || t.active === false || !isFor(t.assignees || [], user)) return false;
+    if (t.repeat === "once") return t.onDate === d;
+    if (t.repeat === "workdays") return isWorkday(d);
+    return true;
+  });
+};
+
+export const taskDoneEntry = (crm, taskId, period, user) =>
+  (crm.taskLog || []).find((l) => l.taskId === taskId && l.period === period && (user === undefined || lc(l.doneBy) === lc(user))) || null;
+
+// daily items are ticked per person; scheduled occurrences once by anyone
+export const isDailyDone = (crm, t, day, user) => Boolean(taskDoneEntry(crm, t.id, day, user));
+export const isOccurrenceDone = (crm, t, occ) => Boolean(occ && taskDoneEntry(crm, t.id, occ.date));
+
+// Scheduled occurrences currently due for a user (date reached, not done)
+export const dueScheduledFor = (crm, user, day) => {
+  const d = day || today();
+  const out = [];
+  (crm.tasks || []).forEach((t) => {
+    if (t.kind !== "scheduled" || t.active === false) return;
+    const occ = scheduledOccurrence(t, d);
+    if (!occ || isOccurrenceDone(crm, t, occ)) return;
+    // only the current occurrence nags; a missed one is replaced by the next
+    if (!isFor(occurrenceAssignees(t, occ), user)) return;
+    out.push({ task: t, occ, overdueDays: daysBetween(occ.date, d) });
+  });
+  return out.sort((a, b) => a.occ.date.localeCompare(b.occ.date));
+};
+
+export const projectsFor = (crm, user, includeDone) =>
+  (crm.tasks || [])
+    .filter((t) => t.kind === "project" && t.active !== false && isFor(t.assignees || [], user) && (includeDone || t.status !== "Done"))
+    .sort((a, b) => PRIORITIES.indexOf(b.priority) - PRIORITIES.indexOf(a.priority) || (a.dueDate || "9999").localeCompare(b.dueDate || "9999"));
+
+// Tick / untick. Mutates the crm copy (inside updateCrm).
+export const setTaskDone = (c, taskId, period, user, done) => {
+  c.taskLog = c.taskLog || [];
+  const t = (c.tasks || []).find((x) => x.id === taskId);
+  const perUser = t && t.kind === "daily";
+  const match = (l) => l.taskId === taskId && l.period === period && (!perUser || lc(l.doneBy) === lc(user));
+  if (done) {
+    if (!c.taskLog.some(match)) c.taskLog.push({ ...blankTaskLog(), taskId, period, doneBy: user || "", doneAt: new Date().toISOString() });
+  } else c.taskLog = c.taskLog.filter((l) => !match(l));
+};
+
+export const staffName = (crm, email) => {
+  const s = (crm.staff || []).find((x) => lc(x.email) === lc(email));
+  if (s && s.name) return s.name;
+  const e = String(email || "");
+  return e ? e.split("@")[0].replace(/^\w/, (m) => m.toUpperCase()) : "Everyone";
+};
+
+// Everyone who can be given a task: logins (profiles) plus anyone already assigned
+export const staffList = (crm, me) => {
+  const seen = new Map();
+  const add = (email, name) => {
+    const k = lc(email);
+    if (k && !seen.has(k)) seen.set(k, { email: String(email).trim(), name: name || "" });
+  };
+  (crm.staff || []).forEach((s) => add(s.email, s.name));
+  if (me) add(me);
+  (crm.tasks || []).forEach((t) => (t.assignees || []).forEach((a) => add(a)));
+  return [...seen.values()].sort((a, b) => staffName(crm, a.email).localeCompare(staffName(crm, b.email)));
+};
+
+export const describeSchedule = (t) => {
+  if (t.frequency === "monthly") {
+    const n = Number(t.monthDay) || 1;
+    const sfx = n % 10 === 1 && n !== 11 ? "st" : n % 10 === 2 && n !== 12 ? "nd" : n % 10 === 3 && n !== 13 ? "rd" : "th";
+    return "Monthly on the " + n + sfx;
+  }
+  return (t.frequency === "fortnightly" ? "Every other " : "Every ") + WEEKDAYS[Number(t.weekday) || 0];
 };

@@ -34,12 +34,15 @@ export const newShipment = (name) => ({
   lines: [],
 });
 
+// yyyy-mm-dd from local date parts (toISOString shifts a day during BST)
+const localYmd = (d) => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+
 export const addMonths = (dateStr, months) => {
   if (!dateStr) return "";
   const d = new Date(dateStr + "T00:00:00");
   if (isNaN(d.getTime())) return "";
   d.setMonth(d.getMonth() + months);
-  return d.toISOString().slice(0, 10);
+  return localYmd(d);
 };
 
 export const addDays = (dateStr, days) => {
@@ -47,7 +50,7 @@ export const addDays = (dateStr, days) => {
   const d = new Date(dateStr + "T00:00:00");
   if (isNaN(d.getTime())) return "";
   d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
+  return localYmd(d);
 };
 
 export const hashPin = async (pin) => {

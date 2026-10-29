@@ -9,6 +9,8 @@ import CollectionsScreen from "./CollectionsScreen.jsx";
 import VansScreen from "./VansScreen.jsx";
 import QuotesScreen from "./QuotesScreen.jsx";
 import SamplesScreen from "./SamplesScreen.jsx";
+import TasksScreen from "./TasksScreen.jsx";
+import { blankTask, scheduledOccurrence, nextScheduled, occurrenceAssignees, dailyTasksFor, dueScheduledFor, projectsFor, setTaskDone, isDailyDone } from "../../lib/crmCore.js";
 import { blankSample, blankSampleItem, syncSampleConversions, sampleStatus, sampleStats, sampleInvoice } from "../../lib/crmCore.js";
 import { addDays as addD } from "../../lib/core.js";
 import { blankQuote, quoteTotals, quoteStatus, convertQuoteToInvoice, duplicateQuote, quoteInvoice, quoteIsOpen, nextNumber } from "../../lib/crmCore.js";
@@ -70,8 +72,8 @@ export default function run(React, renderToString) {
   assert(html.includes("£1,452.00") && html.includes("£242.00") && html.includes("£1,210.00"), "invoice entry totals");
   html = renderToString(React.createElement(ScheduleScreen, props));
   assert(html.includes("Bob") && html.includes("1 job"), "schedule shows the job");
-  html = renderToString(React.createElement(HomeScreen, { data: { products: [], shipments: [] }, crm, setTab: noop, addShipment: noop, newInvoice: noop }));
-  assert(html.includes("Customers") && html.includes("Delivery Schedule") && html.includes("Landed Costs"), "home screen tiles");
+  html = renderToString(React.createElement(HomeScreen, { data: { products: [], shipments: [] }, crm, updateCrm: noop, me: "", askConfirm: noop, setTab: noop, addShipment: noop, newInvoice: noop }));
+  assert(html.includes("Today") && html.includes("Reports") && html.includes("Sales this month") && html.includes("Projects"), "home: tasks + reports");
   html = renderToString(React.createElement(ActivityScreen, { crm, data: { products: [], shipments: [] }, storageMode: "local" }));
   assert(html.includes("activity log"), "activity preview note");
   html = renderToString(React.createElement(ActivityScreen, { crm, data: { products: [], shipments: [] }, storageMode: "supabase" }));
@@ -315,6 +317,59 @@ export default function run(React, renderToString) {
     assert(html.includes("From sample S-1"), "invoice shows its sample");
     html = renderToString(React.createElement(CustomersScreen, { crm: sc, updateCrm: noop, askConfirm: noop, selId: cust.id, setSelId: noop, openInvoice: noop, newInvoiceFor: noop, openQuote: noop, newQuoteFor: noop, openSample: noop, newSampleFor: noop, me: "x" }));
     assert(html.includes("Sample requests (") && html.includes("Log sample"), "customer account lists samples");
+  }
+  // ===== tasks =====
+  {
+    const tc = normaliseCrm({ customers: [], staff: [{ email: "ian@dk.co.uk", name: "Ian" }, { email: "molly@dk.co.uk", name: "Molly" }] });
+    // weekly on Wednesday from Mon 2026-10-05
+    const wk = { ...blankTask("scheduled"), id: "wk", title: "Sweep warehouse", frequency: "weekly", weekday: 2, startDate: "2026-10-05", assignees: ["ian@dk.co.uk", "molly@dk.co.uk"], rotate: true };
+    assert(scheduledOccurrence(wk, "2026-10-06") === null, "nothing before first Wednesday");
+    let o = scheduledOccurrence(wk, "2026-10-07");
+    assert(o.date === "2026-10-07" && o.index === 0 && occurrenceAssignees(wk, o)[0] === "ian@dk.co.uk", "first Wed is Ian's");
+    o = scheduledOccurrence(wk, "2026-10-16");
+    assert(o.date === "2026-10-14" && o.index === 1 && occurrenceAssignees(wk, o)[0] === "molly@dk.co.uk", "second Wed is Molly's (rota)");
+    assert(nextScheduled(wk, "2026-10-14").date === "2026-10-21", "next after a Wednesday is the following one");
+    const fn = { ...wk, id: "fn", frequency: "fortnightly" };
+    assert(scheduledOccurrence(fn, "2026-10-20").date === "2026-10-07" && scheduledOccurrence(fn, "2026-10-21").date === "2026-10-21", "fortnightly");
+    const mo = { ...blankTask("scheduled"), id: "mo", frequency: "monthly", monthDay: 31, startDate: "2026-01-15" };
+    assert(scheduledOccurrence(mo, "2026-02-27").date === "2026-01-31" && scheduledOccurrence(mo, "2026-02-28").date === "2026-02-28", "monthly clamps to month end");
+    assert(scheduledOccurrence(mo, "2026-03-10").index === 1, "monthly index");
+    const mo2 = { ...mo, monthDay: 1, startDate: "2026-01-15" };
+    assert(scheduledOccurrence(mo2, "2026-01-20") === null && scheduledOccurrence(mo2, "2026-02-01").date === "2026-02-01", "monthly starts after start date");
+
+    // due lists + ticking
+    tc.tasks.push({ ...wk, startDate: addD(today(), -21) });
+    const due = dueScheduledFor(tc, "ian@dk.co.uk", today()).concat(dueScheduledFor(tc, "molly@dk.co.uk", today()));
+    const occNow = scheduledOccurrence(tc.tasks[0], today());
+    if (occNow) {
+      assert(due.length === 1, "exactly one person has the current rota occurrence");
+      setTaskDone(tc, "wk", occNow.date, due[0].task ? "x" : "", true);
+      assert(dueScheduledFor(tc, "ian@dk.co.uk").length === 0 && dueScheduledFor(tc, "molly@dk.co.uk").length === 0, "done clears it for everyone");
+    }
+    const d1 = { ...blankTask("daily"), id: "d1", title: "Check web orders", repeat: "everyday" };
+    const d2 = { ...blankTask("daily"), id: "d2", title: "Ian only", repeat: "everyday", assignees: ["ian@dk.co.uk"] };
+    const d3 = { ...blankTask("daily"), id: "d3", title: "One-off", repeat: "once", onDate: addD(today(), 1) };
+    tc.tasks.push(d1, d2, d3);
+    assert(dailyTasksFor(tc, "molly@dk.co.uk", today()).map((t) => t.id).join() === "d1", "Molly sees shared daily only");
+    assert(dailyTasksFor(tc, "ian@dk.co.uk", today()).length === 2 && dailyTasksFor(tc, "ian@dk.co.uk", addD(today(), 1)).length === 3, "one-off shows on its day");
+    setTaskDone(tc, "d1", today(), "ian@dk.co.uk", true);
+    assert(isDailyDone(tc, d1, today(), "ian@dk.co.uk") && !isDailyDone(tc, d1, today(), "molly@dk.co.uk"), "daily ticks are per person");
+    assert(!isDailyDone(tc, d1, addD(today(), 1), "ian@dk.co.uk"), "fresh list tomorrow");
+    setTaskDone(tc, "d1", today(), "ian@dk.co.uk", false);
+    assert(!isDailyDone(tc, d1, today(), "ian@dk.co.uk"), "untick");
+    const wd = { ...blankTask("daily"), id: "wd", repeat: "workdays" };
+    tc.tasks.push(wd);
+    assert(!dailyTasksFor(tc, "", "2026-10-31").some((t) => t.id === "wd") && dailyTasksFor(tc, "", "2026-10-30").some((t) => t.id === "wd"), "working days only");
+    const pj = { ...blankTask("project"), id: "pj", title: "Photograph fencing", assignees: ["molly@dk.co.uk"], priority: "High" };
+    tc.tasks.push(pj, { ...pj, id: "pj2", status: "Done" });
+    assert(projectsFor(tc, "molly@dk.co.uk").length === 1 && projectsFor(tc, "ian@dk.co.uk").length === 0 && projectsFor(tc, "molly@dk.co.uk", true).length === 2, "projects per person");
+
+    html = renderToString(React.createElement(HomeScreen, { data: { products: [], shipments: [] }, crm: tc, updateCrm: noop, me: "molly@dk.co.uk", askConfirm: noop, setTab: noop, addShipment: noop, newInvoice: noop }));
+    assert(html.includes("Check web orders") && html.includes("Photograph fencing") && !html.includes("Ian only"), "home shows Molly's list");
+    for (const k of ["daily", "project", "scheduled"]) {
+      html = renderToString(React.createElement(TasksScreen, { crm: tc, updateCrm: noop, askConfirm: noop, me: "ian@dk.co.uk", goHome: noop }));
+      assert(html.includes("Daily list") && html.includes("Check web orders"), "tasks manager renders");
+    }
   }
   console.log("smoke OK — all screens render, totals reconcile (1392 goods + 60 delivery = 1452 inc VAT, £242 VAT, £1210 net)");
 }

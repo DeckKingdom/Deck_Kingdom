@@ -21,7 +21,6 @@ export const NAV_SECTIONS = [
     title: "Imports",
     items: [
       ["overview", "Overview", "grid"],
-      ["shipments", "Shipments", "ship"],
       ["landed", "Landed Costs", "pound"],
       ["completion", "Completion", "flag"],
     ],
@@ -38,7 +37,7 @@ export const NAV_SECTIONS = [
   { title: "System", items: [["activity", "Activity", "clock"]] },
 ];
 
-export const TAB_LABELS = Object.fromEntries(NAV_SECTIONS.flatMap((s) => s.items.map(([t, l]) => [t, l])));
+export const TAB_LABELS = { ...Object.fromEntries(NAV_SECTIONS.flatMap((s) => s.items.map(([t, l]) => [t, l]))), shipments: "Shipment", tasks: "Tasks" };
 
 export default function Sidebar({ tab, setTab, open, footer, onNew }) {
   const [shut, setShut] = useState({});
@@ -102,7 +101,8 @@ export default function Sidebar({ tab, setTab, open, footer, onNew }) {
                 <div style={{ height: 1, background: "#24375f", margin: "9px 6px" }} />
               ))}
             {open && sec.title && shut[sec.title] ? null : sec.items.map(([t, label, icon, canAdd]) => {
-              const on = tab === t;
+              // a shipment is opened from the Overview, so Overview stays lit
+              const on = tab === t || (t === "overview" && tab === "shipments");
               return (
                 <div key={t} style={{ position: "relative" }}>
                 <button

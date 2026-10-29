@@ -1,140 +1,279 @@
-// Home: the landing screen — live snapshot of both modules and big
-// jump-off tiles into every layout.
-import { NAVY, GOLD, RED, addMonths, prettyDate, STATUS_COLOURS } from "../lib/core.js";
-import { invoiceTotals, gbp, isPaid, today, stockValuation, daysUntil } from "../lib/crmCore.js";
-import { Icon, Chip, card, sect } from "./crm/ui.jsx";
+// Home: the person's own task list (today's to-dos, scheduled rota tasks due,
+// spare-time projects) beside a reports panel of the business at a glance.
+import { useState } from "react";
+import { NAVY, GOLD, RED, addMonths, addDays, prettyDate, STATUS_COLOURS } from "../lib/core.js";
+import {
+  invoiceTotals, gbp, isPaid, today, stockValuation, blankTask,
+  dailyTasksFor, isDailyDone, dueScheduledFor, projectsFor, setTaskDone, scheduledOccurrence, nextScheduled,
+  occurrenceAssignees, staffName, staffList, describeSchedule, PROJECT_STATUSES,
+  quoteTotals, quoteStatus, quoteIsOpen, sampleStats, sampleStatus,
+} from "../lib/crmCore.js";
+import { tasksAvailable } from "../data/crmStorage.js";
+import { Icon, Chip, card, sect, lbl, inp, btn, goldBtn } from "./crm/ui.jsx";
+import { TaskModal, TasksSchemaNotice, PRIORITY_TONES, STATUS_TONES } from "./crm/TasksScreen.jsx";
 
-const Tile = ({ icon, label, note, onClick }) => (
-  <button
-    onClick={onClick}
-    style={{
-      display: "flex", alignItems: "center", gap: 12, padding: "13px 14px", borderRadius: 11,
-      border: "1px solid #e6e9ef", background: "#fff", cursor: "pointer", fontFamily: "inherit",
-      textAlign: "left", width: "100%",
-    }}
-    onMouseEnter={(e) => (e.currentTarget.style.borderColor = GOLD)}
-    onMouseLeave={(e) => (e.currentTarget.style.borderColor = "#e6e9ef")}
-  >
-    <div style={{ width: 38, height: 38, borderRadius: 10, background: NAVY, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>
-      <Icon name={icon} size={18} stroke={GOLD} />
-    </div>
-    <div style={{ minWidth: 0 }}>
-      <div style={{ fontWeight: 700, fontSize: 14.5, color: NAVY }}>{label}</div>
-      <div style={{ fontSize: 12, color: "#5a6a85", fontWeight: 600, marginTop: 1 }}>{note}</div>
-    </div>
+const Check = ({ on, onClick, title }) => (
+  <button onClick={onClick} title={title}
+    style={{ width: 24, height: 24, borderRadius: 7, flex: "none", cursor: "pointer", padding: 0, display: "flex", alignItems: "center", justifyContent: "center",
+      border: "2px solid " + (on ? "#3FA55C" : "#c9d0db"), background: on ? "#3FA55C" : "#fff" }}>
+    {on && <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#fff" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>}
   </button>
 );
 
-const Stat = ({ value, label, tone }) => (
-  <div style={{ padding: "10px 16px", textAlign: "center", borderLeft: "1px solid #ffffff22" }}>
-    <b style={{ display: "block", fontSize: 17, color: tone || GOLD }}>{value}</b>
-    <span style={{ fontSize: 10.5, fontWeight: 700, color: "#aeb9cf", letterSpacing: 0.5, textTransform: "uppercase", whiteSpace: "nowrap" }}>{label}</span>
-  </div>
+const Report = ({ label, value, sub, tone, onClick }) => (
+  <button onClick={onClick}
+    style={{ textAlign: "left", background: "#fff", border: "1px solid #e6e9ef", borderRadius: 11, padding: "11px 14px", cursor: onClick ? "pointer" : "default", fontFamily: "inherit", width: "100%" }}
+    onMouseEnter={(e) => onClick && (e.currentTarget.style.borderColor = GOLD)}
+    onMouseLeave={(e) => (e.currentTarget.style.borderColor = "#e6e9ef")}>
+    <span style={{ ...lbl, marginBottom: 2 }}>{label}</span>
+    <b style={{ fontSize: 19, color: tone || NAVY, display: "block" }}>{value}</b>
+    {sub && <div style={{ fontSize: 11.5, color: "#8593a8", fontWeight: 600, marginTop: 1 }}>{sub}</div>}
+  </button>
 );
 
-export default function HomeScreen({ data, crm, setTab, addShipment, newInvoice }) {
-  const tod = today();
+const rowStyle = { display: "flex", gap: 11, alignItems: "flex-start", padding: "9px 0", borderBottom: "1px solid #f0f2f6" };
 
-  // imports snapshot
+export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTab, addShipment, newInvoice }) {
+  const tod = today();
+  const [viewAs, setViewAs] = useState(me || "");
+  const [draft, setDraft] = useState(null);
+  const [showDone, setShowDone] = useState(false);
+  const ready = tasksAvailable();
+  const who = viewAs; // "" = everyone's view (preview / unassigned)
+
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Morning" : hour < 17 ? "Afternoon" : "Evening";
+  const firstName = me ? staffName(crm || {}, me).split(" ")[0] : "";
+
+  // ===== reports =====
+  const invs = crm ? crm.invoices : [];
+  const monthKey = tod.slice(0, 7);
+  const lastMonthKey = addMonths(tod.slice(0, 8) + "01", -1).slice(0, 7);
+  const dayOfMonth = Number(tod.slice(8, 10));
+  const salesIn = (key, uptoDay) => invs.filter((i) => (i.date || "").slice(0, 7) === key && (!uptoDay || Number((i.date || "").slice(8, 10)) <= uptoDay)).reduce((t, i) => t + invoiceTotals(i).total, 0);
+  const salesThisMonth = salesIn(monthKey);
+  const salesLastToDate = salesIn(lastMonthKey, dayOfMonth);
+  const awaiting = invs.filter((i) => !isPaid(i));
+  const owed = awaiting.reduce((t, i) => t + invoiceTotals(i).total, 0);
+  const todays = invs.filter((i) => i.deliveryDate === tod && !i.deliveryCompleted).length;
+  const weekEnd = addDays(tod, 6);
+  const thisWeek = invs.filter((i) => i.deliveryDate >= tod && i.deliveryDate <= weekEnd && !i.deliveryCompleted).length;
+  const toBook = invs.filter((i) => !i.deliveryDate && !i.deliveryCompleted).length;
+  const quotes = crm ? crm.quotes || [] : [];
+  const openQuotes = quotes.filter((q) => quoteIsOpen(q, crm));
+  const acceptedWaiting = quotes.filter((q) => quoteStatus(q, crm) === "Accepted").length;
+  const samples = crm ? crm.samples || [] : [];
+  const s90 = sampleStats(samples.filter((x) => (x.date || "") >= addDays(tod, -90)), crm || {});
+  const toSend = samples.filter((x) => sampleStatus(x, crm) === "To send").length;
+  const stockVal = crm ? stockValuation(crm) : null;
   const live = data.shipments.filter((s) => s.status !== "Paid");
-  const byStatus = {};
-  live.forEach((s) => (byStatus[s.status] = (byStatus[s.status] || 0) + 1));
   const inbound = data.shipments
     .filter((s) => ["Confirmed", "In production", "Shipped"].includes(s.status) && s.orderDate)
     .map((s) => ({ s, eta: addMonths(s.orderDate, 3) }))
     .sort((a, b) => a.eta.localeCompare(b.eta));
-  const nextIn = inbound[0];
 
-  // sales snapshot
-  const invs = crm ? crm.invoices : null;
-  const todays = invs ? invs.filter((i) => i.deliveryDate === tod && !i.deliveryCompleted).length : null;
-  const pending = invs ? invs.filter((i) => !i.deliveryDate && !i.deliveryCompleted).length : null;
-  const awaiting = invs ? invs.filter((i) => !isPaid(i)) : null;
-  const owed = awaiting ? awaiting.reduce((t, i) => t + invoiceTotals(i).total, 0) : 0;
+  // ===== tasks =====
+  const daily = crm ? dailyTasksFor(crm, who, tod) : [];
+  const dueSched = crm ? dueScheduledFor(crm, who, tod) : [];
+  const projects = crm ? projectsFor(crm, who, showDone) : [];
+  const comingUp = crm
+    ? (crm.tasks || [])
+        .filter((t) => t.kind === "scheduled" && t.active !== false)
+        .map((t) => ({ t, o: nextScheduled(t, tod) }))
+        .filter(({ t, o }) => o && o.date <= addDays(tod, 7) && (!who || !occurrenceAssignees(t, o).length || occurrenceAssignees(t, o).some((a) => a.toLowerCase() === who.toLowerCase())))
+        .sort((a, b) => a.o.date.localeCompare(b.o.date))
+    : [];
+  const dailyDone = daily.filter((t) => isDailyDone(crm, t, tod, who)).length;
+  const totalToday = daily.length + dueSched.length;
+  const doneToday = dailyDone;
+  const staff = crm ? staffList(crm, me) : [];
 
-  const hour = new Date().getHours();
-  const greeting = hour < 12 ? "Morning" : hour < 17 ? "Afternoon" : "Evening";
+  const tick = (taskId, period, done) =>
+    updateCrm((c) => {
+      setTaskDone(c, taskId, period, who || me, done);
+      return c;
+    });
+  const setStatus = (id, status) =>
+    updateCrm((c) => {
+      const t = (c.tasks || []).find((x) => x.id === id);
+      if (t) t.status = status;
+      return c;
+    });
 
   return (
-    <div style={{ maxWidth: 1140, margin: "0 auto", padding: "18px 22px" }}>
+    <div style={{ maxWidth: 1180, margin: "0 auto", padding: "18px 22px" }}>
       {/* hero */}
-      <div style={{ background: "linear-gradient(135deg,#0B1F3F 0%,#13294f 100%)", borderRadius: 14, padding: "22px 24px", color: "#fff", marginBottom: 16, display: "flex", gap: 18, alignItems: "center", flexWrap: "wrap" }}>
+      <div style={{ background: "linear-gradient(135deg,#0B1F3F 0%,#13294f 100%)", borderRadius: 14, padding: "18px 22px", color: "#fff", marginBottom: 16, display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
         <div style={{ minWidth: 200 }}>
-          <h2 style={{ margin: 0, fontSize: 22 }}>{greeting} — here's where things stand</h2>
-          <div style={{ fontSize: 13, color: "#aeb9cf", fontWeight: 600, marginTop: 5 }}>
+          <h2 style={{ margin: 0, fontSize: 21 }}>{greeting}{firstName ? " " + firstName : ""}</h2>
+          <div style={{ fontSize: 13, color: "#aeb9cf", fontWeight: 600, marginTop: 4 }}>
             {new Date().toLocaleDateString("en-GB", { weekday: "long", day: "2-digit", month: "long", year: "numeric" })}
+            {crm && totalToday ? " · " + (totalToday - doneToday) + " of " + totalToday + " to do today" : ""}
           </div>
         </div>
         <span style={{ flex: 1 }} />
-        <div style={{ display: "flex", background: "#ffffff14", border: "1px solid #ffffff22", borderRadius: 12, overflow: "hidden" }}>
-          <Stat value={todays === null ? "…" : todays} label="Deliveries today" />
-          <Stat value={pending === null ? "…" : pending} label="Jobs to book in" tone={pending ? "#f2a6b1" : GOLD} />
-          <Stat value={awaiting === null ? "…" : gbp(owed)} label="Awaiting payment" />
-          <Stat value={live.length} label="Live shipments" />
-        </div>
-        <div style={{ display: "flex", gap: 8, flexBasis: "100%", marginTop: 4, flexWrap: "wrap" }}>
-          <button onClick={newInvoice} style={{ fontFamily: "inherit", fontSize: 13.5, fontWeight: 700, padding: "9px 14px", borderRadius: 9, border: "1px solid " + GOLD, background: GOLD, color: NAVY, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6 }}>
-            <Icon name="plus" stroke={NAVY} />New invoice
-          </button>
-          <button onClick={addShipment} style={{ fontFamily: "inherit", fontSize: 13.5, fontWeight: 700, padding: "9px 14px", borderRadius: 9, border: "1px solid #3a4f78", background: "transparent", color: "#fff", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6 }}>
-            <Icon name="plus" stroke="#fff" />New shipment
-          </button>
-          <button onClick={() => setTab("schedule")} style={{ fontFamily: "inherit", fontSize: 13.5, fontWeight: 700, padding: "9px 14px", borderRadius: 9, border: "1px solid #3a4f78", background: "transparent", color: "#fff", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6 }}>
-            <Icon name="cal" stroke="#fff" />Today's runs
-          </button>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button onClick={newInvoice} style={{ ...goldBtn }}><Icon name="plus" stroke={NAVY} />New invoice</button>
+          <button onClick={addShipment} style={{ ...btn, background: "transparent", border: "1px solid #3a4f78", color: "#fff" }}><Icon name="plus" stroke="#fff" />New shipment</button>
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 14 }}>
-        {/* sales */}
-        <div style={{ ...card, marginBottom: 0 }}>
-          <p style={sect}>Sales &amp; deliveries</p>
-          <div style={{ display: "grid", gap: 8 }}>
-            <Tile icon="users" label="Customers" note={crm ? crm.customers.length.toLocaleString("en-GB") + " accounts" : "Loading…"} onClick={() => setTab("customers")} />
-            <Tile icon="doc" label="Invoices" note={crm ? crm.invoices.length.toLocaleString("en-GB") + " raised" + (awaiting && awaiting.length ? " · " + awaiting.length + " awaiting payment" : "") : "Loading…"} onClick={() => setTab("invoices")} />
-            <Tile icon="cal" label="Delivery Schedule" note={crm ? (todays ? todays + " out today" : "Nothing out today") + (pending ? " · " + pending + " to book in" : "") : "Loading…"} onClick={() => setTab("schedule")} />
-            <Tile icon="truck" label="Vans" note={crm ? (() => {
-              const due = (crm.vans || []).flatMap((v) => [v.insuranceRenewal, v.motDue, v.taxDue].map(daysUntil).filter((d) => d !== null && d <= 30));
-              return (crm.vans || []).length + " vans" + (due.length ? " · " + due.length + " renewal" + (due.length > 1 ? "s" : "") + " due soon" : "");
-            })() : "Loading…"} onClick={() => setTab("vans")} />
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 16, alignItems: "start" }}>
+        {/* ===== tasks column ===== */}
+        <div>
+          {crm && !ready && <TasksSchemaNotice />}
+          <div style={card}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
+              <p style={{ ...sect, margin: 0 }}>Today</p>
+              {totalToday > 0 && (
+                <div style={{ flex: 1, minWidth: 80, height: 7, background: "#eef0f4", borderRadius: 99, overflow: "hidden" }}>
+                  <div style={{ width: (daily.length ? (dailyDone / totalToday) * 100 : 0) + "%", height: "100%", background: "#3FA55C" }} />
+                </div>
+              )}
+              <span style={{ flex: totalToday ? "none" : 1 }} />
+              {crm && (
+                <select style={{ ...inp, width: "auto", padding: "4px 8px", fontSize: 12.5, fontWeight: 700 }} value={viewAs} onChange={(e) => setViewAs(e.target.value)} title="Whose tasks">
+                  {!me && <option value="">Everyone</option>}
+                  {staff.map((s) => <option key={s.email} value={s.email}>{s.email.toLowerCase() === (me || "").toLowerCase() ? "My tasks" : staffName(crm, s.email)}</option>)}
+                  {me && <option value="">Everyone</option>}
+                </select>
+              )}
+            </div>
+            {!crm ? (
+              <div style={{ color: "#8593a8", fontWeight: 600, fontSize: 13 }}>Loading…</div>
+            ) : totalToday === 0 ? (
+              <div style={{ color: "#8593a8", fontWeight: 600, fontSize: 13, padding: "6px 0" }}>Nothing on the list for today.</div>
+            ) : (
+              <>
+                {dueSched.map(({ task: t, occ, overdueDays }) => (
+                  <div key={t.id} style={rowStyle}>
+                    <Check on={false} title="Mark done" onClick={() => tick(t.id, occ.date, true)} />
+                    <div style={{ flex: 1, minWidth: 0, cursor: "pointer" }} onClick={() => setDraft(t)}>
+                      <b style={{ fontSize: 14 }}>{t.title}</b>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: overdueDays > 0 ? RED : "#a05f10", marginTop: 1 }}>
+                        {describeSchedule(t)} · {overdueDays > 0 ? "due " + prettyDate(occ.date) + " (" + overdueDays + " day" + (overdueDays > 1 ? "s" : "") + " late)" : "due today"}
+                        {!who && occurrenceAssignees(t, occ).length ? " · " + occurrenceAssignees(t, occ).map((a) => staffName(crm, a)).join(", ") : ""}
+                      </div>
+                    </div>
+                    <Chip tone="amber" style={{ fontSize: 10.5 }}>{t.rotate && (t.assignees || []).length > 1 ? "rota" : "scheduled"}</Chip>
+                  </div>
+                ))}
+                {daily.map((t) => {
+                  const done = isDailyDone(crm, t, tod, who);
+                  return (
+                    <div key={t.id} style={rowStyle}>
+                      <Check on={done} title={done ? "Untick" : "Done"} onClick={() => tick(t.id, tod, !done)} />
+                      <div style={{ flex: 1, minWidth: 0, cursor: "pointer" }} onClick={() => setDraft(t)}>
+                        <b style={{ fontSize: 14, color: done ? "#8593a8" : NAVY, textDecoration: done ? "line-through" : "none" }}>{t.title}</b>
+                        {t.notes && !done && <div style={{ fontSize: 12, color: "#8593a8", fontWeight: 600, marginTop: 1 }}>{t.notes}</div>}
+                      </div>
+                      {t.repeat === "once" && <Chip style={{ fontSize: 10.5 }}>today</Chip>}
+                    </div>
+                  );
+                })}
+              </>
+            )}
+            {comingUp.length > 0 && (
+              <div style={{ marginTop: 10 }}>
+                <span style={lbl}>Coming up this week</span>
+                {comingUp.slice(0, 5).map(({ t, o }) => (
+                  <div key={t.id} style={{ display: "flex", gap: 8, fontSize: 12.5, fontWeight: 600, color: "#5a6a85", padding: "3px 0" }}>
+                    <span style={{ color: NAVY, fontWeight: 700, minWidth: 74 }}>{new Date(o.date + "T00:00:00").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })}</span>
+                    <span>{t.title}{occurrenceAssignees(t, o).length === 1 ? " · " + staffName(crm, occurrenceAssignees(t, o)[0]) : ""}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+              <button style={{ ...btn, padding: "6px 11px", fontSize: 12.5, opacity: ready ? 1 : 0.5 }} disabled={!crm || !ready}
+                onClick={() => setDraft({ ...blankTask("daily"), repeat: "once", assignees: who ? [who] : [] })}>
+                <Icon name="plus" stroke={NAVY} />Add a to-do for today
+              </button>
+              <span style={{ flex: 1 }} />
+              <button style={{ ...btn, padding: "6px 11px", fontSize: 12.5 }} disabled={!crm} onClick={() => setTab("tasks")}>
+                <Icon name="gear" />Manage all tasks
+              </button>
+            </div>
+          </div>
+
+          <div style={card}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+              <p style={{ ...sect, margin: 0 }}>Projects</p>
+              <span style={{ flex: 1 }} />
+              <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 700, color: "#8593a8" }}>
+                <input type="checkbox" checked={showDone} onChange={(e) => setShowDone(e.target.checked)} />Show done
+              </label>
+              <button style={{ ...btn, padding: "5px 10px", fontSize: 12.5, opacity: ready ? 1 : 0.5 }} disabled={!crm || !ready}
+                onClick={() => setDraft({ ...blankTask("project"), assignees: who ? [who] : [] })}>
+                <Icon name="plus" stroke={NAVY} />New
+              </button>
+            </div>
+            {!crm ? null : projects.length === 0 ? (
+              <div style={{ color: "#8593a8", fontWeight: 600, fontSize: 13, padding: "6px 0" }}>No projects on the go — add one for spare-time jobs.</div>
+            ) : (
+              projects.map((t) => (
+                <div key={t.id} style={{ ...rowStyle, alignItems: "center" }}>
+                  <div style={{ flex: 1, minWidth: 0, cursor: "pointer" }} onClick={() => setDraft(t)}>
+                    <b style={{ fontSize: 14, textDecoration: t.status === "Done" ? "line-through" : "none", color: t.status === "Done" ? "#8593a8" : NAVY }}>{t.title}</b>
+                    <div style={{ fontSize: 12, color: "#8593a8", fontWeight: 600, marginTop: 1 }}>
+                      {[!who ? (t.assignees || []).map((a) => staffName(crm, a)).join(", ") || "Anyone" : "", t.dueDate ? "by " + prettyDate(t.dueDate) : ""].filter(Boolean).join(" · ")}
+                    </div>
+                  </div>
+                  <Chip tone={PRIORITY_TONES[t.priority]} style={{ fontSize: 10.5 }}>{t.priority}</Chip>
+                  <select value={t.status} onChange={(e) => setStatus(t.id, e.target.value)}
+                    style={{ ...inp, width: "auto", padding: "4px 7px", fontSize: 12.5, fontWeight: 700, borderColor: t.status === "In progress" ? "#f0d0a8" : t.status === "Done" ? "#bfe3ca" : "#d5d9e0" }}>
+                    {PROJECT_STATUSES.map((s) => <option key={s}>{s}</option>)}
+                  </select>
+                </div>
+              ))
+            )}
           </div>
         </div>
 
-        {/* imports */}
-        <div style={{ ...card, marginBottom: 0 }}>
-          <p style={sect}>Imports</p>
-          <div style={{ display: "grid", gap: 8 }}>
-            <Tile icon="ship" label="Shipments" note={live.length ? live.length + " live — " + Object.entries(byStatus).map(([k, v]) => v + " " + k.toLowerCase()).join(", ") : "No live shipments"} onClick={() => setTab("shipments")} />
-            <Tile icon="grid" label="Overview" note={nextIn ? "Next in: " + nextIn.s.name + " ~ " + prettyDate(nextIn.eta) : "All shipment summaries"} onClick={() => setTab("overview")} />
-            <Tile icon="pound" label="Landed Costs" note="Cost per piece, landed in GBP" onClick={() => setTab("landed")} />
-            <Tile icon="flag" label="Completion" note="Payments, FX and final totals" onClick={() => setTab("completion")} />
+        {/* ===== reports column ===== */}
+        <div>
+          <div style={card}>
+            <p style={sect}>Reports</p>
+            {!crm ? (
+              <div style={{ color: "#8593a8", fontWeight: 600, fontSize: 13 }}>Loading…</div>
+            ) : (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 8 }}>
+                <Report label="Sales this month" value={gbp(salesThisMonth)}
+                  sub={salesLastToDate ? (salesThisMonth >= salesLastToDate ? "▲ " : "▼ ") + gbp(Math.abs(salesThisMonth - salesLastToDate)) + " vs last month to date" : "inc VAT"}
+                  tone={salesLastToDate && salesThisMonth < salesLastToDate ? RED : NAVY} onClick={() => setTab("invoices")} />
+                <Report label="Awaiting payment" value={gbp(owed)} sub={awaiting.length + " invoice" + (awaiting.length === 1 ? "" : "s")} tone={awaiting.length ? "#a05f10" : NAVY} onClick={() => setTab("invoices")} />
+                <Report label="Deliveries" value={todays + " today"} sub={thisWeek + " this week · " + toBook + " to book in"} tone={toBook ? RED : NAVY} onClick={() => setTab("schedule")} />
+                <Report label="Open quotes" value={gbp(openQuotes.reduce((t, q) => t + quoteTotals(q).total, 0))} sub={openQuotes.length + " open" + (acceptedWaiting ? " · " + acceptedWaiting + " to invoice" : "")} onClick={() => setTab("quotes")} />
+                <Report label="Samples · 90 days" value={s90.rate === null ? "—" : Math.round(s90.rate * 100) + "% convert"} sub={s90.requests + " requests" + (toSend ? " · " + toSend + " to send" : "")} tone={toSend ? RED : NAVY} onClick={() => setTab("samples")} />
+                <Report label="Stock at cost" value={stockVal ? gbp(stockVal.costValue) : "—"} sub={stockVal ? stockVal.units.toLocaleString("en-GB") + " units" : ""} onClick={() => setTab("stock")} />
+              </div>
+            )}
           </div>
-        </div>
 
-        {/* catalogue */}
-        <div style={{ ...card, marginBottom: 0 }}>
-          <p style={sect}>Catalogue</p>
-          <div style={{ display: "grid", gap: 8 }}>
-            <Tile icon="layers" label="Stock" note={crm ? (() => { const v = stockValuation(crm); return v.units.toLocaleString("en-GB") + " units · " + gbp(v.costValue) + " at cost"; })() : "Loading…"} onClick={() => setTab("stock")} />
-            <Tile icon="truck" label="Collections" note={crm ? ((crm.collections || []).filter((c) => !(c.items || []).length || (c.items || []).some((it) => !it.postedAt && !it.assignedInvoiceId)).length || "No") + " open supplier pick-ups" : "Loading…"} onClick={() => setTab("collections")} />
-            <Tile icon="box" label="Products" note={data.products.length + " products"} onClick={() => setTab("products")} />
-            <Tile icon="clock" label="Activity" note="Who changed what, and when" onClick={() => setTab("activity")} />
-          </div>
-          {nextIn && (
-            <div style={{ marginTop: 12, background: "#f8f9fb", border: "1px solid #e6e9ef", borderRadius: 10, padding: "10px 13px" }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: "#8593a8", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 6 }}>Inbound</div>
-              {inbound.slice(0, 3).map(({ s, eta }) => (
-                <div key={s.id} style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12.5, fontWeight: 600, padding: "4px 0" }}>
+          <div style={card}>
+            <div style={{ display: "flex", alignItems: "center", marginBottom: 6 }}>
+              <p style={{ ...sect, margin: 0 }}>Imports</p>
+              <span style={{ flex: 1 }} />
+              <span style={{ fontSize: 12, fontWeight: 700, color: "#5a6a85" }}>{live.length} live</span>
+            </div>
+            {inbound.length === 0 ? (
+              <div style={{ color: "#8593a8", fontWeight: 600, fontSize: 13 }}>Nothing inbound.</div>
+            ) : (
+              inbound.slice(0, 4).map(({ s, eta }) => (
+                <button key={s.id} onClick={() => setTab("overview")}
+                  style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12.5, fontWeight: 600, padding: "6px 0", width: "100%", background: "none", border: "none", borderBottom: "1px solid #f0f2f6", cursor: "pointer", fontFamily: "inherit", color: NAVY, textAlign: "left" }}>
                   <span style={{ width: 8, height: 8, borderRadius: 99, background: STATUS_COLOURS[s.status] || GOLD, flex: "none" }} />
                   <span style={{ fontWeight: 700 }}>{s.name}</span>
                   <span style={{ color: "#5a6a85" }}>{s.status}</span>
                   <span style={{ marginLeft: "auto", color: "#5a6a85" }}>~ {prettyDate(eta)}</span>
-                </div>
-              ))}
-            </div>
-          )}
+                </button>
+              ))
+            )}
+          </div>
         </div>
       </div>
+
+      {draft && crm && <TaskModal crm={crm} updateCrm={updateCrm} me={me} draft={draft} askConfirm={askConfirm} onClose={() => setDraft(null)} />}
       <div style={{ height: 30 }} />
     </div>
   );

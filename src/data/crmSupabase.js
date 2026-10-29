@@ -72,6 +72,26 @@ const sampleItemToRow = (it, sampleId, i) => ({
   size: str(it.size) || "Free", qty: Number(it.qty) || 0, position: i,
 });
 
+// Tasks (018_tasks.sql): same tolerance. The tick log is loaded for the last
+// TASK_LOG_DAYS only; older rows stay in the database untouched.
+let tasksReady = false;
+export const tasksSchemaReady = () => tasksReady;
+const TASK_LOG_DAYS = 120;
+const TASK_TEXT = ["kind", "title", "notes", "repeat", "onDate", "frequency", "startDate", "status", "priority", "dueDate", "created", "createdBy"];
+
+const taskToRow = (t, i) => {
+  const row = {
+    id: t.id, assignees: (t.assignees || []).map((a) => String(a).trim()).filter(Boolean).join(","),
+    rotate: t.rotate === true, active: t.active !== false,
+    weekday: Math.max(0, Math.min(6, Math.round(Number(t.weekday) || 0))),
+    month_day: Math.max(1, Math.min(31, Math.round(Number(t.monthDay) || 1))),
+    position: i,
+  };
+  TASK_TEXT.forEach((k) => (row[snake(k)] = str(t[k])));
+  return row;
+};
+const taskLogToRow = (l, i) => ({ id: l.id, task_id: str(l.taskId), period: str(l.period), done_by: str(l.doneBy), done_at: str(l.doneAt), position: i });
+
 const snake = (k) => k.replace(/[A-Z]/g, (m) => "_" + m.toLowerCase());
 
 const customerToRow = (c, i) => {
@@ -226,7 +246,13 @@ function rowsFromData(d) {
       samples.set(x.id, sampleToRow(x, i));
       (x.items || []).forEach((it, j) => sampleItems.set(it.id, sampleItemToRow(it, x.id, j)));
     });
-  return { customers, sites, invoices, items, picks, mps, comps, colls, collItems, moves, vans, checks, quotes, quoteItems, samples, sampleItems };
+  const tasks = new Map();
+  const taskLog = new Map();
+  if (tasksReady) {
+    (d.tasks || []).forEach((t, i) => tasks.set(t.id, taskToRow(t, i)));
+    (d.taskLog || []).forEach((l, i) => taskLog.set(l.id, taskLogToRow(l, i)));
+  }
+  return { customers, sites, invoices, items, picks, mps, comps, colls, collItems, moves, vans, checks, quotes, quoteItems, samples, sampleItems, tasks, taskLog };
 }
 
 async function fetchAll(sb, table) {
@@ -246,7 +272,7 @@ let settingsSnapshot = {};
 
 async function loadAll() {
   const sb = await getSupabase();
-  const [cs, ss, is_, ls, ps_, mps_, comps_, colls_, collItems_, moves_, vans_, vanChecks_, settings, quoteData, sampleData] = await Promise.all([
+  const [cs, ss, is_, ls, ps_, mps_, comps_, colls_, collItems_, moves_, vans_, vanChecks_, settings, quoteData, sampleData, taskData, staffRows] = await Promise.all([
     fetchAll(sb, "customers"),
     fetchAll(sb, "customer_sites"),
     fetchAll(sb, "invoices"),
@@ -282,7 +308,38 @@ async function loadAll() {
         return null;
       }
     })(),
+    (async () => {
+      try {
+        const since = new Date(Date.now() - TASK_LOG_DAYS * 86400000).toISOString().slice(0, 10);
+        const [tk, lg] = await Promise.all([
+          fetchAll(sb, "tasks"),
+          (async () => {
+            const out = [];
+            for (let from = 0; ; from += 1000) {
+              const { data, error } = await sb.from("task_log").select("*").gte("period", since).order("id").range(from, from + 999);
+              if (error) throw new Error(error.message);
+              out.push(...data);
+              if (data.length < 1000) break;
+            }
+            return out;
+          })(),
+        ]);
+        return { tk, lg };
+      } catch (e) {
+        return null;
+      }
+    })(),
+    (async () => {
+      // staff logins, for assigning tasks (read-only here)
+      try {
+        const { data, error } = await sb.from("profiles").select("email, full_name, role");
+        return error ? [] : data || [];
+      } catch (e) {
+        return [];
+      }
+    })(),
   ]);
+  tasksReady = taskData !== null;
   samplesReady = sampleData !== null;
   quotesReady = quoteData !== null;
 
@@ -420,11 +477,23 @@ async function loadAll() {
     return x;
   });
 
-  const data = { customers, sites, invoices, masterProducts, collections, movements, vans, numbering, reminders, quotes, samples };
+  const tasks = ((taskData && taskData.tk) || []).map((r) => {
+    const t = {
+      id: r.id, assignees: String(r.assignees || "").split(",").map((x) => x.trim()).filter(Boolean),
+      rotate: r.rotate === true, active: r.active !== false, weekday: Number(r.weekday) || 0, monthDay: Number(r.month_day) || 1,
+      modifiedBy: nv(r.modified_by), updatedAt: r.updated_at || "",
+    };
+    TASK_TEXT.forEach((k) => (t[k] = nv(r[snake(k)])));
+    return t;
+  });
+  const taskLog = ((taskData && taskData.lg) || []).map((r) => ({ id: r.id, taskId: r.task_id, period: nv(r.period), doneBy: nv(r.done_by), doneAt: nv(r.done_at) }));
+  const staff = (staffRows || []).filter((r) => r.email).map((r) => ({ email: r.email, name: nv(r.full_name), role: nv(r.role) }));
+
+  const data = { customers, sites, invoices, masterProducts, collections, movements, vans, numbering, reminders, quotes, samples, tasks, taskLog, staff };
   snapshot = rowsFromData(data);
   settingsSnapshot = { numbering: JSON.stringify(numbering), reminders: JSON.stringify(reminders) };
 
-  if (!customers.length && !sites.length && !invoices.length && !masterProducts.length && !collections.length && !vans.length && !quotes.length && !samples.length && !settings.length) return null;
+  if (!customers.length && !sites.length && !invoices.length && !masterProducts.length && !collections.length && !vans.length && !quotes.length && !samples.length && !tasks.length && !settings.length) return null;
   return data;
 }
 
@@ -459,6 +528,8 @@ async function saveAll(d) {
   const dqi = diff(prev.quoteItems || new Map(), next.quoteItems);
   const dsm = diff(prev.samples || new Map(), next.samples);
   const dsi = diff(prev.sampleItems || new Map(), next.sampleItems);
+  const dtk = diff(prev.tasks || new Map(), next.tasks);
+  const dtl = diff(prev.taskLog || new Map(), next.taskLog);
 
   const run = async (q) => {
     const { error } = await q;
@@ -501,6 +572,12 @@ async function saveAll(d) {
     if (dsm.deletes.length) await run(sb.from("samples").delete().in("id", dsm.deletes));
     if (dsm.upserts.length) await run(sb.from("samples").upsert(dsm.upserts));
     if (dsi.upserts.length) await run(sb.from("sample_items").upsert(dsi.upserts));
+  }
+  if (tasksReady) {
+    if (dtl.deletes.length) await run(sb.from("task_log").delete().in("id", dtl.deletes));
+    if (dtk.deletes.length) await run(sb.from("tasks").delete().in("id", dtk.deletes));
+    if (dtk.upserts.length) await run(sb.from("tasks").upsert(dtk.upserts));
+    if (dtl.upserts.length) await run(sb.from("task_log").upsert(dtl.upserts));
   }
 
   const settingsToSave = {
