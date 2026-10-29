@@ -24,6 +24,7 @@ let snapshot = null;
 // code / cost_gbp arrive with 020_product_codes.sql; until then they're left out of saves
 let productCodesReady = true;
 let productSegsReady = true; // seg_* columns arrive with 021_product_skus.sql
+let productKitsReady = true; // is_kit / kit arrive with 022_product_kits.sql
 export const productCodesSchemaReady = () => productCodesReady;
 
 const productToRow = (p, i) => ({
@@ -32,6 +33,7 @@ const productToRow = (p, i) => ({
   sale_price: num(p.salePrice),
   supplier: str(p.supplier), category: str(p.category), position: i,
   ...(productCodesReady ? { code: str(p.code).trim().toUpperCase(), cost_gbp: num(p.costGbp) } : {}),
+  ...(productKitsReady ? { is_kit: p.isKit === true, kit: Array.isArray(p.kit) ? p.kit.map((l) => ({ productId: str(l.productId), qty: Number(l.qty) || 0, colour: str(l.colour) })) : [] } : {}),
   ...(productSegsReady ? { seg_sup: str(p.segSup), seg_len: str(p.segLen), seg_cat: str(p.segCat), seg_sub: str(p.segSub), seg_prod: str(p.segProd) } : {}),
 });
 
@@ -71,6 +73,7 @@ async function loadAll() {
   for (const r of [p, s, l]) if (r.error) throw new Error(r.error.message);
   if (p.data.length) productCodesReady = Object.prototype.hasOwnProperty.call(p.data[0], "code");
   if (p.data.length) productSegsReady = Object.prototype.hasOwnProperty.call(p.data[0], "seg_sup");
+  if (p.data.length) productKitsReady = Object.prototype.hasOwnProperty.call(p.data[0], "is_kit");
 
   if (p.data.length === 0 && s.data.length === 0) {
     snapshot = { products: new Map(), shipments: new Map(), lines: new Map() };
@@ -81,6 +84,7 @@ async function loadAll() {
     id: r.id, name: r.name, colours: r.colours || [], qty: Number(r.qty), cost: Number(r.cost),
     weight: Number(r.weight), cbm: Number(r.cbm), supplier: r.supplier, category: r.category,
     salePrice: nv(r.sale_price), code: nv(r.code), costGbp: nv(r.cost_gbp),
+    isKit: r.is_kit === true, kit: Array.isArray(r.kit) ? r.kit : [],
     segSup: nv(r.seg_sup), segLen: nv(r.seg_len), segCat: nv(r.seg_cat), segSub: nv(r.seg_sub), segProd: nv(r.seg_prod),
   }));
   const linesByShip = {};

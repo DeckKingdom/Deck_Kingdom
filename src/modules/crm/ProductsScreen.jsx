@@ -6,7 +6,7 @@ import React, { useState, useMemo } from "react";
 import { NAVY, GOLD, RED, uid } from "../../lib/core.js";
 import {
   skuLists, productSkuBase, masterKey, productsInList, colourSeg, numericSku, segLabel, cleanCode, codeSource,
-  DEFAULT_SKU_LISTS, gbp,
+  DEFAULT_SKU_LISTS, gbp, kitPartsFor,
 } from "../../lib/crmCore.js";
 import { Icon, Chip, Modal, lbl, card, inp, btn, goldBtn, abtn } from "./ui.jsx";
 
@@ -145,6 +145,7 @@ export default function ProductsScreen({ planner, update, crm, updateCrm, remove
                     <td style={{ ...td, fontWeight: 700 }}>
                       <span style={{ fontSize: 10, color: "#5a6a85", marginRight: 8 }}>{isOpen ? "▼" : "▶"}</span>
                       {g.name || <span style={{ color: "#aab3c2" }}>New product</span>}
+                      {g.items.some((p) => p.isKit) && <Chip tone="gold" style={{ marginLeft: 8, fontSize: 10, padding: "1px 7px" }}>KIT</Chip>}
                       {!g.complete && <Chip tone="amber" style={{ marginLeft: 8, fontSize: 10, padding: "1px 7px" }}>SKU fields needed</Chip>}
                     </td>
                     <td style={{ ...td, color: "#5a6a85", fontWeight: 600 }}>{[segLabel(lists.category, p0.segCat), segLabel(lists.sub, p0.segSub)].filter((x) => x && x !== "N/a").join(" › ") || "—"}</td>
@@ -167,7 +168,7 @@ export default function ProductsScreen({ planner, update, crm, updateCrm, remove
                     <tr>
                       <td colSpan={8} style={{ padding: "8px 10px 14px 26px", background: "#f8f9fb", borderBottom: "1px solid #e6e9ef" }}>
                         {g.items.map((p) => (
-                          <Version key={p.id} p={p} lists={lists} rows={rowsByProduct[p.id] || []} setP={setP} removeProduct={removeProduct} supKey={supKey(p)} />
+                          <Version key={p.id} p={p} lists={lists} rows={rowsByProduct[p.id] || []} rowsByProduct={rowsByProduct} products={products} setP={setP} removeProduct={removeProduct} supKey={supKey(p)} />
                         ))}
                         {g.complete && (
                           <button style={{ ...btn, padding: "6px 12px", fontSize: 12.5, borderStyle: "dashed" }} onClick={() => addVersion(g)}>
@@ -202,7 +203,7 @@ export default function ProductsScreen({ planner, update, crm, updateCrm, remove
 }
 
 // ===== one supplier's version of a master product =====
-function Version({ p, lists, rows, setP, removeProduct, supKey }) {
+function Version({ p, lists, rows, rowsByProduct, products, setP, removeProduct, supKey }) {
   const base = productSkuBase(p);
   const prodList = productsInList(lists, p.segCat, p.segSub);
   const isImport = supKey === "DK" || (!supKey && (!p.code || codeSource(p.code) === "DK"));
@@ -289,7 +290,80 @@ function Version({ p, lists, rows, setP, removeProduct, supKey }) {
         {unknownColours.length > 0 && (
           <Chip tone="red" style={{ fontSize: 11 }}>{unknownColours.join(", ") + " not in the colour list — add it under SKU lists"}</Chip>
         )}
+        <span style={{ flex: 1 }} />
+        <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 700, color: p.isKit ? NAVY : "#5a6a85", cursor: "pointer" }}
+          title="A kit is sold as one line but loaded and taken out of stock as its parts">
+          <input type="checkbox" checked={p.isKit === true} onChange={(e) => setP(p.id, "isKit", e.target.checked)} />
+          This is a kit
+        </label>
       </div>
+      {p.isKit && <KitEditor p={p} products={products} rowsByProduct={rowsByProduct} lists={lists} setP={setP} />}
+    </div>
+  );
+}
+
+// ===== kit recipe: parts + qty + colour, resolved to SKUs for every kit colour =====
+function KitEditor({ p, products, rowsByProduct, lists, setP }) {
+  const lines = p.kit || [];
+  const setLines = (fn) => setP(p.id, "kit", fn(JSON.parse(JSON.stringify(lines))));
+  const choices = products
+    .filter((x) => x.id !== p.id && !x.isKit)
+    .sort((a, b) => cleanCode(a.code).localeCompare(cleanCode(b.code)) || (a.name || "").localeCompare(b.name || ""));
+  const byId = Object.fromEntries(products.map((x) => [x.id, x]));
+  const kitColours = (p.colours || []).length ? p.colours : [""];
+  return (
+    <div style={{ marginTop: 10, borderTop: "1px dashed #d5d9e0", paddingTop: 10 }}>
+      <div style={{ fontSize: 10.5, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 6 }}>
+        Kit parts — what goes on the loading bill for one kit
+      </div>
+      {lines.length === 0 && <div style={{ fontSize: 12.5, color: "#a05f10", fontWeight: 600, marginBottom: 6 }}>No parts yet — add what's in one kit.</div>}
+      {lines.map((l, i) => {
+        const part = byId[l.productId];
+        return (
+          <div key={i} style={{ display: "grid", gridTemplateColumns: "minmax(260px,3fr) 80px minmax(150px,1fr) 30px", gap: 8, alignItems: "center", marginBottom: 6 }}>
+            <select style={{ ...sel, borderColor: part ? "#d5d9e0" : RED }} value={l.productId}
+              onChange={(e) => setLines((x) => { x[i].productId = e.target.value; x[i].colour = ""; return x; })}>
+              <option value="">— choose a part —</option>
+              {!part && l.productId && <option value={l.productId}>(removed product)</option>}
+              {choices.map((x) => <option key={x.id} value={x.id}>{(x.code || "no code") + " — " + (x.name || "unnamed")}</option>)}
+            </select>
+            <input type="number" min="0" step="1" style={numI} value={l.qty} title="How many in one kit"
+              onChange={(e) => setLines((x) => { x[i].qty = e.target.value === "" ? "" : Number(e.target.value); return x; })} />
+            <select style={sel} value={l.colour || ""} onChange={(e) => setLines((x) => { x[i].colour = e.target.value; return x; })}
+              title="Same as the kit, or always one colour (e.g. galvanised inserts)">
+              <option value="">Same colour as the kit</option>
+              {((part && part.colours) || []).map((c) => <option key={c} value={c}>Always {c}</option>)}
+            </select>
+            <button style={{ ...abtn, border: "none", width: 26, height: 26 }} title="Remove part" onClick={() => setLines((x) => x.filter((_, j) => j !== i))}>
+              <Icon name="x" size={12} stroke={RED} />
+            </button>
+          </div>
+        );
+      })}
+      <button style={{ ...btn, padding: "5px 11px", fontSize: 12.5, borderStyle: "dashed" }} onClick={() => setLines((x) => [...x, { productId: "", qty: 1, colour: "" }])}>
+        <Icon name="plus" />Add part
+      </button>
+      {lines.some((l) => l.productId) && (
+        <div style={{ marginTop: 10, display: "grid", gap: 4 }}>
+          {kitColours.map((kc) => {
+            const parts = kitPartsFor(p, kc, rowsByProduct, lists).filter((x) => x.line.productId);
+            return (
+              <div key={kc || "none"} style={{ fontSize: 12, display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                <b style={{ minWidth: 92, color: NAVY }}>{kc ? kc + " kit" : "Each kit"}</b>
+                {parts.map((x) => x.row ? (
+                  <span key={x.i} style={{ border: "1px solid #d5d9e0", borderRadius: 7, padding: "2px 7px", background: "#fff" }}>
+                    {(Number(x.line.qty) || 0) + " × "}<b>{x.row.sku}</b>{x.row.colour ? " " + x.row.colour : ""}
+                  </span>
+                ) : (
+                  <span key={x.i} style={{ border: "1px solid " + RED, borderRadius: 7, padding: "2px 7px", color: RED, fontWeight: 700 }}>
+                    {(byId[x.line.productId] ? byId[x.line.productId].code || byId[x.line.productId].name : "part") + " has no " + (x.line.colour || kc || "") + " — add the colour to that part"}
+                  </span>
+                ))}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

@@ -1341,8 +1341,63 @@ export const syncCatalogue = (crm, planner) => {
       }
     });
   });
+  if (applyKits(next, products, lists)) changed = true;
   return changed ? { masterProducts: next, renames } : null;
 };
+
+// ===== kits =====
+// A product can be a kit: a recipe of parts (other catalogue products) with a
+// quantity each, and a colour that is either "same as the kit" (blank) or fixed
+// (e.g. Galvanised). Each colour of the kit becomes a stock row whose parts are
+// the matching colour rows of those products — so loading bills, stock
+// deductions and job costs take the parts. Generated parts carry ids "k:…".
+const kitRowIndex = (rows) => {
+  const m = {};
+  rows.forEach((r) => {
+    if (!r.importProductId) return;
+    (m[r.importProductId] = m[r.importProductId] || []).push(r);
+  });
+  return m;
+};
+// the stock row a kit line uses for one kit colour, or null
+export const resolveKitPart = (line, kitColour, rowsByProduct, lists) => {
+  const rows = rowsByProduct[line.productId] || [];
+  if (!rows.length) return null;
+  const want = String(line.colour || kitColour || "").trim().toLowerCase();
+  if (rows.length === 1 && !(rows[0].colour || "").trim()) return rows[0]; // part has no colours
+  const exact = rows.find((r) => (r.colour || "").trim().toLowerCase() === want);
+  if (exact) return exact;
+  const seg = colourSeg(lists, want); // Grey kit -> Anthracite part when they share a colour number
+  return (seg && seg !== "00" && rows.find((r) => colourSeg(lists, r.colour) === seg)) || null;
+};
+export const kitPartsFor = (p, kitColour, rowsByProduct, lists) =>
+  (p.kit || []).map((line, i) => ({ line, i, row: resolveKitPart(line, kitColour, rowsByProduct, lists) }));
+
+const applyKits = (rows, products, lists) => {
+  const byProd = kitRowIndex(rows);
+  let changed = false;
+  products.forEach((p) => {
+    (byProd[p.id] || []).forEach((row) => {
+      if (p.isKit && (p.kit || []).length) {
+        const comps = kitPartsFor(p, row.colour, byProd, lists)
+          .filter((x) => x.row && x.row.id !== row.id)
+          .map((x) => ({ id: "k:" + row.id + ":" + x.i, componentId: x.row.id, qty: Number(x.line.qty) || 0 }));
+        const same = row.isKit && JSON.stringify((row.components || []).map((c) => [c.componentId, Number(c.qty)])) === JSON.stringify(comps.map((c) => [c.componentId, c.qty]));
+        if (!same) {
+          row.isKit = true;
+          row.components = comps;
+          changed = true;
+        }
+      } else if (row.isKit && (row.components || []).every((c) => String(c.id).startsWith("k:"))) {
+        row.isKit = false; // recipe removed in the catalogue
+        row.components = [];
+        changed = true;
+      }
+    });
+  });
+  return changed;
+};
+export const rowsByCatalogueProduct = (crm) => kitRowIndex(crm.masterProducts || []);
 
 // Back-compat wrapper: just the new stock rows
 export const syncMasterFromProducts = (crm, planner) => {

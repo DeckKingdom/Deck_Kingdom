@@ -19,7 +19,7 @@ import { blankTask, scheduledOccurrence, nextScheduled, occurrenceAssignees, dai
 import { blankSample, blankSampleItem, syncSampleConversions, sampleStatus, sampleStats, sampleInvoice } from "../../lib/crmCore.js";
 import { addDays as addD } from "../../lib/core.js";
 import { blankQuote, quoteTotals, quoteStatus, convertQuoteToInvoice, duplicateQuote, quoteInvoice, quoteIsOpen, nextNumber } from "../../lib/crmCore.js";
-import { emptyCrm, normaliseCrm, blankCustomer, blankSite, blankInvoice, blankLine, invoiceTotals, blankMasterProduct, blankMovement, explodeInvoiceLines, invoiceCost, allocatedBySku, buildPicks, pickLandedCost, jobCost, stockValuation, matchShipmentToStock, blankCollection, blankCollectionItem, titleCase, formatPhone, formatPostcode, weightedCost, batchBreakdown, applyInvoiceStockDeduction, commitCollectionItem, assignCollectionItem, itemPending, TIME_SLOTS, blankVan, blankVanCheck, vanReminders, mondayOf, today, syncMasterFromProducts } from "../../lib/crmCore.js";
+import { emptyCrm, normaliseCrm, blankCustomer, blankSite, blankInvoice, blankLine, invoiceTotals, blankMasterProduct, blankMovement, explodeInvoiceLines, invoiceLoadKg, invoiceCost, allocatedBySku, buildPicks, pickLandedCost, jobCost, stockValuation, matchShipmentToStock, blankCollection, blankCollectionItem, titleCase, formatPhone, formatPostcode, weightedCost, batchBreakdown, applyInvoiceStockDeduction, commitCollectionItem, assignCollectionItem, itemPending, TIME_SLOTS, blankVan, blankVanCheck, vanReminders, mondayOf, today, syncMasterFromProducts } from "../../lib/crmCore.js";
 
 export default function run(React, renderToString) {
   const crm = normaliseCrm(emptyCrm());
@@ -464,6 +464,43 @@ export default function run(React, renderToString) {
     assert(rr && Object.values(rr.renames).includes("090601010105"), "renumbering a list entry renames the SKU");
     html = renderToString(React.createElement(ProductsScreen, { planner: pl, update: noop, crm: nc, updateCrm: noop, removeProduct: noop }));
     assert(html.includes("Master product") && html.includes("Decking Board Embossed Woodgrain 3.6m") && html.includes("SKU lists"), "products screen renders");
+  }
+  // ===== kits: recipe on the product -> parts on every colour's stock row =====
+  {
+    const kc2 = normaliseCrm({ customers: [] });
+    const board = { id: "kb", code: "DK/1.83/FENCE", name: "Fence Board 1.83m", colours: ["Grey", "Black"], segSup: "01", segLen: "01", segCat: "02", segSub: "01", segProd: "01", weight: 5 };
+    const post = { id: "kp", code: "DK/2.4/POST-COMP", name: "Fence Post Composite 2.4m", colours: ["Black"], segSup: "01", segLen: "03", segCat: "02", segSub: "02", segProd: "01" };
+    const ins = { id: "ki", code: "DK/40MM/POST-INSERT", name: "Fence Post Insert 40mm", colours: ["Galvanised"], segSup: "01", segLen: "41", segCat: "02", segSub: "02", segProd: "05" };
+    const kit = { id: "kk", code: "DK/6FT/RETRO-KIT", name: "Fence Retro Kit 6ft", colours: ["Grey", "Black"], segSup: "01", segLen: "24", segCat: "02", segSub: "03", segProd: "01",
+      isKit: true, kit: [{ productId: "kb", qty: 11, colour: "" }, { productId: "kp", qty: 1, colour: "Black" }, { productId: "ki", qty: 1, colour: "" }] };
+    const plk = { products: [board, post, ins, kit] };
+    kc2.masterProducts = syncCatalogue(kc2, plk).masterProducts;
+    const greyKit = kc2.masterProducts.find((m) => m.importProductId === "kk" && m.colour === "Grey");
+    assert(greyKit.isKit && greyKit.components.length === 2, "grey kit: board + always-black post resolve; the insert has no grey");
+    const greyBoard = kc2.masterProducts.find((m) => m.importProductId === "kb" && m.colour === "Grey");
+    assert(greyKit.components.some((c) => c.componentId === greyBoard.id && c.qty === 11), "same-colour part picks the grey board");
+    assert(syncCatalogue(kc2, plk) === null, "kit sync stable");
+    // fix the insert to galvanised -> resolves for both kit colours
+    kit.kit[2].colour = "Galvanised";
+    kc2.masterProducts = syncCatalogue(kc2, plk).masterProducts;
+    const blackKit = kc2.masterProducts.find((m) => m.importProductId === "kk" && m.colour === "Black");
+    assert(blackKit.components.length === 3, "black kit has all three parts");
+    // a sale of 2 black kits -> loading bill parts, and stock leaves as parts
+    const sale = { ...blankInvoice("", ""), id: "ks", lines: [{ ...blankLine(), code: blackKit.sku, qty: 2, price: 182.5 }] };
+    const ex = explodeInvoiceLines(sale, kc2);
+    const blackBoard = kc2.masterProducts.find((m) => m.importProductId === "kb" && m.colour === "Black");
+    assert(ex[0].kind === "kit" && ex.some((r) => r.kind === "part" && r.sku === blackBoard.sku && r.qty === 22), "loading bill: 2 kits = 22 black boards");
+    assert(Math.abs(invoiceLoadKg(sale, kc2) - 110) < 0.01, "load weight from the parts");
+    blackBoard.stock = 100;
+    kc2.invoices.push(sale);
+    applyInvoiceStockDeduction(sale, kc2, true, "x");
+    assert(Number(blackBoard.stock) === 78, "delivery takes 22 boards out of stock");
+    // untick kit -> generated parts are cleared
+    kit.isKit = false;
+    kc2.masterProducts = syncCatalogue(kc2, plk).masterProducts;
+    assert(!kc2.masterProducts.find((m) => m.importProductId === "kk" && m.colour === "Black").isKit, "un-kitting clears the parts");
+    html = renderToString(React.createElement(ProductsScreen, { planner: { products: [board, post, ins, { ...kit, isKit: true }] }, update: noop, crm: kc2, updateCrm: noop, removeProduct: noop }));
+    assert(html.includes("KIT"), "kit flagged in the master list");
   }
   console.log("smoke OK — all screens render, totals reconcile (1392 goods + 60 delivery = 1452 inc VAT, £242 VAT, £1210 net)");
 }
