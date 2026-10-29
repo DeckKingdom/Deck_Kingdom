@@ -8,7 +8,7 @@ import {
   skuIndex, invoiceCost, buildPicks, pickLandedCost, jobCost, blankPick, invoiceLoadKg,
   TRADE_COUNTER, TRADE_COUNTER_LABEL,
 } from "../../lib/crmCore.js";
-import { Icon, Chip, Tg, Modal, selectAllProps, SuggestInput, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
+import { Icon, Chip, Tg, Modal, selectAllProps, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
 import { printInvoice, printJobSheet, printLoadingBill } from "./printDocs.js";
 
 const navyBtn = { ...btn, background: "transparent", border: "1px solid #3a4f78", color: "#fff" };
@@ -25,6 +25,7 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
   const [search, setSearch] = useState("");
   const [custQuery, setCustQuery] = useState("");
   const [notice, setNotice] = useState("");
+  const [freeQty, setFreeQty] = useState(new Set()); // lines typing a qty beyond the 1-20 list
 
   const custById = useMemo(() => {
     const m = {};
@@ -384,8 +385,8 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 700 }}>
             <thead>
               <tr>
-                {["Code", "Description", "Colour", "Qty", "Price £ inc VAT", "Line £", ""].map((h, i) => (
-                  <th key={i} style={{ textAlign: i >= 3 && i <= 5 ? "right" : "left", fontSize: 11, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", padding: "8px 6px", borderBottom: "2px solid #e6e9ef", whiteSpace: "nowrap" }}>{h}</th>
+                {["Code", "Qty", "Description", "Colour", "Price £ inc VAT", "Line £", ""].map((h, i) => (
+                  <th key={i} style={{ textAlign: i === 4 || i === 5 ? "right" : "left", fontSize: 11, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", padding: "8px 6px", borderBottom: "2px solid #e6e9ef", whiteSpace: "nowrap" }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -395,20 +396,30 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
                   <td style={{ padding: "6px 6px", borderBottom: "1px solid #f0f2f6", width: 120 }}>
                     <input style={{ ...inp, fontWeight: 700, fontSize: 12.5 }} list="dk-skus" value={l.code} {...selectAllProps} onChange={(e) => setLine(l.id, "code", e.target.value)} />
                   </td>
+                  <td style={{ padding: "6px 6px", borderBottom: "1px solid #f0f2f6", width: 74 }}>
+                    {Number(l.qty) > 20 || freeQty.has(l.id) ? (
+                      <input style={numInp} inputMode="decimal" autoFocus={freeQty.has(l.id)} value={l.qty} {...selectAllProps}
+                        onChange={(e) => setLine(l.id, "qty", e.target.value)} />
+                    ) : (
+                      <select style={inp} value={l.qty === "" || l.qty === null ? "" : String(l.qty)}
+                        onChange={(e) => {
+                          if (e.target.value === "__more__") setFreeQty((f) => new Set(f).add(l.id));
+                          else setLine(l.id, "qty", e.target.value === "" ? "" : Number(e.target.value));
+                        }}>
+                        <option value="">—</option>
+                        {l.qty !== "" && l.qty !== null && !Array.from({ length: 20 }, (_, i) => i + 1).includes(Number(l.qty)) && (
+                          <option value={String(l.qty)}>{String(l.qty)}</option>
+                        )}
+                        {Array.from({ length: 20 }, (_, i) => String(i + 1)).map((n) => <option key={n} value={n}>{n}</option>)}
+                        <option value="__more__">More…</option>
+                      </select>
+                    )}
+                  </td>
                   <td style={{ padding: "6px 6px", borderBottom: "1px solid #f0f2f6", minWidth: 200 }}>
                     <input style={inp} value={l.description} {...selectAllProps} onChange={(e) => setLine(l.id, "description", e.target.value)} />
                   </td>
                   <td style={{ padding: "6px 6px", borderBottom: "1px solid #f0f2f6", width: 130 }}>
                     <input style={inp} value={l.colour} {...selectAllProps} onChange={(e) => setLine(l.id, "colour", e.target.value)} />
-                  </td>
-                  <td style={{ padding: "6px 6px", borderBottom: "1px solid #f0f2f6", width: 74 }}>
-                    <SuggestInput
-                      value={l.qty}
-                      options={Array.from({ length: 20 }, (_, i) => String(i + 1))}
-                      inputStyle={{ textAlign: "right" }}
-                      inputMode="decimal"
-                      onChange={(v) => setLine(l.id, "qty", v)}
-                    />
                   </td>
                   <td style={{ padding: "6px 6px", borderBottom: "1px solid #f0f2f6", width: 100 }}>
                     <input style={numInp} inputMode="decimal" value={l.price} {...selectAllProps} onChange={(e) => setLine(l.id, "price", e.target.value)} />
