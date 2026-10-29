@@ -146,6 +146,7 @@ export default function ImportPlanner() {
   const [selCustomerId, setSelCustomerId] = useState(null);
   const [selInvoiceId, setSelInvoiceId] = useState(null);
   const [selCollectionId, setSelCollectionId] = useState(null);
+  const [invFilter, setInvFilter] = useState(null); // { customerId, outstanding }
 
   useEffect(() => {
     if (CRM_TABS.includes(tab) || ["home", "activity", "catalogue", "stock", "collections"].includes(tab)) setCrmOn(true);
@@ -164,6 +165,11 @@ export default function ImportPlanner() {
   const openCollection = (id) => {
     setSelCollectionId(id);
     setTab("collections");
+  };
+  const showOutstanding = (customerId) => {
+    setInvFilter({ customerId, outstanding: true });
+    setSelInvoiceId(null);
+    setTab("invoices");
   };
   const newInvoiceFor = (customerId, siteId) => {
     if (!crm) return;
@@ -797,6 +803,7 @@ export default function ImportPlanner() {
             setSelId={setSelCustomerId}
             openInvoice={openInvoice}
             newInvoiceFor={newInvoiceFor}
+            onOutstanding={showOutstanding}
             me={me}
           />
         ) : tab === "invoices" ? (
@@ -809,6 +816,8 @@ export default function ImportPlanner() {
             goCustomer={goCustomer}
             me={me}
             planner={data}
+            filter={invFilter}
+            setFilter={setInvFilter}
           />
         ) : (
           <ScheduleScreen crm={crm} updateCrm={updateCrm} openInvoice={openInvoice} openCollection={openCollection} />

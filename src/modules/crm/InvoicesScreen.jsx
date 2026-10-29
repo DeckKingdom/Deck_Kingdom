@@ -20,7 +20,7 @@ const NoteBox = ({ children }) => (
   </div>
 );
 
-export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setSelId, goCustomer, me, planner }) {
+export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setSelId, goCustomer, me, planner, filter, setFilter }) {
   const [search, setSearch] = useState("");
   const [custQuery, setCustQuery] = useState("");
   const [notice, setNotice] = useState("");
@@ -85,12 +85,19 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
   // ===== list view =====
   const q = search.trim().toLowerCase();
   const sorted = [...crm.invoices].sort((a, b) => (b.date || "").localeCompare(a.date || "") || (Number(b.invNo) || 0) - (Number(a.invNo) || 0));
+  const prefiltered = sorted.filter((i) => {
+    if (filter && filter.customerId && i.customerId !== filter.customerId) return false;
+    if (filter && filter.outstanding && isPaid(i)) return false;
+    return true;
+  });
   const matches = q
-    ? sorted.filter((i) => {
+    ? prefiltered.filter((i) => {
         const c = custById[i.customerId];
         return [String(i.invNo || ""), i.orderRef, c && c.name, c && c.postcode, i.deliveryDate].some((v) => String(v || "").toLowerCase().includes(q));
       })
-    : sorted;
+    : prefiltered;
+  const filterCust = filter && filter.customerId ? custById[filter.customerId] : null;
+  const filteredTotal = filter ? matches.reduce((t, i) => t + invoiceTotals(i).total, 0) : 0;
   const shown = matches.slice(0, 50);
 
   if (!inv)
@@ -105,6 +112,21 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
           <span style={{ flex: 1 }} />
           <button style={goldBtn} onClick={newInvoice}><Icon name="plus" stroke={NAVY} />New invoice</button>
         </div>
+
+        {filter && (
+          <div style={{ ...card, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "9px 14px", borderColor: "#ecc4cb", background: "#C8102E08" }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: "#8a0b20", letterSpacing: 0.4, textTransform: "uppercase" }}>Filtered:</span>
+            {filterCust && <Chip tone="red">{filterCust.name || "Customer"}</Chip>}
+            {filter.outstanding && <Chip tone="red">Outstanding only</Chip>}
+            <span style={{ fontSize: 13, fontWeight: 700 }}>
+              {matches.length} invoice{matches.length === 1 ? "" : "s"} · {gbp(filteredTotal)}{filter.outstanding ? " outstanding" : ""}
+            </span>
+            <span style={{ flex: 1 }} />
+            <button style={{ ...btn, padding: "5px 11px", fontSize: 12.5 }} onClick={() => setFilter(null)}>
+              <Icon name="x" size={12} />Clear filter
+            </button>
+          </div>
+        )}
 
         <div style={card}>
           {crm.invoices.length === 0 ? (

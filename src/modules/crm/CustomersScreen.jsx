@@ -29,7 +29,7 @@ const NoteBox = ({ children }) => (
   </div>
 );
 
-export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, setSelId, openInvoice, newInvoiceFor, me }) {
+export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, setSelId, openInvoice, newInvoiceFor, onOutstanding, me }) {
   const [search, setSearch] = useState("");
   const [custDraft, setCustDraft] = useState(null);
   const [siteDraft, setSiteDraft] = useState(null);
@@ -285,6 +285,8 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
         const sites = sitesByCust[sel.id] || [];
         const lifetime = invs.reduce((t, i) => t + invoiceTotals(i).total, 0);
         const lastOrder = invs[0] ? invs[0].date : "";
+        const owing = invs.filter((i) => !isPaid(i));
+        const owed = owing.reduce((t, i) => t + invoiceTotals(i).total, 0);
         const siteName = (id) => {
           const s = crm.sites.find((x) => x.id === id);
           return s ? (s.name || s.address || "Site " + (s.siteNo || "")) : "";
@@ -307,13 +309,23 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
                   {sel.source && <Chip tone="navy">Source · {sel.source}</Chip>}
                 </div>
               </div>
-              <div style={{ marginLeft: "auto", display: "flex", background: "#ffffff14", border: "1px solid #ffffff22", borderRadius: 12, overflow: "hidden" }}>
+              <div style={{ marginLeft: "auto", display: "flex", background: "#ffffff14", border: "1px solid #ffffff22", borderRadius: 12, overflow: "hidden", flexWrap: "wrap" }}>
                 {[[invs.length, "Invoices"], [gbp(lifetime), "Lifetime"], [lastOrder ? prettyDate(lastOrder) : "—", "Last order"]].map(([v, l], i) => (
                   <div key={l} style={{ padding: "10px 18px", textAlign: "center", borderLeft: i ? "1px solid #ffffff22" : "none" }}>
                     <b style={{ display: "block", fontSize: 16, color: GOLD }}>{v}</b>
                     <span style={{ fontSize: 10.5, fontWeight: 700, color: "#aeb9cf", letterSpacing: 0.5, textTransform: "uppercase" }}>{l}</span>
                   </div>
                 ))}
+                <button
+                  onClick={() => owing.length && onOutstanding && onOutstanding(sel.id)}
+                  title={owing.length ? "Show this customer's outstanding invoices" : "Nothing outstanding"}
+                  style={{ padding: "10px 18px", textAlign: "center", borderLeft: "1px solid #ffffff22", background: owing.length ? "#C8102E33" : "transparent", border: "none", borderLeftStyle: "solid", borderLeftWidth: 1, borderLeftColor: "#ffffff22", cursor: owing.length ? "pointer" : "default", fontFamily: "inherit" }}
+                >
+                  <b style={{ display: "block", fontSize: 16, color: owing.length ? "#f2a6b1" : GOLD }}>{gbp(owed)}</b>
+                  <span style={{ fontSize: 10.5, fontWeight: 700, color: "#aeb9cf", letterSpacing: 0.5, textTransform: "uppercase" }}>
+                    Outstanding{owing.length ? " · " + owing.length + " inv" + (owing.length > 1 ? "s" : "") : ""}
+                  </span>
+                </button>
               </div>
               <div style={{ display: "flex", gap: 8, flexBasis: "100%", marginTop: 2, flexWrap: "wrap" }}>
                 <button style={goldBtn} onClick={() => newInvoiceFor(sel.id, sites[0] ? sites[0].id : "")}><Icon name="plus" stroke={NAVY} />New invoice</button>
