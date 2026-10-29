@@ -359,7 +359,7 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
                 </button>
               </div>
               <div style={{ display: "flex", gap: 8, flexBasis: "100%", marginTop: 2, flexWrap: "wrap" }}>
-                <button style={goldBtn} onClick={() => newInvoiceFor(sel.id, sites[0] ? sites[0].id : "")}><Icon name="plus" stroke={NAVY} />New invoice</button>
+                <button style={goldBtn} title="Invoice to the account's invoice address — use a site row's + for a site delivery" onClick={() => newInvoiceFor(sel.id, "")}><Icon name="plus" stroke={NAVY} />New invoice</button>
                 <button style={navyBtn} onClick={() => openCustDraft({ ...sel })}><Icon name="pen" stroke="#fff" />Edit account</button>
                 <span style={{ flex: 1 }} />
                 <button style={{ ...navyBtn, border: "1px dashed #3a4f78", color: "#8fa0c0" }} onClick={() => removeCustomer(sel)}><Icon name="bin" stroke="#8fa0c0" />Delete</button>
