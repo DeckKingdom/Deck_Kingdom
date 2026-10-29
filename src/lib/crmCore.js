@@ -1349,6 +1349,31 @@ export const syncCatalogue = (crm, planner) => {
       }
     });
   });
+  // Colours taken off a product: drop their stock rows when nothing ever used
+  // them (no stock, movements, jobs, quotes or collections); otherwise just
+  // retire them so they stop being offered but history still adds up.
+  const wanted = {};
+  products.forEach((p) => {
+    wanted[p.id] = new Set((p.colours && p.colours.length ? p.colours : [""]).map((x) => String(x || "").trim().toLowerCase()));
+  });
+  const used = skusInUse(crm);
+  for (let i = next.length - 1; i >= 0; i--) {
+    const m = next[i];
+    const keep = wanted[m.importProductId];
+    if (!keep) continue; // not a catalogue row (or its product was deleted) — leave alone
+    const listed = keep.has(String(m.colour || "").trim().toLowerCase());
+    if (listed) {
+      if (m.active === false) { m.active = true; changed = true; }
+      continue;
+    }
+    if (!Number(m.stock) && !used.has(String(m.sku || "").trim().toLowerCase())) {
+      next.splice(i, 1);
+      changed = true;
+    } else if (m.active !== false) {
+      m.active = false;
+      changed = true;
+    }
+  }
   if (applyKits(next, products, lists)) changed = true;
   return changed ? { masterProducts: next, renames } : null;
 };
@@ -1411,6 +1436,17 @@ export const rowsByCatalogueProduct = (crm) => kitRowIndex(crm.masterProducts ||
 export const syncMasterFromProducts = (crm, planner) => {
   const r = syncCatalogue(crm, planner);
   return r ? r.masterProducts : null;
+};
+
+// Every SKU some record points at (movements, invoice lines/picks, quotes, collections)
+export const skusInUse = (c) => {
+  const u = new Set();
+  const add = (v) => { const k = String(v || "").trim().toLowerCase(); if (k) u.add(k); };
+  (c.movements || []).forEach((m) => add(m.sku));
+  (c.invoices || []).forEach((i) => { (i.lines || []).forEach((l) => add(l.code)); (i.picks || []).forEach((p) => add(p.sku)); });
+  (c.quotes || []).forEach((q) => (q.lines || []).forEach((l) => add(l.code)));
+  (c.collections || []).forEach((x) => (x.items || []).forEach((it) => add(it.sku)));
+  return u;
 };
 
 // Point every record that used an old SKU at its new one. Mutates c.

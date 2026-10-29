@@ -169,7 +169,7 @@ export default function ProductsScreen({ planner, update, crm, updateCrm, remove
                     <tr>
                       <td colSpan={8} style={{ padding: "8px 10px 14px 26px", background: "#f8f9fb", borderBottom: "1px solid #e6e9ef" }}>
                         {g.items.map((p) => (
-                          <Version key={p.id} p={p} lists={lists} rows={rowsByProduct[p.id] || []} rowsByProduct={rowsByProduct} products={products} setP={setP} removeProduct={removeProduct} supKey={supKey(p)} />
+                          <Version key={p.id} p={p} lists={lists} rows={(rowsByProduct[p.id] || []).filter((r) => r.active !== false)} rowsByProduct={rowsByProduct} products={products} setP={setP} removeProduct={removeProduct} supKey={supKey(p)} />
                         ))}
                         {g.complete && (
                           <button style={{ ...btn, padding: "6px 12px", fontSize: 12.5, borderStyle: "dashed" }} onClick={() => addVersion(g)}>
