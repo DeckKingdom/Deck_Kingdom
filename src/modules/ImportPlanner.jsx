@@ -23,7 +23,7 @@ import {
   money,
   int,
 } from "../lib/core.js";
-import { blankInvoice, blankQuote, blankSample, blankSampleItem, nextNumber, TRADE_COUNTER, vanReminders, syncMasterFromProducts, syncSampleConversions, dueScheduledFor, setTaskDone, describeSchedule, today as todayStr, newPurchaseFor } from "../lib/crmCore.js";
+import { blankInvoice, blankQuote, blankSample, blankSampleItem, nextNumber, TRADE_COUNTER, vanReminders, syncCatalogue, renameSkus, syncSampleConversions, cleanCode, codeSource, PRODUCT_SOURCES, dueScheduledFor, setTaskDone, describeSchedule, today as todayStr, newPurchaseFor } from "../lib/crmCore.js";
 import { useCrm } from "./crm/useCrm.js";
 import CustomersScreen from "./crm/CustomersScreen.jsx";
 import InvoicesScreen from "./crm/InvoicesScreen.jsx";
@@ -157,6 +157,7 @@ export default function ImportPlanner() {
   const [quoteFilter, setQuoteFilter] = useState(null); // { customerId }
   const [selSampleId, setSelSampleId] = useState(null);
   const [newCustSignal, setNewCustSignal] = useState(0);
+  const [prodFilter, setProdFilter] = useState({ src: "", q: "" }); // Products screen: source + search
   const [selPurchaseId, setSelPurchaseId] = useState(null);
   const [purchaseFilter, setPurchaseFilter] = useState(null); // { supplierId }
   const [selSupplierId, setSelSupplierId] = useState(null);
@@ -278,10 +279,11 @@ export default function ImportPlanner() {
   // keep the background stock/SKU rows in step with the Products screen
   useEffect(() => {
     if (!crm || !data) return;
-    const synced = syncMasterFromProducts(crm, data);
+    const synced = syncCatalogue(crm, data);
     if (synced)
       updateCrm((c) => {
-        c.masterProducts = synced;
+        c.masterProducts = synced.masterProducts;
+        renameSkus(c, synced.renames); // stock history, invoices, quotes, picks follow a re-coded product
         return c;
       });
   }, [crm, data]);
@@ -584,7 +586,9 @@ export default function ImportPlanner() {
   const categories = [...new Set(data.products.map((p) => (p.category || "").trim()).filter(Boolean))].sort();
 
   const productsForSupplier = (supplier) =>
-    supplier ? data.products.filter((p) => (p.supplier || "").trim() === supplier) : data.products;
+    supplier
+      ? data.products.filter((p) => (p.supplier || "").trim() === supplier)
+      : data.products.filter((p) => !cleanCode(p.code) || codeSource(p.code) === "DK"); // shipments are our own imports
 
   const lineOptions = (line, supplier) => {
     const opts = productsForSupplier(supplier);
@@ -776,7 +780,9 @@ export default function ImportPlanner() {
 
   const addProduct = () =>
     update((d) => {
-      d.products.push({ id: uid(), name: "New product", colours: ["Grey"], qty: 100, cost: 0, weight: 0, cbm: 0, supplier: "", category: "" });
+      const src = prodFilter.src;
+      const sup = src ? (d.products.find((x) => codeSource(x.code) === src && x.supplier) || {}).supplier || "" : "";
+      d.products.unshift({ id: uid(), code: src ? src + "/" : "", name: "", colours: [], qty: 0, cost: 0, weight: 0, cbm: 0, supplier: sup, category: "", salePrice: "", costGbp: "" });
       return d;
     });
 
@@ -785,7 +791,8 @@ export default function ImportPlanner() {
       const p = d.products.find((x) => x.id === pid);
       if (!p) return d;
       if (field === "colours") p.colours = value.split(",").map((c) => c.trim()).filter(Boolean);
-      else if (field === "qty" || field === "cost" || field === "weight" || field === "cbm" || field === "salePrice") p[field] = value === "" ? "" : Number(value);
+      else if (field === "qty" || field === "cost" || field === "weight" || field === "cbm" || field === "salePrice" || field === "costGbp") p[field] = value === "" ? "" : Number(value);
+      else if (field === "code") p.code = cleanCode(value);
       else p[field] = value;
       return d;
     });
@@ -1055,7 +1062,7 @@ export default function ImportPlanner() {
         ) : tab === "stock" ? (
           <StockScreen crm={crm} updateCrm={updateCrm} planner={data} updatePlanner={update} askConfirm={setConfirmBox} me={me} />
         ) : (
-          <CollectionsScreen crm={crm} updateCrm={updateCrm} askConfirm={setConfirmBox} selId={selCollectionId} setSelId={setSelCollectionId} openInvoice={openInvoice} me={me} goSupplier={goSupplier} />
+          <CollectionsScreen crm={crm} updateCrm={updateCrm} askConfirm={setConfirmBox} selId={selCollectionId} setSelId={setSelCollectionId} openInvoice={openInvoice} me={me} goSupplier={goSupplier} planner={data} />
         ))}
 
       {tab === "overview" && (
@@ -1884,102 +1891,123 @@ export default function ImportPlanner() {
         </div>
       )}
 
-      {tab === "products" && (
-        <div style={{ padding: "18px 22px", maxWidth: 1480, margin: "0 auto" }}>
-          <div style={{ display: "flex", alignItems: "center", marginBottom: 10, position: "sticky", top: headerH, zIndex: 16, background: "#f3f5f8", padding: "8px 0" }}>
-            <h2 style={{ fontSize: 19, fontWeight: 700, margin: 0, flex: 1 }}>Products</h2>
+      {tab === "products" && (() => {
+        const q = prodFilter.q.trim().toLowerCase();
+        const codeCount = {};
+        data.products.forEach((p) => { const k = cleanCode(p.code); if (k) codeCount[k] = (codeCount[k] || 0) + 1; });
+        const srcCounts = {};
+        data.products.forEach((p) => { const k = codeSource(p.code) || "—"; srcCounts[k] = (srcCounts[k] || 0) + 1; });
+        const rows = data.products
+          .filter((p) => !prodFilter.src || (prodFilter.src === "—" ? !codeSource(p.code) : codeSource(p.code) === prodFilter.src))
+          .filter((p) => !q || [p.code, p.name, p.category, p.supplier, (p.colours || []).join(" ")].some((v) => String(v || "").toLowerCase().includes(q)));
+        // new (blank-code) products first, then by code
+        rows.sort((a, b) => (cleanCode(a.code).length > 3 ? 1 : 0) - (cleanCode(b.code).length > 3 ? 1 : 0) || cleanCode(a.code).localeCompare(cleanCode(b.code)) || (a.name || "").localeCompare(b.name || ""));
+        const chip = (k, label, n) => (
+          <button key={k} onClick={() => setProdFilter((f) => ({ ...f, src: k }))} title={k && PRODUCT_SOURCES[k] ? PRODUCT_SOURCES[k] : ""}
+            style={{ fontFamily: "inherit", fontSize: 12.5, fontWeight: 700, padding: "6px 11px", borderRadius: 999, cursor: "pointer", border: "1px solid " + (prodFilter.src === k ? NAVY : "#d5d9e0"), background: prodFilter.src === k ? NAVY : "#fff", color: prodFilter.src === k ? "#fff" : "#5a6a85" }}>
+            {label}{n ? " · " + n : ""}
+          </button>
+        );
+        const isImport = (p) => !p.code || codeSource(p.code) === "DK";
+        return (
+        <div style={{ padding: "18px 22px", maxWidth: 1600, margin: "0 auto" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 10, position: "sticky", top: headerH, zIndex: 16, background: "#f3f5f8", padding: "8px 0" }}>
+            <h2 style={{ fontSize: 19, fontWeight: 700, margin: 0 }}>Products</h2>
+            <input value={prodFilter.q} onChange={(e) => setProdFilter((f) => ({ ...f, q: e.target.value }))} placeholder="Search code, description, colour…"
+              style={{ ...inp, width: 240, maxWidth: "100%" }} />
+            <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+              {chip("", "All", data.products.length)}
+              {Object.keys(PRODUCT_SOURCES).filter((k) => srcCounts[k]).map((k) => chip(k, k, srcCounts[k]))}
+              {srcCounts["—"] ? chip("—", "No code", srcCounts["—"]) : null}
+            </div>
+            <span style={{ flex: 1 }} />
             <button onClick={addProduct} style={{ ...btn, background: GOLD, border: "1px solid " + GOLD }}>
-              + Add product
+              + Add product{prodFilter.src && prodFilter.src !== "—" ? " (" + prodFilter.src + ")" : ""}
             </button>
           </div>
           <div style={{ background: "#fff", borderRadius: 10, border: "1px solid #e6e9ef", padding: "4px 12px 12px", overflowX: "auto", overflowY: "auto", maxHeight: "max(320px, calc(100vh - " + (headerH + 150) + "px))" }}>
-            <table className="dk-sticky-table" style={{ width: "100%", borderCollapse: "collapse", minWidth: 1400 }}>
+            <table className="dk-sticky-table" style={{ width: "100%", borderCollapse: "collapse", minWidth: 1500 }}>
               <thead>
                 <tr>
-                  <th style={{ ...th, minWidth: 280 }}>Product</th>
-                  <th style={{ ...th, minWidth: 170 }}>Category</th>
-                  <th style={{ ...th, minWidth: 130 }}>Supplier</th>
-                  <th style={{ ...th, minWidth: 280 }}>Colours (comma separated)</th>
-                  <th style={{ ...th, minWidth: 86, textAlign: "right", fontSize: 11.5 }}>Default qty / Plt / Ctn</th>
-                  <th style={{ ...th, minWidth: 80, textAlign: "right", fontSize: 11.5 }}>Default kg / pc</th>
-                  <th style={{ ...th, minWidth: 80, textAlign: "right", fontSize: 11.5 }}>Default m³ / Plt / Ctn</th>
-                  <th style={{ ...th, minWidth: 86, textAlign: "right", fontSize: 11.5 }}>Default $ / pc</th>
-                  <th style={{ ...th, minWidth: 96, textAlign: "right", fontSize: 11.5 }}>Retail £ / pc (inc VAT)</th>
+                  <th style={{ ...th, minWidth: 215 }}>Code</th>
+                  <th style={{ ...th, minWidth: 290 }}>Description</th>
+                  <th style={{ ...th, minWidth: 150 }}>Category</th>
+                  <th style={{ ...th, minWidth: 150 }}>Supplier</th>
+                  <th style={{ ...th, minWidth: 230 }}>Colours (comma separated)</th>
+                  <th style={{ ...th, minWidth: 84, textAlign: "right", fontSize: 11.5 }}>UK cost £ / pc (ex VAT)</th>
+                  <th style={{ ...th, minWidth: 90, textAlign: "right", fontSize: 11.5 }}>Retail £ / pc (inc VAT)</th>
+                  <th style={{ ...th, minWidth: 78, textAlign: "right", fontSize: 11.5, color: "#8593a8" }}>Import $ / pc</th>
+                  <th style={{ ...th, minWidth: 78, textAlign: "right", fontSize: 11.5, color: "#8593a8" }}>Qty / Plt / Ctn</th>
+                  <th style={{ ...th, minWidth: 70, textAlign: "right", fontSize: 11.5, color: "#8593a8" }}>kg / pc</th>
+                  <th style={{ ...th, minWidth: 70, textAlign: "right", fontSize: 11.5, color: "#8593a8" }}>m³ / Plt</th>
                   <th style={{ ...th, width: 34 }}></th>
                 </tr>
               </thead>
               <tbody>
-                {data.products.map((p) => (
+                {rows.map((p) => {
+                  const dupe = cleanCode(p.code) && codeCount[cleanCode(p.code)] > 1;
+                  const imp = isImport(p);
+                  const dim = imp ? {} : { background: "#f6f7f9", color: "#8593a8" };
+                  return (
                   <tr key={p.id}>
                     <td style={td}>
-                      <input value={p.name} onChange={(e) => setProduct(p.id, "name", e.target.value)} style={inp} />
+                      <input defaultValue={p.code || ""} key={"c" + p.id + (p.code || "")} placeholder="e.g. TG/3.6/DECK"
+                        onBlur={(e) => cleanCode(e.target.value) !== cleanCode(p.code) && setProduct(p.id, "code", e.target.value)}
+                        title={dupe ? "Another product already has this code" : "SOURCE / SIZE / TYPE — changing it renames the stock rows (stock and history follow)"}
+                        style={{ ...inp, fontWeight: 700, textTransform: "uppercase", borderColor: dupe ? RED : !p.code ? "#E8912D" : undefined }} />
                     </td>
                     <td style={td}>
-                      <input
-                        value={p.category || ""}
-                        onChange={(e) => setProduct(p.id, "category", e.target.value)}
-                        list="dk-categories"
-                        placeholder="e.g. Fencing components"
-                        style={inp}
-                      />
+                      <input value={p.name} placeholder="Product, spec, size — e.g. Decking Board Embossed Woodgrain 3.6m" onChange={(e) => setProduct(p.id, "name", e.target.value)} style={inp} />
                     </td>
                     <td style={td}>
-                      <input
-                        value={p.supplier || ""}
-                        onChange={(e) => setProduct(p.id, "supplier", e.target.value)}
-                        list="dk-suppliers"
-                        placeholder="Supplier name"
-                        style={inp}
-                      />
+                      <input value={p.category || ""} onChange={(e) => setProduct(p.id, "category", e.target.value)} list="dk-categories" style={inp} />
                     </td>
                     <td style={td}>
-                      <input
-                        defaultValue={p.colours.join(", ")}
-                        onBlur={(e) => setProduct(p.id, "colours", e.target.value)}
-                        style={inp}
-                        key={p.id + p.colours.length}
-                      />
+                      <input value={p.supplier || ""} onChange={(e) => setProduct(p.id, "supplier", e.target.value)} list="dk-suppliers" placeholder="Supplier name" style={inp} />
                     </td>
                     <td style={td}>
-                      <input type="number" min="0" step="1" value={p.qty} onChange={(e) => setProduct(p.id, "qty", e.target.value)} style={num} />
+                      <input defaultValue={(p.colours || []).join(", ")} onBlur={(e) => setProduct(p.id, "colours", e.target.value)} style={inp} key={p.id + (p.colours || []).join("|")} placeholder="none — one stock row" />
                     </td>
                     <td style={td}>
-                      <input type="number" min="0" step="0.1" value={p.weight} onChange={(e) => setProduct(p.id, "weight", e.target.value)} style={num} />
+                      <input type="number" min="0" step="0.01" value={p.costGbp === undefined || p.costGbp === null ? "" : p.costGbp} onChange={(e) => setProduct(p.id, "costGbp", e.target.value)} style={num} title="What we pay per piece (ex VAT) for bought-in stock; imports take their landed cost from shipments" />
                     </td>
                     <td style={td}>
-                      <input type="number" min="0" step="0.01" value={p.cbm} onChange={(e) => setProduct(p.id, "cbm", e.target.value)} style={num} />
+                      <input type="number" min="0" step="0.01" value={p.salePrice === undefined || p.salePrice === null ? "" : p.salePrice} onChange={(e) => setProduct(p.id, "salePrice", e.target.value)} style={num} />
                     </td>
-                    <td style={td}>
-                      <input type="number" min="0" step="0.01" value={p.cost} onChange={(e) => setProduct(p.id, "cost", e.target.value)} style={num} />
-                    </td>
-                    <td style={td}>
-                      <input type="number" min="0" step="0.01" value={p.salePrice === undefined ? "" : p.salePrice} onChange={(e) => setProduct(p.id, "salePrice", e.target.value)} style={num} />
-                    </td>
+                    <td style={td}><input type="number" min="0" step="0.01" value={p.cost} onChange={(e) => setProduct(p.id, "cost", e.target.value)} style={{ ...num, ...dim }} /></td>
+                    <td style={td}><input type="number" min="0" step="1" value={p.qty} onChange={(e) => setProduct(p.id, "qty", e.target.value)} style={{ ...num, ...dim }} /></td>
+                    <td style={td}><input type="number" min="0" step="0.1" value={p.weight} onChange={(e) => setProduct(p.id, "weight", e.target.value)} style={num} /></td>
+                    <td style={td}><input type="number" min="0" step="0.01" value={p.cbm} onChange={(e) => setProduct(p.id, "cbm", e.target.value)} style={{ ...num, ...dim }} /></td>
                     <td style={{ ...td, textAlign: "center" }}>
                       <button onClick={() => removeProduct(p.id)} title="Remove product" style={{ ...btn, padding: "4px 9px", color: RED, border: "none", background: "transparent" }}>
                         ✕
                       </button>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
+            {rows.length === 0 && <div style={{ padding: 24, textAlign: "center", color: "#5a6a85", fontWeight: 600 }}>No products match.</div>}
           </div>
           <datalist id="dk-suppliers">
-            {suppliers.map((sup) => (
+            {[...new Set([...suppliers, ...((crm && crm.suppliers) || []).filter((x) => x.active !== false).map((x) => x.name)])].sort().map((sup) => (
               <option key={sup} value={sup} />
             ))}
           </datalist>
           <datalist id="dk-categories">
-            {categories.map((c) => (
+            {[...new Set(["Decking", "Decking Accessories", "Cladding", "Fencing", "Fencing Accessories", "Balustrade", "Framework", "Fixings", "Artificial Grass", "Sundries", ...categories])].map((c) => (
               <option key={c} value={c} />
             ))}
           </datalist>
           <p style={{ fontSize: 12.5, color: "#5a6a85", marginTop: 10 }}>
-            Set up your full range here once. Shipment lines pull qty per pallet and $ cost from these defaults; the retail £ feeds the Stock valuations and invoice lines. Every product + colour automatically gets a stock row (with its own code) on the Stock screen — no separate product list to maintain.
+            One catalogue for everything. <b>Code</b> = SOURCE / SIZE / TYPE (DK = our imports, TG = Tuda Grass, SY = South Yorkshire Composites, TS = Tradescape, CL = Easy Composite, FN = Finch).
+            Every product + colour gets a stock row coded <b>code/colour</b> (e.g. DK/3.6/DECK/ANT); change a code and its stock rows, history and existing invoices follow.
+            The grey import columns only matter for our own imports — shipment lines pull their defaults from them.
           </p>
         </div>
-      )}
+        );
+      })()}
       {dueReminders.length > 0 && !remindersClosed && !locked && (
         <div style={{ position: "fixed", inset: 0, zIndex: 55, background: "rgba(11,31,63,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
           <div style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 560, overflow: "hidden", boxShadow: "0 24px 70px rgba(11,31,63,0.5)" }}>

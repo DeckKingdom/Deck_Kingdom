@@ -519,10 +519,36 @@ export const genSku = (name, colour, taken) => {
   return sku;
 };
 
+// ===== product codes =====
+// Products carry a code: SOURCE / SIZE / TYPE (e.g. DK/3.6/DECK, TG/CLIPS-METAL).
+// The source is the first part: DK = our own imports, TG = Tuda Grass, etc.
+// Each product + colour is a stock row whose SKU is the code + a 3-letter colour.
+export const PRODUCT_SOURCES = {
+  DK: "Deck Kingdom (own import)", TG: "Tuda Grass", SY: "South Yorkshire Composites",
+  TS: "Tradescape", CL: "Easy Composite", FN: "Finch Decking",
+};
+export const COLOUR_CODES = {
+  "ash white": "AWH", ash: "ASH", silver: "SIL", anthracite: "ANT", black: "BLK", maple: "MAP", teak: "TEA",
+  "red/brown": "RBR", "red brown": "RBR", chocolate: "CHO", oak: "OAK", walnut: "WAL", galvanised: "GAL",
+  grey: "GRY", "golden teak": "GTK", "golden oak": "GOK", slate: "SLA", graphite: "GRA", "light grey": "LGR",
+  "dark grey": "DGR", brown: "BRN", antique: "ANQ", sand: "SND", "cherry brown": "CBR", pebble: "PEB",
+};
+export const colourCode = (c) => {
+  const k = String(c || "").trim().toLowerCase();
+  if (!k) return "";
+  return COLOUR_CODES[k] || k.replace(/[^a-z]/g, "").toUpperCase().slice(0, 3);
+};
+export const cleanCode = (c) => String(c || "").trim().toUpperCase().replace(/\s+/g, "");
+export const codeSource = (code) => cleanCode(code).split("/")[0] || "";
+export const skuFor = (code, colour) => cleanCode(code) + (colourCode(colour) ? "/" + colourCode(colour) : "");
+
 // Keeps the background stock/SKU table in step with the Products screen:
 // one row per product+colour, created and updated automatically. Stock and
-// batch costs are never touched. Returns the new array, or null if in step.
-export const syncMasterFromProducts = (crm, planner) => {
+// batch costs are never touched. When a product has a code its rows take the
+// code-based SKU; a row still on an old SKU is renamed (see renameSkus) so its
+// stock, movements and any invoices/quotes/picks that used it follow along.
+// Returns { masterProducts, renames } or null when everything is in step.
+export const syncCatalogue = (crm, planner) => {
   const products = (planner && planner.products) || [];
   if (!products.length) return null;
   const next = JSON.parse(JSON.stringify(crm.masterProducts || []));
@@ -531,10 +557,12 @@ export const syncMasterFromProducts = (crm, planner) => {
     if (m.importProductId) byKey[m.importProductId + "||" + (m.colour || "").trim().toLowerCase()] = m;
   });
   const taken = new Set(next.map((m) => (m.sku || "").toLowerCase()));
+  const renames = {};
   let changed = false;
   products.forEach((p) => {
     const colours = p.colours && p.colours.length ? p.colours : [""];
     const seen = new Set();
+    const code = cleanCode(p.code);
     colours.forEach((colRaw) => {
       const col = String(colRaw || "").trim();
       const lk = col.toLowerCase();
@@ -550,9 +578,12 @@ export const syncMasterFromProducts = (crm, planner) => {
       };
       const cur = byKey[p.id + "||" + lk];
       if (!cur) {
-        const sku = genSku(p.name, col, taken);
+        let sku = code ? skuFor(code, col) : genSku(p.name, col, taken);
+        if (code && taken.has(sku.toLowerCase())) sku = genSku(p.name, col, taken);
         taken.add(sku.toLowerCase());
-        next.push({ ...blankMasterProduct(), ...want, sku, importProductId: p.id, unit: "each" });
+        const row = { ...blankMasterProduct(), ...want, sku, importProductId: p.id, unit: "each" };
+        if (p.costGbp !== "" && p.costGbp !== null && p.costGbp !== undefined && isFinite(Number(p.costGbp))) row.costGbp = Number(p.costGbp);
+        next.push(row);
         changed = true;
       } else {
         Object.entries(want).forEach(([k, v]) => {
@@ -562,10 +593,54 @@ export const syncMasterFromProducts = (crm, planner) => {
             changed = true;
           }
         });
+        // a bought-in product's £ cost seeds the row until real batch costs arrive
+        if ((cur.costGbp === "" || cur.costGbp === null) && p.costGbp !== "" && p.costGbp !== null && p.costGbp !== undefined && isFinite(Number(p.costGbp)) && Number(p.costGbp) > 0) {
+          cur.costGbp = Number(p.costGbp);
+          changed = true;
+        }
+        if (code) {
+          const sku = skuFor(code, col);
+          if (cur.sku !== sku && !taken.has(sku.toLowerCase())) {
+            taken.delete((cur.sku || "").toLowerCase());
+            taken.add(sku.toLowerCase());
+            if (cur.sku) renames[cur.sku] = sku;
+            cur.sku = sku;
+            changed = true;
+          }
+        }
       }
     });
   });
-  return changed ? next : null;
+  return changed ? { masterProducts: next, renames } : null;
+};
+
+// Back-compat wrapper: just the new stock rows
+export const syncMasterFromProducts = (crm, planner) => {
+  const r = syncCatalogue(crm, planner);
+  return r ? r.masterProducts : null;
+};
+
+// Point every record that used an old SKU at its new one. Mutates c.
+export const renameSkus = (c, renames) => {
+  const map = {};
+  Object.entries(renames || {}).forEach(([o, n]) => (map[String(o).trim().toLowerCase()] = n));
+  if (!Object.keys(map).length) return 0;
+  let n = 0;
+  const fix = (obj, key) => {
+    const k = String(obj[key] || "").trim().toLowerCase();
+    if (k && map[k]) {
+      obj[key] = map[k];
+      n++;
+    }
+  };
+  (c.movements || []).forEach((m) => fix(m, "sku"));
+  (c.invoices || []).forEach((i) => {
+    (i.lines || []).forEach((l) => fix(l, "code"));
+    (i.picks || []).forEach((p) => fix(p, "sku"));
+  });
+  (c.quotes || []).forEach((q) => (q.lines || []).forEach((l) => fix(l, "code")));
+  (c.collections || []).forEach((x) => (x.items || []).forEach((it) => fix(it, "sku")));
+  return n;
 };
 
 // ===== master products: SKU lookup, kit explosion, stock allocation =====

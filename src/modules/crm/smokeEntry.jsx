@@ -11,13 +11,14 @@ import QuotesScreen from "./QuotesScreen.jsx";
 import SamplesScreen from "./SamplesScreen.jsx";
 import TasksScreen from "./TasksScreen.jsx";
 import PurchasesScreen from "./PurchasesScreen.jsx";
+import { syncCatalogue, renameSkus, skuFor, codeSource } from "../../lib/crmCore.js";
 import SuppliersScreen from "./SuppliersScreen.jsx";
 import { blankSupplier, blankPurchase, purchaseTotals, newPurchaseFor, supplierStats, findSupplierByName } from "../../lib/crmCore.js";
 import { blankTask, scheduledOccurrence, nextScheduled, occurrenceAssignees, dailyTasksFor, dueScheduledFor, projectsFor, setTaskDone, isDailyDone } from "../../lib/crmCore.js";
 import { blankSample, blankSampleItem, syncSampleConversions, sampleStatus, sampleStats, sampleInvoice } from "../../lib/crmCore.js";
 import { addDays as addD } from "../../lib/core.js";
 import { blankQuote, quoteTotals, quoteStatus, convertQuoteToInvoice, duplicateQuote, quoteInvoice, quoteIsOpen, nextNumber } from "../../lib/crmCore.js";
-import { emptyCrm, normaliseCrm, blankCustomer, blankSite, blankInvoice, blankLine, invoiceTotals, blankMasterProduct, explodeInvoiceLines, invoiceCost, allocatedBySku, buildPicks, pickLandedCost, jobCost, stockValuation, matchShipmentToStock, blankCollection, blankCollectionItem, titleCase, formatPhone, formatPostcode, weightedCost, batchBreakdown, applyInvoiceStockDeduction, commitCollectionItem, assignCollectionItem, itemPending, TIME_SLOTS, blankVan, blankVanCheck, vanReminders, mondayOf, today, syncMasterFromProducts } from "../../lib/crmCore.js";
+import { emptyCrm, normaliseCrm, blankCustomer, blankSite, blankInvoice, blankLine, invoiceTotals, blankMasterProduct, blankMovement, explodeInvoiceLines, invoiceCost, allocatedBySku, buildPicks, pickLandedCost, jobCost, stockValuation, matchShipmentToStock, blankCollection, blankCollectionItem, titleCase, formatPhone, formatPostcode, weightedCost, batchBreakdown, applyInvoiceStockDeduction, commitCollectionItem, assignCollectionItem, itemPending, TIME_SLOTS, blankVan, blankVanCheck, vanReminders, mondayOf, today, syncMasterFromProducts } from "../../lib/crmCore.js";
 
 export default function run(React, renderToString) {
   const crm = normaliseCrm(emptyCrm());
@@ -413,6 +414,32 @@ export default function run(React, renderToString) {
     html = renderToString(React.createElement(CollectionsScreen, { crm: pc, updateCrm: noop, askConfirm: noop, selId: "colx", setSelId: noop, openInvoice: noop, me: "x", goSupplier: noop }));
     assert(html.includes("Tuda Grass"), "collection shows linked supplier");
     assert(supplierStats(pc, "sup1").collections === 1, "supplier counts its collections");
+  }
+  // ===== product codes: code-based SKUs, renames carry stock + history =====
+  {
+    const kc = normaliseCrm({ customers: [] });
+    const plannerK = { products: [{ id: "pk", name: "Decking Board 3.6m", colours: ["Anthracite", "Ash White"], salePrice: 19.99 }] };
+    kc.masterProducts = syncCatalogue(kc, plannerK).masterProducts;
+    const oldSku = kc.masterProducts[0].sku;
+    kc.masterProducts[0].stock = 120;
+    kc.movements.push({ ...blankMovement(), sku: oldSku, qty: 120 });
+    const kInv = { ...blankInvoice("", ""), id: "ki", lines: [{ ...blankLine(), code: oldSku, qty: 2, price: 19.99 }] };
+    kc.invoices.push(kInv);
+    plannerK.products[0].code = "dk/3.6/deck ";
+    plannerK.products[0].costGbp = 7.84;
+    const r = syncCatalogue(kc, plannerK);
+    assert(r && Object.keys(r.renames).length === 2, "both colours renamed");
+    kc.masterProducts = r.masterProducts;
+    renameSkus(kc, r.renames);
+    const ant = kc.masterProducts.find((m) => m.colour === "Anthracite");
+    assert(ant.sku === "DK/3.6/DECK/ANT" && ant.stock === 120 && ant.costGbp === 7.84, "renamed row keeps stock, gets cost: " + JSON.stringify(ant));
+    assert(kc.movements[0].sku === "DK/3.6/DECK/ANT" && kc.invoices[0].lines[0].code === "DK/3.6/DECK/ANT", "history and invoices follow the rename");
+    assert(kc.masterProducts.find((m) => m.colour === "Ash White").sku === "DK/3.6/DECK/AWH", "colour codes");
+    assert(syncCatalogue(kc, plannerK) === null, "stable after rename");
+    plannerK.products.push({ id: "tg1", code: "TG/CLIPS-METAL", name: "Decking Clips Metal (100 pack)", colours: [] });
+    kc.masterProducts = syncCatalogue(kc, plannerK).masterProducts;
+    assert(kc.masterProducts.some((m) => m.sku === "TG/CLIPS-METAL"), "no colours = one row on the bare code");
+    assert(skuFor("TG/3.6/DECK", "Red/Brown") === "TG/3.6/DECK/RBR" && codeSource("tg/3.6/deck") === "TG", "helpers");
   }
   console.log("smoke OK — all screens render, totals reconcile (1392 goods + 60 delivery = 1452 inc VAT, £242 VAT, £1210 net)");
 }

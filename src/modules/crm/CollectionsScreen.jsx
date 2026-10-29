@@ -7,7 +7,7 @@ import { NAVY, GOLD, RED, prettyDate } from "../../lib/core.js";
 import {
   blankCollection, blankCollectionItem, nextNumber, skuIndex, gbp, today,
   TIME_SLOTS, vanOptions, itemPending, collectionProgress, commitCollectionItem, assignCollectionItem,
-  blankSupplier, findSupplierByName,
+  blankSupplier, findSupplierByName, supplierKey,
 } from "../../lib/crmCore.js";
 import { SupplierModal } from "./SuppliersScreen.jsx";
 import { purchasesAvailable } from "../../data/crmStorage.js";
@@ -26,7 +26,8 @@ export const collectionStatus = (c) => {
   return ["Not booked", "red"];
 };
 
-export default function CollectionsScreen({ crm, updateCrm, askConfirm, selId, setSelId, openInvoice, me, goSupplier }) {
+export default function CollectionsScreen({ crm, updateCrm, askConfirm, selId, setSelId, openInvoice, me, goSupplier, planner }) {
+  const [allProducts, setAllProducts] = useState(false);
   const [supDraft, setSupDraft] = useState(null);
   const [search, setSearch] = useState("");
   const [assignFor, setAssignFor] = useState(null); // item id, or "ALL" for every pending line
@@ -37,16 +38,27 @@ export default function CollectionsScreen({ crm, updateCrm, askConfirm, selId, s
   const bySku = skuIndex(crm);
   const custById = useMemo(() => Object.fromEntries(crm.customers.map((c) => [c.id, c])), [crm.customers]);
 
-  const skuOpts = useMemo(
+  // the supplier each stock row is bought from (via its catalogue product)
+  const supplierOfProduct = useMemo(() => {
+    const m = {};
+    ((planner && planner.products) || []).forEach((p) => (m[p.id] = p.supplier || ""));
+    return m;
+  }, [planner]);
+  const allSkuOpts = useMemo(
     () =>
       (crm.masterProducts || [])
         .filter((p) => p.active !== false && p.sku)
         .map((p) => ({
           value: p.sku,
           label: p.sku + " — " + p.name + (p.colour ? " · " + p.colour : ""),
+          supplierKey: supplierKey(supplierOfProduct[p.importProductId] || ""),
         })),
-    [crm.masterProducts]
+    [crm.masterProducts, supplierOfProduct]
   );
+  // a collection only offers what that supplier sells, unless "all products" is ticked
+  const collSupKey = coll ? supplierKey(coll.supplier) : "";
+  const supplierSkuOpts = collSupKey ? allSkuOpts.filter((o) => o.supplierKey === collSupKey) : [];
+  const skuOpts = !allProducts && supplierSkuOpts.length ? supplierSkuOpts : allSkuOpts;
 
   const setColl = (fn) =>
     updateCrm((c) => {
@@ -316,7 +328,19 @@ export default function CollectionsScreen({ crm, updateCrm, askConfirm, selId, s
       </div>
 
       <div style={card}>
-        <p style={sect}>Lines — commit each to stock or assign it to a job</p>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
+          <p style={{ ...sect, margin: 0 }}>Lines — commit each to stock or assign it to a job</p>
+          <span style={{ flex: 1 }} />
+          {supplierSkuOpts.length > 0 ? (
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 700, color: "#5a6a85" }}
+              title={"Codes offered: only " + coll.supplier + "'s products, unless ticked"}>
+              <input type="checkbox" checked={allProducts} onChange={(e) => setAllProducts(e.target.checked)} />
+              Show all products ({supplierSkuOpts.length} from {coll.supplier})
+            </label>
+          ) : coll.supplier ? (
+            <span style={{ fontSize: 12, fontWeight: 600, color: "#8593a8" }}>No catalogue products list {coll.supplier} as supplier — showing all</span>
+          ) : null}
+        </div>
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 780 }}>
             <thead><tr>{["SKU", "Description", "Colour", "Qty", "Unit cost £", "Line £", "Where it went", ""].map((h, i) => (

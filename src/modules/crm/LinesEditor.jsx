@@ -2,8 +2,8 @@
 // colour and price from the products list; qty is a 1-100 dropdown (double-
 // click to type any amount). `edit(fn)` mutates the record that owns `lines`.
 import { useState, useMemo } from "react";
-import { RED } from "../../lib/core.js";
-import { blankLine, skuIndex } from "../../lib/crmCore.js";
+import { RED, NAVY } from "../../lib/core.js";
+import { blankLine, skuIndex, codeSource, PRODUCT_SOURCES } from "../../lib/crmCore.js";
 import { Icon, SuggestInput, selectAllProps, inp, btn, abtn } from "./ui.jsx";
 
 const numInp = { ...inp, textAlign: "right" };
@@ -11,8 +11,9 @@ const td = { padding: "6px 6px", borderBottom: "1px solid #f0f2f6" };
 
 export default function LinesEditor({ doc, edit, crm, readOnly }) {
   const [freeQty, setFreeQty] = useState(new Set()); // lines typing a qty directly (double-clicked)
+  const [src, setSrc] = useState(""); // offer only one source's codes (DK, TG …)
 
-  const skuOpts = useMemo(
+  const allSkuOpts = useMemo(
     () =>
       (crm.masterProducts || [])
         .filter((p) => p.active !== false && p.sku)
@@ -22,6 +23,12 @@ export default function LinesEditor({ doc, edit, crm, readOnly }) {
         })),
     [crm.masterProducts]
   );
+  const sources = useMemo(() => {
+    const n = {};
+    allSkuOpts.forEach((o) => { const k = codeSource(o.value); if (PRODUCT_SOURCES[k]) n[k] = (n[k] || 0) + 1; });
+    return Object.keys(PRODUCT_SOURCES).filter((k) => n[k]);
+  }, [allSkuOpts]);
+  const skuOpts = src ? allSkuOpts.filter((o) => codeSource(o.value) === src) : allSkuOpts;
   const bySku = skuIndex(crm);
 
   const setLine = (lid, k, v) =>
@@ -44,6 +51,17 @@ export default function LinesEditor({ doc, edit, crm, readOnly }) {
 
   return (
     <>
+      {!readOnly && sources.length > 1 && (
+        <div style={{ display: "flex", gap: 4, alignItems: "center", flexWrap: "wrap", marginBottom: 6 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", marginRight: 4 }}>Stock from</span>
+          {["", ...sources].map((k) => (
+            <button key={k || "all"} onClick={() => setSrc(k)} title={k ? PRODUCT_SOURCES[k] : "Any source"}
+              style={{ fontFamily: "inherit", fontSize: 12, fontWeight: 700, padding: "3px 10px", borderRadius: 999, cursor: "pointer", border: "1px solid " + (src === k ? NAVY : "#d5d9e0"), background: src === k ? NAVY : "#fff", color: src === k ? "#fff" : "#5a6a85" }}>
+              {k || "All"}
+            </button>
+          ))}
+        </div>
+      )}
       <div style={{ overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 700 }}>
           <thead>
