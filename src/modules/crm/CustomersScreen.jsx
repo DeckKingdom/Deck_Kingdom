@@ -35,6 +35,8 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
   const [siteDraft, setSiteDraft] = useState(null);
   const [noEdit, setNoEdit] = useState(false); // account # unlocked for editing
   const [noConfirm, setNoConfirm] = useState(false); // confirmation bar showing
+  const [siteNoEdit, setSiteNoEdit] = useState(false);
+  const [siteNoConfirm, setSiteNoConfirm] = useState(false);
   const [numPanel, setNumPanel] = useState(false);
   const [numDraft, setNumDraft] = useState(null);
 
@@ -136,8 +138,14 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
     });
   };
 
+  const openSiteDraft = (draft) => {
+    setSiteNoEdit(false);
+    setSiteNoConfirm(false);
+    setSiteDraft(draft);
+  };
+
   const startNewSite = () =>
-    setSiteDraft({ ...blankSite(sel.id), siteNo: nextNumber(crm.sites, "siteNo", crm.numbering.site), _new: true });
+    openSiteDraft({ ...blankSite(sel.id), siteNo: nextNumber(crm.sites, "siteNo", crm.numbering.site), _new: true });
 
   const saveSite = () => {
     const d = siteDraft;
@@ -183,6 +191,18 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
     : crm.customers;
   const shown = matches.slice(0, 50);
 
+  const siteSuggestions = useMemo(() => {
+    if (!siteDraft) return null;
+    const out = {};
+    ["name", "address", "town", "postcode", "contact", "landline", "mobile", "email"].forEach((k) => {
+      const seen = new Set();
+      crm.sites.forEach((x) => { const v = String(x[k] || "").trim(); if (v) seen.add(v); });
+      crm.customers.forEach((x) => { const v = String(x[k === "name" ? "address" : k] || "").trim(); if (v) seen.add(v); });
+      out[k] = [...seen].sort().slice(0, 2000);
+    });
+    return out;
+  }, [crm.sites, crm.customers, Boolean(siteDraft)]);
+
   const custField = (k, label, props = {}, wrapStyle = {}) => (
     <div style={wrapStyle}>
       <span style={lbl}>{label}</span>
@@ -202,13 +222,24 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
       )}
     </div>
   );
-  const siteField = (k, label, props = {}) => (
-    <div>
+  const SITE_SUGGEST = ["name", "address", "town", "postcode", "contact", "landline", "mobile", "email"];
+  const siteField = (k, label, props = {}, wrapStyle = {}) => (
+    <div style={wrapStyle}>
       <span style={lbl}>{label}</span>
-      <input style={inp} value={siteDraft[k] === null ? "" : siteDraft[k]} {...props}
-        {...selectAllProps}
-        onChange={(e) => setSiteDraft({ ...siteDraft, [k]: e.target.value })}
-        onBlur={FIELD_FORMATS[k] ? (e) => setSiteDraft((d) => ({ ...d, [k]: FIELD_FORMATS[k](e.target.value) })) : undefined} />
+      {SITE_SUGGEST.includes(k) ? (
+        <SuggestInput
+          value={siteDraft[k]}
+          options={(siteSuggestions && siteSuggestions[k]) || []}
+          format={FIELD_FORMATS[k]}
+          onChange={(v) => setSiteDraft((d) => ({ ...d, [k]: v }))}
+          {...props}
+        />
+      ) : (
+        <input style={inp} value={siteDraft[k] === null ? "" : siteDraft[k]} {...props}
+          {...selectAllProps}
+          onChange={(e) => setSiteDraft({ ...siteDraft, [k]: e.target.value })}
+          onBlur={FIELD_FORMATS[k] ? (e) => setSiteDraft((d) => ({ ...d, [k]: FIELD_FORMATS[k](e.target.value) })) : undefined} />
+      )}
     </div>
   );
 
@@ -368,7 +399,7 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
                     </div>
                     <div style={{ display: "flex", gap: 5 }}>
                       <button style={abtn} title="New invoice for this site" onClick={() => newInvoiceFor(sel.id, s.id)}><Icon name="plus" /></button>
-                      <button style={abtn} title="Edit site" onClick={() => setSiteDraft({ ...s })}><Icon name="pen" /></button>
+                      <button style={abtn} title="Edit site" onClick={() => openSiteDraft({ ...s })}><Icon name="pen" /></button>
                       <button style={abtn} title="Remove site" onClick={() => removeSite(s)}><Icon name="bin" /></button>
                     </div>
                   </div>
@@ -527,17 +558,46 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
 
       {/* ===== site modal ===== */}
       {siteDraft && sel && (
-        <Modal title={siteDraft._new ? "New site for " + (sel.name || "account") : "Edit site #" + (siteDraft.siteNo || "")} onClose={() => setSiteDraft(null)}>
+        <Modal
+          title={
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              {siteDraft._new ? "New site for " + (sel.name || "account") : "Edit site"}
+              {siteNoEdit ? (
+                <input
+                  style={{ ...inp, width: 100, fontWeight: 700 }}
+                  inputMode="numeric"
+                  value={siteDraft.siteNo === null ? "" : siteDraft.siteNo}
+                  onChange={(e) => setSiteDraft({ ...siteDraft, siteNo: e.target.value.replace(/[^0-9]/g, "") })}
+                />
+              ) : (
+                <Chip style={{ fontSize: 13 }}>Site #{siteDraft.siteNo || "—"}</Chip>
+              )}
+              {!siteNoEdit && (
+                <button style={{ ...abtn, width: 26, height: 26 }} title="The site number is auto-generated — click to change it"
+                  onClick={() => setSiteNoConfirm(true)}>
+                  <Icon name="pen" size={12} />
+                </button>
+              )}
+            </span>
+          }
+          onClose={() => setSiteDraft(null)}
+        >
+          {siteNoConfirm && !siteNoEdit && (
+            <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", background: "#fff8e6", border: "1px solid #f4d78f", borderRadius: 8, padding: "8px 12px", marginBottom: 12, fontSize: 12.5, fontWeight: 600, color: "#6b5305" }}>
+              <span style={{ flex: 1 }}>The site number is auto-generated and normally shouldn't be changed. Change it anyway?</span>
+              <button style={{ ...btn, padding: "5px 11px", fontSize: 12.5 }} onClick={() => { setSiteNoEdit(true); setSiteNoConfirm(false); }}>Change it</button>
+              <button style={{ ...btn, padding: "5px 11px", fontSize: 12.5, background: GOLD, borderColor: GOLD }} onClick={() => setSiteNoConfirm(false)}>Keep as is</button>
+            </div>
+          )}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12 }}>
-            {siteField("name", "Site name", { autoFocus: true })}
-            {siteField("siteNo", "Site #", { inputMode: "numeric" })}
+            {siteField("name", "Site name", { autoFocus: true }, { gridColumn: "1 / -1" })}
             {siteField("address", "Address")}
             {siteField("town", "Town")}
             {siteField("postcode", "Post code")}
-            {siteField("contact", "Contact")}
+            {siteField("contact", "Contact name")}
             {siteField("landline", "Landline")}
             {siteField("mobile", "Mobile")}
-            {siteField("email", "Email")}
+            {siteField("email", "Email", {}, { gridColumn: "span 2" })}
           </div>
           <div style={{ marginTop: 12 }}>
             <span style={lbl}>Notes for booking in &amp; locating this site</span>
