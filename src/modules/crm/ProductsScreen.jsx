@@ -202,6 +202,30 @@ export default function ProductsScreen({ planner, update, crm, updateCrm, remove
   );
 }
 
+// ===== colours: chosen ones as chips, add more from the colour list =====
+function ColourPicker({ p, lists, unknown, onChange }) {
+  const cur = p.colours || [];
+  const has = new Set(cur.map((c) => c.toLowerCase()));
+  const opts = (lists.colour || []).filter((x) => x.code !== "00" && !has.has(String(x.label).toLowerCase()));
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 4, alignItems: "center", minHeight: 34, border: "1px solid " + (unknown.length ? RED : "#d5d9e0"), borderRadius: 8, padding: "3px 4px", background: "#fff" }}>
+      {cur.map((c) => (
+        <span key={c} style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 12, fontWeight: 700, padding: "2px 4px 2px 8px", borderRadius: 999,
+          background: unknown.includes(c) ? "#fdecef" : "#eef1f6", color: unknown.includes(c) ? RED : NAVY }}>
+          {c}
+          <button onClick={() => onChange(cur.filter((x) => x !== c))} title={"Remove " + c}
+            style={{ border: "none", background: "none", cursor: "pointer", padding: 0, lineHeight: 1, color: "#8593a8", fontSize: 14 }}>×</button>
+        </span>
+      ))}
+      <select value="" onChange={(e) => e.target.value && onChange([...cur, e.target.value])}
+        style={{ flex: 1, minWidth: 90, border: "none", background: "transparent", fontFamily: "inherit", fontSize: 12.5, color: "#5a6a85", padding: "4px 2px", outline: "none", cursor: "pointer" }}>
+        <option value="">{cur.length ? "+ add colour" : "No colour — pick to add"}</option>
+        {opts.map((x) => <option key={x.code} value={x.label}>{x.label}</option>)}
+      </select>
+    </div>
+  );
+}
+
 // ===== one supplier's version of a master product =====
 function Version({ p, lists, rows, rowsByProduct, products, setP, removeProduct, supKey }) {
   const base = productSkuBase(p);
@@ -239,12 +263,13 @@ function Version({ p, lists, rows, rowsByProduct, products, setP, removeProduct,
         </div>
         <div>
           <span style={{ ...lbl, fontSize: 10 }}>Bought from</span>
-          <input style={sm} value={p.supplier || ""} list="dk-suppliers" onChange={(e) => setP(p.id, "supplier", e.target.value)} />
+          {p.isKit
+            ? <input style={{ ...sm, background: "#f4f6f9", color: "#8593a8" }} value="Made up from parts" disabled title="Kits aren't bought — their parts are" />
+            : <input style={sm} value={p.supplier || ""} list="dk-suppliers" onChange={(e) => setP(p.id, "supplier", e.target.value)} />}
         </div>
         <div>
           <span style={{ ...lbl, fontSize: 10 }}>Colours</span>
-          <input key={"col" + p.id + (p.colours || []).join("|")} defaultValue={(p.colours || []).join(", ")} style={{ ...sm, borderColor: unknownColours.length ? RED : "#d5d9e0" }}
-            placeholder="none — one stock row" onBlur={(e) => setP(p.id, "colours", e.target.value)} />
+          <ColourPicker p={p} lists={lists} unknown={unknownColours} onChange={(cols) => setP(p.id, "colours", cols.join(", "))} />
         </div>
         <div>
           <span style={{ ...lbl, fontSize: 10 }}>UK cost £</span>
@@ -262,7 +287,7 @@ function Version({ p, lists, rows, rowsByProduct, products, setP, removeProduct,
         {segSelect("segCat", lists.category, "Category")}
         {segSelect("segSub", lists.sub, "Sub-category")}
         {segSelect("segProd", prodList, "Product", !p.segCat || !p.segSub)}
-        {isImport && (
+        {isImport && !p.isKit && (
           <>
             <div><span style={{ ...lbl, fontSize: 10 }}>Import $ / pc</span><input type="number" style={numI} value={p.cost} onChange={(e) => setP(p.id, "cost", e.target.value)} /></div>
             <div><span style={{ ...lbl, fontSize: 10 }}>Qty / plt</span><input type="number" style={numI} value={p.qty} onChange={(e) => setP(p.id, "qty", e.target.value)} /></div>
