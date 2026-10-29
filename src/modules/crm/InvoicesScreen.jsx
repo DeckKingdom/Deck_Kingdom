@@ -10,6 +10,7 @@ import {
 } from "../../lib/crmCore.js";
 import { Icon, Chip, Tg, Modal, selectAllProps, SuggestInput, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
 import { printInvoice, printJobSheet, printLoadingBill } from "./printDocs.js";
+import { readableFor } from "./LinesEditor.jsx";
 import LinesEditor from "./LinesEditor.jsx";
 import StockCheck from "./StockCheck.jsx";
 
@@ -40,6 +41,7 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
   }, [crm.sites]);
 
   const inv = crm.invoices.find((i) => i.id === selId) || null;
+  const bySkuAll = useMemo(() => skuIndex(crm), [crm.masterProducts]);
 
   const setInv = (fn) =>
     updateCrm((c) => {
@@ -434,7 +436,7 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
                           const lc = pickLandedCost(p, crm, planner);
                           return (
                             <tr key={p.id}>
-                              <td style={{ padding: "6px 6px", borderBottom: "1px solid #eef0f4", fontWeight: 700, whiteSpace: "nowrap" }}>{p.sku || "—"}</td>
+                              <td style={{ padding: "6px 6px", borderBottom: "1px solid #eef0f4", fontWeight: 700, whiteSpace: "nowrap" }}>{p.sku || "—"}{readableFor(bySkuAll, p.sku) && <div style={{ fontSize: 11, color: "#5a6a85" }}>{readableFor(bySkuAll, p.sku)}</div>}</td>
                               <td style={{ padding: "6px 6px", borderBottom: "1px solid #eef0f4" }}>{p.description}{p.colour ? " · " + p.colour : ""}</td>
                               <td style={{ padding: "6px 6px", borderBottom: "1px solid #eef0f4", width: 64 }}>
                                 <input style={{ ...numInp, padding: "4px 7px" }} inputMode="decimal" value={p.qty} onChange={(e) => setPick(p.id, "qty", e.target.value)} />

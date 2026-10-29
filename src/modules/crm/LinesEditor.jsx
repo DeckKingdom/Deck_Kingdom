@@ -7,6 +7,32 @@ import { blankLine, skuIndex, PRODUCT_SOURCES, skuSource, skuLists, skuOptionLab
 import { Icon, SuggestInput, selectAllProps, inp, btn, abtn } from "./ui.jsx";
 
 const numInp = { ...inp, textAlign: "right" };
+
+// SKU picker: a wide list with the familiar readable code first (DK/4.8/DECK/AWH)
+export const SKU_COLS = "215px 100px minmax(220px,1fr) 120px 70px 30px";
+export const SKU_LIST_W = 920;
+export const readableFor = (bySku, code) => {
+  const p = bySku[String(code || "").trim().toLowerCase()];
+  return p && p.family && p.family.includes("/") && p.family !== p.sku ? p.family : "";
+};
+export const skuOption = (p, crm) => {
+  const src = skuSource(p, skuLists(crm));
+  const price = p.priceIncVat !== "" && p.priceIncVat !== null && p.priceIncVat !== undefined ? "£" + Number(p.priceIncVat).toFixed(2) : "";
+  const readable = p.family && p.family.includes("/") && p.family !== p.sku ? p.family : "";
+  return {
+    value: p.sku,
+    label: skuOptionLabel(p) + (price ? " · " + price : ""),
+    src,
+    cells: [
+      { text: readable || p.sku, style: { fontWeight: 800 } },
+      { text: readable ? p.sku : "", style: { fontSize: 11.5, color: "#8593a8", fontWeight: 600, letterSpacing: 0.3 } },
+      { text: p.name, style: { fontWeight: 600 } },
+      { text: p.colour || "", style: { color: "#5a6a85", fontWeight: 600 } },
+      { text: price, style: { textAlign: "right" } },
+      { text: src, style: { fontSize: 10.5, fontWeight: 800, color: "#a86b12", textAlign: "center" } },
+    ],
+  };
+};
 const td = { padding: "6px 6px", borderBottom: "1px solid #f0f2f6" };
 
 export default function LinesEditor({ doc, edit, crm, readOnly }) {
@@ -17,11 +43,7 @@ export default function LinesEditor({ doc, edit, crm, readOnly }) {
     () =>
       (crm.masterProducts || [])
         .filter((p) => p.active !== false && p.sku)
-        .map((p) => ({
-          value: p.sku,
-          label: skuOptionLabel(p) + (p.priceIncVat !== "" && p.priceIncVat !== null ? " · £" + Number(p.priceIncVat).toFixed(2) : ""),
-          src: skuSource(p, skuLists(crm)),
-        })),
+        .map((p) => skuOption(p, crm)),
     [crm.masterProducts, crm.skuLists]
   );
   const sources = useMemo(() => {
@@ -76,7 +98,7 @@ export default function LinesEditor({ doc, edit, crm, readOnly }) {
             {readOnly
               ? doc.lines.map((l) => (
                   <tr key={l.id}>
-                    <td style={{ ...td, fontWeight: 700, padding: "9px 6px" }}>{l.code || "—"}</td>
+                    <td style={{ ...td, fontWeight: 700, padding: "9px 6px" }}>{l.code || "—"}{readableFor(bySku, l.code) && <div style={{ fontSize: 11, color: "#5a6a85" }}>{readableFor(bySku, l.code)}</div>}</td>
                     <td style={td}>{l.qty}</td>
                     <td style={td}>{l.description}</td>
                     <td style={td}>{l.colour}</td>
@@ -88,7 +110,8 @@ export default function LinesEditor({ doc, edit, crm, readOnly }) {
               : doc.lines.map((l) => (
                   <tr key={l.id}>
                     <td style={{ ...td, width: 130 }}>
-                      <SuggestInput value={l.code} options={skuOpts} inputStyle={{ fontWeight: 700, fontSize: 12.5 }} onChange={(v) => setLine(l.id, "code", v)} />
+                      <SuggestInput value={l.code} options={skuOpts} listWidth={SKU_LIST_W} cols={SKU_COLS} inputStyle={{ fontWeight: 700, fontSize: 12.5 }} onChange={(v) => setLine(l.id, "code", v)} />
+                      {readableFor(bySku, l.code) && <div style={{ fontSize: 11, fontWeight: 700, color: "#5a6a85", marginTop: 3, letterSpacing: 0.2 }}>{readableFor(bySku, l.code)}</div>}
                     </td>
                     <td style={{ ...td, width: 74 }}>
                       {Number(l.qty) > 100 || freeQty.has(l.id) ? (

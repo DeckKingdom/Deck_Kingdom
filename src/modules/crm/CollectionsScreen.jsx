@@ -13,6 +13,7 @@ import { SupplierModal } from "./SuppliersScreen.jsx";
 import { purchasesAvailable } from "../../data/crmStorage.js";
 import { Icon, Chip, Modal, selectAllProps, SuggestInput, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
 import { printCollectionNote } from "./printDocs.js";
+import { skuOption, SKU_COLS, SKU_LIST_W } from "./LinesEditor.jsx";
 
 const navyBtn = { ...btn, background: "transparent", border: "1px solid #3a4f78", color: "#fff" };
 const td = { padding: "6px 6px", borderBottom: "1px solid #f0f2f6", fontSize: 13 };
@@ -49,8 +50,7 @@ export default function CollectionsScreen({ crm, updateCrm, askConfirm, selId, s
       (crm.masterProducts || [])
         .filter((p) => p.active !== false && p.sku)
         .map((p) => ({
-          value: p.sku,
-          label: skuOptionLabel(p),
+          ...skuOption(p, crm),
           supplierKey: supplierKey(supplierOfProduct[p.importProductId] || ""),
         })),
     [crm.masterProducts, supplierOfProduct]
@@ -354,7 +354,7 @@ export default function CollectionsScreen({ crm, updateCrm, askConfirm, selId, s
                   <tr key={it.id} style={{ opacity: pending ? 1 : 0.85 }}>
                     <td style={{ ...td, width: 150 }}>
                       {pending ? (
-                        <SuggestInput value={it.sku} options={skuOpts} inputStyle={{ fontWeight: 700, fontSize: 12.5 }} onChange={(v) => setItem(it.id, "sku", v)} />
+                        <SuggestInput value={it.sku} options={skuOpts} listWidth={SKU_LIST_W} cols={SKU_COLS} inputStyle={{ fontWeight: 700, fontSize: 12.5 }} onChange={(v) => setItem(it.id, "sku", v)} />
                       ) : (
                         <b style={{ fontSize: 12.5 }}>{it.sku || "—"}</b>
                       )}
