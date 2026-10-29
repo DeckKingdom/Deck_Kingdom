@@ -5,7 +5,7 @@ import { NAVY, GOLD, RED, uid, prettyDate, prettyDateTime } from "../../lib/core
 import {
   blankInvoice, blankLine, nextNumber, invoiceTotals, gbp, isPaid,
   JOB_TYPES, PAYMENT_TYPES, PREP_FLAGS, FOLLOWUP_FLAGS, today, TIME_SLOTS, vanOptions,
-  skuIndex, invoiceCost, buildPicks, pickLandedCost, jobCost, blankPick, invoiceLoadKg,
+  skuIndex, invoiceCost, buildPicks, pickLandedCost, jobCost, blankPick, invoiceLoadKg, applyInvoiceStockDeduction,
   TRADE_COUNTER, TRADE_COUNTER_LABEL,
 } from "../../lib/crmCore.js";
 import { Icon, Chip, Tg, Modal, selectAllProps, SuggestInput, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
@@ -376,8 +376,10 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
           ))}
           <span style={{ flex: 1 }} />
           <label style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 13.5, fontWeight: 700 }}>
-            <input type="checkbox" checked={inv.deliveryCompleted} onChange={(e) => setInv((x) => (x.deliveryCompleted = e.target.checked))} />
+            <input type="checkbox" checked={inv.deliveryCompleted}
+              onChange={(e) => setInv((x, c) => { x.deliveryCompleted = e.target.checked; applyInvoiceStockDeduction(x, c, e.target.checked, me); })} />
             Delivery completed
+            {inv.stockDeducted && <Chip tone="green" style={{ marginLeft: 6, fontSize: 10, padding: "1px 7px" }}>stock out</Chip>}
           </label>
         </div>
       </div>

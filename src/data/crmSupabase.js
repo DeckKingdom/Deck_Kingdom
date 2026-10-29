@@ -16,7 +16,7 @@ const intOrNull = (v) => {
 
 const CUSTOMER_FIELDS = ["name", "address", "town", "postcode", "contact", "landline", "mobile", "email", "source", "contactMethod", "created", "createdBy", "modifiedBy"];
 const SITE_FIELDS = ["name", "address", "town", "postcode", "contact", "landline", "mobile", "email", "notes"];
-const INV_TEXT = ["date", "orderRef", "jobType", "van", "deliveryDate", "deliveryTime", "paymentType", "paymentDate", "jobNotes", "raisedBy", "created", "siteId"];
+const INV_TEXT = ["date", "orderRef", "jobType", "van", "deliveryDate", "deliveryTime", "paymentType", "paymentDate", "jobNotes", "raisedBy", "created", "siteId", "stockDeducted"];
 const FLAG_COLS = {
   booked: "f_booked",
   courier: "f_courier",

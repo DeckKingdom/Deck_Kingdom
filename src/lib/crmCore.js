@@ -181,6 +181,7 @@ export const blankInvoice = (customerId, siteId) => ({
   vatInclusive: true,
   jobNotes: "",
   raisedBy: "",
+  stockDeducted: "",
   created: today(),
   flags: {
     booked: false,
@@ -637,6 +638,62 @@ export const weightedCost = (oldStock, oldCost, qty, newCost) => {
   const oc = Number(oldCost);
   if (!isFinite(os) || os <= 0 || !isFinite(oc) || oldCost === "" || oldCost === null) return newCost;
   return Math.round(((os * oc + qty * newCost) / (os + qty)) * 10000) / 10000;
+};
+
+// Which batch a pick names (shipment name, or free-text batch ref)
+export const batchKeyForPick = (pick, planner) => {
+  if (pick.shipmentId && planner) {
+    const s = (planner.shipments || []).find((x) => x.id === pick.shipmentId);
+    if (s) return s.name;
+  }
+  return pick.batchRef || "";
+};
+
+// What's left from which batch: inbound movements grouped by reference,
+// minus the picks assigned to that batch across all invoices.
+export const batchBreakdown = (sku, crm, planner) => {
+  const k = String(sku || "").trim().toLowerCase();
+  const batches = [];
+  const byRef = {};
+  (crm.movements || []).forEach((m) => {
+    if ((m.sku || "").trim().toLowerCase() !== k || !(Number(m.qty) > 0)) return;
+    const ref = m.ref || "manual";
+    let b = byRef[ref];
+    if (!b) {
+      b = byRef[ref] = { ref, date: (m.at || "").slice(0, 10), unitCost: "", qtyIn: 0, picked: 0 };
+      batches.push(b);
+    }
+    b.qtyIn += Number(m.qty) || 0;
+    if (m.unitCost !== "" && m.unitCost !== null && m.unitCost !== undefined) b.unitCost = Number(m.unitCost);
+  });
+  (crm.invoices || []).forEach((inv) =>
+    (inv.picks || []).forEach((p) => {
+      if ((p.sku || "").trim().toLowerCase() !== k) return;
+      const b = byRef[batchKeyForPick(p, planner)];
+      if (b) b.picked += Number(p.qty) || 0;
+    })
+  );
+  batches.forEach((b) => (b.left = b.qtyIn - b.picked));
+  return batches.sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+};
+
+// Delivery completed -> stock leaves (one movement per line, batch kept on
+// the picks); unticking puts it back. Idempotent via inv.stockDeducted.
+export const applyInvoiceStockDeduction = (inv, c, on, actor) => {
+  if (on === Boolean(inv.stockDeducted)) return;
+  const rows =
+    inv.picks && inv.picks.length
+      ? inv.picks.map((p) => ({ sku: p.sku, qty: Number(p.qty) || 0 }))
+      : explodeInvoiceLines(inv, c).filter((r) => r.kind !== "kit").map((r) => ({ sku: r.sku, qty: r.qty }));
+  const sign = on ? -1 : 1;
+  rows.forEach(({ sku, qty }) => {
+    if (!sku || !qty) return;
+    const mp = (c.masterProducts || []).find((m) => (m.sku || "").trim().toLowerCase() === String(sku).trim().toLowerCase());
+    if (!mp) return;
+    mp.stock = (mp.stock === "" || mp.stock === null ? 0 : Number(mp.stock)) + sign * qty;
+    c.movements.push({ ...blankMovement(), sku: mp.sku, mpId: mp.id, qty: sign * qty, kind: "job", ref: "#" + (inv.invNo || "") + (on ? "" : " reopened"), actor: actor || "" });
+  });
+  inv.stockDeducted = on ? today() : "";
 };
 
 // ===== stock =====

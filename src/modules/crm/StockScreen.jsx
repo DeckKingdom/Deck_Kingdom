@@ -1,9 +1,9 @@
 // Stock: valuation report (cost / standard sale / trade sale -10%), per-SKU
 // quantities, posting arrived shipments into stock, and the movements ledger.
-import { useState, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import { NAVY, GOLD, RED, prettyDate, prettyDateTime, money } from "../../lib/core.js";
 import {
-  stockValuation, allocatedBySku, matchShipmentToStock, blankMovement, gbp, TRADE_DISCOUNT, today, weightedCost,
+  stockValuation, allocatedBySku, matchShipmentToStock, blankMovement, gbp, TRADE_DISCOUNT, today, weightedCost, batchBreakdown,
 } from "../../lib/crmCore.js";
 import { Icon, Chip, Modal, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
 
@@ -18,6 +18,7 @@ export default function StockScreen({ crm, updateCrm, planner, updatePlanner, as
   const [postShipId, setPostShipId] = useState("");
   const [updateCosts, setUpdateCosts] = useState(true);
   const [showMoves, setShowMoves] = useState(false);
+  const [openSkus, setOpenSkus] = useState(() => new Set());
 
   const mps = crm.masterProducts || [];
   const val = useMemo(() => stockValuation(crm), [crm.masterProducts]);
@@ -153,9 +154,18 @@ export default function StockScreen({ crm, updateCrm, planner, updatePlanner, as
                 const cost = p.costGbp === "" || p.costGbp === null ? null : Number(p.costGbp);
                 const price = p.priceIncVat === "" || p.priceIncVat === null ? null : Number(p.priceIncVat);
                 const low = p.stockAlert !== "" && p.stockAlert !== null && stock <= Number(p.stockAlert);
+                const isOpen = openSkus.has(p.id);
+                const batches = isOpen ? batchBreakdown(p.sku, crm, planner) : null;
                 return (
-                  <tr key={p.id}>
-                    <td style={{ ...td, fontWeight: 700, whiteSpace: "nowrap" }}>{p.sku || "—"} {low && <Chip tone="red" style={{ fontSize: 9.5, padding: "1px 6px" }}>LOW</Chip>}</td>
+                  <React.Fragment key={p.id}>
+                  <tr>
+                    <td style={{ ...td, fontWeight: 700, whiteSpace: "nowrap" }}>
+                      <button onClick={() => setOpenSkus((o) => { const x = new Set(o); x.has(p.id) ? x.delete(p.id) : x.add(p.id); return x; })}
+                        title="Batch breakdown — what's left from which shipment"
+                        style={{ border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit", fontSize: 10, color: "#5a6a85", padding: "0 6px 0 0" }}>
+                        {isOpen ? "▼" : "▶"}
+                      </button>
+                      {p.sku || "—"} {low && <Chip tone="red" style={{ fontSize: 9.5, padding: "1px 6px" }}>LOW</Chip>}</td>
                     <td style={{ ...td, fontWeight: 600 }}>{p.name}</td>
                     <td style={td}>{p.colour || "—"}</td>
                     <td style={{ ...td, ...num }}>{stock.toLocaleString("en-GB")}</td>
@@ -168,6 +178,47 @@ export default function StockScreen({ crm, updateCrm, planner, updatePlanner, as
                     <td style={{ ...td, ...num, color: "#5a6a85" }}>{price === null ? "—" : (price * (1 - TRADE_DISCOUNT)).toFixed(2)}</td>
                     <td style={{ ...td, ...num, color: "#5a6a85" }}>{price === null ? "—" : money(stock * price * (1 - TRADE_DISCOUNT))}</td>
                   </tr>
+                  {isOpen && (
+                    <tr>
+                      <td colSpan={12} style={{ padding: "4px 10px 12px 30px", borderBottom: "1px solid #f0f2f6", background: "#f8f9fb" }}>
+                        {batches.length === 0 ? (
+                          <span style={{ fontSize: 12, fontWeight: 600, color: "#8593a8" }}>
+                            No batches recorded — stock was set by hand. Batches appear when shipments or collections are posted in.
+                          </span>
+                        ) : (
+                          <>
+                            <table style={{ borderCollapse: "collapse", fontSize: 12, minWidth: 520 }}>
+                              <thead><tr>{["Batch", "Received", "£/pc", "In", "Picked", "Left", "Value left £"].map((h, i) => (
+                                <th key={i} style={{ textAlign: i >= 2 ? "right" : "left", fontSize: 10, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", padding: "4px 10px 4px 0" }}>{h}</th>
+                              ))}</tr></thead>
+                              <tbody>
+                                {batches.map((b, i) => (
+                                  <tr key={i}>
+                                    <td style={{ padding: "3px 14px 3px 0", fontWeight: 700 }}>{b.ref}</td>
+                                    <td style={{ padding: "3px 14px 3px 0" }}>{b.date || "—"}</td>
+                                    <td style={{ padding: "3px 10px 3px 0", textAlign: "right", fontWeight: 700 }}>{b.unitCost === "" ? "—" : Number(b.unitCost).toFixed(2)}</td>
+                                    <td style={{ padding: "3px 10px 3px 0", textAlign: "right" }}>{b.qtyIn.toLocaleString("en-GB")}</td>
+                                    <td style={{ padding: "3px 10px 3px 0", textAlign: "right", color: b.picked ? "#a05f10" : "#aab3c2" }}>{b.picked || "—"}</td>
+                                    <td style={{ padding: "3px 10px 3px 0", textAlign: "right", fontWeight: 700, color: b.left < 0 ? RED : "#28713e" }}>{b.left.toLocaleString("en-GB")}</td>
+                                    <td style={{ padding: "3px 0 3px 0", textAlign: "right", fontWeight: 700 }}>{b.unitCost === "" ? "—" : (b.left * Number(b.unitCost)).toLocaleString("en-GB", { minimumFractionDigits: 2 })}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                            {(() => {
+                              const sumLeft = batches.reduce((t, b) => t + b.left, 0);
+                              return sumLeft !== stock ? (
+                                <div style={{ fontSize: 11, fontWeight: 600, color: "#8593a8", marginTop: 5 }}>
+                                  Batches account for {sumLeft.toLocaleString("en-GB")} of {stock.toLocaleString("en-GB")} on hand — the rest is manual adjustments or pre-batch stock.
+                                </div>
+                              ) : null;
+                            })()}
+                          </>
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                  </React.Fragment>
                 );
               })}
               {!rows.length && (

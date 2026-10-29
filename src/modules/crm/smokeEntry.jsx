@@ -7,7 +7,7 @@ import ActivityScreen from "./ActivityScreen.jsx";
 import StockScreen from "./StockScreen.jsx";
 import CollectionsScreen from "./CollectionsScreen.jsx";
 import VansScreen from "./VansScreen.jsx";
-import { emptyCrm, normaliseCrm, blankCustomer, blankSite, blankInvoice, blankLine, invoiceTotals, blankMasterProduct, explodeInvoiceLines, invoiceCost, allocatedBySku, buildPicks, pickLandedCost, jobCost, stockValuation, matchShipmentToStock, blankCollection, blankCollectionItem, titleCase, formatPhone, formatPostcode, weightedCost, TIME_SLOTS, blankVan, blankVanCheck, vanReminders, mondayOf, today, syncMasterFromProducts } from "../../lib/crmCore.js";
+import { emptyCrm, normaliseCrm, blankCustomer, blankSite, blankInvoice, blankLine, invoiceTotals, blankMasterProduct, explodeInvoiceLines, invoiceCost, allocatedBySku, buildPicks, pickLandedCost, jobCost, stockValuation, matchShipmentToStock, blankCollection, blankCollectionItem, titleCase, formatPhone, formatPostcode, weightedCost, batchBreakdown, applyInvoiceStockDeduction, TIME_SLOTS, blankVan, blankVanCheck, vanReminders, mondayOf, today, syncMasterFromProducts } from "../../lib/crmCore.js";
 
 export default function run(React, renderToString) {
   const crm = normaliseCrm(emptyCrm());
@@ -157,6 +157,28 @@ export default function run(React, renderToString) {
     assert(!vanReminders(crm).some((r) => r.key === "renew:" + motVan.id + ":motDue"), "snoozed renewal hidden for a week");
     crm.reminders["check:" + crm.vans[0].id] = mondayOf(today());
     assert(!vanReminders(crm).some((r) => r.key === "check:" + crm.vans[0].id), "snoozed check hidden until next Monday");
+  }
+  // batch breakdown + completion deduction
+  {
+    crm.movements.push(
+      { id: "mv1", at: "2026-10-01T10:00:00Z", sku: "DK/2.4/FP", mpId: post.id, qty: 40, unitCost: 14.2, kind: "shipment", ref: "Shipment 25" },
+      { id: "mv2", at: "2026-10-20T10:00:00Z", sku: "DK/2.4/FP", mpId: post.id, qty: 30, unitCost: 13.1, kind: "shipment", ref: "Shipment 31" }
+    );
+    kitInv.picks[1].shipmentId = "ship1"; // posts picked from Shipment 31
+    const bb = batchBreakdown("DK/2.4/FP", crm, planner);
+    // kitInv picks: 6 posts assigned to ship1 = "Shipment 31"
+    const b31 = bb.find((b) => b.ref === "Shipment 31");
+    const b25 = bb.find((b) => b.ref === "Shipment 25");
+    assert(b25 && b25.left === 40 && b31 && b31.picked === 6 && b31.left === 24, "batch lefts, got " + JSON.stringify(bb.map((b) => [b.ref, b.qtyIn, b.picked, b.left])));
+    // completion deducts stock once, untick restores
+    const postRef = crm.masterProducts.find((m) => m.sku === "DK/2.4/FP");
+    const preStock = Number(postRef.stock);
+    applyInvoiceStockDeduction(kitInv, crm, true, "x");
+    assert(Number(postRef.stock) === preStock - 6 && kitInv.stockDeducted, "completion deducts picks, got " + postRef.stock);
+    applyInvoiceStockDeduction(kitInv, crm, true, "x");
+    assert(Number(postRef.stock) === preStock - 6, "idempotent");
+    applyInvoiceStockDeduction(kitInv, crm, false, "x");
+    assert(Number(postRef.stock) === preStock && !kitInv.stockDeducted, "untick restores");
   }
   html = renderToString(React.createElement(VansScreen, { crm, updateCrm: noop, askConfirm: noop, me: "x" }));
   assert(html.includes("Sprinter") && html.includes("Weekly check") && html.includes("Insurance"), "vans screen renders");
