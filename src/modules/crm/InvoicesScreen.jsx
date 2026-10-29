@@ -228,7 +228,6 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
           <option key={p.id} value={p.sku}>{p.name + (p.colour ? " · " + p.colour : "")}</option>
         ))}
       </datalist>
-      <datalist id="dk-jobtypes">{JOB_TYPES.map((s) => <option key={s} value={s} />)}</datalist>
       <datalist id="dk-paytypes">{PAYMENT_TYPES.map((s) => <option key={s} value={s} />)}</datalist>
       <datalist id="dk-vans">{VANS.map((s) => <option key={s} value={s} />)}</datalist>
 
@@ -331,7 +330,10 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(118px, 1fr))", gap: 12, marginBottom: 12 }}>
           <div>
             <span style={lbl}>Job type</span>
-            <input style={inp} list="dk-jobtypes" value={inv.jobType} onChange={(e) => setInv((x) => (x.jobType = e.target.value))} />
+            <select style={inp} value={inv.jobType} onChange={(e) => setInv((x) => (x.jobType = e.target.value))}>
+              {inv.jobType && !JOB_TYPES.includes(inv.jobType) && <option value={inv.jobType}>{inv.jobType}</option>}
+              {JOB_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
           </div>
           {field("Delivery date", "deliveryDate", { type: "date" })}
           {field("Time", "deliveryTime", { placeholder: "e.g. 9:30" })}
