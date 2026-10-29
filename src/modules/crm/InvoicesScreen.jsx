@@ -38,6 +38,17 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
     return m;
   }, [crm.sites]);
 
+  const skuOpts = useMemo(
+    () =>
+      (crm.masterProducts || [])
+        .filter((p) => p.active !== false && p.sku)
+        .map((p) => ({
+          value: p.sku,
+          label: p.sku + " — " + p.name + (p.colour ? " · " + p.colour : "") + (p.priceIncVat !== "" && p.priceIncVat !== null ? " · £" + Number(p.priceIncVat).toFixed(2) : ""),
+        })),
+    [crm.masterProducts]
+  );
+
   const inv = crm.invoices.find((i) => i.id === selId) || null;
 
   const setInv = (fn) =>
@@ -203,17 +214,6 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
   );
 
   const bySku = skuIndex(crm);
-
-  const skuOpts = useMemo(
-    () =>
-      (crm.masterProducts || [])
-        .filter((p) => p.active !== false && p.sku)
-        .map((p) => ({
-          value: p.sku,
-          label: p.sku + " — " + p.name + (p.colour ? " · " + p.colour : "") + (p.priceIncVat !== "" && p.priceIncVat !== null ? " · £" + Number(p.priceIncVat).toFixed(2) : ""),
-        })),
-    [crm.masterProducts]
-  );
 
   const setLine = (lid, k, v) =>
     setInv((x) => {
