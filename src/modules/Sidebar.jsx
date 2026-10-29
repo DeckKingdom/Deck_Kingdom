@@ -13,7 +13,6 @@ export const NAV_SECTIONS = [
       ["customers", "Customers", "users"],
       ["invoices", "Invoices", "doc"],
       ["schedule", "Schedule", "cal"],
-      ["vans", "Vans", "truck"],
     ],
   },
   {
@@ -34,6 +33,7 @@ export const NAV_SECTIONS = [
       ["products", "Import Products", "box"],
     ],
   },
+  { title: "Fleet", items: [["vans", "Vans", "truck"]] },
   { title: "System", items: [["activity", "Activity", "clock"]] },
 ];
 

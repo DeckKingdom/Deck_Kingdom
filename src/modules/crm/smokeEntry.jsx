@@ -8,7 +8,7 @@ import MasterProductsScreen from "./MasterProductsScreen.jsx";
 import StockScreen from "./StockScreen.jsx";
 import CollectionsScreen from "./CollectionsScreen.jsx";
 import VansScreen from "./VansScreen.jsx";
-import { emptyCrm, normaliseCrm, blankCustomer, blankSite, blankInvoice, blankLine, invoiceTotals, blankMasterProduct, explodeInvoiceLines, invoiceCost, allocatedBySku, buildPicks, pickLandedCost, jobCost, stockValuation, matchShipmentToStock, blankCollection, blankCollectionItem, titleCase, formatPhone, formatPostcode, TIME_SLOTS, blankVan, blankVanCheck } from "../../lib/crmCore.js";
+import { emptyCrm, normaliseCrm, blankCustomer, blankSite, blankInvoice, blankLine, invoiceTotals, blankMasterProduct, explodeInvoiceLines, invoiceCost, allocatedBySku, buildPicks, pickLandedCost, jobCost, stockValuation, matchShipmentToStock, blankCollection, blankCollectionItem, titleCase, formatPhone, formatPostcode, TIME_SLOTS, blankVan, blankVanCheck, vanReminders, mondayOf, today } from "../../lib/crmCore.js";
 
 export default function run(React, renderToString) {
   const crm = normaliseCrm(emptyCrm());
@@ -132,6 +132,20 @@ export default function run(React, renderToString) {
   const van = { ...blankVan(), name: "Sprinter", reg: "DK71 VAN", insurer: "NFU", insuranceRenewal: "2026-11-15", motDue: "2026-11-02" };
   van.checks = [{ ...blankVanCheck(), by: "Ian", mileage: 54210, lights: false, defects: "nearside indicator bulb" }];
   crm.vans.push(van);
+  // reminders: unchecked van + MOT due inside 30 days -> both due; snoozed today -> hidden
+  {
+    crm.vans[0].checks[0].date = new Date(Date.now() - 10 * 86400000).toISOString().slice(0, 10);
+    const rs = vanReminders(crm);
+    assert(rs.some((r) => r.kind === "check"), "weekly check reminder due (van checked 10 days ago)");
+    const motVan = { ...blankVan(), name: "Renault", motDue: new Date(Date.now() + 10 * 86400000).toISOString().slice(0, 10) };
+    crm.vans.push(motVan);
+    const rs2 = vanReminders(crm);
+    assert(rs2.some((r) => r.key === "renew:" + motVan.id + ":motDue"), "MOT renewal reminder at 10 days out");
+    crm.reminders["renew:" + motVan.id + ":motDue"] = today();
+    assert(!vanReminders(crm).some((r) => r.key === "renew:" + motVan.id + ":motDue"), "snoozed renewal hidden for a week");
+    crm.reminders["check:" + crm.vans[0].id] = mondayOf(today());
+    assert(!vanReminders(crm).some((r) => r.key === "check:" + crm.vans[0].id), "snoozed check hidden until next Monday");
+  }
   html = renderToString(React.createElement(VansScreen, { crm, updateCrm: noop, askConfirm: noop, me: "x" }));
   assert(html.includes("Sprinter") && html.includes("Weekly check") && html.includes("Insurance"), "vans screen renders");
   console.log("smoke OK — all screens render, totals reconcile (1392 goods + 60 delivery = 1452 inc VAT, £242 VAT, £1210 net)");

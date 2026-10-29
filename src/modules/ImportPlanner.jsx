@@ -23,7 +23,7 @@ import {
   money,
   int,
 } from "../lib/core.js";
-import { blankInvoice, nextNumber, TRADE_COUNTER } from "../lib/crmCore.js";
+import { blankInvoice, nextNumber, TRADE_COUNTER, vanReminders } from "../lib/crmCore.js";
 import { useCrm } from "./crm/useCrm.js";
 import CustomersScreen from "./crm/CustomersScreen.jsx";
 import InvoicesScreen from "./crm/InvoicesScreen.jsx";
@@ -148,6 +148,7 @@ export default function ImportPlanner() {
   const [selInvoiceId, setSelInvoiceId] = useState(null);
   const [selCollectionId, setSelCollectionId] = useState(null);
   const [invFilter, setInvFilter] = useState(null); // { customerId, outstanding }
+  const [remindersClosed, setRemindersClosed] = useState(false); // closed for this visit
 
   useEffect(() => {
     if (CRM_TABS.includes(tab) || ["home", "activity", "catalogue", "stock", "collections", "vans"].includes(tab)) setCrmOn(true);
@@ -167,6 +168,17 @@ export default function ImportPlanner() {
     setSelCollectionId(id);
     setTab("collections");
   };
+  const dueReminders = crm ? vanReminders(crm) : [];
+  const snoozeReminders = () => {
+    const tod = new Date().toISOString().slice(0, 10);
+    updateCrm((c) => {
+      c.reminders = c.reminders || {};
+      dueReminders.forEach((r) => (c.reminders[r.key] = tod));
+      return c;
+    });
+    setRemindersClosed(true);
+  };
+
   const showOutstanding = (customerId) => {
     setInvFilter({ customerId, outstanding: true });
     setSelInvoiceId(null);
@@ -1759,6 +1771,43 @@ export default function ImportPlanner() {
           </p>
         </div>
       )}
+      {dueReminders.length > 0 && !remindersClosed && !locked && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 55, background: "rgba(11,31,63,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+          <div style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 560, overflow: "hidden", boxShadow: "0 24px 70px rgba(11,31,63,0.5)" }}>
+            <div style={{ background: "linear-gradient(135deg,#C8102E 0%,#8a0b20 100%)", padding: "18px 22px", display: "flex", alignItems: "center", gap: 12 }}>
+              <span style={{ fontSize: 26 }}>🚐</span>
+              <div>
+                <div style={{ color: "#fff", fontWeight: 700, fontSize: 18 }}>Van reminders</div>
+                <div style={{ color: "#ffd8dd", fontSize: 12.5, fontWeight: 600 }}>
+                  {dueReminders.length} item{dueReminders.length === 1 ? "" : "s"} need attention
+                </div>
+              </div>
+            </div>
+            <div style={{ padding: "16px 22px", maxHeight: "46vh", overflowY: "auto" }}>
+              {dueReminders.map((r) => (
+                <div key={r.key} style={{ display: "flex", gap: 10, alignItems: "center", padding: "9px 0", borderBottom: "1px solid #f0f2f6" }}>
+                  <span style={{ width: 10, height: 10, borderRadius: 99, background: r.severity === "red" ? RED : "#E8912D", flex: "none" }} />
+                  <span style={{ fontSize: 14.5, fontWeight: 700, color: NAVY }}>{r.label}</span>
+                  {r.date && <span style={{ marginLeft: "auto", fontSize: 12.5, fontWeight: 600, color: "#5a6a85", whiteSpace: "nowrap" }}>{prettyDate(r.date)}</span>}
+                </div>
+              ))}
+              <p style={{ fontSize: 12, color: "#8593a8", fontWeight: 600, margin: "10px 0 0" }}>
+                Weekly checks come back every Monday until recorded; renewals nag weekly from a month out until the date is moved on.
+              </p>
+            </div>
+            <div style={{ display: "flex", gap: 8, padding: "0 22px 18px", flexWrap: "wrap" }}>
+              <button onClick={() => { setRemindersClosed(true); setTab("vans"); }}
+                style={{ ...btn, background: GOLD, borderColor: GOLD, fontWeight: 700 }}>
+                Go to Vans
+              </button>
+              <button onClick={snoozeReminders} style={btn}>Snooze for a week</button>
+              <span style={{ flex: 1 }} />
+              <button onClick={() => setRemindersClosed(true)} style={{ ...btn, border: "none", color: "#8593a8" }}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {copyPanel && (
         <div
           onClick={() => setCopyPanel(null)}

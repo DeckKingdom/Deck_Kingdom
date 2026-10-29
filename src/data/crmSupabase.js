@@ -184,7 +184,7 @@ async function fetchAll(sb, table) {
 }
 
 let snapshot = null;
-let numberingSnapshot = null;
+let settingsSnapshot = {};
 
 async function loadAll() {
   const sb = await getSupabase();
@@ -201,11 +201,12 @@ async function loadAll() {
     fetchAll(sb, "stock_movements"),
     fetchAll(sb, "vans"),
     fetchAll(sb, "van_checks"),
-    sb.from("crm_settings").select("*").eq("key", "numbering").maybeSingle(),
+    fetchAll(sb, "crm_settings"),
   ]);
-  if (settings.error) throw new Error(settings.error.message);
 
-  const numbering = (settings.data && settings.data.value) || { account: 1, site: 1, invoice: 1 };
+  const settingRow = (key) => settings.find((r) => r.key === key);
+  const numbering = (settingRow("numbering") || {}).value || { account: 1, site: 1, invoice: 1 };
+  const reminders = (settingRow("reminders") || {}).value || {};
 
   const customers = cs.map((r) => {
     const c = { id: r.id, accountNo: r.account_no, trader: r.trader === true, discountPct: nv(r.discount_pct), updatedAt: r.updated_at || "" };
@@ -302,11 +303,11 @@ async function loadAll() {
     return v;
   });
 
-  const data = { customers, sites, invoices, masterProducts, collections, movements, vans, numbering };
+  const data = { customers, sites, invoices, masterProducts, collections, movements, vans, numbering, reminders };
   snapshot = rowsFromData(data);
-  numberingSnapshot = JSON.stringify(numbering);
+  settingsSnapshot = { numbering: JSON.stringify(numbering), reminders: JSON.stringify(reminders) };
 
-  if (!customers.length && !sites.length && !invoices.length && !masterProducts.length && !collections.length && !settings.data) return null;
+  if (!customers.length && !sites.length && !invoices.length && !masterProducts.length && !collections.length && !vans.length && !settings.length) return null;
   return data;
 }
 
@@ -369,10 +370,16 @@ async function saveAll(d) {
   if (dv.upserts.length) await run(sb.from("vans").upsert(dv.upserts));
   if (dvc.upserts.length) await run(sb.from("van_checks").upsert(dvc.upserts));
 
-  const numbering = d.numbering || { account: 1, site: 1, invoice: 1 };
-  if (JSON.stringify(numbering) !== numberingSnapshot) {
-    await run(sb.from("crm_settings").upsert({ key: "numbering", value: numbering }));
-    numberingSnapshot = JSON.stringify(numbering);
+  const settingsToSave = {
+    numbering: d.numbering || { account: 1, site: 1, invoice: 1 },
+    reminders: d.reminders || {},
+  };
+  for (const [key, value] of Object.entries(settingsToSave)) {
+    const j = JSON.stringify(value);
+    if (j !== settingsSnapshot[key]) {
+      await run(sb.from("crm_settings").upsert({ key, value }));
+      settingsSnapshot[key] = j;
+    }
   }
 
   snapshot = next;

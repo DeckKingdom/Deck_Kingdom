@@ -65,6 +65,58 @@ export const daysUntil = (dateStr) => {
   return d === null ? null : d;
 };
 
+// Monday of the week containing dateStr (reminder weeks run Mon-Sun)
+export const mondayOf = (dateStr) => {
+  const d = new Date(dateStr + "T00:00:00");
+  if (isNaN(d.getTime())) return "";
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  return d.toISOString().slice(0, 10);
+};
+
+export const RENEWAL_FIELDS = [
+  ["insuranceRenewal", "Insurance"],
+  ["motDue", "MOT"],
+  ["taxDue", "Tax"],
+  ["serviceDue", "Service"],
+];
+
+// Pop-up reminders: weekly van check each Monday until that week's check is
+// recorded; renewals from 30 days before expiry, re-nagging weekly until the
+// date is moved on. crm.reminders holds when each was last snoozed.
+export const vanReminders = (crm) => {
+  const tod = today();
+  const weekStart = mondayOf(tod);
+  const snoozes = crm.reminders || {};
+  const out = [];
+  (crm.vans || []).forEach((v) => {
+    if (v.active === false) return;
+    // weekly check
+    const checkedThisWeek = (v.checks || []).some((c) => (c.date || "") >= weekStart);
+    if (!checkedThisWeek) {
+      const key = "check:" + v.id;
+      if (!snoozes[key] || snoozes[key] < weekStart) {
+        const last = (v.checks || []).map((c) => c.date).sort().pop();
+        out.push({ key, van: v, kind: "check", label: (v.name || "Van") + " — weekly check due" + (last ? " (last checked " + last + ")" : " (never checked)"), severity: "amber" });
+      }
+    }
+    // renewals
+    RENEWAL_FIELDS.forEach(([k, label]) => {
+      const d = daysUntil(v[k]);
+      if (d === null || d > 30) return;
+      const key = "renew:" + v.id + ":" + k;
+      const snoozed = snoozes[key] && daysBetween(snoozes[key], tod) < 7;
+      if (snoozed) return;
+      out.push({
+        key, van: v, kind: "renewal",
+        label: (v.name || "Van") + " — " + label + " " + (d < 0 ? Math.abs(d) + " day" + (Math.abs(d) === 1 ? "" : "s") + " OVERDUE" : d === 0 ? "due TODAY" : "due in " + d + " day" + (d === 1 ? "" : "s")),
+        date: v[k],
+        severity: d <= 7 ? "red" : "amber",
+      });
+    });
+  });
+  return out;
+};
+
 // the van names offered on invoices/collections: the fleet if defined, else defaults
 export const vanOptions = (crm) => {
   const names = (crm.vans || []).filter((v) => v.active !== false && (v.name || "").trim()).map((v) => v.name.trim());
@@ -217,6 +269,7 @@ export const emptyCrm = () => ({
   collections: [],
   movements: [],
   vans: [],
+  reminders: {},
   numbering: { account: 1, site: 1, invoice: 1, collection: 1 },
 });
 
@@ -239,6 +292,7 @@ export const normaliseCrm = (c) => {
   });
   d.movements = Array.isArray(d.movements) ? d.movements : [];
   d.movements.forEach((m) => Object.assign(m, { ...blankMovement(), ...m, id: m.id || uid() }));
+  d.reminders = d.reminders && typeof d.reminders === "object" ? d.reminders : {};
   d.vans = Array.isArray(d.vans) ? d.vans : [];
   d.vans.forEach((v) => {
     Object.assign(v, { ...blankVan(), ...v, id: v.id || uid() });
