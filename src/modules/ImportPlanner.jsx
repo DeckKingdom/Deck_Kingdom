@@ -337,6 +337,7 @@ export default function ImportPlanner() {
     copy.depositFx = "";
     copy.balanceUsd = "";
     copy.balanceFx = "";
+    copy.postedToStock = "";
     update((d) => {
       d.shipments.unshift(copy);
       return d;
