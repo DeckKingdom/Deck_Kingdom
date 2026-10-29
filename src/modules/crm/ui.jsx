@@ -102,9 +102,9 @@ export const card = { background: "#fff", border: "1px solid #e6e9ef", borderRad
 // follows focus, so that first mouse-up is swallowed; a second click still
 // positions the cursor normally.
 export const selectAllProps = {
-  // also keeps the browser's own autofill/address pop-up off these fields —
-  // suggestions come from the app's data, not Chrome's saved addresses
-  autoComplete: "off",
+  // keeps the browser's own autofill/address pop-up off these fields —
+  // Chrome ignores "off" for address-shaped fields but honours this token
+  autoComplete: "one-time-code",
   spellCheck: false,
   onFocus: (e) => {
     e.target.select();
@@ -152,7 +152,7 @@ export function SuggestInput({ value, onChange, options = [], format, inputStyle
       <input
         style={{ ...inp, ...inputStyle }}
         value={value === null || value === undefined ? "" : value}
-        autoComplete="off"
+        autoComplete="one-time-code"
         spellCheck={false}
         {...props}
         onFocus={(e) => { selectAllProps.onFocus(e); setOpen(false); setHi(-1); }}
