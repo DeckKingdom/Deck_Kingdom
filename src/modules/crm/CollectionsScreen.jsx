@@ -7,7 +7,7 @@ import { NAVY, GOLD, RED, prettyDate } from "../../lib/core.js";
 import {
   blankCollection, blankCollectionItem, nextNumber, skuIndex, gbp, today,
   TIME_SLOTS, vanOptions, itemPending, collectionProgress, commitCollectionItem, assignCollectionItem,
-  blankSupplier, findSupplierByName, supplierKey,
+  blankSupplier, findSupplierByName, supplierKey, skuOptionLabel,
 } from "../../lib/crmCore.js";
 import { SupplierModal } from "./SuppliersScreen.jsx";
 import { purchasesAvailable } from "../../data/crmStorage.js";
@@ -50,7 +50,7 @@ export default function CollectionsScreen({ crm, updateCrm, askConfirm, selId, s
         .filter((p) => p.active !== false && p.sku)
         .map((p) => ({
           value: p.sku,
-          label: p.sku + " — " + p.name + (p.colour ? " · " + p.colour : ""),
+          label: skuOptionLabel(p),
           supplierKey: supplierKey(supplierOfProduct[p.importProductId] || ""),
         })),
     [crm.masterProducts, supplierOfProduct]

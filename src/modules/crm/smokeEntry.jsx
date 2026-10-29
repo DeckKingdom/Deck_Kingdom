@@ -11,7 +11,8 @@ import QuotesScreen from "./QuotesScreen.jsx";
 import SamplesScreen from "./SamplesScreen.jsx";
 import TasksScreen from "./TasksScreen.jsx";
 import PurchasesScreen from "./PurchasesScreen.jsx";
-import { syncCatalogue, renameSkus, skuFor, codeSource } from "../../lib/crmCore.js";
+import { syncCatalogue, renameSkus, skuFor, codeSource, numericSku, skuLists, masterKey, colourSeg, skuSource } from "../../lib/crmCore.js";
+import ProductsScreen from "./ProductsScreen.jsx";
 import SuppliersScreen from "./SuppliersScreen.jsx";
 import { blankSupplier, blankPurchase, purchaseTotals, newPurchaseFor, supplierStats, findSupplierByName } from "../../lib/crmCore.js";
 import { blankTask, scheduledOccurrence, nextScheduled, occurrenceAssignees, dailyTasksFor, dueScheduledFor, projectsFor, setTaskDone, isDailyDone } from "../../lib/crmCore.js";
@@ -440,6 +441,29 @@ export default function run(React, renderToString) {
     kc.masterProducts = syncCatalogue(kc, plannerK).masterProducts;
     assert(kc.masterProducts.some((m) => m.sku === "TG/CLIPS-METAL"), "no colours = one row on the bare code");
     assert(skuFor("TG/3.6/DECK", "Red/Brown") === "TG/3.6/DECK/RBR" && codeSource("tg/3.6/deck") === "TG", "helpers");
+  }
+  // ===== numeric SKUs + master products =====
+  {
+    const nc = normaliseCrm({ customers: [] });
+    const L = skuLists(nc);
+    const dk = { id: "n1", code: "DK/3.6/DECK", name: "Decking Board Embossed Woodgrain 3.6m", colours: ["Anthracite", "Grey"], segSup: "01", segLen: "06", segCat: "01", segSub: "01", segProd: "01" };
+    const tg = { id: "n2", code: "TG/3.6/DECK", name: "Decking Board Embossed Woodgrain 3.6m", colours: ["Teak"], segSup: "02", segLen: "06", segCat: "01", segSub: "01", segProd: "01" };
+    assert(numericSku(dk, "Anthracite", L) === "010601010112" && colourSeg(L, "grey") === "12" && colourSeg(L, "Purple") === null, "numeric SKU + colour aliases");
+    assert(masterKey(dk) === masterKey(tg) && masterKey({ ...dk, segProd: "" }) === "", "DK and TG versions share a master product");
+    const pl = { products: [dk, tg] };
+    nc.masterProducts = syncCatalogue(nc, pl).masterProducts;
+    assert(nc.masterProducts.some((m) => m.sku === "020601010105" && m.family === "TG/3.6/DECK/TEA"), "TG teak row: numeric SKU, readable code kept");
+    assert(skuSource(nc.masterProducts.find((m) => m.sku === "020601010105"), L) === "TG", "source read from the SKU");
+    // Grey and Anthracite are one colour in the list -> same SKU: the second one keeps a fallback, never a clash
+    const skusN = nc.masterProducts.map((m) => m.sku);
+    assert(new Set(skusN).size === skusN.length, "no duplicate SKUs even when two colours share a code");
+    // an edited list renumbers: TG becomes 09 -> its rows move
+    nc.skuLists = JSON.parse(JSON.stringify(L));
+    nc.skuLists.supplier.find((x) => x.key === "TG").code = "09";
+    const rr = syncCatalogue(nc, { products: [dk, { ...tg, segSup: "09" }] });
+    assert(rr && Object.values(rr.renames).includes("090601010105"), "renumbering a list entry renames the SKU");
+    html = renderToString(React.createElement(ProductsScreen, { planner: pl, update: noop, crm: nc, updateCrm: noop, removeProduct: noop }));
+    assert(html.includes("Master product") && html.includes("Decking Board Embossed Woodgrain 3.6m") && html.includes("SKU lists"), "products screen renders");
   }
   console.log("smoke OK — all screens render, totals reconcile (1392 goods + 60 delivery = 1452 inc VAT, £242 VAT, £1210 net)");
 }

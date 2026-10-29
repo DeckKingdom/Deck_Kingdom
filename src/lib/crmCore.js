@@ -542,6 +542,733 @@ export const cleanCode = (c) => String(c || "").trim().toUpperCase().replace(/\s
 export const codeSource = (code) => cleanCode(code).split("/")[0] || "";
 export const skuFor = (code, colour) => cleanCode(code) + (colourCode(colour) ? "/" + colourCode(colour) : "");
 
+
+// ===== numeric SKUs =====
+// 12 digits = supplier · length · category · sub-category · product · colour,
+// two digits each, from the editable lists below (Products → SKU lists).
+// 01 06 01 01 01 12 = DK · 3.6m · decking · boards · embossed woodgrain · grey/anthracite.
+// Products with the same length/category/sub-category/product are one master
+// product; each supplier's version sits under it. The fields are the source of
+// truth — the SKU is built from them, never read apart.
+export const DEFAULT_SKU_LISTS = {
+ "supplier": [
+  {
+   "code": "01",
+   "key": "DK",
+   "label": "Deck Kingdom (own import)"
+  },
+  {
+   "code": "02",
+   "key": "TG",
+   "label": "Tuda Grass"
+  },
+  {
+   "code": "03",
+   "key": "TS",
+   "label": "Tradescape"
+  },
+  {
+   "code": "04",
+   "key": "FN",
+   "label": "Finch"
+  },
+  {
+   "code": "05",
+   "key": "SY",
+   "label": "South Yorkshire Composites"
+  },
+  {
+   "code": "06",
+   "key": "CL",
+   "label": "Easy Composite (Chinese Lee)"
+  }
+ ],
+ "length": [
+  {
+   "code": "00",
+   "key": "",
+   "label": "n/a"
+  },
+  {
+   "code": "01",
+   "key": "1.83",
+   "label": "1.83m"
+  },
+  {
+   "code": "02",
+   "key": "2.2",
+   "label": "2.2m"
+  },
+  {
+   "code": "03",
+   "key": "2.4",
+   "label": "2.4m"
+  },
+  {
+   "code": "04",
+   "key": "2.5",
+   "label": "2.5m"
+  },
+  {
+   "code": "05",
+   "key": "2.9",
+   "label": "2.9m"
+  },
+  {
+   "code": "06",
+   "key": "3.6",
+   "label": "3.6m"
+  },
+  {
+   "code": "07",
+   "key": "4.0",
+   "label": "4m"
+  },
+  {
+   "code": "08",
+   "key": "4.8",
+   "label": "4.8m"
+  },
+  {
+   "code": "09",
+   "key": "5.0",
+   "label": "5m"
+  },
+  {
+   "code": "10",
+   "key": "1.5",
+   "label": "1.5m"
+  },
+  {
+   "code": "11",
+   "key": "1.8",
+   "label": "1.8m"
+  },
+  {
+   "code": "12",
+   "key": "1.9",
+   "label": "1.9m"
+  },
+  {
+   "code": "13",
+   "key": "3.0",
+   "label": "3m"
+  },
+  {
+   "code": "20",
+   "key": "2FT",
+   "label": "2ft"
+  },
+  {
+   "code": "21",
+   "key": "3FT",
+   "label": "3ft"
+  },
+  {
+   "code": "22",
+   "key": "4FT",
+   "label": "4ft"
+  },
+  {
+   "code": "23",
+   "key": "5FT",
+   "label": "5ft"
+  },
+  {
+   "code": "24",
+   "key": "6FT",
+   "label": "6ft"
+  },
+  {
+   "code": "30",
+   "key": "300MM",
+   "label": "300mm"
+  },
+  {
+   "code": "40",
+   "key": "30MM",
+   "label": "30mm"
+  },
+  {
+   "code": "41",
+   "key": "40MM",
+   "label": "40mm"
+  },
+  {
+   "code": "42",
+   "key": "50MM",
+   "label": "50mm"
+  }
+ ],
+ "category": [
+  {
+   "code": "01",
+   "label": "Decking"
+  },
+  {
+   "code": "02",
+   "label": "Fencing"
+  },
+  {
+   "code": "03",
+   "label": "Cladding"
+  },
+  {
+   "code": "04",
+   "label": "Balustrade"
+  },
+  {
+   "code": "05",
+   "label": "Grass"
+  },
+  {
+   "code": "06",
+   "label": "Misc"
+  }
+ ],
+ "sub": [
+  {
+   "code": "00",
+   "label": "N/a"
+  },
+  {
+   "code": "01",
+   "label": "Boards"
+  },
+  {
+   "code": "02",
+   "label": "Accessories"
+  },
+  {
+   "code": "03",
+   "label": "Kits"
+  },
+  {
+   "code": "04",
+   "label": "Balustrade"
+  },
+  {
+   "code": "05",
+   "label": "Grass"
+  },
+  {
+   "code": "06",
+   "label": "Misc"
+  }
+ ],
+ "product": {
+  "01-01": [
+   {
+    "code": "01",
+    "label": "Embossed woodgrain board"
+   },
+   {
+    "code": "02",
+    "label": "Step edge board"
+   },
+   {
+    "code": "03",
+    "label": "Premium board"
+   },
+   {
+    "code": "04",
+    "label": "Premium bullnose board"
+   },
+   {
+    "code": "05",
+    "label": "Premium fascia board"
+   },
+   {
+    "code": "06",
+    "label": "Gen2 board"
+   },
+   {
+    "code": "07",
+    "label": "Gen2 board (2nds)"
+   },
+   {
+    "code": "08",
+    "label": "Printed woodgrain board"
+   },
+   {
+    "code": "09",
+    "label": "Traditional groove board"
+   }
+  ],
+  "01-02": [
+   {
+    "code": "01",
+    "label": "Decking trim"
+   },
+   {
+    "code": "02",
+    "label": "Premium trim"
+   },
+   {
+    "code": "03",
+    "label": "Gen2 trim"
+   },
+   {
+    "code": "04",
+    "label": "End cap"
+   }
+  ],
+  "02-01": [
+   {
+    "code": "01",
+    "label": "Fence board"
+   },
+   {
+    "code": "02",
+    "label": "Fence screen"
+   }
+  ],
+  "02-02": [
+   {
+    "code": "01",
+    "label": "Composite post"
+   },
+   {
+    "code": "02",
+    "label": "Aluminium post"
+   },
+   {
+    "code": "03",
+    "label": "Post cap"
+   },
+   {
+    "code": "04",
+    "label": "Post skirt"
+   },
+   {
+    "code": "05",
+    "label": "Post insert / foot"
+   },
+   {
+    "code": "06",
+    "label": "Concrete post adaptor"
+   },
+   {
+    "code": "07",
+    "label": "Adaptor cap"
+   },
+   {
+    "code": "08",
+    "label": "Post infill"
+   },
+   {
+    "code": "09",
+    "label": "Top beam"
+   },
+   {
+    "code": "10",
+    "label": "Bottom beam"
+   },
+   {
+    "code": "11",
+    "label": "Top / bottom beam"
+   },
+   {
+    "code": "12",
+    "label": "U beam"
+   },
+   {
+    "code": "13",
+    "label": "H beam"
+   }
+  ],
+  "02-03": [
+   {
+    "code": "01",
+    "label": "Retro kit"
+   },
+   {
+    "code": "02",
+    "label": "Retro kit (2.2m boards)"
+   },
+   {
+    "code": "03",
+    "label": "Aluminium post kit"
+   }
+  ],
+  "03-01": [
+   {
+    "code": "01",
+    "label": "Woodgrain cladding"
+   },
+   {
+    "code": "02",
+    "label": "Smooth cladding"
+   },
+   {
+    "code": "03",
+    "label": "Slatted cladding"
+   },
+   {
+    "code": "04",
+    "label": "Slatted cladding S1"
+   },
+   {
+    "code": "05",
+    "label": "Acoustic wall panel"
+   }
+  ],
+  "03-02": [
+   {
+    "code": "01",
+    "label": "Cladding trim"
+   },
+   {
+    "code": "02",
+    "label": "Slatted cladding trim"
+   }
+  ],
+  "04-03": [
+   {
+    "code": "01",
+    "label": "Handrail section (boxed)"
+   },
+   {
+    "code": "02",
+    "label": "Post kit (boxed)"
+   },
+   {
+    "code": "03",
+    "label": "Balustrade kit"
+   },
+   {
+    "code": "04",
+    "label": "Finishing kit"
+   }
+  ],
+  "04-04": [
+   {
+    "code": "01",
+    "label": "Handrail"
+   },
+   {
+    "code": "02",
+    "label": "Base rail"
+   },
+   {
+    "code": "03",
+    "label": "Handrail bracket"
+   },
+   {
+    "code": "04",
+    "label": "Base rail bracket"
+   },
+   {
+    "code": "05",
+    "label": "Post"
+   },
+   {
+    "code": "06",
+    "label": "Post base / skirt"
+   },
+   {
+    "code": "07",
+    "label": "Post cap"
+   },
+   {
+    "code": "08",
+    "label": "Spindle"
+   },
+   {
+    "code": "09",
+    "label": "Spindle lug"
+   },
+   {
+    "code": "10",
+    "label": "Post insert"
+   }
+  ],
+  "05-05": [
+   {
+    "code": "01",
+    "label": "Love Romance"
+   },
+   {
+    "code": "02",
+    "label": "Tokyo"
+   },
+   {
+    "code": "03",
+    "label": "Grass adhesive"
+   }
+  ],
+  "06-06": [
+   {
+    "code": "01",
+    "label": "Composite joist"
+   },
+   {
+    "code": "02",
+    "label": "Treated timber 4x2"
+   },
+   {
+    "code": "03",
+    "label": "Composite batten"
+   },
+   {
+    "code": "10",
+    "label": "Plastic clips & screws (100)"
+   },
+   {
+    "code": "11",
+    "label": "Plastic clips (100)"
+   },
+   {
+    "code": "12",
+    "label": "Metal clips (100)"
+   },
+   {
+    "code": "13",
+    "label": "Starter clips (20)"
+   },
+   {
+    "code": "14",
+    "label": "T7 clip (loose)"
+   },
+   {
+    "code": "15",
+    "label": "S4 screw (loose)"
+   },
+   {
+    "code": "16",
+    "label": "Square head screws black (100)"
+   },
+   {
+    "code": "17",
+    "label": "Black screws (100)"
+   },
+   {
+    "code": "18",
+    "label": "SQ1 drill bit"
+   },
+   {
+    "code": "19",
+    "label": "Cladding clips"
+   },
+   {
+    "code": "20",
+    "label": "Ratchet strap"
+   }
+  ]
+ },
+ "colour": [
+  {
+   "code": "00",
+   "label": "n/a",
+   "aliases": []
+  },
+  {
+   "code": "01",
+   "label": "Antique",
+   "aliases": [
+    "antique"
+   ]
+  },
+  {
+   "code": "02",
+   "label": "Maple",
+   "aliases": [
+    "maple"
+   ]
+  },
+  {
+   "code": "03",
+   "label": "Oak",
+   "aliases": [
+    "oak"
+   ]
+  },
+  {
+   "code": "04",
+   "label": "Golden oak",
+   "aliases": [
+    "golden oak"
+   ]
+  },
+  {
+   "code": "05",
+   "label": "Teak",
+   "aliases": [
+    "teak"
+   ]
+  },
+  {
+   "code": "06",
+   "label": "Golden teak",
+   "aliases": [
+    "golden teak"
+   ]
+  },
+  {
+   "code": "07",
+   "label": "Red/Brown",
+   "aliases": [
+    "red/brown",
+    "red brown"
+   ]
+  },
+  {
+   "code": "08",
+   "label": "Chocolate",
+   "aliases": [
+    "chocolate"
+   ]
+  },
+  {
+   "code": "09",
+   "label": "Walnut",
+   "aliases": [
+    "walnut"
+   ]
+  },
+  {
+   "code": "10",
+   "label": "Ash white",
+   "aliases": [
+    "ash white"
+   ]
+  },
+  {
+   "code": "11",
+   "label": "Silver",
+   "aliases": [
+    "silver"
+   ]
+  },
+  {
+   "code": "12",
+   "label": "Grey/Anthracite",
+   "aliases": [
+    "grey",
+    "anthracite"
+   ]
+  },
+  {
+   "code": "13",
+   "label": "Ash grey",
+   "aliases": [
+    "ash grey",
+    "ash"
+   ]
+  },
+  {
+   "code": "14",
+   "label": "Black/Charcoal",
+   "aliases": [
+    "black",
+    "charcoal"
+   ]
+  },
+  {
+   "code": "15",
+   "label": "Galvanised",
+   "aliases": [
+    "galvanised"
+   ]
+  },
+  {
+   "code": "16",
+   "label": "Slate",
+   "aliases": [
+    "slate"
+   ]
+  },
+  {
+   "code": "17",
+   "label": "Graphite",
+   "aliases": [
+    "graphite"
+   ]
+  },
+  {
+   "code": "18",
+   "label": "Light grey",
+   "aliases": [
+    "light grey"
+   ]
+  },
+  {
+   "code": "19",
+   "label": "Dark grey",
+   "aliases": [
+    "dark grey"
+   ]
+  },
+  {
+   "code": "20",
+   "label": "Brown",
+   "aliases": [
+    "brown"
+   ]
+  },
+  {
+   "code": "21",
+   "label": "Cherry brown",
+   "aliases": [
+    "cherry brown"
+   ]
+  },
+  {
+   "code": "22",
+   "label": "Sand",
+   "aliases": [
+    "sand"
+   ]
+  }
+ ]
+};
+export const SEG_FIELDS = [["segSup", "supplier"], ["segLen", "length"], ["segCat", "category"], ["segSub", "sub"], ["segProd", "product"]];
+export const skuLists = (crm) => {
+  const l = crm && crm.skuLists && typeof crm.skuLists === "object" ? crm.skuLists : {};
+  return {
+    supplier: Array.isArray(l.supplier) ? l.supplier : DEFAULT_SKU_LISTS.supplier,
+    length: Array.isArray(l.length) ? l.length : DEFAULT_SKU_LISTS.length,
+    category: Array.isArray(l.category) ? l.category : DEFAULT_SKU_LISTS.category,
+    sub: Array.isArray(l.sub) ? l.sub : DEFAULT_SKU_LISTS.sub,
+    product: l.product && typeof l.product === "object" ? l.product : DEFAULT_SKU_LISTS.product,
+    colour: Array.isArray(l.colour) ? l.colour : DEFAULT_SKU_LISTS.colour,
+  };
+};
+const two = (v) => /^\d{2}$/.test(String(v || "").trim());
+// the 10-digit product part, or "" while any field is missing
+export const productSkuBase = (p) => (SEG_FIELDS.every(([k]) => two(p[k])) ? SEG_FIELDS.map(([k]) => String(p[k]).trim()).join("") : "");
+// master product = same length, category, sub-category and product (any supplier)
+export const masterKey = (p) => (["segLen", "segCat", "segSub", "segProd"].every((k) => two(p[k])) ? ["segLen", "segCat", "segSub", "segProd"].map((k) => String(p[k]).trim()).join("-") : "");
+export const productsInList = (lists, cat, sub) => (lists.product[cat + "-" + sub] || []);
+export const colourSeg = (lists, colour) => {
+  const k = String(colour || "").trim().toLowerCase();
+  if (!k) return "00";
+  const hit = lists.colour.find((c) => (c.label || "").toLowerCase() === k || (c.aliases || []).some((a) => String(a).toLowerCase() === k));
+  return hit ? hit.code : null;
+};
+// stock-row SKU: 12 digits when the product's fields and colour are all in the lists
+export const numericSku = (p, colour, lists) => {
+  const base = productSkuBase(p);
+  const c = colourSeg(lists, colour);
+  return base && c ? base + c : "";
+};
+// which source a stock row is (DK, TG …): from the SKU's first two digits, else its code
+export const skuSource = (row, lists) => {
+  const sku = String((row && row.sku) || "");
+  if (/^\d{12}$/.test(sku)) {
+    const hit = lists.supplier.find((x) => x.code === sku.slice(0, 2));
+    return hit ? hit.key : "";
+  }
+  return codeSource(row && row.family && row.family.includes("/") ? row.family : sku);
+};
+// how a stock row reads in pickers: SKU · readable code — name · colour
+export const skuOptionLabel = (p) =>
+  p.sku + (p.family && p.family.includes("/") && p.family !== p.sku ? " · " + p.family : "") + " — " + p.name + (p.colour ? " · " + p.colour : "");
+export const segLabel = (list, code) => {
+  const hit = (list || []).find((x) => x.code === code);
+  return hit ? hit.label : "";
+};
+
 // Keeps the background stock/SKU table in step with the Products screen:
 // one row per product+colour, created and updated automatically. Stock and
 // batch costs are never touched. When a product has a code its rows take the
@@ -551,6 +1278,7 @@ export const skuFor = (code, colour) => cleanCode(code) + (colourCode(colour) ? 
 export const syncCatalogue = (crm, planner) => {
   const products = (planner && planner.products) || [];
   if (!products.length) return null;
+  const lists = skuLists(crm);
   const next = JSON.parse(JSON.stringify(crm.masterProducts || []));
   const byKey = {};
   next.forEach((m) => {
@@ -571,15 +1299,16 @@ export const syncCatalogue = (crm, planner) => {
       const want = {
         name: p.name || "",
         colour: col,
-        family: p.name || "",
+        family: code ? skuFor(code, col) : p.name || "", // readable code alongside the numeric SKU
         category: p.category || "",
         weightKg: Number(p.weight) > 0 ? Number(p.weight) : "",
         priceIncVat: Number(p.salePrice) > 0 ? Number(p.salePrice) : "",
       };
       const cur = byKey[p.id + "||" + lk];
       if (!cur) {
-        let sku = code ? skuFor(code, col) : genSku(p.name, col, taken);
-        if (code && taken.has(sku.toLowerCase())) sku = genSku(p.name, col, taken);
+        const target = numericSku(p, col, lists) || (code ? skuFor(code, col) : "");
+        let sku = target || genSku(p.name, col, taken);
+        if (target && taken.has(sku.toLowerCase())) sku = genSku(p.name, col, taken);
         taken.add(sku.toLowerCase());
         const row = { ...blankMasterProduct(), ...want, sku, importProductId: p.id, unit: "each" };
         if (p.costGbp !== "" && p.costGbp !== null && p.costGbp !== undefined && isFinite(Number(p.costGbp))) row.costGbp = Number(p.costGbp);
@@ -598,8 +1327,9 @@ export const syncCatalogue = (crm, planner) => {
           cur.costGbp = Number(p.costGbp);
           changed = true;
         }
-        if (code) {
-          const sku = skuFor(code, col);
+        const target = numericSku(p, col, lists) || (code ? skuFor(code, col) : "");
+        if (target) {
+          const sku = target;
           if (cur.sku !== sku && !taken.has(sku.toLowerCase())) {
             taken.delete((cur.sku || "").toLowerCase());
             taken.add(sku.toLowerCase());

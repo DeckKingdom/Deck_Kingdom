@@ -58,7 +58,7 @@ export default function StockScreen({ crm, updateCrm, planner, updatePlanner, as
     const stock = p.stock === "" || p.stock === null ? 0 : Number(p.stock);
     if (inStockOnly && stock === 0) return false;
     if (cat && p.category !== cat) return false;
-    if (q && ![p.sku, p.name, p.colour, p.category].some((v) => String(v || "").toLowerCase().includes(q))) return false;
+    if (q && ![p.sku, p.family, p.name, p.colour, p.category].some((v) => String(v || "").toLowerCase().includes(q))) return false;
     return true;
   });
 
@@ -165,7 +165,8 @@ export default function StockScreen({ crm, updateCrm, planner, updatePlanner, as
                         style={{ border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit", fontSize: 10, color: "#5a6a85", padding: "0 6px 0 0" }}>
                         {isOpen ? "▼" : "▶"}
                       </button>
-                      {p.sku || "—"} {low && <Chip tone="red" style={{ fontSize: 9.5, padding: "1px 6px" }}>LOW</Chip>}</td>
+                      {p.sku || "—"} {low && <Chip tone="red" style={{ fontSize: 9.5, padding: "1px 6px" }}>LOW</Chip>}
+                      {p.family && p.family.includes("/") && p.family !== p.sku && <div style={{ fontSize: 11, fontWeight: 600, color: "#8593a8", paddingLeft: 16 }}>{p.family}</div>}</td>
                     <td style={{ ...td, fontWeight: 600 }}>{p.name}</td>
                     <td style={td}>{p.colour || "—"}</td>
                     <td style={{ ...td, ...num }}>{stock.toLocaleString("en-GB")}</td>

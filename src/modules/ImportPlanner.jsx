@@ -30,6 +30,7 @@ import InvoicesScreen from "./crm/InvoicesScreen.jsx";
 import QuotesScreen from "./crm/QuotesScreen.jsx";
 import SamplesScreen from "./crm/SamplesScreen.jsx";
 import TasksScreen from "./crm/TasksScreen.jsx";
+import ProductsScreen from "./crm/ProductsScreen.jsx";
 import PurchasesScreen from "./crm/PurchasesScreen.jsx";
 import SuppliersScreen from "./crm/SuppliersScreen.jsx";
 import { quotesAvailable, samplesAvailable, tasksAvailable, purchasesAvailable } from "../data/crmStorage.js";
@@ -1891,123 +1892,12 @@ export default function ImportPlanner() {
         </div>
       )}
 
-      {tab === "products" && (() => {
-        const q = prodFilter.q.trim().toLowerCase();
-        const codeCount = {};
-        data.products.forEach((p) => { const k = cleanCode(p.code); if (k) codeCount[k] = (codeCount[k] || 0) + 1; });
-        const srcCounts = {};
-        data.products.forEach((p) => { const k = codeSource(p.code) || "—"; srcCounts[k] = (srcCounts[k] || 0) + 1; });
-        const rows = data.products
-          .filter((p) => !prodFilter.src || (prodFilter.src === "—" ? !codeSource(p.code) : codeSource(p.code) === prodFilter.src))
-          .filter((p) => !q || [p.code, p.name, p.category, p.supplier, (p.colours || []).join(" ")].some((v) => String(v || "").toLowerCase().includes(q)));
-        // new (blank-code) products first, then by code
-        rows.sort((a, b) => (cleanCode(a.code).length > 3 ? 1 : 0) - (cleanCode(b.code).length > 3 ? 1 : 0) || cleanCode(a.code).localeCompare(cleanCode(b.code)) || (a.name || "").localeCompare(b.name || ""));
-        const chip = (k, label, n) => (
-          <button key={k} onClick={() => setProdFilter((f) => ({ ...f, src: k }))} title={k && PRODUCT_SOURCES[k] ? PRODUCT_SOURCES[k] : ""}
-            style={{ fontFamily: "inherit", fontSize: 12.5, fontWeight: 700, padding: "6px 11px", borderRadius: 999, cursor: "pointer", border: "1px solid " + (prodFilter.src === k ? NAVY : "#d5d9e0"), background: prodFilter.src === k ? NAVY : "#fff", color: prodFilter.src === k ? "#fff" : "#5a6a85" }}>
-            {label}{n ? " · " + n : ""}
-          </button>
-        );
-        const isImport = (p) => !p.code || codeSource(p.code) === "DK";
-        return (
-        <div style={{ padding: "18px 22px", maxWidth: 1600, margin: "0 auto" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 10, position: "sticky", top: headerH, zIndex: 16, background: "#f3f5f8", padding: "8px 0" }}>
-            <h2 style={{ fontSize: 19, fontWeight: 700, margin: 0 }}>Products</h2>
-            <input value={prodFilter.q} onChange={(e) => setProdFilter((f) => ({ ...f, q: e.target.value }))} placeholder="Search code, description, colour…"
-              style={{ ...inp, width: 240, maxWidth: "100%" }} />
-            <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-              {chip("", "All", data.products.length)}
-              {Object.keys(PRODUCT_SOURCES).filter((k) => srcCounts[k]).map((k) => chip(k, k, srcCounts[k]))}
-              {srcCounts["—"] ? chip("—", "No code", srcCounts["—"]) : null}
-            </div>
-            <span style={{ flex: 1 }} />
-            <button onClick={addProduct} style={{ ...btn, background: GOLD, border: "1px solid " + GOLD }}>
-              + Add product{prodFilter.src && prodFilter.src !== "—" ? " (" + prodFilter.src + ")" : ""}
-            </button>
-          </div>
-          <div style={{ background: "#fff", borderRadius: 10, border: "1px solid #e6e9ef", padding: "4px 12px 12px", overflowX: "auto", overflowY: "auto", maxHeight: "max(320px, calc(100vh - " + (headerH + 150) + "px))" }}>
-            <table className="dk-sticky-table" style={{ width: "100%", borderCollapse: "collapse", minWidth: 1500 }}>
-              <thead>
-                <tr>
-                  <th style={{ ...th, minWidth: 215 }}>Code</th>
-                  <th style={{ ...th, minWidth: 290 }}>Description</th>
-                  <th style={{ ...th, minWidth: 150 }}>Category</th>
-                  <th style={{ ...th, minWidth: 150 }}>Supplier</th>
-                  <th style={{ ...th, minWidth: 230 }}>Colours (comma separated)</th>
-                  <th style={{ ...th, minWidth: 84, textAlign: "right", fontSize: 11.5 }}>UK cost £ / pc (ex VAT)</th>
-                  <th style={{ ...th, minWidth: 90, textAlign: "right", fontSize: 11.5 }}>Retail £ / pc (inc VAT)</th>
-                  <th style={{ ...th, minWidth: 78, textAlign: "right", fontSize: 11.5, color: "#8593a8" }}>Import $ / pc</th>
-                  <th style={{ ...th, minWidth: 78, textAlign: "right", fontSize: 11.5, color: "#8593a8" }}>Qty / Plt / Ctn</th>
-                  <th style={{ ...th, minWidth: 70, textAlign: "right", fontSize: 11.5, color: "#8593a8" }}>kg / pc</th>
-                  <th style={{ ...th, minWidth: 70, textAlign: "right", fontSize: 11.5, color: "#8593a8" }}>m³ / Plt</th>
-                  <th style={{ ...th, width: 34 }}></th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((p) => {
-                  const dupe = cleanCode(p.code) && codeCount[cleanCode(p.code)] > 1;
-                  const imp = isImport(p);
-                  const dim = imp ? {} : { background: "#f6f7f9", color: "#8593a8" };
-                  return (
-                  <tr key={p.id}>
-                    <td style={td}>
-                      <input defaultValue={p.code || ""} key={"c" + p.id + (p.code || "")} placeholder="e.g. TG/3.6/DECK"
-                        onBlur={(e) => cleanCode(e.target.value) !== cleanCode(p.code) && setProduct(p.id, "code", e.target.value)}
-                        title={dupe ? "Another product already has this code" : "SOURCE / SIZE / TYPE — changing it renames the stock rows (stock and history follow)"}
-                        style={{ ...inp, fontWeight: 700, textTransform: "uppercase", borderColor: dupe ? RED : !p.code ? "#E8912D" : undefined }} />
-                    </td>
-                    <td style={td}>
-                      <input value={p.name} placeholder="Product, spec, size — e.g. Decking Board Embossed Woodgrain 3.6m" onChange={(e) => setProduct(p.id, "name", e.target.value)} style={inp} />
-                    </td>
-                    <td style={td}>
-                      <input value={p.category || ""} onChange={(e) => setProduct(p.id, "category", e.target.value)} list="dk-categories" style={inp} />
-                    </td>
-                    <td style={td}>
-                      <input value={p.supplier || ""} onChange={(e) => setProduct(p.id, "supplier", e.target.value)} list="dk-suppliers" placeholder="Supplier name" style={inp} />
-                    </td>
-                    <td style={td}>
-                      <input defaultValue={(p.colours || []).join(", ")} onBlur={(e) => setProduct(p.id, "colours", e.target.value)} style={inp} key={p.id + (p.colours || []).join("|")} placeholder="none — one stock row" />
-                    </td>
-                    <td style={td}>
-                      <input type="number" min="0" step="0.01" value={p.costGbp === undefined || p.costGbp === null ? "" : p.costGbp} onChange={(e) => setProduct(p.id, "costGbp", e.target.value)} style={num} title="What we pay per piece (ex VAT) for bought-in stock; imports take their landed cost from shipments" />
-                    </td>
-                    <td style={td}>
-                      <input type="number" min="0" step="0.01" value={p.salePrice === undefined || p.salePrice === null ? "" : p.salePrice} onChange={(e) => setProduct(p.id, "salePrice", e.target.value)} style={num} />
-                    </td>
-                    <td style={td}><input type="number" min="0" step="0.01" value={p.cost} onChange={(e) => setProduct(p.id, "cost", e.target.value)} style={{ ...num, ...dim }} /></td>
-                    <td style={td}><input type="number" min="0" step="1" value={p.qty} onChange={(e) => setProduct(p.id, "qty", e.target.value)} style={{ ...num, ...dim }} /></td>
-                    <td style={td}><input type="number" min="0" step="0.1" value={p.weight} onChange={(e) => setProduct(p.id, "weight", e.target.value)} style={num} /></td>
-                    <td style={td}><input type="number" min="0" step="0.01" value={p.cbm} onChange={(e) => setProduct(p.id, "cbm", e.target.value)} style={{ ...num, ...dim }} /></td>
-                    <td style={{ ...td, textAlign: "center" }}>
-                      <button onClick={() => removeProduct(p.id)} title="Remove product" style={{ ...btn, padding: "4px 9px", color: RED, border: "none", background: "transparent" }}>
-                        ✕
-                      </button>
-                    </td>
-                  </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            {rows.length === 0 && <div style={{ padding: 24, textAlign: "center", color: "#5a6a85", fontWeight: 600 }}>No products match.</div>}
-          </div>
-          <datalist id="dk-suppliers">
-            {[...new Set([...suppliers, ...((crm && crm.suppliers) || []).filter((x) => x.active !== false).map((x) => x.name)])].sort().map((sup) => (
-              <option key={sup} value={sup} />
-            ))}
-          </datalist>
-          <datalist id="dk-categories">
-            {[...new Set(["Decking", "Decking Accessories", "Cladding", "Fencing", "Fencing Accessories", "Balustrade", "Framework", "Fixings", "Artificial Grass", "Sundries", ...categories])].map((c) => (
-              <option key={c} value={c} />
-            ))}
-          </datalist>
-          <p style={{ fontSize: 12.5, color: "#5a6a85", marginTop: 10 }}>
-            One catalogue for everything. <b>Code</b> = SOURCE / SIZE / TYPE (DK = our imports, TG = Tuda Grass, SY = South Yorkshire Composites, TS = Tradescape, CL = Easy Composite, FN = Finch).
-            Every product + colour gets a stock row coded <b>code/colour</b> (e.g. DK/3.6/DECK/ANT); change a code and its stock rows, history and existing invoices follow.
-            The grey import columns only matter for our own imports — shipment lines pull their defaults from them.
-          </p>
-        </div>
-        );
-      })()}
+      {tab === "products" &&
+        (!crm ? (
+          <div style={{ padding: 40, textAlign: "center", color: "#5a6a85", fontWeight: 600 }}>Loading products…</div>
+        ) : (
+          <ProductsScreen planner={data} update={update} crm={crm} updateCrm={updateCrm} removeProduct={removeProduct} headerH={headerH} />
+        ))}
       {dueReminders.length > 0 && !remindersClosed && !locked && (
         <div style={{ position: "fixed", inset: 0, zIndex: 55, background: "rgba(11,31,63,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
           <div style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 560, overflow: "hidden", boxShadow: "0 24px 70px rgba(11,31,63,0.5)" }}>

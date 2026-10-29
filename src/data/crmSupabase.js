@@ -384,6 +384,7 @@ async function loadAll() {
   const settingRow = (key) => settings.find((r) => r.key === key);
   const numbering = (settingRow("numbering") || {}).value || { account: 1, site: 1, invoice: 1 };
   const reminders = (settingRow("reminders") || {}).value || {};
+  const skuListsRow = settingRow("skuLists");
 
   const customers = cs.map((r) => {
     const c = { id: r.id, accountNo: r.account_no, trader: r.trader === true, discountPct: nv(r.discount_pct), updatedAt: r.updated_at || "" };
@@ -544,8 +545,9 @@ async function loadAll() {
   });
 
   const data = { customers, sites, invoices, masterProducts, collections, movements, vans, numbering, reminders, quotes, samples, tasks, taskLog, staff, suppliers, purchases };
+  if (skuListsRow && skuListsRow.value) data.skuLists = skuListsRow.value;
   snapshot = rowsFromData(data);
-  settingsSnapshot = { numbering: JSON.stringify(numbering), reminders: JSON.stringify(reminders) };
+  settingsSnapshot = { numbering: JSON.stringify(numbering), reminders: JSON.stringify(reminders), skuLists: skuListsRow ? JSON.stringify(skuListsRow.value) : undefined };
 
   if (!customers.length && !sites.length && !invoices.length && !masterProducts.length && !collections.length && !vans.length && !quotes.length && !samples.length && !tasks.length && !suppliers.length && !purchases.length && !settings.length) return null;
   return data;
@@ -646,6 +648,7 @@ async function saveAll(d) {
     numbering: d.numbering || { account: 1, site: 1, invoice: 1 },
     reminders: d.reminders || {},
   };
+  if (d.skuLists) settingsToSave.skuLists = d.skuLists; // only once someone has edited the SKU lists
   for (const [key, value] of Object.entries(settingsToSave)) {
     const j = JSON.stringify(value);
     if (j !== settingsSnapshot[key]) {
