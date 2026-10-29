@@ -25,7 +25,7 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
   const [search, setSearch] = useState("");
   const [custQuery, setCustQuery] = useState("");
   const [notice, setNotice] = useState("");
-  const [freeQty, setFreeQty] = useState(new Set()); // lines typing a qty beyond the 1-20 list
+  const [freeQty, setFreeQty] = useState(new Set()); // lines typing a qty directly (double-clicked)
 
   const custById = useMemo(() => {
     const m = {};
@@ -397,21 +397,23 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
                     <input style={{ ...inp, fontWeight: 700, fontSize: 12.5 }} list="dk-skus" value={l.code} {...selectAllProps} onChange={(e) => setLine(l.id, "code", e.target.value)} />
                   </td>
                   <td style={{ padding: "6px 6px", borderBottom: "1px solid #f0f2f6", width: 74 }}>
-                    {Number(l.qty) > 20 || freeQty.has(l.id) ? (
+                    {Number(l.qty) > 100 || freeQty.has(l.id) ? (
                       <input style={numInp} inputMode="decimal" autoFocus={freeQty.has(l.id)} value={l.qty} {...selectAllProps}
-                        onChange={(e) => setLine(l.id, "qty", e.target.value)} />
+                        onChange={(e) => setLine(l.id, "qty", e.target.value)}
+                        onBlur={(e) => {
+                          const n = Number(e.target.value);
+                          if (Number.isInteger(n) && n >= 1 && n <= 100)
+                            setFreeQty((f) => { const x = new Set(f); x.delete(l.id); return x; });
+                        }} />
                     ) : (
-                      <select style={inp} value={l.qty === "" || l.qty === null ? "" : String(l.qty)}
-                        onChange={(e) => {
-                          if (e.target.value === "__more__") setFreeQty((f) => new Set(f).add(l.id));
-                          else setLine(l.id, "qty", e.target.value === "" ? "" : Number(e.target.value));
-                        }}>
+                      <select style={inp} title="Double-click to type a quantity" value={l.qty === "" || l.qty === null ? "" : String(l.qty)}
+                        onDoubleClick={() => setFreeQty((f) => new Set(f).add(l.id))}
+                        onChange={(e) => setLine(l.id, "qty", e.target.value === "" ? "" : Number(e.target.value))}>
                         <option value="">—</option>
-                        {l.qty !== "" && l.qty !== null && !Array.from({ length: 20 }, (_, i) => i + 1).includes(Number(l.qty)) && (
+                        {l.qty !== "" && l.qty !== null && !(Number.isInteger(Number(l.qty)) && Number(l.qty) >= 1 && Number(l.qty) <= 100) && (
                           <option value={String(l.qty)}>{String(l.qty)}</option>
                         )}
-                        {Array.from({ length: 20 }, (_, i) => String(i + 1)).map((n) => <option key={n} value={n}>{n}</option>)}
-                        <option value="__more__">More…</option>
+                        {Array.from({ length: 100 }, (_, i) => String(i + 1)).map((n) => <option key={n} value={n}>{n}</option>)}
                       </select>
                     )}
                   </td>
