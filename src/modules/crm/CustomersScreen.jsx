@@ -1,6 +1,6 @@
 // Customers tab: searchable account list -> account view with sites and
 // invoice history, per the approved mockup.
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { NAVY, GOLD, RED, prettyDate, prettyDateTime } from "../../lib/core.js";
 import {
   blankCustomer, blankSite, nextNumber, SOURCES,
@@ -30,7 +30,7 @@ const NoteBox = ({ children }) => (
   </div>
 );
 
-export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, setSelId, openInvoice, newInvoiceFor, openQuote, newQuoteFor, openSample, newSampleFor, onOutstanding, me }) {
+export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, setSelId, openInvoice, newInvoiceFor, openQuote, newQuoteFor, openSample, newSampleFor, onOutstanding, me, newSignal, onNewHandled }) {
   const [search, setSearch] = useState("");
   const [custDraft, setCustDraft] = useState(null);
   const [siteDraft, setSiteDraft] = useState(null);
@@ -160,6 +160,13 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
     setSiteNoConfirm(false);
     setSiteDraft(draft);
   };
+
+  // "+" next to Customers in the side menu: open the new-account form straight away
+  useEffect(() => {
+    if (!newSignal) return;
+    startNewCustomer();
+    if (onNewHandled) onNewHandled();
+  }, [newSignal]);
 
   const startNewSite = () =>
     openSiteDraft({ ...blankSite(sel.id), siteNo: nextNumber(crm.sites, "siteNo", crm.numbering.site), _new: true });

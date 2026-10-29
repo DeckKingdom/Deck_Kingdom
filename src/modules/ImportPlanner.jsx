@@ -153,6 +153,23 @@ export default function ImportPlanner() {
   const [selQuoteId, setSelQuoteId] = useState(null);
   const [quoteFilter, setQuoteFilter] = useState(null); // { customerId }
   const [selSampleId, setSelSampleId] = useState(null);
+  const [newCustSignal, setNewCustSignal] = useState(0);
+  // "+" buttons in the side menu
+  const sideNew = (t) => {
+    if (t === "customers") {
+      setSelCustomerId(null);
+      setNewCustSignal((n) => n + 1);
+      setTab("customers");
+      return;
+    }
+    if (!crm) {
+      setTab(t); // still loading: just go there
+      return;
+    }
+    if (t === "invoices") newInvoiceFor("", "");
+    else if (t === "quotes") newQuoteFor("", "");
+    else if (t === "samples") newSampleFor("");
+  };
   const [invFilter, setInvFilter] = useState(null); // { customerId, outstanding }
   const [remindersClosed, setRemindersClosed] = useState(false); // closed for this visit
 
@@ -833,7 +850,7 @@ export default function ImportPlanner() {
         }`}</style>
 
       <div style={{ display: "flex", alignItems: "stretch" }}>
-      <Sidebar tab={tab} setTab={setTab} open={sideOpen} footer={sideFooter} />
+      <Sidebar tab={tab} setTab={setTab} open={sideOpen} footer={sideFooter} onNew={sideNew} />
       <div style={{ flex: 1, minWidth: 0 }}>
 
       <div ref={headerRef} className="no-print" style={{ background: NAVY, padding: "10px 16px", display: "flex", alignItems: "center", gap: 10, position: "sticky", top: 0, zIndex: 25, boxShadow: "0 2px 8px rgba(11,31,63,0.25)" }}>
@@ -843,7 +860,7 @@ export default function ImportPlanner() {
         <span style={{ color: "#fff", fontWeight: 700, fontSize: 15.5, whiteSpace: "nowrap" }}>{TAB_LABELS[tab] || "Home"}</span>
         <span style={{ flex: 1 }} />
         <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-          {[["home", "Home", "home"], ["shipments", "Shipments", "ship"], ["customers", "Customers", "users"], ["samples", "Samples", "leaf"], ["quotes", "Quotes", "tag"], ["invoices", "Invoices", "doc"], ["schedule", "Schedule", "cal"]].map(([t, label, icon]) => (
+          {[["home", "Home", "home"], ["shipments", "Shipments", "ship"], ["customers", "Customers", "users"], ["invoices", "Invoices", "doc"], ["quotes", "Quotes", "tag"], ["samples", "Samples", "leaf"], ["schedule", "Delivery Schedule", "cal"]].map(([t, label, icon]) => (
             <button key={t} onClick={() => setTab(t)} title={label} style={{ width: 34, height: 34, borderRadius: 8, border: "1px solid " + (tab === t ? GOLD : "#33466b"), background: tab === t ? GOLD : "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flex: "none", padding: 0 }}>
               <Icon name={icon} size={16} stroke={tab === t ? NAVY : "#cfd6e4"} />
             </button>
@@ -909,6 +926,8 @@ export default function ImportPlanner() {
             newQuoteFor={newQuoteFor}
             openSample={openSample}
             newSampleFor={newSampleFor}
+            newSignal={newCustSignal}
+            onNewHandled={() => setNewCustSignal(0)}
             onOutstanding={showOutstanding}
             me={me}
           />

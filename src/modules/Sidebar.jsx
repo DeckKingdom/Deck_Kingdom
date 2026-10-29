@@ -6,17 +6,17 @@ import { NAVY, GOLD } from "../lib/core.js";
 import { Icon } from "./crm/ui.jsx";
 
 export const NAV_SECTIONS = [
-  { title: "", items: [["home", "Home", "home"]] },
+  // 4th value true = a "+" next to the link that creates a new record
+  { title: "", items: [["home", "Home", "home"], ["customers", "Customers", "users", true]] },
   {
     title: "Sales",
     items: [
-      ["customers", "Customers", "users"],
-      ["samples", "Samples", "leaf"],
-      ["quotes", "Quotes", "tag"],
-      ["invoices", "Invoices", "doc"],
-      ["schedule", "Schedule", "cal"],
+      ["invoices", "Invoices", "doc", true],
+      ["quotes", "Quotes", "tag", true],
+      ["samples", "Samples", "leaf", true],
     ],
   },
+  { title: "", items: [["schedule", "Delivery Schedule", "cal"]] },
   {
     title: "Imports",
     items: [
@@ -40,7 +40,7 @@ export const NAV_SECTIONS = [
 
 export const TAB_LABELS = Object.fromEntries(NAV_SECTIONS.flatMap((s) => s.items.map(([t, l]) => [t, l])));
 
-export default function Sidebar({ tab, setTab, open, footer }) {
+export default function Sidebar({ tab, setTab, open, footer, onNew }) {
   const [shut, setShut] = useState({});
 
   // never leave the active screen hidden inside a shut section
@@ -101,11 +101,11 @@ export default function Sidebar({ tab, setTab, open, footer }) {
               ) : (
                 <div style={{ height: 1, background: "#24375f", margin: "9px 6px" }} />
               ))}
-            {open && sec.title && shut[sec.title] ? null : sec.items.map(([t, label, icon]) => {
+            {open && sec.title && shut[sec.title] ? null : sec.items.map(([t, label, icon, canAdd]) => {
               const on = tab === t;
               return (
+                <div key={t} style={{ position: "relative" }}>
                 <button
-                  key={t}
                   onClick={() => setTab(t)}
                   title={label}
                   style={{
@@ -129,6 +129,21 @@ export default function Sidebar({ tab, setTab, open, footer }) {
                   <Icon name={icon} size={17} stroke={on ? NAVY : "#8fa0c0"} />
                   {open && <span style={{ whiteSpace: "nowrap" }}>{label}</span>}
                 </button>
+                {open && canAdd && onNew && (
+                  <button
+                    onClick={() => onNew(t)}
+                    title={"New " + label.replace(/s$/, "").toLowerCase()}
+                    style={{
+                      position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)",
+                      width: 24, height: 24, borderRadius: 7, padding: 0, cursor: "pointer",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      border: "1px solid " + (on ? NAVY : "#3a4f78"), background: on ? "#ffffff55" : "transparent",
+                    }}
+                  >
+                    <Icon name="plus" size={13} stroke={on ? NAVY : GOLD} width={2.6} />
+                  </button>
+                )}
+                </div>
               );
             })}
           </div>
