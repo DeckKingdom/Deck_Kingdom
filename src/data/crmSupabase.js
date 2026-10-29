@@ -201,7 +201,12 @@ async function loadAll() {
     fetchAll(sb, "stock_movements"),
     fetchAll(sb, "vans"),
     fetchAll(sb, "van_checks"),
-    fetchAll(sb, "crm_settings"),
+    (async () => {
+      // crm_settings has no position/id ordering columns — plain select
+      const { data, error } = await sb.from("crm_settings").select("*");
+      if (error) throw new Error(error.message);
+      return data;
+    })(),
   ]);
 
   const settingRow = (key) => settings.find((r) => r.key === key);
