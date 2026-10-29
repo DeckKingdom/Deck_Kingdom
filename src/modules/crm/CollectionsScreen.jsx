@@ -1,34 +1,48 @@
 // Collections: goods picked up from UK suppliers by our vans. A collection
-// note prints for the driver, the job shows on the delivery schedule, and
-// on return the goods are committed to stock or assigned straight to a job.
+// note prints for the driver and the job rides the delivery schedule. On
+// return, EACH LINE is dispositioned on its own: committed to stock or
+// assigned straight to a job — mixed loads are the normal case.
 import { useState, useMemo } from "react";
 import { NAVY, GOLD, RED, prettyDate } from "../../lib/core.js";
 import {
-  blankCollection, blankCollectionItem, blankMovement, blankPick, nextNumber,
-  skuIndex, gbp, today, TIME_SLOTS, vanOptions, weightedCost,
+  blankCollection, blankCollectionItem, nextNumber, skuIndex, gbp, today,
+  TIME_SLOTS, vanOptions, itemPending, collectionProgress, commitCollectionItem, assignCollectionItem,
 } from "../../lib/crmCore.js";
-import { Icon, Chip, Modal, selectAllProps, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
+import { Icon, Chip, Modal, selectAllProps, SuggestInput, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
 import { printCollectionNote } from "./printDocs.js";
 
 const navyBtn = { ...btn, background: "transparent", border: "1px solid #3a4f78", color: "#fff" };
 const td = { padding: "6px 6px", borderBottom: "1px solid #f0f2f6", fontSize: 13 };
 
-export const collectionStatus = (c) =>
-  c.postedAt ? ["Posted to stock", "green"]
-  : c.assignedInvoiceId ? ["Assigned to job", "green"]
-  : c.collected ? ["Collected", "gold"]
-  : c.collectDate ? ["Booked", "grey"]
-  : ["Not booked", "red"];
+export const collectionStatus = (c) => {
+  const { total, done } = collectionProgress(c);
+  if (total > 0 && done === total) return ["Processed", "green"];
+  if (done > 0) return ["Part processed", "gold"];
+  if (c.collected) return ["Collected", "gold"];
+  if (c.collectDate) return ["Booked", "grey"];
+  return ["Not booked", "red"];
+};
 
 export default function CollectionsScreen({ crm, updateCrm, askConfirm, selId, setSelId, openInvoice, me }) {
   const [search, setSearch] = useState("");
-  const [assignPanel, setAssignPanel] = useState(false);
+  const [assignFor, setAssignFor] = useState(null); // item id, or "ALL" for every pending line
   const [assignQuery, setAssignQuery] = useState("");
   const [notice, setNotice] = useState("");
 
   const coll = (crm.collections || []).find((c) => c.id === selId) || null;
   const bySku = skuIndex(crm);
   const custById = useMemo(() => Object.fromEntries(crm.customers.map((c) => [c.id, c])), [crm.customers]);
+
+  const skuOpts = useMemo(
+    () =>
+      (crm.masterProducts || [])
+        .filter((p) => p.active !== false && p.sku)
+        .map((p) => ({
+          value: p.sku,
+          label: p.sku + " — " + p.name + (p.colour ? " · " + p.colour : ""),
+        })),
+    [crm.masterProducts]
+  );
 
   const setColl = (fn) =>
     updateCrm((c) => {
@@ -51,7 +65,7 @@ export default function CollectionsScreen({ crm, updateCrm, askConfirm, selId, s
 
   const removeCollection = (c) =>
     askConfirm({
-      message: "Delete collection COL-" + (c.collectionNo || "—") + " from " + (c.supplier || "supplier") + "?",
+      message: "Delete collection COL-" + (c.collectionNo || "—") + " from " + (c.supplier || "supplier") + "?" + (collectionProgress(c).done ? " Lines already in stock or on jobs keep their records." : ""),
       confirmLabel: "Delete",
       danger: true,
       action: () => {
@@ -65,48 +79,41 @@ export default function CollectionsScreen({ crm, updateCrm, askConfirm, selId, s
 
   const itemsValue = (c) => (c.items || []).reduce((t, it) => t + (Number(it.qty) || 0) * (Number(it.unitCost) || 0), 0);
 
-  const postToStock = () => {
-    const matched = (coll.items || []).filter((it) => bySku[(it.sku || "").trim().toLowerCase()]);
-    const unmatched = (coll.items || []).filter((it) => !bySku[(it.sku || "").trim().toLowerCase()] && (Number(it.qty) || 0) > 0);
+  // ----- per-line disposition -----
+  const stockOneItem = (itemId) =>
+    setColl((t, c) => {
+      const it = t.items.find((y) => y.id === itemId);
+      if (!it) return;
+      if (!commitCollectionItem(c, t, it, me)) setNotice('"' + (it.sku || it.description || "That line") + "\" doesn't match a stock code — check the SKU, then try again.");
+    });
+
+  const stockAllPending = () => {
+    const pend = (coll.items || []).filter(itemPending);
+    const unmatched = pend.filter((it) => !bySku[(it.sku || "").trim().toLowerCase()]);
     askConfirm({
       message:
-        "Commit COL-" + (coll.collectionNo || "—") + " to stock? " +
-        matched.reduce((t, it) => t + (Number(it.qty) || 0), 0) + " pcs across " + matched.length + " SKUs will be added." +
-        (unmatched.length ? " Not matched to a master SKU (skipped): " + unmatched.map((u) => u.sku || u.description).join(", ") + "." : ""),
+        "Commit the " + pend.length + " remaining line" + (pend.length === 1 ? "" : "s") + " of COL-" + (coll.collectionNo || "—") + " to stock?" +
+        (unmatched.length ? " No stock code match (will be skipped): " + unmatched.map((u) => u.sku || u.description).join(", ") + "." : ""),
       confirmLabel: "Commit to stock",
       action: () =>
         setColl((t, c) => {
-          matched.forEach((it) => {
-            const mp = c.masterProducts.find((p) => (p.sku || "").trim().toLowerCase() === (it.sku || "").trim().toLowerCase());
-            if (!mp) return;
-            const q = Number(it.qty) || 0;
-            const oldStock = mp.stock === "" || mp.stock === null ? 0 : Number(mp.stock);
-            if (it.unitCost !== "" && it.unitCost !== null) mp.costGbp = weightedCost(oldStock, mp.costGbp, q, Number(it.unitCost));
-            mp.stock = oldStock + q;
-            c.movements.push({ ...blankMovement(), sku: mp.sku, mpId: mp.id, qty: q, unitCost: it.unitCost === "" ? "" : Number(it.unitCost), kind: "collection", ref: "COL-" + (t.collectionNo || ""), actor: me || "" });
-          });
-          t.postedAt = today();
+          t.items.filter(itemPending).forEach((it) => commitCollectionItem(c, t, it, me));
           t.collected = true;
         }),
     });
   };
 
-  const assignToJob = (invId) => {
+  const assignItems = (invId) => {
     setColl((t, c) => {
-      const inv = c.invoices.find((i) => i.id === invId);
-      if (!inv) return;
-      inv.picks = inv.picks || [];
-      (t.items || []).forEach((it) => {
-        inv.picks.push({
-          ...blankPick(),
-          sku: it.sku, description: it.description, colour: it.colour, qty: it.qty,
-          batchRef: "COL-" + (t.collectionNo || ""), unitCost: it.unitCost, picked: true,
-        });
-      });
-      t.assignedInvoiceId = invId;
+      const targets = assignFor === "ALL" ? t.items.filter(itemPending) : t.items.filter((y) => y.id === assignFor);
+      targets.forEach((it) => assignCollectionItem(c, t, it, invId));
       t.collected = true;
     });
-    setAssignPanel(false);
+    setAssignPanelClosed();
+  };
+  const setAssignPanelClosed = () => {
+    setAssignFor(null);
+    setAssignQuery("");
   };
 
   const tryPrint = () => {
@@ -136,12 +143,13 @@ export default function CollectionsScreen({ crm, updateCrm, askConfirm, selId, s
             </div>
           ) : (
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-              <thead><tr>{["COL #", "Supplier", "Postcode", "Collect", "Van", "Items", "Value £", "Status", ""].map((h, i) => (
-                <th key={i} style={{ textAlign: i === 5 || i === 6 ? "right" : "left", fontSize: 10.5, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", padding: "8px 7px", borderBottom: "2px solid #e6e9ef", whiteSpace: "nowrap" }}>{h}</th>
+              <thead><tr>{["COL #", "Supplier", "Postcode", "Collect", "Van", "Lines", "Done", "Value £", "Status", ""].map((h, i) => (
+                <th key={i} style={{ textAlign: i >= 5 && i <= 7 ? "right" : "left", fontSize: 10.5, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", padding: "8px 7px", borderBottom: "2px solid #e6e9ef", whiteSpace: "nowrap" }}>{h}</th>
               ))}</tr></thead>
               <tbody>
                 {rows.map((c) => {
                   const [label, tone] = collectionStatus(c);
+                  const prog = collectionProgress(c);
                   return (
                     <tr key={c.id} onClick={() => setSelId(c.id)} style={{ cursor: "pointer" }}
                       onMouseEnter={(e) => (e.currentTarget.style.background = "#f6f8fb")}
@@ -151,7 +159,8 @@ export default function CollectionsScreen({ crm, updateCrm, askConfirm, selId, s
                       <td style={td}>{c.postcode}</td>
                       <td style={{ ...td, whiteSpace: "nowrap" }}>{c.collectDate ? prettyDate(c.collectDate) + (c.collectTime ? " " + c.collectTime : "") : "—"}</td>
                       <td style={td}>{c.van || "—"}</td>
-                      <td style={{ ...td, textAlign: "right", fontWeight: 700 }}>{(c.items || []).length}</td>
+                      <td style={{ ...td, textAlign: "right", fontWeight: 700 }}>{prog.total}</td>
+                      <td style={{ ...td, textAlign: "right", fontWeight: 700, color: prog.done ? "#28713e" : "#aab3c2" }}>{prog.done}</td>
                       <td style={{ ...td, textAlign: "right", fontWeight: 700 }}>{itemsValue(c) ? itemsValue(c).toLocaleString("en-GB", { minimumFractionDigits: 2 }) : "—"}</td>
                       <td style={td}><Chip tone={tone}>{label}</Chip></td>
                       <td style={{ ...td, textAlign: "right" }}><button style={abtn} onClick={(e) => { e.stopPropagation(); setSelId(c.id); }}><Icon name="pen" /></button></td>
@@ -168,8 +177,11 @@ export default function CollectionsScreen({ crm, updateCrm, askConfirm, selId, s
 
   // ===== editor =====
   const [statusLabel, statusTone] = collectionStatus(coll);
-  const locked = Boolean(coll.postedAt || coll.assignedInvoiceId);
-  const assignedInv = crm.invoices.find((i) => i.id === coll.assignedInvoiceId);
+  const prog = collectionProgress(coll);
+  const invNoFor = (id) => {
+    const i = crm.invoices.find((x) => x.id === id);
+    return i ? "#" + (i.invNo || "—") : "job";
+  };
 
   const field = (k, label, props = {}, style = {}) => (
     <div>
@@ -182,7 +194,7 @@ export default function CollectionsScreen({ crm, updateCrm, askConfirm, selId, s
   const setItem = (iid, k, v) =>
     setColl((t) => {
       const it = t.items.find((y) => y.id === iid);
-      if (!it) return;
+      if (!it || !itemPending(it)) return;
       it[k] = v;
       if (k === "sku") {
         const mp = bySku[String(v || "").trim().toLowerCase()];
@@ -215,11 +227,7 @@ export default function CollectionsScreen({ crm, updateCrm, askConfirm, selId, s
           <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
             <h2 style={{ margin: 0, fontSize: 19 }}>Collection COL-{coll.collectionNo || "—"}</h2>
             <Chip tone={statusTone}>{statusLabel}</Chip>
-            {assignedInv && (
-              <button onClick={() => openInvoice(assignedInv.id)} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12.5, fontWeight: 700, color: GOLD, padding: 0 }}>
-                → Invoice #{assignedInv.invNo}
-              </button>
-            )}
+            {prog.total > 0 && <span style={{ fontSize: 12.5, fontWeight: 700, color: "#aeb9cf" }}>{prog.done} of {prog.total} lines processed</span>}
           </div>
           <div style={{ fontSize: 12.5, color: "#aeb9cf", fontWeight: 600, marginTop: 5 }}>
             Raised {prettyDate(coll.date)}{coll.raisedBy ? " by " + coll.raisedBy.split("@")[0] : ""}
@@ -228,10 +236,10 @@ export default function CollectionsScreen({ crm, updateCrm, askConfirm, selId, s
         <span style={{ flex: 1 }} />
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <button style={navyBtn} onClick={tryPrint}><Icon name="doc" stroke="#fff" />Collection note</button>
-          {!locked && (
+          {prog.pending > 0 && (
             <>
-              <button style={{ ...goldBtn }} onClick={postToStock}><Icon name="box" stroke={NAVY} />Commit to stock</button>
-              <button style={navyBtn} onClick={() => { setAssignQuery(""); setAssignPanel(true); }}><Icon name="doc" stroke="#fff" />Assign to job</button>
+              <button style={goldBtn} onClick={stockAllPending}><Icon name="box" stroke={NAVY} />Remaining to stock</button>
+              <button style={navyBtn} onClick={() => { setAssignQuery(""); setAssignFor("ALL"); }}><Icon name="doc" stroke="#fff" />Remaining to a job</button>
             </>
           )}
           <button style={{ ...navyBtn, border: "1px dashed #3a4f78", color: "#8fa0c0" }} onClick={() => removeCollection(coll)}><Icon name="bin" stroke="#8fa0c0" />Delete</button>
@@ -266,50 +274,77 @@ export default function CollectionsScreen({ crm, updateCrm, askConfirm, selId, s
           </div>
         </div>
         <label style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 13.5, fontWeight: 700, marginTop: 12 }}>
-          <input type="checkbox" checked={coll.collected} disabled={locked} onChange={(e) => setColl((t) => (t.collected = e.target.checked))} />
+          <input type="checkbox" checked={coll.collected} onChange={(e) => setColl((t) => (t.collected = e.target.checked))} />
           Collected — goods are back at the warehouse
         </label>
       </div>
 
       <div style={card}>
-        <p style={sect}>Items {locked && <Chip tone="grey" style={{ marginLeft: 6 }}>locked — already {coll.postedAt ? "in stock" : "on the job"}</Chip>}</p>
-        <datalist id="dk-skus-col">
-          {(crm.masterProducts || []).filter((p) => p.active !== false && p.sku).map((p) => (
-            <option key={p.id} value={p.sku}>{p.name + (p.colour ? " · " + p.colour : "")}</option>
-          ))}
-        </datalist>
+        <p style={sect}>Lines — commit each to stock or assign it to a job</p>
         <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 620 }}>
-            <thead><tr>{["SKU", "Description", "Colour", "Qty", "Unit cost £", "Line £", ""].map((h, i) => (
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 780 }}>
+            <thead><tr>{["SKU", "Description", "Colour", "Qty", "Unit cost £", "Line £", "Where it went", ""].map((h, i) => (
               <th key={i} style={{ textAlign: i >= 3 && i <= 5 ? "right" : "left", fontSize: 10.5, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", padding: "7px 6px", borderBottom: "2px solid #e6e9ef", whiteSpace: "nowrap" }}>{h}</th>
             ))}</tr></thead>
             <tbody>
-              {(coll.items || []).map((it) => (
-                <tr key={it.id}>
-                  <td style={{ ...td, width: 150 }}><input style={{ ...inp, fontWeight: 700, fontSize: 12.5 }} list="dk-skus-col" disabled={locked} value={it.sku} onChange={(e) => setItem(it.id, "sku", e.target.value)} /></td>
-                  <td style={{ ...td, minWidth: 170 }}><input style={inp} disabled={locked} value={it.description} onChange={(e) => setItem(it.id, "description", e.target.value)} /></td>
-                  <td style={{ ...td, width: 110 }}><input style={inp} disabled={locked} value={it.colour} onChange={(e) => setItem(it.id, "colour", e.target.value)} /></td>
-                  <td style={{ ...td, width: 66 }}><input style={{ ...inp, textAlign: "right" }} inputMode="decimal" disabled={locked} value={it.qty} onChange={(e) => setItem(it.id, "qty", e.target.value)} /></td>
-                  <td style={{ ...td, width: 92 }}><input style={{ ...inp, textAlign: "right" }} inputMode="decimal" disabled={locked} value={it.unitCost} onChange={(e) => setItem(it.id, "unitCost", e.target.value)} /></td>
-                  <td style={{ ...td, textAlign: "right", fontWeight: 700, whiteSpace: "nowrap", width: 86 }}>{((Number(it.qty) || 0) * (Number(it.unitCost) || 0)).toLocaleString("en-GB", { minimumFractionDigits: 2 })}</td>
-                  <td style={{ ...td, width: 34, textAlign: "right" }}>
-                    {!locked && (
-                      <button style={{ ...abtn, border: "none" }} title="Remove" onClick={() => setColl((t) => (t.items = t.items.filter((y) => y.id !== it.id)))}>
-                        <Icon name="x" stroke={RED} />
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
+              {(coll.items || []).map((it) => {
+                const pending = itemPending(it);
+                return (
+                  <tr key={it.id} style={{ opacity: pending ? 1 : 0.85 }}>
+                    <td style={{ ...td, width: 150 }}>
+                      {pending ? (
+                        <SuggestInput value={it.sku} options={skuOpts} inputStyle={{ fontWeight: 700, fontSize: 12.5 }} onChange={(v) => setItem(it.id, "sku", v)} />
+                      ) : (
+                        <b style={{ fontSize: 12.5 }}>{it.sku || "—"}</b>
+                      )}
+                    </td>
+                    <td style={{ ...td, minWidth: 170 }}>
+                      {pending ? <input style={inp} {...selectAllProps} value={it.description} onChange={(e) => setItem(it.id, "description", e.target.value)} /> : it.description}
+                    </td>
+                    <td style={{ ...td, width: 100 }}>
+                      {pending ? <input style={inp} {...selectAllProps} value={it.colour} onChange={(e) => setItem(it.id, "colour", e.target.value)} /> : it.colour || "—"}
+                    </td>
+                    <td style={{ ...td, width: 64, textAlign: "right" }}>
+                      {pending ? <input style={{ ...inp, textAlign: "right" }} inputMode="decimal" {...selectAllProps} value={it.qty} onChange={(e) => setItem(it.id, "qty", e.target.value)} /> : <b>{it.qty}</b>}
+                    </td>
+                    <td style={{ ...td, width: 88, textAlign: "right" }}>
+                      {pending ? <input style={{ ...inp, textAlign: "right" }} inputMode="decimal" {...selectAllProps} value={it.unitCost} onChange={(e) => setItem(it.id, "unitCost", e.target.value)} /> : (it.unitCost === "" ? "—" : Number(it.unitCost).toFixed(2))}
+                    </td>
+                    <td style={{ ...td, textAlign: "right", fontWeight: 700, whiteSpace: "nowrap", width: 80 }}>
+                      {((Number(it.qty) || 0) * (Number(it.unitCost) || 0)).toLocaleString("en-GB", { minimumFractionDigits: 2 })}
+                    </td>
+                    <td style={{ ...td, whiteSpace: "nowrap", width: 150 }}>
+                      {it.postedAt ? (
+                        <Chip tone="green">In stock · {prettyDate(it.postedAt)}</Chip>
+                      ) : it.assignedInvoiceId ? (
+                        <button onClick={() => openInvoice(it.assignedInvoiceId)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit" }}>
+                          <Chip tone="gold">Job {invNoFor(it.assignedInvoiceId)} →</Chip>
+                        </button>
+                      ) : (
+                        <Chip tone="grey">Pending</Chip>
+                      )}
+                    </td>
+                    <td style={{ ...td, width: 100, textAlign: "right", whiteSpace: "nowrap" }}>
+                      {pending && (
+                        <>
+                          <button style={abtn} title="Commit this line to stock" onClick={() => stockOneItem(it.id)}><Icon name="box" /></button>{" "}
+                          <button style={abtn} title="Assign this line to a job" onClick={() => { setAssignQuery(""); setAssignFor(it.id); }}><Icon name="doc" /></button>{" "}
+                          <button style={{ ...abtn, border: "none" }} title="Remove line" onClick={() => setColl((t) => (t.items = t.items.filter((y) => y.id !== it.id)))}>
+                            <Icon name="x" stroke={RED} />
+                          </button>
+                        </>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
-        {!locked && (
-          <button style={{ ...btn, width: "100%", justifyContent: "center", borderStyle: "dashed", color: "#5a6a85", marginTop: 8 }}
-            onClick={() => setColl((t) => t.items.push(blankCollectionItem()))}>
-            <Icon name="plus" />Add item
-          </button>
-        )}
+        <button style={{ ...btn, width: "100%", justifyContent: "center", borderStyle: "dashed", color: "#5a6a85", marginTop: 8 }}
+          onClick={() => setColl((t) => t.items.push(blankCollectionItem()))}>
+          <Icon name="plus" />Add item
+        </button>
         <div style={{ display: "flex", gap: 16, alignItems: "center", justifyContent: "flex-end", marginTop: 12, fontSize: 13.5, fontWeight: 700 }}>
           Purchase value: <span style={{ background: GOLD + "33", border: "1px solid " + GOLD, borderRadius: 8, padding: "4px 12px" }}>{gbp(itemsValue(coll))}</span>
         </div>
@@ -319,16 +354,16 @@ export default function CollectionsScreen({ crm, updateCrm, askConfirm, selId, s
         </div>
       </div>
 
-      {assignPanel && (
-        <Modal title="Assign this collection to a job" onClose={() => setAssignPanel(false)} width={520}>
+      {assignFor && (
+        <Modal title={assignFor === "ALL" ? "Assign the remaining lines to a job" : "Assign this line to a job"} onClose={setAssignPanelClosed} width={520}>
           <p style={{ fontSize: 13, color: "#5a6a85", fontWeight: 600, marginTop: 0 }}>
-            The items go onto the invoice's pick list at their purchase cost (batch COL-{coll.collectionNo || "—"}), so the
-            job cost uses what you actually paid. Stock is not changed.
+            The line lands on the invoice's pick list at its purchase cost (batch COL-{coll.collectionNo || "—"}), so the job
+            cost uses what you actually paid. Stock is not changed.
           </p>
           <input style={inp} autoFocus placeholder="Search invoice # or customer…" value={assignQuery} onChange={(e) => setAssignQuery(e.target.value)} />
           <div style={{ border: "1px solid #e6e9ef", borderRadius: 9, marginTop: 8, maxHeight: 260, overflowY: "auto" }}>
             {assignable.map((i) => (
-              <button key={i.id} onClick={() => assignToJob(i.id)}
+              <button key={i.id} onClick={() => assignItems(i.id)}
                 style={{ display: "block", width: "100%", textAlign: "left", background: "#fff", border: "none", borderBottom: "1px solid #f0f2f6", padding: "9px 12px", fontFamily: "inherit", fontSize: 13.5, cursor: "pointer" }}>
                 <b>#{i.invNo || "—"}</b> <span style={{ color: "#5a6a85", fontWeight: 600 }}>{(custById[i.customerId] || {}).name || "no customer"} · {prettyDate(i.date)}</span>
               </button>

@@ -112,7 +112,8 @@ const collToRow = (c, i) => {
 
 const collItemToRow = (it, collectionId, i) => ({
   id: it.id, collection_id: collectionId, sku: str(it.sku), description: str(it.description),
-  colour: str(it.colour), qty: Number(it.qty) || 0, unit_cost: num(it.unitCost), position: i,
+  colour: str(it.colour), qty: Number(it.qty) || 0, unit_cost: num(it.unitCost),
+  assigned_invoice_id: str(it.assignedInvoiceId), posted_at: str(it.postedAt), position: i,
 });
 
 const VAN_TEXT = ["name", "reg", "makeModel", "insurer", "policyNo", "insuranceRenewal", "motDue", "taxDue", "serviceDue", "notes"];
@@ -284,6 +285,7 @@ async function loadAll() {
     (itemsByColl[r.collection_id] = itemsByColl[r.collection_id] || []).push({
       id: r.id, sku: nv(r.sku), description: nv(r.description), colour: nv(r.colour),
       qty: nv(r.qty) === "" ? "" : Number(r.qty), unitCost: nv(r.unit_cost),
+      assignedInvoiceId: nv(r.assigned_invoice_id), postedAt: nv(r.posted_at),
     });
   });
   const collections = colls_.map((r) => {

@@ -7,7 +7,7 @@ import ActivityScreen from "./ActivityScreen.jsx";
 import StockScreen from "./StockScreen.jsx";
 import CollectionsScreen from "./CollectionsScreen.jsx";
 import VansScreen from "./VansScreen.jsx";
-import { emptyCrm, normaliseCrm, blankCustomer, blankSite, blankInvoice, blankLine, invoiceTotals, blankMasterProduct, explodeInvoiceLines, invoiceCost, allocatedBySku, buildPicks, pickLandedCost, jobCost, stockValuation, matchShipmentToStock, blankCollection, blankCollectionItem, titleCase, formatPhone, formatPostcode, weightedCost, batchBreakdown, applyInvoiceStockDeduction, TIME_SLOTS, blankVan, blankVanCheck, vanReminders, mondayOf, today, syncMasterFromProducts } from "../../lib/crmCore.js";
+import { emptyCrm, normaliseCrm, blankCustomer, blankSite, blankInvoice, blankLine, invoiceTotals, blankMasterProduct, explodeInvoiceLines, invoiceCost, allocatedBySku, buildPicks, pickLandedCost, jobCost, stockValuation, matchShipmentToStock, blankCollection, blankCollectionItem, titleCase, formatPhone, formatPostcode, weightedCost, batchBreakdown, applyInvoiceStockDeduction, commitCollectionItem, assignCollectionItem, itemPending, TIME_SLOTS, blankVan, blankVanCheck, vanReminders, mondayOf, today, syncMasterFromProducts } from "../../lib/crmCore.js";
 
 export default function run(React, renderToString) {
   const crm = normaliseCrm(emptyCrm());
@@ -126,8 +126,20 @@ export default function run(React, renderToString) {
   assert(html.includes("Post shipment to stock"), "stock screen post button");
   html = renderToString(React.createElement(CollectionsScreen, { crm, updateCrm: noop, askConfirm: noop, selId: null, setSelId: noop, openInvoice: noop, me: "x" }));
   assert(html.includes("UK Timber Co") && html.includes("COL-"), "collections list renders");
+  // per-line disposition: one to stock, one to a job
+  {
+    colln.items.push({ ...colln.items[0], id: "ci2", sku: "DK/1.8/FE/TK", description: "1.8m Fence Board", qty: 4, unitCost: 6.1, assignedInvoiceId: "", postedAt: "" });
+    const boardRef = crm.masterProducts.find((m) => m.sku === "DK/1.8/FE/TK");
+    const preB = Number(boardRef.stock);
+    assert(commitCollectionItem(crm, colln, colln.items[1], "x") && Number(boardRef.stock) === preB + 4 && colln.items[1].postedAt, "line to stock");
+    assert(!commitCollectionItem(crm, colln, colln.items[1], "x"), "no double stocking");
+    const assignInv = { ...blankInvoice(cust.id, ""), invNo: 9998 };
+    crm.invoices.push(assignInv);
+    assert(assignCollectionItem(crm, colln, colln.items[0], assignInv.id) && assignInv.picks.length === 1 && assignInv.picks[0].unitCost === 13.25, "line to job at purchase cost");
+    assert(!itemPending(colln.items[0]) && !itemPending(colln.items[1]), "both lines dispositioned");
+  }
   html = renderToString(React.createElement(CollectionsScreen, { crm, updateCrm: noop, askConfirm: noop, selId: colln.id, setSelId: noop, openInvoice: noop, me: "x" }));
-  assert(html.includes("Commit to stock") && html.includes("Assign to job"), "collection editor actions");
+  assert(html.includes("In stock") && html.includes("9998"), "collection editor shows per-line outcomes");
   html = renderToString(React.createElement(ScheduleScreen, { crm, updateCrm: noop, openInvoice: noop, openCollection: noop }));
   assert(html.includes("COLLECTION") && html.includes("UK Timber Co"), "collection shows on schedule");
   // auto-sync: products screen drives the stock rows

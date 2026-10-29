@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import { NAVY, GOLD, RED, prettyDate } from "../../lib/core.js";
 import {
-  invoiceTotals, gbp, isPaid, scheduleStatus, STRIPE_COLOURS, daysSinceRaised, isCollectionJob, invoiceLoadKg,
+  invoiceTotals, gbp, isPaid, scheduleStatus, STRIPE_COLOURS, daysSinceRaised, isCollectionJob, invoiceLoadKg, collectionProgress,
   PREP_FLAGS, FOLLOWUP_FLAGS, today,
 } from "../../lib/crmCore.js";
 import { Icon, Chip, Tg, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
@@ -77,7 +77,7 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
 
   // collections ride the same board: a van picking up from a UK supplier is a run too
   const visibleColls = (crm.collections || []).filter((c) => {
-    if (hideDone && (c.postedAt || c.assignedInvoiceId)) return false;
+    if (hideDone) { const pr = collectionProgress(c); if (pr.total > 0 && pr.pending === 0) return false; }
     if (van && c.van !== van) return false;
     if (q && ![("col-" + (c.collectionNo || "")), c.supplier, c.postcode, c.van].some((v) => String(v || "").toLowerCase().includes(q))) return false;
     if (!c.collectDate) return true;
@@ -156,7 +156,8 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
   };
 
   const CollRow = ({ c }) => {
-    const done = Boolean(c.postedAt || c.assignedInvoiceId);
+    const pr = collectionProgress(c);
+    const done = pr.total > 0 && pr.pending === 0;
     const items = (c.items || []).reduce((t, it) => t + (Number(it.qty) || 0), 0);
     return (
       <div style={{ display: "flex", alignItems: "center", gap: 12, background: "#fff", border: "1px solid #e6e9ef", borderRadius: 10, padding: "9px 12px 9px 0", marginBottom: 6, overflow: "hidden", flexWrap: "wrap" }}>
@@ -180,7 +181,9 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
         <div style={{ flex: "none", width: 48, textAlign: "right", fontSize: 12.5, fontWeight: 700 }}>{c.collectTime || "—"}</div>
         <div style={{ flex: "1 1 120px", fontSize: 12, fontWeight: 700 }}>
           {done ? (
-            <Chip tone="green">{c.postedAt ? "In stock" : "On job"}</Chip>
+            <Chip tone="green">Processed</Chip>
+          ) : pr.done > 0 ? (
+            <Chip tone="gold">{pr.done}/{pr.total} processed</Chip>
           ) : (
             <label style={{ display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
               <input type="checkbox" checked={c.collected}

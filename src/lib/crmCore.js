@@ -234,7 +234,41 @@ export const blankCollection = () => ({
   items: [],
 });
 
-export const blankCollectionItem = () => ({ id: uid(), sku: "", description: "", colour: "", qty: "", unitCost: "" });
+export const blankCollectionItem = () => ({ id: uid(), sku: "", description: "", colour: "", qty: "", unitCost: "", assignedInvoiceId: "", postedAt: "" });
+
+export const itemPending = (it) => !it.postedAt && !it.assignedInvoiceId;
+
+export const collectionProgress = (c) => {
+  const items = c.items || [];
+  const done = items.filter((it) => !itemPending(it)).length;
+  return { total: items.length, done, pending: items.length - done };
+};
+
+// Commit ONE collection item into stock (weighted-average cost, movement row).
+export const commitCollectionItem = (c, coll, item, actor) => {
+  if (!itemPending(item)) return false;
+  const mp = (c.masterProducts || []).find((m) => (m.sku || "").trim().toLowerCase() === (item.sku || "").trim().toLowerCase());
+  if (!mp) return false;
+  const q = Number(item.qty) || 0;
+  const oldStock = mp.stock === "" || mp.stock === null ? 0 : Number(mp.stock);
+  if (item.unitCost !== "" && item.unitCost !== null) mp.costGbp = weightedCost(oldStock, mp.costGbp, q, Number(item.unitCost));
+  mp.stock = oldStock + q;
+  c.movements.push({ ...blankMovement(), sku: mp.sku, mpId: mp.id, qty: q, unitCost: item.unitCost === "" ? "" : Number(item.unitCost), kind: "collection", ref: "COL-" + (coll.collectionNo || ""), actor: actor || "" });
+  item.postedAt = today();
+  return true;
+};
+
+// Assign ONE collection item straight to a job: it lands on the invoice's
+// pick list at purchase cost (batch COL-n); stock is not touched.
+export const assignCollectionItem = (c, coll, item, invoiceId) => {
+  if (!itemPending(item)) return false;
+  const inv = (c.invoices || []).find((i) => i.id === invoiceId);
+  if (!inv) return false;
+  inv.picks = inv.picks || [];
+  inv.picks.push({ ...blankPick(), sku: item.sku, description: item.description, colour: item.colour, qty: item.qty, batchRef: "COL-" + (coll.collectionNo || ""), unitCost: item.unitCost, picked: true });
+  item.assignedInvoiceId = invoiceId;
+  return true;
+};
 
 export const blankMovement = () => ({ id: uid(), at: new Date().toISOString(), sku: "", mpId: "", qty: 0, unitCost: "", kind: "", ref: "" });
 
