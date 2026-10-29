@@ -13,6 +13,8 @@ const TABLE_LABELS = {
   quotes: "Quote",
   quote_items: "Quote line",
   samples: "Sample request",
+  suppliers: "Supplier",
+  purchases: "Purchase",
   sample_items: "Sample item",
   products: "Product",
   shipments: "Shipment",
@@ -66,13 +68,15 @@ export default function ActivityScreen({ crm, data, storageMode }) {
   }, []);
 
   const byId = useMemo(() => {
-    const m = { customers: {}, customer_sites: {}, invoices: {}, quotes: {}, samples: {}, products: {}, shipments: {} };
+    const m = { customers: {}, customer_sites: {}, invoices: {}, quotes: {}, samples: {}, suppliers: {}, purchases: {}, products: {}, shipments: {} };
     if (crm) {
       crm.customers.forEach((c) => (m.customers[c.id] = c.name || "Account #" + (c.accountNo || "—")));
       crm.sites.forEach((s) => (m.customer_sites[s.id] = s.name || s.address || "Site #" + (s.siteNo || "—")));
       crm.invoices.forEach((i) => (m.invoices[i.id] = "#" + (i.invNo || "—")));
       (crm.quotes || []).forEach((q) => (m.quotes[q.id] = "Q-" + (q.quoteNo || "—")));
       (crm.samples || []).forEach((x) => (m.samples[x.id] = "S-" + (x.sampleNo || "—")));
+      (crm.suppliers || []).forEach((x) => (m.suppliers[x.id] = x.name || "Supplier"));
+      (crm.purchases || []).forEach((x) => (m.purchases[x.id] = "PO " + (x.poNo || "—")));
     }
     if (data) {
       data.products.forEach((p) => (m.products[p.id] = p.name));

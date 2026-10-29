@@ -7,7 +7,10 @@ import { NAVY, GOLD, RED, prettyDate } from "../../lib/core.js";
 import {
   blankCollection, blankCollectionItem, nextNumber, skuIndex, gbp, today,
   TIME_SLOTS, vanOptions, itemPending, collectionProgress, commitCollectionItem, assignCollectionItem,
+  blankSupplier, findSupplierByName,
 } from "../../lib/crmCore.js";
+import { SupplierModal } from "./SuppliersScreen.jsx";
+import { purchasesAvailable } from "../../data/crmStorage.js";
 import { Icon, Chip, Modal, selectAllProps, SuggestInput, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
 import { printCollectionNote } from "./printDocs.js";
 
@@ -23,7 +26,8 @@ export const collectionStatus = (c) => {
   return ["Not booked", "red"];
 };
 
-export default function CollectionsScreen({ crm, updateCrm, askConfirm, selId, setSelId, openInvoice, me }) {
+export default function CollectionsScreen({ crm, updateCrm, askConfirm, selId, setSelId, openInvoice, me, goSupplier }) {
+  const [supDraft, setSupDraft] = useState(null);
   const [search, setSearch] = useState("");
   const [assignFor, setAssignFor] = useState(null); // item id, or "ALL" for every pending line
   const [assignQuery, setAssignQuery] = useState("");
@@ -249,7 +253,39 @@ export default function CollectionsScreen({ crm, updateCrm, askConfirm, selId, s
       <div style={card}>
         <p style={sect}>Supplier &amp; collection</p>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 12 }}>
-          {field("supplier", "Supplier")}
+          <div style={{ gridColumn: "span 2" }}>
+            <span style={lbl}>Supplier</span>
+            {(() => {
+              const linked = (crm.suppliers || []).find((x) => x.id === coll.supplierId);
+              // picking a supplier from the list links it and fills the address in
+              const pick = (v) =>
+                setColl((t) => {
+                  t.supplier = v;
+                  const s = (crm.suppliers || []).find((x) => x.name === v);
+                  if (s) {
+                    t.supplierId = s.id;
+                    ["address", "town", "postcode", "contact"].forEach((k) => (t[k] = s[k] || t[k]));
+                    if (s.phone) t.phone = s.phone;
+                  } else if (t.supplierId) t.supplierId = "";
+                });
+              return (
+                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                  <div style={{ flex: 1 }}>
+                    <SuggestInput value={coll.supplier} onChange={pick}
+                      options={(crm.suppliers || []).filter((x) => x.active !== false).map((x) => ({ value: x.name, label: x.name + (x.town ? " · " + x.town : "") }))} />
+                  </div>
+                  {linked ? (
+                    goSupplier ? <button style={abtn} title="Open supplier" onClick={() => goSupplier(linked.id)}><Icon name="user" /></button> : null
+                  ) : coll.supplier.trim() && purchasesAvailable() && !findSupplierByName(crm, coll.supplier) ? (
+                    <button style={{ ...btn, padding: "6px 10px", fontSize: 12.5, whiteSpace: "nowrap" }} title="Add to the suppliers list"
+                      onClick={() => setSupDraft({ ...blankSupplier(), name: coll.supplier.trim(), address: coll.address, town: coll.town, postcode: coll.postcode, contact: coll.contact, phone: coll.phone })}>
+                      <Icon name="plus" stroke={NAVY} />Save supplier
+                    </button>
+                  ) : null}
+                </div>
+              );
+            })()}
+          </div>
           {field("contact", "Contact")}
           {field("phone", "Phone")}
           {field("address", "Address")}
@@ -371,6 +407,10 @@ export default function CollectionsScreen({ crm, updateCrm, askConfirm, selId, s
             {!assignable.length && <div style={{ padding: 12, fontSize: 12.5, fontWeight: 600, color: "#8593a8" }}>No matching invoices.</div>}
           </div>
         </Modal>
+      )}
+      {supDraft && (
+        <SupplierModal crm={crm} updateCrm={updateCrm} me={me} draft={supDraft} onClose={() => setSupDraft(null)}
+          onSaved={(sp) => setColl((t) => { t.supplierId = sp.id; t.supplier = sp.name; })} />
       )}
     </div>
   );

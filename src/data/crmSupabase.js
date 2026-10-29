@@ -92,6 +92,28 @@ const taskToRow = (t, i) => {
 };
 const taskLogToRow = (l, i) => ({ id: l.id, task_id: str(l.taskId), period: str(l.period), done_by: str(l.doneBy), done_at: str(l.doneAt), position: i });
 
+// Suppliers + purchases (019_purchases.sql): same tolerance; collections only
+// send supplier_id once that column exists.
+let purchasesReady = false;
+export const purchasesSchemaReady = () => purchasesReady;
+const SUPPLIER_TEXT = ["name", "accountNo", "contact", "phone", "email", "address", "town", "postcode", "website", "category", "paymentMethod", "notes", "created", "createdBy"];
+const PURCHASE_TEXT = ["supplierId", "invNo", "invDate", "invDetail", "purchasedBy", "category", "vehicle", "datePaid", "paymentMethod", "createdBy"];
+
+const supplierToRow = (x, i) => {
+  const row = { id: x.id, active: x.active !== false, position: i };
+  SUPPLIER_TEXT.forEach((k) => (row[snake(k)] = str(x[k])));
+  return row;
+};
+const purchaseToRow = (p, i) => {
+  const row = {
+    id: p.id, po_no: intOrNull(p.poNo), created_at_text: str(p.createdAt), physical_receipt: p.physicalReceipt === true,
+    sub_total: num(p.subTotal), vat_rate: isFinite(Number(p.vatRate)) && p.vatRate !== "" ? Number(p.vatRate) : 20, vat_amount: num(p.vatAmount),
+    position: i,
+  };
+  PURCHASE_TEXT.forEach((k) => (row[snake(k)] = str(p[k])));
+  return row;
+};
+
 const snake = (k) => k.replace(/[A-Z]/g, (m) => "_" + m.toLowerCase());
 
 const customerToRow = (c, i) => {
@@ -170,6 +192,7 @@ const COLL_TEXT = ["supplier", "address", "town", "postcode", "contact", "phone"
 const collToRow = (c, i) => {
   const row = { id: c.id, collection_no: intOrNull(c.collectionNo), collected: c.collected === true, position: i };
   COLL_TEXT.forEach((k) => (row[snake(k)] = str(c[k])));
+  if (purchasesReady) row.supplier_id = str(c.supplierId);
   return row;
 };
 
@@ -252,7 +275,13 @@ function rowsFromData(d) {
     (d.tasks || []).forEach((t, i) => tasks.set(t.id, taskToRow(t, i)));
     (d.taskLog || []).forEach((l, i) => taskLog.set(l.id, taskLogToRow(l, i)));
   }
-  return { customers, sites, invoices, items, picks, mps, comps, colls, collItems, moves, vans, checks, quotes, quoteItems, samples, sampleItems, tasks, taskLog };
+  const suppliers = new Map();
+  const purchases = new Map();
+  if (purchasesReady) {
+    (d.suppliers || []).forEach((x, i) => suppliers.set(x.id, supplierToRow(x, i)));
+    (d.purchases || []).forEach((p, i) => purchases.set(p.id, purchaseToRow(p, i)));
+  }
+  return { customers, sites, invoices, items, picks, mps, comps, colls, collItems, moves, vans, checks, quotes, quoteItems, samples, sampleItems, tasks, taskLog, suppliers, purchases };
 }
 
 async function fetchAll(sb, table) {
@@ -272,7 +301,7 @@ let settingsSnapshot = {};
 
 async function loadAll() {
   const sb = await getSupabase();
-  const [cs, ss, is_, ls, ps_, mps_, comps_, colls_, collItems_, moves_, vans_, vanChecks_, settings, quoteData, sampleData, taskData, staffRows] = await Promise.all([
+  const [cs, ss, is_, ls, ps_, mps_, comps_, colls_, collItems_, moves_, vans_, vanChecks_, settings, quoteData, sampleData, taskData, staffRows, purchData] = await Promise.all([
     fetchAll(sb, "customers"),
     fetchAll(sb, "customer_sites"),
     fetchAll(sb, "invoices"),
@@ -338,7 +367,16 @@ async function loadAll() {
         return [];
       }
     })(),
+    (async () => {
+      try {
+        const [sp, pu] = await Promise.all([fetchAll(sb, "suppliers"), fetchAll(sb, "purchases")]);
+        return { sp, pu };
+      } catch (e) {
+        return null;
+      }
+    })(),
   ]);
+  purchasesReady = purchData !== null;
   tasksReady = taskData !== null;
   samplesReady = sampleData !== null;
   quotesReady = quoteData !== null;
@@ -425,6 +463,7 @@ async function loadAll() {
   const collections = colls_.map((r) => {
     const c = { id: r.id, collectionNo: r.collection_no, collected: r.collected === true, items: itemsByColl[r.id] || [] };
     COLL_TEXT.forEach((k) => (c[k] = nv(r[snake(k)])));
+    c.supplierId = nv(r.supplier_id);
     return c;
   });
   const movements = moves_.map((r) => ({
@@ -489,11 +528,26 @@ async function loadAll() {
   const taskLog = ((taskData && taskData.lg) || []).map((r) => ({ id: r.id, taskId: r.task_id, period: nv(r.period), doneBy: nv(r.done_by), doneAt: nv(r.done_at) }));
   const staff = (staffRows || []).filter((r) => r.email).map((r) => ({ email: r.email, name: nv(r.full_name), role: nv(r.role) }));
 
-  const data = { customers, sites, invoices, masterProducts, collections, movements, vans, numbering, reminders, quotes, samples, tasks, taskLog, staff };
+  const suppliers = ((purchData && purchData.sp) || []).map((r) => {
+    const x = { id: r.id, active: r.active !== false, modifiedBy: nv(r.modified_by), updatedAt: r.updated_at || "" };
+    SUPPLIER_TEXT.forEach((k) => (x[k] = nv(r[snake(k)])));
+    return x;
+  });
+  const purchases = ((purchData && purchData.pu) || []).map((r) => {
+    const p = {
+      id: r.id, poNo: r.po_no, createdAt: nv(r.created_at_text), physicalReceipt: r.physical_receipt === true,
+      subTotal: nv(r.sub_total), vatRate: Number(r.vat_rate), vatAmount: nv(r.vat_amount),
+      modifiedBy: nv(r.modified_by), updatedAt: r.updated_at || "",
+    };
+    PURCHASE_TEXT.forEach((k) => (p[k] = nv(r[snake(k)])));
+    return p;
+  });
+
+  const data = { customers, sites, invoices, masterProducts, collections, movements, vans, numbering, reminders, quotes, samples, tasks, taskLog, staff, suppliers, purchases };
   snapshot = rowsFromData(data);
   settingsSnapshot = { numbering: JSON.stringify(numbering), reminders: JSON.stringify(reminders) };
 
-  if (!customers.length && !sites.length && !invoices.length && !masterProducts.length && !collections.length && !vans.length && !quotes.length && !samples.length && !tasks.length && !settings.length) return null;
+  if (!customers.length && !sites.length && !invoices.length && !masterProducts.length && !collections.length && !vans.length && !quotes.length && !samples.length && !tasks.length && !suppliers.length && !purchases.length && !settings.length) return null;
   return data;
 }
 
@@ -530,6 +584,8 @@ async function saveAll(d) {
   const dsi = diff(prev.sampleItems || new Map(), next.sampleItems);
   const dtk = diff(prev.tasks || new Map(), next.tasks);
   const dtl = diff(prev.taskLog || new Map(), next.taskLog);
+  const dsp = diff(prev.suppliers || new Map(), next.suppliers);
+  const dpu = diff(prev.purchases || new Map(), next.purchases);
 
   const run = async (q) => {
     const { error } = await q;
@@ -572,6 +628,12 @@ async function saveAll(d) {
     if (dsm.deletes.length) await run(sb.from("samples").delete().in("id", dsm.deletes));
     if (dsm.upserts.length) await run(sb.from("samples").upsert(dsm.upserts));
     if (dsi.upserts.length) await run(sb.from("sample_items").upsert(dsi.upserts));
+  }
+  if (purchasesReady) {
+    if (dpu.deletes.length) await run(sb.from("purchases").delete().in("id", dpu.deletes));
+    if (dsp.deletes.length) await run(sb.from("suppliers").delete().in("id", dsp.deletes));
+    if (dsp.upserts.length) await run(sb.from("suppliers").upsert(dsp.upserts));
+    if (dpu.upserts.length) await run(sb.from("purchases").upsert(dpu.upserts));
   }
   if (tasksReady) {
     if (dtl.deletes.length) await run(sb.from("task_log").delete().in("id", dtl.deletes));

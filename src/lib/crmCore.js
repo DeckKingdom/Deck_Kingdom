@@ -221,6 +221,7 @@ export const blankPick = () => ({
 export const blankCollection = () => ({
   id: uid(),
   collectionNo: null,
+  supplierId: "",
   supplier: "",
   address: "",
   town: "",
@@ -314,6 +315,8 @@ export const emptyCrm = () => ({
   samples: [],
   tasks: [],
   taskLog: [],
+  suppliers: [],
+  purchases: [],
   staff: [],
   numbering: { account: 1, site: 1, invoice: 1, collection: 1, quote: 1, sample: 1 },
 });
@@ -338,6 +341,11 @@ export const normaliseCrm = (c) => {
   });
   d.taskLog = Array.isArray(d.taskLog) ? d.taskLog : [];
   d.staff = Array.isArray(d.staff) ? d.staff : [];
+  if (!d.numbering.purchase) d.numbering.purchase = 1;
+  d.suppliers = Array.isArray(d.suppliers) ? d.suppliers : [];
+  d.suppliers.forEach((x) => Object.assign(x, { ...blankSupplier(), ...x, id: x.id || uid() }));
+  d.purchases = Array.isArray(d.purchases) ? d.purchases : [];
+  d.purchases.forEach((x) => Object.assign(x, { ...blankPurchase(x.supplierId), ...x, id: x.id || uid() }));
   d.samples = Array.isArray(d.samples) ? d.samples : [];
   d.samples.forEach((x) => {
     Object.assign(x, { ...blankSample(x.customerId), ...x, id: x.id || uid() });
@@ -1194,4 +1202,106 @@ export const describeSchedule = (t) => {
     return "Monthly on the " + n + sfx;
   }
   return (t.frequency === "fortnightly" ? "Every other " : "Every ") + WEEKDAYS[Number(t.weekday) || 0];
+};
+
+// ===== suppliers & purchases =====
+// Suppliers hold the details once (our account # with them, address, contact,
+// usual category / payment method) and feed both Purchases and Collections.
+// Purchases follow the FileMaker layout: sub total entered ex VAT, VAT worked
+// out from the rate (or typed over for mixed-rate invoices), total = both.
+export const PURCHASE_CATEGORIES = ["Products", "Fixings & sundries", "Packaging", "Fuel", "Vehicle", "Tools & equipment", "Postage & couriers", "Marketing", "Website & software", "Premises & utilities", "Office", "Other"];
+export const PAYMENT_METHODS = ["Virgin Transfer", "Card", "Direct Debit", "Cash", "On account"];
+export const VAT_RATES = [20, 5, 0];
+
+export const blankSupplier = () => ({
+  id: uid(),
+  name: "",
+  accountNo: "",
+  contact: "",
+  phone: "",
+  email: "",
+  address: "",
+  town: "",
+  postcode: "",
+  website: "",
+  category: "",
+  paymentMethod: "",
+  notes: "",
+  active: true,
+  created: today(),
+});
+
+export const blankPurchase = (supplierId) => ({
+  id: uid(),
+  poNo: null,
+  createdAt: new Date().toISOString(),
+  createdBy: "",
+  supplierId: supplierId || "",
+  physicalReceipt: false,
+  invNo: "",
+  invDate: "",
+  invDetail: "",
+  purchasedBy: "",
+  category: "",
+  vehicle: "",
+  subTotal: "",
+  vatRate: 20,
+  vatAmount: "",     // "" = worked out from the rate; a number = typed over
+  datePaid: "",
+  paymentMethod: "",
+});
+
+const round2 = (n) => Math.round(n * 100) / 100;
+export const purchaseTotals = (p) => {
+  const sub = Number(p.subTotal) || 0;
+  const rate = isFinite(Number(p.vatRate)) && p.vatRate !== "" ? Number(p.vatRate) : 20;
+  const manual = p.vatAmount !== "" && p.vatAmount !== null && p.vatAmount !== undefined && isFinite(Number(p.vatAmount));
+  const vat = manual ? Number(p.vatAmount) : round2(sub * rate / 100);
+  return { sub, rate, vat, total: round2(sub + vat), manualVat: manual };
+};
+export const purchaseIsPaid = (p) => Boolean(p.datePaid);
+export const poRef = (p) => "PO " + (p && p.poNo ? p.poNo : "—");
+
+// Start a purchase for a supplier with their usual category / payment method
+export const newPurchaseFor = (c, supplierId, actor, newId) => {
+  const sup = (c.suppliers || []).find((x) => x.id === supplierId);
+  const n = blankPurchase(supplierId);
+  if (newId) n.id = newId;
+  n.poNo = nextNumber(c.purchases || [], "poNo", c.numbering.purchase);
+  n.createdBy = actor || "";
+  if (sup) {
+    n.category = sup.category || "";
+    n.paymentMethod = sup.paymentMethod || "";
+  }
+  c.purchases = c.purchases || [];
+  c.purchases.unshift(n);
+  c.numbering.purchase = (Number(n.poNo) || 0) + 1;
+  return n;
+};
+
+export const supplierById = (crm) => {
+  const m = {};
+  (crm.suppliers || []).forEach((x) => (m[x.id] = x));
+  return m;
+};
+
+// Same supplier, ignoring case / Ltd / punctuation — to spot duplicates and match collections
+export const supplierKey = (name) => String(name || "").toLowerCase().replace(/\b(ltd|limited|plc|llp|uk)\b/g, "").replace(/[^a-z0-9]/g, "");
+export const findSupplierByName = (crm, name) => {
+  const k = supplierKey(name);
+  return k ? (crm.suppliers || []).find((x) => supplierKey(x.name) === k) || null : null;
+};
+
+export const supplierStats = (crm, supplierId) => {
+  const ps = (crm.purchases || []).filter((p) => p.supplierId === supplierId);
+  let spend = 0, unpaid = 0, unpaidCount = 0, last = "";
+  ps.forEach((p) => {
+    const t = purchaseTotals(p).total;
+    spend += t;
+    if (!purchaseIsPaid(p)) { unpaid += t; unpaidCount++; }
+    const d = p.invDate || (p.createdAt || "").slice(0, 10);
+    if (d > last) last = d;
+  });
+  const colls = (crm.collections || []).filter((c) => c.supplierId === supplierId).length;
+  return { count: ps.length, spend: round2(spend), unpaid: round2(unpaid), unpaidCount, last, collections: colls };
 };

@@ -10,6 +10,9 @@ import VansScreen from "./VansScreen.jsx";
 import QuotesScreen from "./QuotesScreen.jsx";
 import SamplesScreen from "./SamplesScreen.jsx";
 import TasksScreen from "./TasksScreen.jsx";
+import PurchasesScreen from "./PurchasesScreen.jsx";
+import SuppliersScreen from "./SuppliersScreen.jsx";
+import { blankSupplier, blankPurchase, purchaseTotals, newPurchaseFor, supplierStats, findSupplierByName } from "../../lib/crmCore.js";
 import { blankTask, scheduledOccurrence, nextScheduled, occurrenceAssignees, dailyTasksFor, dueScheduledFor, projectsFor, setTaskDone, isDailyDone } from "../../lib/crmCore.js";
 import { blankSample, blankSampleItem, syncSampleConversions, sampleStatus, sampleStats, sampleInvoice } from "../../lib/crmCore.js";
 import { addDays as addD } from "../../lib/core.js";
@@ -370,6 +373,46 @@ export default function run(React, renderToString) {
       html = renderToString(React.createElement(TasksScreen, { crm: tc, updateCrm: noop, askConfirm: noop, me: "ian@dk.co.uk", goHome: noop }));
       assert(html.includes("Daily list") && html.includes("Check web orders"), "tasks manager renders");
     }
+  }
+  // ===== suppliers & purchases =====
+  {
+    const pc = normaliseCrm({ customers: [] });
+    assert(pc.numbering.purchase === 1 && Array.isArray(pc.suppliers) && Array.isArray(pc.purchases), "purchases normalised");
+    const tuda = { ...blankSupplier(), id: "sup1", name: "Tuda Grass", accountNo: "DK001", postcode: "M1-1AA", category: "Products", paymentMethod: "Virgin Transfer" };
+    pc.suppliers.push(tuda);
+    pc.numbering.purchase = 3798;
+    const po = newPurchaseFor(pc, "sup1", "hayley@dk.co.uk", "po1");
+    assert(po.poNo === 3798 && pc.numbering.purchase === 3799, "PO numbering continues");
+    assert(po.category === "Products" && po.paymentMethod === "Virgin Transfer", "supplier defaults pulled through");
+    Object.assign(po, { invNo: "106163", invDate: "2026-01-05", invDetail: "4 x U channel\n66 x Fence panel grey", subTotal: "748", purchasedBy: "Jon", datePaid: "2026-02-20" });
+    let t = purchaseTotals(po);
+    assert(t.sub === 748 && t.vat === 149.6 && t.total === 897.6, "FileMaker example: 748 + 149.60 = 897.60, got " + JSON.stringify(t));
+    po.vatAmount = "100";
+    t = purchaseTotals(po);
+    assert(t.manualVat && t.total === 848, "typed-over VAT");
+    po.vatAmount = ""; po.vatRate = 0;
+    assert(purchaseTotals(po).total === 748, "zero-rated");
+    po.vatRate = 20;
+    const po2 = newPurchaseFor(pc, "sup1", "x", "po2");
+    po2.subTotal = "100";
+    const st = supplierStats(pc, "sup1");
+    assert(st.count === 2 && st.spend === 1017.6 && st.unpaid === 120 && st.unpaidCount === 1, "supplier stats " + JSON.stringify(st));
+    assert(findSupplierByName(pc, "TUDA GRASS LTD") === tuda && !findSupplierByName(pc, "Cladco"), "duplicate supplier match");
+    const pprops = { crm: pc, updateCrm: noop, askConfirm: noop, setSelId: noop, me: "x", goSupplier: noop, filter: null, setFilter: noop };
+    html = renderToString(React.createElement(PurchasesScreen, { ...pprops, selId: null }));
+    assert(html.includes("Spent this month") && html.includes("New purchase") && html.includes("Unpaid"), "purchases list renders");
+    html = renderToString(React.createElement(PurchasesScreen, { ...pprops, selId: "po1" }));
+    assert(html.includes("PO# 3798") && html.includes("Tuda Grass") && html.includes("DK001") && html.includes("106163") && html.includes("£897.60"), "purchase entry renders");
+    const sprops = { crm: pc, updateCrm: noop, askConfirm: noop, setSelId: noop, me: "x", openPurchase: noop, newPurchase: noop, openCollection: noop };
+    html = renderToString(React.createElement(SuppliersScreen, { ...sprops, selId: null }));
+    assert(html.includes("Tuda Grass") && html.includes("New supplier"), "suppliers list renders");
+    html = renderToString(React.createElement(SuppliersScreen, { ...sprops, selId: "sup1" }));
+    assert(html.includes("Account #DK001") && html.includes("106163") && html.includes("Total spend"), "supplier view renders");
+    const col = { ...blankCollection(), id: "colx", collectionNo: 9, supplierId: "sup1", supplier: "Tuda Grass" };
+    pc.collections.push(col);
+    html = renderToString(React.createElement(CollectionsScreen, { crm: pc, updateCrm: noop, askConfirm: noop, selId: "colx", setSelId: noop, openInvoice: noop, me: "x", goSupplier: noop }));
+    assert(html.includes("Tuda Grass"), "collection shows linked supplier");
+    assert(supplierStats(pc, "sup1").collections === 1, "supplier counts its collections");
   }
   console.log("smoke OK — all screens render, totals reconcile (1392 goods + 60 delivery = 1452 inc VAT, £242 VAT, £1210 net)");
 }

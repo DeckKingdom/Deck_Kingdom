@@ -18,6 +18,13 @@ export const NAV_SECTIONS = [
   },
   { title: "", items: [["schedule", "Delivery Schedule", "cal"]] },
   {
+    title: "Purchasing",
+    items: [
+      ["purchases", "Purchases", "pound", true],
+      ["suppliers", "Suppliers", "box", true],
+    ],
+  },
+  {
     title: "Imports",
     items: [
       ["overview", "Overview", "grid"],

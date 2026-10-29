@@ -23,14 +23,16 @@ import {
   money,
   int,
 } from "../lib/core.js";
-import { blankInvoice, blankQuote, blankSample, blankSampleItem, nextNumber, TRADE_COUNTER, vanReminders, syncMasterFromProducts, syncSampleConversions, dueScheduledFor, setTaskDone, describeSchedule, today as todayStr } from "../lib/crmCore.js";
+import { blankInvoice, blankQuote, blankSample, blankSampleItem, nextNumber, TRADE_COUNTER, vanReminders, syncMasterFromProducts, syncSampleConversions, dueScheduledFor, setTaskDone, describeSchedule, today as todayStr, newPurchaseFor } from "../lib/crmCore.js";
 import { useCrm } from "./crm/useCrm.js";
 import CustomersScreen from "./crm/CustomersScreen.jsx";
 import InvoicesScreen from "./crm/InvoicesScreen.jsx";
 import QuotesScreen from "./crm/QuotesScreen.jsx";
 import SamplesScreen from "./crm/SamplesScreen.jsx";
 import TasksScreen from "./crm/TasksScreen.jsx";
-import { quotesAvailable, samplesAvailable, tasksAvailable } from "../data/crmStorage.js";
+import PurchasesScreen from "./crm/PurchasesScreen.jsx";
+import SuppliersScreen from "./crm/SuppliersScreen.jsx";
+import { quotesAvailable, samplesAvailable, tasksAvailable, purchasesAvailable } from "../data/crmStorage.js";
 import ScheduleScreen from "./crm/ScheduleScreen.jsx";
 import Sidebar, { TAB_LABELS } from "./Sidebar.jsx";
 import HomeScreen from "./HomeScreen.jsx";
@@ -155,6 +157,33 @@ export default function ImportPlanner() {
   const [quoteFilter, setQuoteFilter] = useState(null); // { customerId }
   const [selSampleId, setSelSampleId] = useState(null);
   const [newCustSignal, setNewCustSignal] = useState(0);
+  const [selPurchaseId, setSelPurchaseId] = useState(null);
+  const [purchaseFilter, setPurchaseFilter] = useState(null); // { supplierId }
+  const [selSupplierId, setSelSupplierId] = useState(null);
+  const [newSupplierSignal, setNewSupplierSignal] = useState(0);
+  const openPurchase = (id) => {
+    setSelPurchaseId(id);
+    setTab("purchases");
+  };
+  const goSupplier = (id) => {
+    setSelSupplierId(id);
+    setTab("suppliers");
+  };
+  const newPurchase = (supplierId) => {
+    if (!crm) return;
+    if (!purchasesAvailable()) {
+      setSelPurchaseId(null);
+      setTab("purchases");
+      return;
+    }
+    const id = Math.random().toString(36).slice(2, 10);
+    updateCrm((c) => {
+      newPurchaseFor(c, supplierId || "", me, id);
+      return c;
+    });
+    setSelPurchaseId(id);
+    setTab("purchases");
+  };
   // "+" buttons in the side menu
   const sideNew = (t) => {
     if (t === "customers") {
@@ -167,7 +196,14 @@ export default function ImportPlanner() {
       setTab(t); // still loading: just go there
       return;
     }
-    if (t === "invoices") newInvoiceFor("", "");
+    if (t === "suppliers") {
+      setSelSupplierId(null);
+      setNewSupplierSignal((n) => n + 1);
+      setTab("suppliers");
+      return;
+    }
+    if (t === "purchases") newPurchase("");
+    else if (t === "invoices") newInvoiceFor("", "");
     else if (t === "quotes") newQuoteFor("", "");
     else if (t === "samples") newSampleFor("");
   };
@@ -175,7 +211,7 @@ export default function ImportPlanner() {
   const [remindersClosed, setRemindersClosed] = useState(false); // closed for this visit
 
   useEffect(() => {
-    if (CRM_TABS.includes(tab) || ["home", "tasks", "activity", "stock", "collections", "vans", "products"].includes(tab)) setCrmOn(true);
+    if (CRM_TABS.includes(tab) || ["home", "tasks", "purchases", "suppliers", "activity", "stock", "collections", "vans", "products"].includes(tab)) setCrmOn(true);
   }, [tab]);
 
   const me = storageMode === "supabase" ? getSessionEmail() || "" : "";
@@ -915,6 +951,18 @@ export default function ImportPlanner() {
         </>
       )}
 
+      {(tab === "purchases" || tab === "suppliers") &&
+        (!crm ? (
+          <div style={{ padding: 40, textAlign: "center", color: "#5a6a85", fontWeight: 600 }}>Loading…</div>
+        ) : tab === "purchases" ? (
+          <PurchasesScreen crm={crm} updateCrm={updateCrm} askConfirm={setConfirmBox} selId={selPurchaseId} setSelId={setSelPurchaseId}
+            me={me} goSupplier={goSupplier} filter={purchaseFilter} setFilter={setPurchaseFilter} />
+        ) : (
+          <SuppliersScreen crm={crm} updateCrm={updateCrm} askConfirm={setConfirmBox} selId={selSupplierId} setSelId={setSelSupplierId}
+            me={me} openPurchase={openPurchase} newPurchase={newPurchase} openCollection={openCollection}
+            newSignal={newSupplierSignal} onNewHandled={() => setNewSupplierSignal(0)} />
+        ))}
+
       {tab === "tasks" &&
         (!crm ? (
           <div style={{ padding: 40, textAlign: "center", color: "#5a6a85", fontWeight: 600 }}>Loading tasks…</div>
@@ -1007,7 +1055,7 @@ export default function ImportPlanner() {
         ) : tab === "stock" ? (
           <StockScreen crm={crm} updateCrm={updateCrm} planner={data} updatePlanner={update} askConfirm={setConfirmBox} me={me} />
         ) : (
-          <CollectionsScreen crm={crm} updateCrm={updateCrm} askConfirm={setConfirmBox} selId={selCollectionId} setSelId={setSelCollectionId} openInvoice={openInvoice} me={me} />
+          <CollectionsScreen crm={crm} updateCrm={updateCrm} askConfirm={setConfirmBox} selId={selCollectionId} setSelId={setSelCollectionId} openInvoice={openInvoice} me={me} goSupplier={goSupplier} />
         ))}
 
       {tab === "overview" && (

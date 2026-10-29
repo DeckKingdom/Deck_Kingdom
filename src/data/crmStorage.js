@@ -1,7 +1,7 @@
 // CRM storage: same mode selection as the planner, but the supabase mode
 // talks to the CRM tables through its own relational adapter.
 import { storage, storageMode } from "./storage.js";
-import { crmSupabaseStorage, quotesSchemaReady, samplesSchemaReady, tasksSchemaReady } from "./crmSupabase.js";
+import { crmSupabaseStorage, quotesSchemaReady, samplesSchemaReady, tasksSchemaReady, purchasesSchemaReady } from "./crmSupabase.js";
 
 export const crmStorage = storageMode === "supabase" ? crmSupabaseStorage : storage;
 export { storageMode };
@@ -11,3 +11,5 @@ export const quotesAvailable = () => (storageMode === "supabase" ? quotesSchemaR
 export const samplesAvailable = () => (storageMode === "supabase" ? samplesSchemaReady() : true);
 // false only on the hosted site before 018_tasks.sql has been run
 export const tasksAvailable = () => (storageMode === "supabase" ? tasksSchemaReady() : true);
+// false only on the hosted site before 019_purchases.sql has been run
+export const purchasesAvailable = () => (storageMode === "supabase" ? purchasesSchemaReady() : true);
