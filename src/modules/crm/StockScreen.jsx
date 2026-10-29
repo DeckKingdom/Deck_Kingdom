@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import { NAVY, GOLD, RED, prettyDate, prettyDateTime, money } from "../../lib/core.js";
 import {
-  stockValuation, allocatedBySku, matchShipmentToStock, blankMovement, gbp, TRADE_DISCOUNT, today,
+  stockValuation, allocatedBySku, matchShipmentToStock, blankMovement, gbp, TRADE_DISCOUNT, today, weightedCost,
 } from "../../lib/crmCore.js";
 import { Icon, Chip, Modal, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
 
@@ -36,8 +36,9 @@ export default function StockScreen({ crm, updateCrm, planner, updatePlanner, as
       match.matched.forEach(({ mp, qty, landed }) => {
         const t = c.masterProducts.find((x) => x.id === mp.id);
         if (!t) return;
-        t.stock = (t.stock === "" || t.stock === null ? 0 : Number(t.stock)) + qty;
-        if (updateCosts && landed !== null) t.costGbp = Math.round(landed * 10000) / 10000;
+        const oldStock = t.stock === "" || t.stock === null ? 0 : Number(t.stock);
+        if (updateCosts && landed !== null) t.costGbp = weightedCost(oldStock, t.costGbp, qty, Math.round(landed * 10000) / 10000);
+        t.stock = oldStock + qty;
         c.movements.push({ ...blankMovement(), sku: t.sku, mpId: t.id, qty, unitCost: landed === null ? "" : Math.round(landed * 10000) / 10000, kind: "shipment", ref, actor: me || "" });
       });
       return c;
@@ -224,7 +225,7 @@ export default function StockScreen({ crm, updateCrm, planner, updatePlanner, as
                   )}
                   <label style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 13, fontWeight: 700, margin: "12px 0" }}>
                     <input type="checkbox" checked={updateCosts} onChange={(e) => setUpdateCosts(e.target.checked)} />
-                    Update each SKU's master cost £/pc to this batch's landed cost
+                    Update each SKU's cost £/pc (weighted average of stock on hand + this batch)
                   </label>
                 </>
               )}

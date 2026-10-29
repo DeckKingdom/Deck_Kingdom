@@ -5,7 +5,7 @@ import { useState, useMemo } from "react";
 import { NAVY, GOLD, RED, prettyDate } from "../../lib/core.js";
 import {
   blankCollection, blankCollectionItem, blankMovement, blankPick, nextNumber,
-  skuIndex, gbp, today, TIME_SLOTS, vanOptions,
+  skuIndex, gbp, today, TIME_SLOTS, vanOptions, weightedCost,
 } from "../../lib/crmCore.js";
 import { Icon, Chip, Modal, selectAllProps, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
 import { printCollectionNote } from "./printDocs.js";
@@ -80,8 +80,9 @@ export default function CollectionsScreen({ crm, updateCrm, askConfirm, selId, s
             const mp = c.masterProducts.find((p) => (p.sku || "").trim().toLowerCase() === (it.sku || "").trim().toLowerCase());
             if (!mp) return;
             const q = Number(it.qty) || 0;
-            mp.stock = (mp.stock === "" || mp.stock === null ? 0 : Number(mp.stock)) + q;
-            if (it.unitCost !== "" && it.unitCost !== null) mp.costGbp = Number(it.unitCost);
+            const oldStock = mp.stock === "" || mp.stock === null ? 0 : Number(mp.stock);
+            if (it.unitCost !== "" && it.unitCost !== null) mp.costGbp = weightedCost(oldStock, mp.costGbp, q, Number(it.unitCost));
+            mp.stock = oldStock + q;
             c.movements.push({ ...blankMovement(), sku: mp.sku, mpId: mp.id, qty: q, unitCost: it.unitCost === "" ? "" : Number(it.unitCost), kind: "collection", ref: "COL-" + (t.collectionNo || ""), actor: me || "" });
           });
           t.postedAt = today();

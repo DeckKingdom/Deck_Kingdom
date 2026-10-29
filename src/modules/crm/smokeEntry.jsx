@@ -7,7 +7,7 @@ import ActivityScreen from "./ActivityScreen.jsx";
 import StockScreen from "./StockScreen.jsx";
 import CollectionsScreen from "./CollectionsScreen.jsx";
 import VansScreen from "./VansScreen.jsx";
-import { emptyCrm, normaliseCrm, blankCustomer, blankSite, blankInvoice, blankLine, invoiceTotals, blankMasterProduct, explodeInvoiceLines, invoiceCost, allocatedBySku, buildPicks, pickLandedCost, jobCost, stockValuation, matchShipmentToStock, blankCollection, blankCollectionItem, titleCase, formatPhone, formatPostcode, TIME_SLOTS, blankVan, blankVanCheck, vanReminders, mondayOf, today, syncMasterFromProducts } from "../../lib/crmCore.js";
+import { emptyCrm, normaliseCrm, blankCustomer, blankSite, blankInvoice, blankLine, invoiceTotals, blankMasterProduct, explodeInvoiceLines, invoiceCost, allocatedBySku, buildPicks, pickLandedCost, jobCost, stockValuation, matchShipmentToStock, blankCollection, blankCollectionItem, titleCase, formatPhone, formatPostcode, weightedCost, TIME_SLOTS, blankVan, blankVanCheck, vanReminders, mondayOf, today, syncMasterFromProducts } from "../../lib/crmCore.js";
 
 export default function run(React, renderToString) {
   const crm = normaliseCrm(emptyCrm());
@@ -47,6 +47,10 @@ export default function run(React, renderToString) {
 
   assert(TIME_SLOTS[0] === "AM" && TIME_SLOTS[1] === "PM" && TIME_SLOTS[2] === "TBC" && TIME_SLOTS[3] === "08:00" && TIME_SLOTS[TIME_SLOTS.length - 1] === "18:00", "time slots sequence");
   assert(TIME_SLOTS.includes("09:15") && TIME_SLOTS.includes("12:45"), "quarter-hour slots");
+
+  // weighted average: 100 @ 6.50 in stock + 300 arriving @ 10.34 -> 9.38
+  assert(Math.abs(weightedCost(100, 6.5, 300, 10.34) - 9.38) < 0.001, "weighted cost, got " + weightedCost(100, 6.5, 300, 10.34));
+  assert(weightedCost(0, "", 300, 10.34) === 10.34, "no prior stock -> new cost");
 
   const noop = () => {};
   const props = { crm, updateCrm: noop, askConfirm: noop, me: "jon@deckkingdom.co.uk", openInvoice: noop, newInvoiceFor: noop, goCustomer: noop };

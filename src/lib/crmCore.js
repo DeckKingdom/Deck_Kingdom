@@ -629,6 +629,16 @@ export const jobCost = (inv, crm, planner) => {
   return { total, costed, landedLines, of: (inv.picks || []).length };
 };
 
+// New batch arriving on top of existing stock: weighted-average cost.
+// (old stock x old cost + new qty x new cost) / total — falls back to the
+// new cost when there's no prior stock or no prior cost.
+export const weightedCost = (oldStock, oldCost, qty, newCost) => {
+  const os = Number(oldStock);
+  const oc = Number(oldCost);
+  if (!isFinite(os) || os <= 0 || !isFinite(oc) || oldCost === "" || oldCost === null) return newCost;
+  return Math.round(((os * oc + qty * newCost) / (os + qty)) * 10000) / 10000;
+};
+
 // ===== stock =====
 export const TRADE_DISCOUNT = 0.1; // trade pricing = standard - 10%
 
