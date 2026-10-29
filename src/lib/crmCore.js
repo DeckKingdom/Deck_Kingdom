@@ -237,7 +237,7 @@ export const blankCollectionItem = () => ({ id: uid(), sku: "", description: "",
 
 export const blankMovement = () => ({ id: uid(), at: new Date().toISOString(), sku: "", mpId: "", qty: 0, unitCost: "", kind: "", ref: "" });
 
-export const blankLine = () => ({ id: uid(), code: "", description: "", colour: "", qty: "", price: "" });
+export const blankLine = () => ({ id: uid(), code: "", description: "", colour: "", qty: 0, price: "" });
 
 export const blankMasterProduct = () => ({
   id: uid(),

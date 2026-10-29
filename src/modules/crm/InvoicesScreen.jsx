@@ -25,7 +25,6 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
   const [search, setSearch] = useState("");
   const [custQuery, setCustQuery] = useState("");
   const [notice, setNotice] = useState("");
-  const [freeQty, setFreeQty] = useState(new Set()); // lines typing a qty directly (double-clicked)
 
   const custById = useMemo(() => {
     const m = {};
@@ -406,28 +405,19 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
                     />
                   </td>
                   <td style={{ padding: "6px 6px", borderBottom: "1px solid #f0f2f6", width: 74 }}>
-                    {Number(l.qty) > 100 || freeQty.has(l.id) ? (
-                      <div style={{ position: "relative" }}>
-                        <input style={{ ...numInp, paddingRight: 20 }} inputMode="decimal" autoFocus={freeQty.has(l.id)} value={l.qty} {...selectAllProps}
-                          onChange={(e) => setLine(l.id, "qty", e.target.value)}
-                          onBlur={(e) => {
-                            const n = Number(e.target.value);
-                            if (Number.isInteger(n) && n >= 1 && n <= 100)
-                              setFreeQty((f) => { const x = new Set(f); x.delete(l.id); return x; });
-                          }} />
-                        <span style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: "#5a6a85", fontSize: 10 }}>▾</span>
-                      </div>
-                    ) : (
-                      <select style={inp} title="Double-click to type a quantity" value={l.qty === "" || l.qty === null ? "" : String(l.qty)}
-                        onDoubleClick={() => setFreeQty((f) => new Set(f).add(l.id))}
-                        onChange={(e) => setLine(l.id, "qty", e.target.value === "" ? "" : Number(e.target.value))}>
-                        <option value="">—</option>
-                        {l.qty !== "" && l.qty !== null && !(Number.isInteger(Number(l.qty)) && Number(l.qty) >= 1 && Number(l.qty) <= 100) && (
-                          <option value={String(l.qty)}>{String(l.qty)}</option>
-                        )}
-                        {Array.from({ length: 100 }, (_, i) => String(i + 1)).map((n) => <option key={n} value={n}>{n}</option>)}
-                      </select>
-                    )}
+                    <div style={{ position: "relative" }}>
+                      <SuggestInput
+                        value={l.qty === "" || l.qty === null ? 0 : l.qty}
+                        options={Array.from({ length: 101 }, (_, i) => String(i))}
+                        openOnFocus
+                        listMaxHeight={176}
+                        listMinWidth={64}
+                        inputStyle={{ textAlign: "right", paddingRight: 20 }}
+                        inputMode="decimal"
+                        onChange={(v) => setLine(l.id, "qty", v)}
+                      />
+                      <span style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: "#5a6a85", fontSize: 10 }}>▾</span>
+                    </div>
                   </td>
                   <td style={{ padding: "6px 6px", borderBottom: "1px solid #f0f2f6", minWidth: 200 }}>
                     <input style={inp} value={l.description} {...selectAllProps} onChange={(e) => setLine(l.id, "description", e.target.value)} />
