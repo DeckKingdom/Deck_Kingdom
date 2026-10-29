@@ -7,7 +7,7 @@ import { NAVY, GOLD, RED, prettyDate } from "../../lib/core.js";
 import {
   blankCollection, blankCollectionItem, nextNumber, skuIndex, gbp, today,
   TIME_SLOTS, vanOptions, itemPending, collectionProgress, commitCollectionItem, assignCollectionItem,
-  blankSupplier, findSupplierByName, supplierKey, skuOptionLabel,
+  blankSupplier, findSupplierByName, supplierKey, skuOptionLabel, releaseCollectionPicks,
 } from "../../lib/crmCore.js";
 import { SupplierModal } from "./SuppliersScreen.jsx";
 import { purchasesAvailable } from "../../data/crmStorage.js";
@@ -86,6 +86,7 @@ export default function CollectionsScreen({ crm, updateCrm, askConfirm, selId, s
       danger: true,
       action: () => {
         updateCrm((x) => {
+          releaseCollectionPicks(x, c); // jobs it was raised for go back to their stock check
           x.collections = x.collections.filter((y) => y.id !== c.id);
           return x;
         });

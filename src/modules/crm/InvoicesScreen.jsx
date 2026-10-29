@@ -11,6 +11,7 @@ import {
 import { Icon, Chip, Tg, Modal, selectAllProps, SuggestInput, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
 import { printInvoice, printJobSheet, printLoadingBill } from "./printDocs.js";
 import LinesEditor from "./LinesEditor.jsx";
+import StockCheck from "./StockCheck.jsx";
 
 const navyBtn = { ...btn, background: "transparent", border: "1px solid #3a4f78", color: "#fff" };
 const numInp = { ...inp, textAlign: "right" };
@@ -22,7 +23,7 @@ const NoteBox = ({ children }) => (
   </div>
 );
 
-export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setSelId, goCustomer, openQuote, openSample, me, planner, filter, setFilter }) {
+export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setSelId, goCustomer, openQuote, openSample, openCollection, me, planner, filter, setFilter }) {
   const [search, setSearch] = useState("");
   const [custQuery, setCustQuery] = useState("");
   const [notice, setNotice] = useState("");
@@ -375,6 +376,9 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
         <p style={sect}>Lines</p>
         <LinesEditor doc={inv} edit={setInv} crm={crm} />
 
+        <StockCheck inv={inv} crm={crm} planner={planner} updateCrm={updateCrm} me={me} openCollection={openCollection}
+          onRaised={(names) => setNotice((names.length > 1 ? "Collection notes raised with " : "Collection note raised with ") + names.join(" and ") + " — linked to this job and added to its pick list below. It's on the Collections screen ready to book a van.")} />
+
         {(() => {
           const shipments = (planner && planner.shipments) || [];
           const jc = jobCost(inv, crm, planner);
@@ -393,7 +397,7 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
                     style={{ ...btn, padding: "6px 11px", fontSize: 12.5 }}
                     onClick={() =>
                       askConfirm({
-                        message: "Rebuild the pick list from the invoice lines? Batch references entered so far will be cleared.",
+                        message: "Rebuild the pick list from the invoice lines? Batch references on stock lines will be cleared — parts coming on collections stay.",
                         confirmLabel: "Rebuild",
                         danger: true,
                         action: () => setInv((x) => (x.picks = buildPicks(x, crm))),

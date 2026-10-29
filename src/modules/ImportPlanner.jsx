@@ -1048,6 +1048,7 @@ export default function ImportPlanner() {
             goCustomer={goCustomer}
             openQuote={openQuote}
             openSample={openSample}
+            openCollection={openCollection}
             me={me}
             planner={data}
             filter={invFilter}

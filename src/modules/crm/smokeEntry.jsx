@@ -13,6 +13,8 @@ import TasksScreen from "./TasksScreen.jsx";
 import PurchasesScreen from "./PurchasesScreen.jsx";
 import { syncCatalogue, renameSkus, skuFor, codeSource, numericSku, skuLists, masterKey, colourSeg, skuSource } from "../../lib/crmCore.js";
 import ProductsScreen from "./ProductsScreen.jsx";
+import StockCheck from "./StockCheck.jsx";
+import { stockCheck, partAlternatives, raiseShortfallCollections, releaseCollectionPicks, reconcilePicks, isColPick } from "../../lib/crmCore.js";
 import SuppliersScreen from "./SuppliersScreen.jsx";
 import { blankSupplier, blankPurchase, purchaseTotals, newPurchaseFor, supplierStats, findSupplierByName } from "../../lib/crmCore.js";
 import { blankTask, scheduledOccurrence, nextScheduled, occurrenceAssignees, dailyTasksFor, dueScheduledFor, projectsFor, setTaskDone, isDailyDone } from "../../lib/crmCore.js";
@@ -501,6 +503,47 @@ export default function run(React, renderToString) {
     assert(!kc2.masterProducts.find((m) => m.importProductId === "kk" && m.colour === "Black").isKit, "un-kitting clears the parts");
     html = renderToString(React.createElement(ProductsScreen, { planner: { products: [board, post, ins, { ...kit, isKit: true }] }, update: noop, crm: kc2, updateCrm: noop, removeProduct: noop }));
     assert(html.includes("KIT"), "kit flagged in the master list");
+  }
+  // ===== stock check -> shortfall collection -> picks, deduction, job cost =====
+  {
+    const sc2 = normaliseCrm({ customers: [], suppliers: [{ ...blankSupplier(), id: "tgsup", name: "Tuda Grass", postcode: "BL1-2AA" }] });
+    const seg = (sup, len, cat, sub, prod) => ({ segSup: sup, segLen: len, segCat: cat, segSub: sub, segProd: prod });
+    const board = { id: "b", code: "DK/1.83/FENCE", name: "Fence Board 1.83m", colours: ["Black"], ...seg("01", "01", "02", "01", "01"), supplier: "Veejoy" };
+    const beamDK = { id: "bd", code: "DK/1.83/BEAM-TOP", name: "Aluminium Top Beam 1.83m", colours: ["Black"], ...seg("01", "01", "02", "02", "09"), supplier: "Veejoy" };
+    const beamTG = { id: "bt", code: "TG/1.83/BEAM-TOP", name: "Aluminium Top Beam 1.83m", colours: ["Black"], ...seg("02", "01", "02", "02", "09"), supplier: "Tuda Grass", costGbp: 11.02 };
+    const kit = { id: "k", code: "DK/6FT/RETRO-KIT", name: "Fence Retro Kit 6ft", colours: ["Black"], ...seg("01", "24", "02", "03", "01"), isKit: true,
+      kit: [{ productId: "b", qty: 11, colour: "" }, { productId: "bd", qty: 1, colour: "" }] };
+    const pl2 = { products: [board, beamDK, beamTG, kit] };
+    sc2.masterProducts = syncCatalogue(sc2, pl2).masterProducts;
+    const R = (pid) => sc2.masterProducts.find((m) => m.importProductId === pid);
+    R("b").stock = 40; R("b").costGbp = 4.5; R("bd").stock = 0;
+    const job = { ...blankInvoice("", ""), id: "job", invNo: 4400, lines: [{ ...blankLine(), code: R("k").sku, qty: 2, price: 182.5 }] };
+    sc2.invoices.push(job);
+    let chk = stockCheck(job, sc2);
+    const beamChk = chk.find((r) => r.sku === R("bd").sku);
+    assert(chk.find((r) => r.sku === R("b").sku).short === 0 && beamChk.short === 2, "boards in stock, 2 beams short");
+    const alts = partAlternatives(sc2, R("bd").sku);
+    assert(alts.length === 1 && alts[0].sku === R("bt").sku, "TG's beam is the same part (same SKU after the supplier digits)");
+    const made = raiseShortfallCollections(sc2, "job", [{ row: alts[0], qty: 2, supplierName: "Tuda Grass" }], "molly");
+    const coll = made[0];
+    assert(coll.supplierId === "tgsup" && coll.postcode === "BL1-2AA" && coll.items[0].assignedInvoiceId === "job" && coll.items[0].unitCost === 11.02, "collection note: supplier filled in, line linked to the job at cost");
+    chk = stockCheck(job, sc2);
+    assert(chk.every((r) => r.short === 0) && chk.find((r) => r.sku === R("bd").sku).covered === 2, "nothing short once the collection is raised");
+    const stockPicks = job.picks.filter((p) => !isColPick(p));
+    assert(stockPicks.length === 1 && stockPicks[0].sku === R("b").sku && stockPicks[0].qty === 22, "pick list: 22 boards from stock + the collected beams");
+    reconcilePicks(job, sc2); reconcilePicks(job, sc2);
+    assert(job.picks.length === 2, "reconcile is stable");
+    const jc = jobCost(job, sc2, { shipments: [] });
+    assert(Math.abs(jc.total - (22 * 4.5 + 2 * 11.02)) < 0.001, "job cost = boards at stock cost + beams at the price paid: " + jc.total);
+    applyInvoiceStockDeduction(job, sc2, true, "x");
+    assert(Number(R("b").stock) === 18 && Number(R("bt").stock || 0) === 0, "delivery takes the boards from stock, not the collected beams");
+    applyInvoiceStockDeduction(job, sc2, false, "x");
+    // deleting the collection hands the shortfall back to the stock check
+    releaseCollectionPicks(sc2, coll);
+    sc2.collections = sc2.collections.filter((c) => c.id !== coll.id);
+    assert(stockCheck(job, sc2).find((r) => r.sku === R("bd").sku).short === 2 && !job.picks.some(isColPick), "deleted collection releases the job");
+    html = renderToString(React.createElement(StockCheck, { inv: job, crm: sc2, planner: pl2, updateCrm: noop, me: "x" }));
+    assert(html.includes("Stock check") && html.includes("Collect the shortfall") && html.includes("1 part short"), "stock check renders");
   }
   console.log("smoke OK — all screens render, totals reconcile (1392 goods + 60 delivery = 1452 inc VAT, £242 VAT, £1210 net)");
 }

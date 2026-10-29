@@ -273,6 +273,7 @@ export const assignCollectionItem = (c, coll, item, invoiceId) => {
   inv.picks = inv.picks || [];
   inv.picks.push({ ...blankPick(), sku: item.sku, description: item.description, colour: item.colour, qty: item.qty, batchRef: "COL-" + (coll.collectionNo || ""), unitCost: item.unitCost, picked: true });
   item.assignedInvoiceId = invoiceId;
+  if (explodeInvoiceLines(inv, c).length) reconcilePicks(inv, c); // stock picks net off what this collection covers
   return true;
 };
 
@@ -1525,10 +1526,12 @@ export const invoiceCost = (inv, crm) => {
 };
 
 // The pick list seeded from the invoice lines (kits already exploded).
-export const buildPicks = (inv, crm) =>
-  explodeInvoiceLines(inv, crm)
-    .filter((r) => r.kind !== "kit")
-    .map((r) => ({ ...blankPick(), sku: r.sku, description: r.description, colour: r.colour, qty: r.qty }));
+// The pick list from the lines (kits exploded): stock picks for whatever isn't
+// already coming on a collection for this job; collection picks are kept.
+export const buildPicks = (inv, crm) => {
+  const copy = { ...inv, picks: (inv.picks || []).filter(isColPick) };
+  return reconcilePicks(copy, crm);
+};
 
 // Landed £/pc for one pick: the batch's real landed cost when the pick names a
 // shipment and the SKU is linked to an import product; master cost otherwise.
@@ -1615,10 +1618,11 @@ export const batchBreakdown = (sku, crm, planner) => {
 // the picks); unticking puts it back. Idempotent via inv.stockDeducted.
 export const applyInvoiceStockDeduction = (inv, c, on, actor) => {
   if (on === Boolean(inv.stockDeducted)) return;
-  const rows =
-    inv.picks && inv.picks.length
-      ? inv.picks.map((p) => ({ sku: p.sku, qty: Number(p.qty) || 0 }))
-      : explodeInvoiceLines(inv, c).filter((r) => r.kind !== "kit").map((r) => ({ sku: r.sku, qty: r.qty }));
+  // only what comes out of our stock: parts collected for the job never went into it
+  const stockPicks = (inv.picks || []).filter((p) => !isColPick(p));
+  const rows = stockPicks.length
+    ? stockPicks.map((p) => ({ sku: p.sku, qty: Number(p.qty) || 0 }))
+    : stockNeeds(inv, c).map((n) => ({ sku: n.sku, qty: n.fromStock }));
   const sign = on ? -1 : 1;
   rows.forEach(({ sku, qty }) => {
     if (!sku || !qty) return;
@@ -2173,4 +2177,140 @@ export const supplierStats = (crm, supplierId) => {
   });
   const colls = (crm.collections || []).filter((c) => c.supplierId === supplierId).length;
   return { count: ps.length, spend: round2(spend), unpaid: round2(unpaid), unpaidCount, last, collections: colls };
+};
+
+// ===== stock check & shortfall collections =====
+// A job's parts (kits exploded) come from our stock or from a collection raised
+// for the job (picks with batch COL-n). Parts are matched across suppliers by
+// the SKU without its supplier digits: same length, category, sub-category,
+// product and colour = the same part, whoever we buy it from.
+export const isColPick = (p) => /^COL-/i.test(String((p && p.batchRef) || ""));
+export const partKey = (sku) => {
+  const s = String(sku || "").trim();
+  return /^\d{12}$/.test(s) ? "n:" + s.slice(2) : "s:" + s.toLowerCase();
+};
+
+// what the job needs, per part: total, already coming on collections, and the rest from stock
+export const stockNeeds = (inv, crm) => {
+  const need = new Map();
+  explodeInvoiceLines(inv, crm).forEach((r) => {
+    if (r.kind === "kit" || !r.sku || !r.qty) return;
+    const k = partKey(r.sku);
+    const cur = need.get(k) || { key: k, sku: r.sku, description: r.description, colour: r.colour, need: 0, covered: 0 };
+    cur.need += Number(r.qty) || 0;
+    need.set(k, cur);
+  });
+  (inv.picks || []).filter(isColPick).forEach((p) => {
+    const cur = need.get(partKey(p.sku));
+    if (cur) cur.covered += Number(p.qty) || 0;
+  });
+  return [...need.values()].map((n) => ({ ...n, fromStock: Math.max(0, n.need - n.covered) }));
+};
+
+// stock promised to OTHER undelivered jobs, per SKU (their own collections netted off)
+const allocatedElsewhere = (crm, invId) => {
+  const m = {};
+  (crm.invoices || []).forEach((i) => {
+    if (i.deliveryCompleted || i.id === invId) return;
+    stockNeeds(i, crm).forEach((n) => {
+      const k = n.sku.trim().toLowerCase();
+      m[k] = (m[k] || 0) + n.fromStock;
+    });
+  });
+  return m;
+};
+
+// the stock check shown on an invoice: per part, need / coming / in stock / short
+export const stockCheck = (inv, crm) => {
+  const bySku = skuIndex(crm);
+  const elsewhere = allocatedElsewhere(crm, inv.id);
+  return stockNeeds(inv, crm).map((n) => {
+    const row = bySku[n.sku.trim().toLowerCase()];
+    const stock = row && row.stock !== "" && row.stock !== null ? Number(row.stock) : 0;
+    const free = Math.max(0, stock - (elsewhere[n.sku.trim().toLowerCase()] || 0));
+    return { ...n, row, stock, free, short: inv.deliveryCompleted ? 0 : Math.max(0, n.fromStock - free) };
+  });
+};
+
+// other suppliers' versions of the same part (same SKU after the supplier digits)
+export const partAlternatives = (crm, sku) => {
+  const k = partKey(sku);
+  return (crm.masterProducts || []).filter((r) => r.active !== false && r.sku && r.sku !== sku && partKey(r.sku) === k && !r.isKit);
+};
+
+// Keep the job's pick list in step: collection picks stay; stock picks are set
+// to need - coming for each part (batch details on existing picks are kept).
+export const reconcilePicks = (inv, crm) => {
+  const needs = stockNeeds(inv, crm);
+  const col = (inv.picks || []).filter(isColPick);
+  let stock = (inv.picks || []).filter((p) => !isColPick(p));
+  const out = [];
+  needs.forEach((n) => {
+    let target = n.fromStock;
+    const mine = stock.filter((p) => partKey(p.sku) === n.key);
+    stock = stock.filter((p) => partKey(p.sku) !== n.key);
+    mine.forEach((p) => {
+      if (target <= 0) return;
+      const q = Math.min(Number(p.qty) || 0, target);
+      if (q > 0) { out.push({ ...p, qty: q }); target -= q; }
+    });
+    if (target > 0) {
+      const first = out.find((p) => partKey(p.sku) === n.key && !p.shipmentId && !p.batchRef);
+      if (first) first.qty = (Number(first.qty) || 0) + target;
+      else out.push({ ...blankPick(), sku: n.sku, description: n.description, colour: n.colour, qty: target });
+    }
+  });
+  inv.picks = [...out, ...col];
+  return inv.picks;
+};
+
+// Raise collection notes for a job's shortfall. choices: [{ row (the supplier's
+// stock row to collect), qty, supplierName }] — grouped into one collection per
+// supplier, every line assigned to the job and added to its pick list at cost.
+export const raiseShortfallCollections = (c, invId, choices, actor) => {
+  const inv = (c.invoices || []).find((i) => i.id === invId);
+  if (!inv) return [];
+  const bySupplier = new Map();
+  choices.filter((x) => x.row && Number(x.qty) > 0).forEach((x) => {
+    const k = (x.supplierName || "").trim() || "Supplier";
+    if (!bySupplier.has(k)) bySupplier.set(k, []);
+    bySupplier.get(k).push(x);
+  });
+  const made = [];
+  c.collections = c.collections || [];
+  bySupplier.forEach((lines, supName) => {
+    const coll = blankCollection();
+    coll.collectionNo = nextNumber(c.collections, "collectionNo", c.numbering.collection);
+    c.numbering.collection = (Number(coll.collectionNo) || 0) + 1;
+    coll.raisedBy = actor || "";
+    const sup = findSupplierByName(c, supName);
+    coll.supplier = sup ? sup.name : supName;
+    if (sup) {
+      coll.supplierId = sup.id;
+      ["address", "town", "postcode", "contact"].forEach((k) => (coll[k] = sup[k] || ""));
+      coll.phone = sup.phone || "";
+    }
+    coll.notes = "For job #" + (inv.invNo || "");
+    lines.forEach((x) => {
+      const cost = x.row.costGbp === "" || x.row.costGbp === null || x.row.costGbp === undefined ? "" : Number(x.row.costGbp);
+      const item = { ...blankCollectionItem(), sku: x.row.sku, description: x.row.name, colour: x.row.colour || "", qty: Number(x.qty), unitCost: cost, assignedInvoiceId: inv.id };
+      coll.items.push(item);
+      inv.picks = inv.picks || [];
+      inv.picks.push({ ...blankPick(), sku: item.sku, description: item.description, colour: item.colour, qty: item.qty, batchRef: "COL-" + coll.collectionNo, unitCost: cost, picked: false });
+    });
+    c.collections.unshift(coll);
+    made.push(coll);
+  });
+  reconcilePicks(inv, c);
+  return made;
+};
+
+// a collection deleted before it's done: take its lines back off the jobs
+export const releaseCollectionPicks = (c, coll) => {
+  const ref = "COL-" + (coll.collectionNo || "");
+  (c.invoices || []).forEach((i) => {
+    if (!(i.picks || []).some((p) => p.batchRef === ref)) return;
+    i.picks = i.picks.filter((p) => p.batchRef !== ref);
+    reconcilePicks(i, c);
+  });
 };
