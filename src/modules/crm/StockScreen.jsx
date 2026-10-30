@@ -70,11 +70,21 @@ export default function StockScreen({ crm, updateCrm, planner, updatePlanner, as
 
   const moves = [...(crm.movements || [])].sort((a, b) => (b.at || "").localeCompare(a.at || "")).slice(0, 60);
 
-  const Card = ({ label, value, sub, tone }) => (
-    <div style={{ flex: "1 1 160px", background: "linear-gradient(135deg,#0B1F3F 0%,#13294f 100%)", borderRadius: 12, padding: "14px 18px", color: "#fff", minWidth: 150 }}>
+  const Card = ({ label, value, sub, tone, profit }) => (
+    <div style={{ flex: "1 1 160px", background: "linear-gradient(135deg,#0B1F3F 0%,#13294f 100%)", borderRadius: 12, padding: "14px 18px", color: "#fff", minWidth: 150, display: "flex", flexDirection: "column" }}>
       <div style={{ fontSize: 10.5, fontWeight: 700, color: "#aeb9cf", letterSpacing: 0.5, textTransform: "uppercase" }}>{label}</div>
       <div style={{ fontSize: 21, fontWeight: 700, color: tone || GOLD, marginTop: 3 }}>{value}</div>
       {sub && <div style={{ fontSize: 11, fontWeight: 600, color: "#8fa0c0", marginTop: 2 }}>{sub}</div>}
+      {profit && (
+        <div style={{ marginTop: "auto", paddingTop: 8 }}>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 8, borderTop: "1px solid #ffffff22", paddingTop: 7 }}>
+            <span style={{ fontSize: 10.5, fontWeight: 700, color: "#aeb9cf", letterSpacing: 0.5, textTransform: "uppercase" }}>Profit ex VAT</span>
+            <span style={{ flex: 1 }} />
+            <span style={{ fontSize: 15, fontWeight: 700, color: profit.gbp < 0 ? "#ff8a9b" : "#7fd99a" }}>{gbp(profit.gbp)}</span>
+            <span style={{ fontSize: 12.5, fontWeight: 700, color: profit.gbp < 0 ? "#ff8a9b" : "#7fd99a" }}>{profit.pct === null ? "" : Math.round(profit.pct) + "%"}</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 
@@ -83,9 +93,9 @@ export default function StockScreen({ crm, updateCrm, planner, updatePlanner, as
       {/* valuation */}
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
         <Card label="Units in stock" value={val.units.toLocaleString("en-GB")} tone="#fff" />
-        <Card label="Stock value at cost" value={gbp(val.costValue)} sub="purchased / landed" />
-        <Card label="Sale value — standard" value={gbp(val.saleValue)} sub="at list prices inc VAT" />
-        <Card label={"Sale value — trade (−" + TRADE_DISCOUNT * 100 + "%)"} value={gbp(val.tradeValue)} sub="standard less 10%" />
+        <Card label="Stock value at cost" value={gbp(val.costValue)} sub={"purchased / landed" + (val.unpricedUnits ? " · " + val.unpricedUnits.toLocaleString("en-GB") + " units lack a cost or price, left out of profit" : "")} />
+        <Card label="Sale value — standard" value={gbp(val.saleValue)} sub="at list prices inc VAT" profit={val.standardProfit} />
+        <Card label={"Sale value — trade (−" + TRADE_DISCOUNT * 100 + "%)"} value={gbp(val.tradeValue)} sub="standard less 10%" profit={val.tradeProfit} />
       </div>
 
       {/* actions / filters */}

@@ -1802,22 +1802,31 @@ export const applyInvoiceStockDeduction = (inv, c, on, actor) => {
 // ===== stock =====
 export const TRADE_DISCOUNT = 0.1; // trade pricing = standard - 10%
 
+const VAT_RATE = 0.2;
 export const stockValuation = (crm) => {
   let units = 0;
   let costValue = 0;
   let saleValue = 0;
   let tradeValue = 0;
+  // profit is only counted on stock that has both a cost and a price, ex VAT
+  let pricedCost = 0, pricedSaleEx = 0, unpricedUnits = 0;
   (crm.masterProducts || []).forEach((p) => {
     const stock = p.stock === "" || p.stock === null ? 0 : Number(p.stock);
     if (!isFinite(stock) || stock === 0) return;
     units += stock;
-    if (p.costGbp !== "" && p.costGbp !== null) costValue += stock * Number(p.costGbp);
-    if (p.priceIncVat !== "" && p.priceIncVat !== null) {
+    const hasCost = p.costGbp !== "" && p.costGbp !== null && isFinite(Number(p.costGbp));
+    const hasPrice = p.priceIncVat !== "" && p.priceIncVat !== null && isFinite(Number(p.priceIncVat));
+    if (hasCost) costValue += stock * Number(p.costGbp);
+    if (hasPrice) {
       saleValue += stock * Number(p.priceIncVat);
       tradeValue += stock * Number(p.priceIncVat) * (1 - TRADE_DISCOUNT);
     }
+    if (hasCost && hasPrice) { pricedCost += stock * Number(p.costGbp); pricedSaleEx += (stock * Number(p.priceIncVat)) / (1 + VAT_RATE); }
+    else unpricedUnits += stock;
   });
-  return { units, costValue, saleValue, tradeValue };
+  const profit = (saleEx) => ({ gbp: saleEx - pricedCost, pct: saleEx > 0 ? ((saleEx - pricedCost) / saleEx) * 100 : null });
+  return { units, costValue, saleValue, tradeValue, unpricedUnits,
+    standardProfit: profit(pricedSaleEx), tradeProfit: profit(pricedSaleEx * (1 - TRADE_DISCOUNT)) };
 };
 
 // Match an import shipment's lines to master SKUs (importProductId + colour),
