@@ -14,6 +14,7 @@ import { Icon, Chip, Modal, lbl, card, inp, btn, goldBtn, abtn } from "./ui.jsx"
 const sel = { ...inp, padding: "5px 6px", fontSize: 12.5 };
 const numI = { ...inp, textAlign: "right", padding: "5px 7px", fontSize: 13 };
 const sm = { ...inp, padding: "5px 7px", fontSize: 13 };
+const SKU_PREVIEW = 5; // SKU chips shown before "+n more"
 const segOpt = (x) => x.code + " · " + (x.key ? x.key + " — " : "") + x.label;
 
 export default function ProductsScreen({ planner, update, crm, updateCrm, removeProduct, headerH = 0 }) {
@@ -319,11 +320,16 @@ function MasterBar({ g, lists, setGroup }) {
     </div>
   );
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "120px 140px 160px minmax(200px,1fr) auto", gap: 8, alignItems: "end", padding: "4px 2px 12px" }}>
+    <div style={{ display: "grid", gridTemplateColumns: "120px 140px 160px minmax(200px,1fr) auto auto", gap: 8, alignItems: "end", padding: "4px 2px 12px" }}>
       {pick("segLen", lists.length, "Length")}
       {pick("segCat", lists.category, "Category")}
       {pick("segSub", lists.sub, "Sub-category")}
       {pick("segProd", prodList, "Product", !p.segCat || !p.segSub)}
+      <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 700, color: g.items.some((x) => x.isKit) ? NAVY : "#5a6a85", cursor: "pointer", whiteSpace: "nowrap", paddingBottom: 7 }}
+        title="A kit is sold as one line but loaded and taken out of stock as its parts">
+        <input type="checkbox" checked={g.items.some((x) => x.isKit === true)} onChange={(e) => setGroup(g, "isKit", e.target.checked)} />
+        This is a kit
+      </label>
       <span style={{ fontSize: 11.5, color: "#8593a8", fontWeight: 600, paddingBottom: 7 }}>
         {"Applies to all " + g.items.length + " supplier version" + (g.items.length === 1 ? "" : "s") + " below"}
       </span>
@@ -411,6 +417,30 @@ function Version({ p, lists, rows, rowsByProduct, products, setP, removeProduct,
       </select>
     </div>
   );
+  const [costsOpen, setCostsOpen] = useState(false);
+  const [skusOpen, setSkusOpen] = useState(false);
+  const money = (v) => (v === "" || v === null || v === undefined || isNaN(Number(v)) ? null : Number(v));
+  const kitCost = p.isKit ? kitCostFromParts(p, products, rowsByProduct) : null;
+  const costs = rows.map((r) => money(r.costGbp)).filter((v) => v !== null && v > 0);
+  const stockCost = costs.length ? costs.reduce((a, b) => a + b, 0) / costs.length : null;
+  const unitCost = p.isKit ? kitCost : isImport ? stockCost : money(p.costGbp);
+  const retailEx = money(p.salePrice) ? money(p.salePrice) / 1.2 : null;
+  const margin = unitCost !== null && retailEx ? "£" + (retailEx - unitCost).toFixed(2) + " · " + Math.round(((retailEx - unitCost) / retailEx) * 100) + "%" : "—";
+  const costSummary = p.isKit ? (kitCost === null ? "Parts —" : "Parts £" + kitCost.toFixed(2))
+    : isImport ? (money(p.cost) ? "$" + Number(p.cost).toFixed(2) + " import" : "Import costs")
+    : money(p.costGbp) !== null ? "£" + Number(p.costGbp).toFixed(2) + " cost" : "Add cost";
+  const ro = (label, value, title) => (
+    <div title={title} style={{ width: 110 }}>
+      <span style={{ ...lbl, fontSize: 10 }}>{label}</span>
+      <input style={{ ...numI, background: "#eef1f6", color: "#3a4a63", fontWeight: 700 }} disabled value={value} />
+    </div>
+  );
+  const num = (label, field) => (
+    <div style={{ width: 96 }}>
+      <span style={{ ...lbl, fontSize: 10 }}>{label}</span>
+      <input type="number" style={numI} value={p[field] === undefined || p[field] === null ? "" : p[field]} onChange={(e) => setP(p.id, field, e.target.value)} />
+    </div>
+  );
   const unknownColours = (p.colours || []).filter((c) => colourSeg(lists, c) === null);
   const sameCode = (() => {
     const seen = {}, out = [];
@@ -419,7 +449,7 @@ function Version({ p, lists, rows, rowsByProduct, products, setP, removeProduct,
   })();
   return (
     <div style={{ background: "#fff", border: "1px solid #e6e9ef", borderRadius: 10, padding: "10px 12px", marginBottom: 10 }}>
-      <div style={{ display: "grid", gridTemplateColumns: "110px 150px minmax(220px,2fr) 160px minmax(180px,1.4fr) 90px 90px 34px", gap: 8, alignItems: "end" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "110px 150px minmax(220px,2fr) 160px minmax(180px,1.4fr) 130px 90px 34px", gap: 8, alignItems: "end" }}>
         <div style={{ minWidth: 0 }}>
           <span style={{ ...lbl, fontSize: 10 }}>Supplier code</span>
           <RadioPick value={p.segSup} width={340}
@@ -455,11 +485,12 @@ function Version({ p, lists, rows, rowsByProduct, products, setP, removeProduct,
           <ColourPicker p={p} lists={lists} unknown={unknownColours} onChange={(cols) => setP(p.id, "colours", cols.join(", "))} />
         </div>
         <div>
-          <span style={{ ...lbl, fontSize: 10 }}>{p.isKit ? "Parts cost £" : "UK cost £"}</span>
-          {p.isKit
-            ? <input style={{ ...numI, background: "#f4f6f9", color: "#5a6a85" }} disabled title="Worked out from the parts' costs — not stored on the kit"
-                value={(() => { const c = kitCostFromParts(p, products, rowsByProduct); return c === null ? "—" : c.toFixed(2); })()} />
-            : <input type="number" style={numI} value={p.costGbp === undefined || p.costGbp === null ? "" : p.costGbp} onChange={(e) => setP(p.id, "costGbp", e.target.value)} />}
+          <span style={{ ...lbl, fontSize: 10 }}>Costs</span>
+          <button type="button" onClick={() => setCostsOpen((o) => !o)}
+            style={{ ...sm, width: "100%", textAlign: "left", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontWeight: 700, color: NAVY, borderColor: costsOpen ? NAVY : "#d5d9e0", background: costsOpen ? "#eef1f6" : "#fff" }}>
+            <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{costSummary}</span>
+            <span style={{ color: "#5a6a85", fontSize: 10 }}>{costsOpen ? "▴" : "▾"}</span>
+          </button>
         </div>
         <div>
           <span style={{ ...lbl, fontSize: 10 }}>Retail £ inc</span>
@@ -468,35 +499,48 @@ function Version({ p, lists, rows, rowsByProduct, products, setP, removeProduct,
         <button style={{ ...abtn, color: RED, border: "none" }} title="Remove this version" onClick={() => removeProduct(p.id)}><Icon name="x" stroke={RED} /></button>
       </div>
 
-      {(!shared || p.isKit || isImport) && (
-      <div style={{ display: "grid", gridTemplateColumns: (shared ? "" : "110px 130px 150px minmax(200px,1fr) ") + (p.isKit ? "100px" : isImport ? "80px 80px 80px 80px" : ""), justifyContent: shared ? "end" : undefined, gap: 8, alignItems: "end", marginTop: 8 }}>
-        {!shared && segSelect("segLen", lists.length, "Length")}
-        {!shared && segSelect("segCat", lists.category, "Category")}
-        {!shared && segSelect("segSub", lists.sub, "Sub-category")}
-        {!shared && segSelect("segProd", prodList, "Product", !p.segCat || !p.segSub)}
-        {p.isKit && (
-          <div title="Worked out from the parts' kg / pc × qty — used on the loading bill">
-            <span style={{ ...lbl, fontSize: 10 }}>Kit weight kg</span>
-            <input style={{ ...numI, background: "#f4f6f9", color: "#5a6a85" }} disabled
-              value={(() => { const w = kitWeight(p, products); return w ? String(w) : "—"; })()} />
-          </div>
-        )}
-        {isImport && !p.isKit && (
-          <>
-            <div><span style={{ ...lbl, fontSize: 10 }}>Import $ / pc</span><input type="number" style={numI} value={p.cost} onChange={(e) => setP(p.id, "cost", e.target.value)} /></div>
-            <div><span style={{ ...lbl, fontSize: 10 }}>Qty / plt</span><input type="number" style={numI} value={p.qty} onChange={(e) => setP(p.id, "qty", e.target.value)} /></div>
-            <div><span style={{ ...lbl, fontSize: 10 }}>kg / pc</span><input type="number" style={numI} value={p.weight} onChange={(e) => setP(p.id, "weight", e.target.value)} /></div>
-            <div><span style={{ ...lbl, fontSize: 10 }}>m³ / plt</span><input type="number" style={numI} value={p.cbm} onChange={(e) => setP(p.id, "cbm", e.target.value)} /></div>
-          </>
-        )}
-      </div>
+      {!shared && (
+        <div style={{ display: "grid", gridTemplateColumns: "110px 130px 150px minmax(200px,1fr)", gap: 8, alignItems: "end", marginTop: 8 }}>
+          {segSelect("segLen", lists.length, "Length")}
+          {segSelect("segCat", lists.category, "Category")}
+          {segSelect("segSub", lists.sub, "Sub-category")}
+          {segSelect("segProd", prodList, "Product", !p.segCat || !p.segSub)}
+        </div>
       )}
 
-      <div style={{ marginTop: 10, display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+      {costsOpen && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end", marginTop: 8, padding: "10px 12px", background: "#f6f8fb", border: "1px solid #e6e9ef", borderRadius: 8 }}>
+          {p.isKit ? (
+            <>
+              {ro("Parts cost £", kitCost === null ? "—" : kitCost.toFixed(2), "Worked out from the parts' costs")}
+              {ro("Kit weight kg", (() => { const w = kitWeight(p, products); return w ? String(w) : "—"; })(), "Parts' kg / pc × qty — used on the loading bill")}
+            </>
+          ) : isImport ? (
+            <>
+              {num("Import $ / pc", "cost")}
+              {num("Qty / plt", "qty")}
+              {num("kg / pc", "weight")}
+              {num("m³ / plt", "cbm")}
+              {ro("Landed £ / pc", stockCost === null ? "—" : stockCost.toFixed(2), "From the shipments this stock came in on")}
+            </>
+          ) : (
+            <>
+              {num("UK cost £", "costGbp")}
+              {num("kg / pc", "weight")}
+            </>
+          )}
+          {ro("Margin", margin, "Retail ex VAT less cost")}
+          <span style={{ fontSize: 11.5, color: "#8593a8", fontWeight: 600, paddingBottom: 7 }}>
+            {p.isKit ? "A kit costs what its parts cost." : isImport ? "Imported — cost comes from the shipment's landed cost, not a UK price." : "Bought in the UK at this price."}
+          </span>
+        </div>
+      )}
+
+      <div style={{ marginTop: 10, display: "flex", gap: 6, flexWrap: skusOpen ? "wrap" : "nowrap", overflow: skusOpen ? undefined : "hidden", alignItems: "center" }}>
         <span style={{ fontSize: 10.5, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", marginRight: 4 }}>
           SKUs {base ? <span style={{ color: NAVY, letterSpacing: 1 }}>{base.replace(/(\d\d)(?=\d)/g, "$1 ")} ··</span> : <span style={{ color: "#a05f10" }}>— fill in the orange fields</span>}
         </span>
-        {rows.map((r) => (
+        {(skusOpen ? rows : rows.slice(0, SKU_PREVIEW)).map((r) => (
           <span key={r.id} title={(r.family || "") + " · cost £" + (r.costGbp === "" || r.costGbp === null ? "—" : Number(r.costGbp).toFixed(2))}
             style={{ display: "inline-flex", gap: 6, alignItems: "center", border: "1px solid " + (/^\d{12}$/.test(r.sku) ? "#d5d9e0" : "#f0d0a8"), background: /^\d{12}$/.test(r.sku) ? "#fff" : "#fff8e6", borderRadius: 8, padding: "3px 8px", fontSize: 12 }}>
             <b style={{ letterSpacing: 0.5 }}>{r.sku}</b>
@@ -504,6 +548,12 @@ function Version({ p, lists, rows, rowsByProduct, products, setP, removeProduct,
             <span style={{ fontWeight: 700, color: Number(r.stock) ? "#28713e" : "#aab3c2" }}>{Number(r.stock) ? Number(r.stock).toLocaleString("en-GB") : "0"}</span>
           </span>
         ))}
+        {rows.length > SKU_PREVIEW && (
+          <button type="button" onClick={() => setSkusOpen((o) => !o)}
+            style={{ fontFamily: "inherit", fontSize: 12, fontWeight: 700, color: NAVY, background: "#eef1f6", border: "1px solid #d5d9e0", borderRadius: 8, padding: "3px 10px", cursor: "pointer" }}>
+            {skusOpen ? "Show less ▴" : "+" + (rows.length - SKU_PREVIEW) + " more ▾"}
+          </button>
+        )}
         {sameCode.length > 0 && (
           <Chip tone="red" style={{ fontSize: 11 }}>{sameCode.join(", ") + " share a colour number — keep one, or split them in SKU lists"}</Chip>
         )}
@@ -511,11 +561,13 @@ function Version({ p, lists, rows, rowsByProduct, products, setP, removeProduct,
           <Chip tone="red" style={{ fontSize: 11 }}>{unknownColours.join(", ") + " not in the colour list — add it under SKU lists"}</Chip>
         )}
         <span style={{ flex: 1 }} />
-        <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 700, color: p.isKit ? NAVY : "#5a6a85", cursor: "pointer" }}
-          title="A kit is sold as one line but loaded and taken out of stock as its parts">
-          <input type="checkbox" checked={p.isKit === true} onChange={(e) => setP(p.id, "isKit", e.target.checked)} />
-          This is a kit
-        </label>
+        {!shared && (
+          <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 700, color: p.isKit ? NAVY : "#5a6a85", cursor: "pointer", whiteSpace: "nowrap" }}
+            title="A kit is sold as one line but loaded and taken out of stock as its parts">
+            <input type="checkbox" checked={p.isKit === true} onChange={(e) => setP(p.id, "isKit", e.target.checked)} />
+            This is a kit
+          </label>
+        )}
       </div>
       {p.isKit && <KitEditor p={p} products={products} rowsByProduct={rowsByProduct} lists={lists} setP={setP} />}
     </div>
