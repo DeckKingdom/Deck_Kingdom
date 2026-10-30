@@ -182,12 +182,20 @@ export default function ProductsScreen({ planner, update, crm, updateCrm, remove
                     <td style={{ ...td, fontWeight: 700 }}>
                       <span style={{ fontSize: 10, color: "#5a6a85", marginRight: 8 }}>{isOpen ? "▼" : "▶"}</span>
                       {g.name || <span style={{ color: "#aab3c2" }}>New product</span>}
-                      <label onClick={(e) => e.stopPropagation()} title="A kit is sold as one line but loaded and taken out of stock as its parts"
-                        style={{ display: "inline-flex", alignItems: "center", gap: 5, marginLeft: 10, fontSize: 11, fontWeight: 700, padding: "1px 8px 1px 5px", borderRadius: 999, cursor: "pointer", verticalAlign: "middle",
-                          border: "1px solid " + (g.items.some((p) => p.isKit) ? "#e9c46a" : "#dde2ea"), background: g.items.some((p) => p.isKit) ? "#fdf3dc" : "#fff", color: g.items.some((p) => p.isKit) ? "#8a5a00" : "#8593a8" }}>
-                        <input type="checkbox" style={{ margin: 0, width: 13, height: 13 }} checked={g.items.some((p) => p.isKit === true)} onChange={(e) => setGroup(g, "isKit", e.target.checked)} />
-                        KIT
-                      </label>
+                      {(() => {
+                        const on = g.items.some((p) => p.isKit === true);
+                        return (
+                          <span role="switch" aria-checked={on} tabIndex={0} title={on ? "Kit — sold as one line, loaded and taken out of stock as its parts. Click to undo." : "Make this a kit"}
+                            onClick={(e) => { e.stopPropagation(); setGroup(g, "isKit", !on); }}
+                            onKeyDown={(e) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); e.stopPropagation(); setGroup(g, "isKit", !on); } }}
+                            style={{ display: "inline-flex", alignItems: "center", gap: 6, marginLeft: 12, verticalAlign: "middle", cursor: "pointer", fontSize: 11, fontWeight: 700, letterSpacing: 0.6, textTransform: "uppercase", color: on ? "#a86b12" : "#b3bccb" }}>
+                            <span style={{ position: "relative", width: 26, height: 15, borderRadius: 999, background: on ? GOLD : "#dde2ea", transition: "background .15s" }}>
+                              <span style={{ position: "absolute", top: 2, left: on ? 13 : 2, width: 11, height: 11, borderRadius: "50%", background: "#fff", boxShadow: "0 1px 2px rgba(11,31,63,.25)", transition: "left .15s" }} />
+                            </span>
+                            Kit
+                          </span>
+                        );
+                      })()}
                       {!g.complete && <Chip tone="amber" style={{ marginLeft: 8, fontSize: 10, padding: "1px 7px" }}>SKU fields needed</Chip>}
                     </td>
                     <td style={{ ...td, color: "#5a6a85", fontWeight: 600 }}>{[segLabel(lists.category, p0.segCat), segLabel(lists.sub, p0.segSub)].filter((x) => x && x !== "N/a").join(" › ") || "—"}</td>
@@ -211,7 +219,7 @@ export default function ProductsScreen({ planner, update, crm, updateCrm, remove
                       <td colSpan={8} style={{ padding: "8px 10px 14px 26px", background: "#f8f9fb", borderBottom: "1px solid #e6e9ef" }}>
                         {g.complete && (
                           <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
-                            {[["fields", "SKU fields"], ["skus", "SKUs"]].map(([k, label]) => {
+                            {[["fields", "product attributes"], ["skus", "SKUs"]].map(([k, label]) => {
                               const on = shownBits.has(g.key + "|" + k);
                               return (
                                 <button key={k} type="button" onClick={() => toggleBit(g.key + "|" + k)}

@@ -502,7 +502,7 @@ export default function run(React, renderToString) {
     kc2.masterProducts = syncCatalogue(kc2, plk).masterProducts;
     assert(!kc2.masterProducts.find((m) => m.importProductId === "kk" && m.colour === "Black").isKit, "un-kitting clears the parts");
     html = renderToString(React.createElement(ProductsScreen, { planner: { products: [board, post, ins, { ...kit, isKit: true }] }, update: noop, crm: kc2, updateCrm: noop, removeProduct: noop }));
-    assert(html.includes("KIT"), "kit flagged in the master list");
+    assert(html.includes("aria-checked=\"true\""), "kit flagged in the master list");
   }
   // ===== stock check -> shortfall collection -> picks, deduction, job cost =====
   {
