@@ -7,7 +7,7 @@ import { NAVY, GOLD, RED, uid, shipmentLandedBasis } from "../../lib/core.js";
 import {
   kitWeight,
   skuLists, productSkuBase, masterKey, productsInList, colourSeg, numericSku, segLabel, cleanCode, codeSource,
-  DEFAULT_SKU_LISTS, gbp, kitPartsFor,
+  DEFAULT_SKU_LISTS, gbp, kitPartsFor, supplierKey,
 } from "../../lib/crmCore.js";
 import { Icon, Chip, Modal, lbl, card, inp, btn, goldBtn, abtn } from "./ui.jsx";
 
@@ -77,6 +77,14 @@ export default function ProductsScreen({ planner, update, crm, updateCrm, remove
   const srcCounts = {};
   products.forEach((p) => { const k = supKey(p); if (k) srcCounts[k] = (srcCounts[k] || 0) + 1; });
 
+  // "bought from" choices: the suppliers we buy products from (named on products, or a SKU supplier code)
+  const supplierNames = useMemo(() => {
+    const byKey = new Map();
+    const add = (n) => { const name = String(n || "").trim(); const k = supplierKey(name); if (k && !k.startsWith("deckkingdom") && !byKey.has(k)) byKey.set(k, name); };
+    products.forEach((p) => add(p.supplier));
+    lists.supplier.forEach((x) => add(supplierName(x)));
+    return [...byKey.values()].sort((a, b) => a.localeCompare(b));
+  }, [products, lists]);
   const [shownBits, setShownBits] = useState(new Set()); // "groupKey|fields" / "groupKey|skus" shown
   const toggleBit = (k) => setShownBits((o) => { const x = new Set(o); x.has(k) ? x.delete(k) : x.add(k); return x; });
   const toggle = (k) => setOpen((o) => { const x = new Set(o); x.has(k) ? x.delete(k) : x.add(k); return x; });
@@ -168,7 +176,16 @@ export default function ProductsScreen({ planner, update, crm, updateCrm, remove
           <thead>
             <tr>
               {["Master product", "Kit", "Category", "Length", "Suppliers", "Colours", "Stock", "Retail £ inc VAT", "SKUs"].map((h, i) => (
-                <th key={h} style={{ ...th, textAlign: i >= 5 ? "right" : "left" }}>{h}</th>
+                <th key={h} style={{ ...th, textAlign: i >= 5 ? "right" : "left" }}>
+                  {i === 0 ? (
+                    <button type="button" onClick={() => setOpen(new Set())} disabled={!open.size} title={open.size ? "Collapse all" : "Nothing open"}
+                      style={{ fontFamily: "inherit", border: "none", background: "none", padding: 0, marginRight: 8, cursor: open.size ? "pointer" : "default", color: open.size ? NAVY : "#c3cad6", fontSize: 10 }}>
+                      {open.size ? "▼" : "▶"}
+                    </button>
+                  ) : null}
+                  {h}
+                  {i === 0 && open.size > 1 ? <span style={{ marginLeft: 6, color: "#aab3c2", fontWeight: 600, textTransform: "none", letterSpacing: 0 }}>{"· " + open.size + " open"}</span> : null}
+                </th>
               ))}
             </tr>
           </thead>
@@ -239,7 +256,7 @@ export default function ProductsScreen({ planner, update, crm, updateCrm, remove
                         )}
                         {g.complete && shownBits.has(g.key + "|fields") && <MasterBar g={g} lists={lists} setGroup={setGroup} />}
                         {g.items.map((p) => (
-                          <Version key={p.id} p={p} shipments={planner.shipments || []} lists={lists} rows={(rowsByProduct[p.id] || []).filter((r) => r.active !== false)} rowsByProduct={rowsByProduct} products={products} setP={setP} removeProduct={removeProduct} supKey={supKey(p)}
+                          <Version key={p.id} p={p} shipments={planner.shipments || []} supplierNames={supplierNames} lists={lists} rows={(rowsByProduct[p.id] || []).filter((r) => r.active !== false)} rowsByProduct={rowsByProduct} products={products} setP={setP} removeProduct={removeProduct} supKey={supKey(p)}
                             shared={g.complete} showSkus={!g.complete || shownBits.has(g.key + "|skus")} setSupplier={setSupplier} usedSup={g.items.filter((x) => x.id !== p.id).map((x) => x.segSup)} />
                         ))}
                         {g.complete && (
@@ -270,9 +287,6 @@ export default function ProductsScreen({ planner, update, crm, updateCrm, remove
         Change a field and the SKU is rebuilt; stock, history and existing invoices move with it.
       </p>
 
-      <datalist id="dk-suppliers">
-        {[...new Set([...products.map((x) => (x.supplier || "").trim()), ...(crm.suppliers || []).filter((x) => x.active !== false).map((x) => x.name)].filter(Boolean))].sort().map((x) => <option key={x} value={x} />)}
-      </datalist>
       {listsOpen && <ListsEditor lists={lists} custom={Boolean(crm.skuLists)} onClose={() => setListsOpen(false)}
         onSave={(l) => { updateCrm((c) => { c.skuLists = l; return c; }); setListsOpen(false); }} />}
     </div>
@@ -496,6 +510,28 @@ function CostPanel({ p, isImport, rows, products, rowsByProduct, shipments, setP
   );
 }
 
+// "bought from": a drop-down of our product suppliers; "Other…" types a new one
+function BoughtFrom({ value, names, onChange }) {
+  const [typing, setTyping] = useState(false);
+  const known = names.some((n) => supplierKey(n) === supplierKey(value));
+  if (typing || (value && !known))
+    return (
+      <div style={{ display: "flex", gap: 4 }}>
+        <input autoFocus={typing} style={{ ...sm, flex: 1, minWidth: 0 }} value={value} placeholder="Supplier name" onChange={(e) => onChange(e.target.value)} onBlur={() => setTyping(false)} />
+        <button type="button" title="Pick from the list" onClick={() => { setTyping(false); if (!known) onChange(""); }}
+          style={{ ...abtn, border: "1px solid #d5d9e0", padding: "0 7px" }}>▾</button>
+      </div>
+    );
+  return (
+    <select style={{ ...sel, borderColor: value ? "#d5d9e0" : "#E8912D" }} value={known ? names.find((n) => supplierKey(n) === supplierKey(value)) : ""}
+      onChange={(e) => (e.target.value === "__other" ? (setTyping(true), onChange("")) : onChange(e.target.value))}>
+      <option value="">—</option>
+      {names.map((n) => <option key={n} value={n}>{n}</option>)}
+      <option value="__other">Other supplier…</option>
+    </select>
+  );
+}
+
 // ===== colours: chosen ones as chips, add more from the colour list =====
 function ColourPicker({ p, lists, unknown, onChange }) {
   const cur = p.colours || [];
@@ -561,7 +597,7 @@ function ColourPicker({ p, lists, unknown, onChange }) {
 }
 
 // ===== one supplier's version of a master product =====
-function Version({ p, lists, rows, rowsByProduct, products, setP, removeProduct, supKey, shared, showSkus = true, setSupplier, usedSup = [], shipments = [] }) {
+function Version({ p, lists, rows, rowsByProduct, products, setP, removeProduct, supKey, shared, showSkus = true, setSupplier, usedSup = [], shipments = [], supplierNames = [] }) {
   const base = productSkuBase(p);
   const prodList = productsInList(lists, p.segCat, p.segSub);
   const isImport = supKey === "DK" || (!supKey && (!p.code || codeSource(p.code) === "DK"));
@@ -637,7 +673,7 @@ function Version({ p, lists, rows, rowsByProduct, products, setP, removeProduct,
           <span style={{ ...lbl, fontSize: 10 }}>Bought from</span>
           {p.isKit
             ? <input style={{ ...sm, background: "#f4f6f9", color: "#8593a8" }} value="Made up from parts" disabled title="Kits aren't bought — their parts are" />
-            : <input style={sm} value={p.supplier || ""} list="dk-suppliers" onChange={(e) => setP(p.id, "supplier", e.target.value)} />}
+            : <BoughtFrom value={p.supplier || ""} names={supplierNames} onChange={(v) => setP(p.id, "supplier", v)} />}
         </div>
         <div>
           <span style={{ ...lbl, fontSize: 10 }}>Colours</span>
