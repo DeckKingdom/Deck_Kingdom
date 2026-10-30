@@ -453,7 +453,8 @@ async function loadAll() {
     };
     MP_TEXT.forEach((k) => (p[k] = nv(r[snake(k)])));
     Object.entries(MP_NUM).forEach(([k, col]) => (p[k] = nv(r[col])));
-    p.grade = nv(r.grade);
+    // grade column (migration 023); until it's run the SKU suffix -R / -D / -C says it
+    p.grade = nv(r.grade) || ({ r: "returned", d: "damaged", c: "clearance" }[(String(p.sku || "").match(/-([rdc])$/i) || [])[1]?.toLowerCase()] || "");
     return p;
   });
 
