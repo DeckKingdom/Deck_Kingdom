@@ -3,7 +3,7 @@
 // its code, prices, colours and the 12-digit SKU + stock for every colour.
 // The two-digit lists behind the SKUs are edited from "SKU lists".
 import React, { useState, useMemo } from "react";
-import { NAVY, GOLD, RED, uid } from "../../lib/core.js";
+import { NAVY, GOLD, RED, uid, shipmentLandedBasis } from "../../lib/core.js";
 import {
   kitWeight,
   skuLists, productSkuBase, masterKey, productsInList, colourSeg, numericSku, segLabel, cleanCode, codeSource,
@@ -239,7 +239,7 @@ export default function ProductsScreen({ planner, update, crm, updateCrm, remove
                         )}
                         {g.complete && shownBits.has(g.key + "|fields") && <MasterBar g={g} lists={lists} setGroup={setGroup} />}
                         {g.items.map((p) => (
-                          <Version key={p.id} p={p} lists={lists} rows={(rowsByProduct[p.id] || []).filter((r) => r.active !== false)} rowsByProduct={rowsByProduct} products={products} setP={setP} removeProduct={removeProduct} supKey={supKey(p)}
+                          <Version key={p.id} p={p} shipments={planner.shipments || []} lists={lists} rows={(rowsByProduct[p.id] || []).filter((r) => r.active !== false)} rowsByProduct={rowsByProduct} products={products} setP={setP} removeProduct={removeProduct} supKey={supKey(p)}
                             shared={g.complete} showSkus={!g.complete || shownBits.has(g.key + "|skus")} setSupplier={setSupplier} usedSup={g.items.filter((x) => x.id !== p.id).map((x) => x.segSup)} />
                         ))}
                         {g.complete && (
@@ -367,6 +367,135 @@ function MasterBar({ g, lists, setGroup }) {
   );
 }
 
+// ===== costs: the full picture for one supplier version =====
+const f2 = (v) => (v === null || v === undefined || !isFinite(v) ? "—" : "£" + Number(v).toFixed(2));
+const pct = (v) => (v === null || v === undefined || !isFinite(v) ? "—" : Math.round(v) + "%");
+function CostPanel({ p, isImport, rows, products, rowsByProduct, shipments, setP, kitCost, stockCost }) {
+  const n = (v) => (v === "" || v === null || v === undefined || isNaN(Number(v)) ? null : Number(v));
+  // latest shipment carrying this product with its payments in (so the exchange rate is known)
+  const ship = (() => {
+    const hits = (shipments || []).filter((s) => (s.lines || []).some((l) => l.productId === p.id) && shipmentLandedBasis(s).fx > 0);
+    return hits.length ? hits[hits.length - 1] : null;
+  })();
+  const basis = ship ? shipmentLandedBasis(ship) : null;
+  const shipLine = ship ? (ship.lines || []).find((l) => l.productId === p.id) : null;
+  const usd = shipLine ? n(shipLine.cost) : n(p.cost);
+  const goods = basis && usd !== null ? usd / basis.fx : null;
+  const sur = goods !== null && basis.surchargeOn ? goods * 0.03 : goods !== null ? 0 : null;
+  const landedShip = goods !== null ? goods + sur + basis.dutyPerPc + basis.shipPerPc : null;
+
+  const ukCost = n(p.costGbp);
+  const cost = p.isKit ? kitCost : isImport ? (stockCost !== null ? stockCost : landedShip) : ukCost;
+  const costSource = p.isKit ? "parts" : isImport ? (stockCost !== null ? "landed cost of stock held" : landedShip !== null ? "latest shipment" : "") : "UK price";
+  const retailInc = n(p.salePrice);
+  const retailEx = retailInc !== null ? retailInc / 1.2 : null;
+  const marginGbp = cost !== null && retailEx !== null ? retailEx - cost : null;
+
+  const stockQty = rows.reduce((t, r) => t + (Number(r.stock) || 0), 0);
+  const stockVal = rows.reduce((t, r) => t + (Number(r.stock) || 0) * (n(r.costGbp) || 0), 0);
+  const qtyPlt = n(p.qty), kg = n(p.weight), cbm = n(p.cbm);
+
+  const box = { background: "#fff", border: "1px solid #e6e9ef", borderRadius: 8, padding: "10px 12px", minWidth: 0 };
+  const head = (t) => <div style={{ fontSize: 10.5, fontWeight: 800, color: "#8593a8", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 6 }}>{t}</div>;
+  const line = (label, value, opts = {}) => (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0", borderTop: opts.total ? "1px solid #e6e9ef" : undefined, marginTop: opts.total ? 4 : 0, fontSize: 12.5 }}>
+      <span style={{ flex: 1, color: opts.total ? NAVY : "#5a6a85", fontWeight: opts.total ? 800 : 600 }}>{label}</span>
+      <span style={{ fontWeight: opts.total ? 800 : 700, color: opts.tone || NAVY, whiteSpace: "nowrap" }}>{value}</span>
+    </div>
+  );
+  const field = (label, key, prefix) => (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "3px 0", fontSize: 12.5 }}>
+      <span style={{ flex: 1, color: "#5a6a85", fontWeight: 600 }}>{label}</span>
+      <span style={{ position: "relative", width: 100 }}>
+        {prefix && <span style={{ position: "absolute", left: 7, top: "50%", transform: "translateY(-50%)", color: "#8593a8", fontSize: 12 }}>{prefix}</span>}
+        <input type="number" style={{ ...numI, padding: "4px 7px", paddingLeft: prefix ? 18 : 7 }} value={p[key] === undefined || p[key] === null ? "" : p[key]} onChange={(e) => setP(p.id, key, e.target.value)} />
+      </span>
+    </div>
+  );
+  const mTone = marginGbp === null ? "#8593a8" : marginGbp < 0 ? RED : "#28713e";
+
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))", gap: 10, marginTop: 8, padding: 10, background: "#f6f8fb", border: "1px solid #e6e9ef", borderRadius: 8 }}>
+      {/* 1. what one costs us */}
+      <div style={box}>
+        {p.isKit ? (
+          <>
+            {head("Kit cost — parts, ex VAT")}
+            {(p.kit || []).map((k, i) => {
+              const part = products.find((x) => x.id === k.productId);
+              const costs = ((part && rowsByProduct[part.id]) || []).map((r) => n(r.costGbp)).filter((v) => v !== null && v > 0);
+              const each = costs.length ? costs.reduce((a, b) => a + b, 0) / costs.length : part ? n(part.costGbp) : null;
+              return <React.Fragment key={i}>{line((Number(k.qty) || 0) + " × " + (part ? part.code || part.name : "—"), each === null ? "no cost" : f2(each * (Number(k.qty) || 0)), { tone: each === null ? "#a05f10" : NAVY })}</React.Fragment>;
+            })}
+            {line("Kit cost", f2(kitCost), { total: true })}
+          </>
+        ) : isImport ? (
+          <>
+            {head("Import cost per piece")}
+            {field("Factory price", "cost", "$")}
+            {line("Exchange rate" + (ship ? " (" + (ship.name || "shipment") + ")" : ""), basis ? "$" + basis.fx.toFixed(4) + " = £1" : "no shipment paid yet", { tone: basis ? NAVY : "#8593a8" })}
+            {line("Goods", f2(goods))}
+            {line("3% surcharge", basis ? (basis.surchargeOn ? f2(sur) : "off") : "—")}
+            {line("Duty", basis ? f2(basis.dutyPerPc) : "—")}
+            {line("Shipping & freight", basis ? f2(basis.shipPerPc) : "—")}
+            {line("Landed, latest shipment", f2(landedShip), { total: true })}
+            {line("Landed, stock held (avg)", f2(stockCost))}
+          </>
+        ) : (
+          <>
+            {head("UK purchase cost")}
+            {field("Cost ex VAT", "costGbp", "£")}
+            {line("VAT 20%", f2(ukCost !== null ? ukCost * 0.2 : null))}
+            {line("Cost inc VAT", f2(ukCost !== null ? ukCost * 1.2 : null), { total: true })}
+            {line("Reclaimable VAT", f2(ukCost !== null ? ukCost * 0.2 : null), { tone: "#5a6a85" })}
+          </>
+        )}
+      </div>
+
+      {/* 2. selling price and margin */}
+      <div style={box}>
+        {head("Selling & margin")}
+        {line("Retail inc VAT", f2(retailInc))}
+        {line("VAT 20%", f2(retailInc !== null ? retailInc - retailEx : null))}
+        {line("Retail ex VAT", f2(retailEx))}
+        {line("Cost ex VAT" + (costSource ? " (" + costSource + ")" : ""), f2(cost))}
+        {line("Margin per piece", f2(marginGbp), { total: true, tone: mTone })}
+        {line("Margin %", pct(marginGbp !== null && retailEx ? (marginGbp / retailEx) * 100 : null), { tone: mTone })}
+        {line("Markup on cost", pct(marginGbp !== null && cost ? (marginGbp / cost) * 100 : null), { tone: mTone })}
+      </div>
+
+      {/* 3. handling: pallets and weights */}
+      <div style={box}>
+        {head(p.isKit ? "Kit weight" : "Pallets & weight")}
+        {p.isKit ? (
+          line("Weight per kit", (() => { const w = kitWeight(p, products); return w ? w + " kg" : "—"; })(), { total: true })
+        ) : (
+          <>
+            {isImport && field("Qty per pallet", "qty")}
+            {field("Weight per piece kg", "weight")}
+            {isImport && field("m³ per pallet", "cbm")}
+            {isImport && line("Pallet weight", qtyPlt && kg ? Math.round(qtyPlt * kg).toLocaleString("en-GB") + " kg" : "—")}
+            {isImport && line("Pallet cost, landed", f2(qtyPlt && cost !== null ? qtyPlt * cost : null))}
+            {isImport && line("Pallet retail ex VAT", f2(qtyPlt && retailEx !== null ? qtyPlt * retailEx : null))}
+            {isImport && line("Pallet margin", f2(qtyPlt && marginGbp !== null ? qtyPlt * marginGbp : null), { total: true, tone: mTone })}
+            {!isImport && line("Per 10 pieces", kg ? Math.round(kg * 10) + " kg" : "—")}
+          </>
+        )}
+      </div>
+
+      {/* 4. what we're holding */}
+      {!p.isKit && (
+        <div style={box}>
+          {head("Stock held")}
+          {rows.length ? rows.map((r) => line((r.colour || "No colour") + " · " + (Number(r.stock) || 0).toLocaleString("en-GB"), f2((Number(r.stock) || 0) * (n(r.costGbp) || 0)), { tone: Number(r.stock) ? NAVY : "#aab3c2" })) : line("No stock rows yet", "")}
+          {line(stockQty.toLocaleString("en-GB") + " pcs at cost", f2(stockVal), { total: true })}
+          {line("At retail ex VAT", f2(retailEx !== null ? stockQty * retailEx : null), { tone: "#5a6a85" })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ===== colours: chosen ones as chips, add more from the colour list =====
 function ColourPicker({ p, lists, unknown, onChange }) {
   const cur = p.colours || [];
@@ -432,7 +561,7 @@ function ColourPicker({ p, lists, unknown, onChange }) {
 }
 
 // ===== one supplier's version of a master product =====
-function Version({ p, lists, rows, rowsByProduct, products, setP, removeProduct, supKey, shared, showSkus = true, setSupplier, usedSup = [] }) {
+function Version({ p, lists, rows, rowsByProduct, products, setP, removeProduct, supKey, shared, showSkus = true, setSupplier, usedSup = [], shipments = [] }) {
   const base = productSkuBase(p);
   const prodList = productsInList(lists, p.segCat, p.segSub);
   const isImport = supKey === "DK" || (!supKey && (!p.code || codeSource(p.code) === "DK"));
@@ -539,31 +668,7 @@ function Version({ p, lists, rows, rowsByProduct, products, setP, removeProduct,
       )}
 
       {costsOpen && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end", marginTop: 8, padding: "10px 12px", background: "#f6f8fb", border: "1px solid #e6e9ef", borderRadius: 8 }}>
-          {p.isKit ? (
-            <>
-              {ro("Parts £ ex VAT", kitCost === null ? "—" : kitCost.toFixed(2), "Worked out from the parts' costs")}
-              {ro("Kit weight kg", (() => { const w = kitWeight(p, products); return w ? String(w) : "—"; })(), "Parts' kg / pc × qty — used on the loading bill")}
-            </>
-          ) : isImport ? (
-            <>
-              {num("Import $ / pc", "cost")}
-              {num("Qty / plt", "qty")}
-              {num("kg / pc", "weight")}
-              {num("m³ / plt", "cbm")}
-              {ro("Landed £ ex VAT", stockCost === null ? "—" : stockCost.toFixed(2), "From the shipments this stock came in on")}
-            </>
-          ) : (
-            <>
-              {num("UK cost £ ex VAT", "costGbp")}
-              {num("kg / pc", "weight")}
-            </>
-          )}
-          {ro("Margin ex VAT", margin, "Retail ex VAT less cost ex VAT")}
-          <span style={{ fontSize: 11.5, color: "#8593a8", fontWeight: 600, paddingBottom: 7 }}>
-            {p.isKit ? "A kit costs what its parts cost." : isImport ? "Imported — cost comes from the shipment's landed cost, not a UK price." : "Bought in the UK — enter the price ex VAT, as on the supplier's invoice before VAT."}
-          </span>
-        </div>
+        <CostPanel p={p} isImport={isImport} rows={rows} products={products} rowsByProduct={rowsByProduct} shipments={shipments} setP={setP} kitCost={kitCost} stockCost={stockCost} />
       )}
 
       {(showSkus || sameCode.length > 0 || unknownColours.length > 0) && (
