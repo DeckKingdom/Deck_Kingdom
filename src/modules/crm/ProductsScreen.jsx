@@ -86,14 +86,47 @@ export default function ProductsScreen({ planner, update, crm, updateCrm, remove
     });
     setOpen((o) => new Set(o).add("p:" + id));
   };
-  const addVersion = (g) => {
+  // picking a supplier code also gives the version its readable prefix (TG/…) and "bought from"
+  const applySupplier = (p, code) => {
+    const sup = lists.supplier.find((x) => x.code === code);
+    if (!sup) return;
+    p.segSup = code;
+    const parts = cleanCode(p.code || "").split("/").filter(Boolean);
+    if (sup.key && parts.length) { parts[0] = sup.key; p.code = cleanCode(parts.join("/")); }
+    else if (sup.key && !parts.length) p.code = sup.key + "/";
+    if (!p.isKit && sup.key !== "DK" && (!p.supplier || lists.supplier.some((x) => x.code !== code && supplierName(x) === p.supplier))) p.supplier = supplierName(sup);
+  };
+  const setSupplier = (pid, code) =>
+    update((d) => {
+      const p = d.products.find((x) => x.id === pid);
+      if (p) applySupplier(p, code);
+      return d;
+    });
+  const addVersion = (g, code) => {
     const id = uid();
     const p0 = g.p0;
     update((d) => {
       const i = d.products.findIndex((x) => x.id === g.items[g.items.length - 1].id);
-      d.products.splice(i + 1, 0, { id, code: "", name: g.name, colours: [...(p0.colours || [])], qty: 0, cost: 0, weight: 0, cbm: 0, supplier: "", category: p0.category || "", salePrice: p0.salePrice || "", costGbp: "", segSup: "", segLen: p0.segLen, segCat: p0.segCat, segSub: p0.segSub, segProd: p0.segProd });
+      const v = { id, code: p0.code || "", name: g.name, colours: [...(p0.colours || [])], qty: 0, cost: 0, weight: 0, cbm: 0, supplier: "", category: p0.category || "", salePrice: p0.salePrice || "", costGbp: "", segSup: "", segLen: p0.segLen, segCat: p0.segCat, segSub: p0.segSub, segProd: p0.segProd };
+      applySupplier(v, code);
+      d.products.splice(i + 1, 0, v);
       return d;
     });
+  };
+  // length / category / sub-category / product belong to the master product: set once, every version follows
+  const setGroup = (g, field, value) => {
+    update((d) => {
+      g.items.forEach((it) => {
+        const p = d.products.find((x) => x.id === it.id);
+        if (!p) return;
+        p[field] = value;
+        if ((field === "segCat" || field === "segSub") && p.segProd && !productsInList(lists, p.segCat, p.segSub).some((x) => x.code === p.segProd)) p.segProd = "";
+        if (field === "segCat" && !p.category) p.category = segLabel(lists.category, value);
+      });
+      return d;
+    });
+    const next = masterKey({ ...g.p0, [field]: value });
+    if (next) setOpen((o) => new Set(o).add(next)); // stay open under its new key
   };
 
   const th = { textAlign: "left", fontSize: 10.5, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", padding: "8px 8px", borderBottom: "2px solid #e6e9ef", whiteSpace: "nowrap", background: "#fff", position: "sticky", top: 0, zIndex: 2 };
@@ -168,13 +201,20 @@ export default function ProductsScreen({ planner, update, crm, updateCrm, remove
                   {isOpen && (
                     <tr>
                       <td colSpan={8} style={{ padding: "8px 10px 14px 26px", background: "#f8f9fb", borderBottom: "1px solid #e6e9ef" }}>
+                        {g.complete && <MasterBar g={g} lists={lists} setGroup={setGroup} />}
                         {g.items.map((p) => (
-                          <Version key={p.id} p={p} lists={lists} rows={(rowsByProduct[p.id] || []).filter((r) => r.active !== false)} rowsByProduct={rowsByProduct} products={products} setP={setP} removeProduct={removeProduct} supKey={supKey(p)} />
+                          <Version key={p.id} p={p} lists={lists} rows={(rowsByProduct[p.id] || []).filter((r) => r.active !== false)} rowsByProduct={rowsByProduct} products={products} setP={setP} removeProduct={removeProduct} supKey={supKey(p)}
+                            shared={g.complete} setSupplier={setSupplier} usedSup={g.items.filter((x) => x.id !== p.id).map((x) => x.segSup)} />
                         ))}
                         {g.complete && (
-                          <button style={{ ...btn, padding: "6px 12px", fontSize: 12.5, borderStyle: "dashed" }} onClick={() => addVersion(g)}>
-                            <Icon name="plus" stroke={NAVY} />Add another supplier's version
-                          </button>
+                          <RadioPick
+                            options={lists.supplier.map((x) => ({ value: x.code, label: x.code + " · " + x.key + " — " + x.label, disabled: g.items.some((it) => it.segSup === x.code), note: g.items.some((it) => it.segSup === x.code) ? "added" : "" }))}
+                            onPick={(code) => addVersion(g, code)} width={340}
+                            button={(openIt) => (
+                              <button style={{ ...btn, padding: "6px 12px", fontSize: 12.5, borderStyle: "dashed" }} onClick={openIt}>
+                                <Icon name="plus" stroke={NAVY} />Add another supplier's version
+                              </button>
+                            )} />
                         )}
                       </td>
                     </tr>
@@ -215,6 +255,80 @@ function kitCostFromParts(p, products, rowsByProduct) {
     total += each * (Number(k.qty) || 0); any = true;
   }
   return any ? total : null;
+}
+
+// the name a supplier code stands for, as "bought from" ("Tuda Grass", not "Easy Composite (Chinese Lee)")
+const supplierName = (x) => String((x && x.label) || "").replace(/\s*\(.*\)\s*/, "").trim();
+
+// one-pick radio list in a pop-out; `button(open)` draws whatever opens it
+function RadioPick({ value, options, onPick, button, width = 300 }) {
+  const [box, setBox] = useState(null); // fixed to the screen so the scrolling table can't clip it
+  const ref = React.useRef(null), pop = React.useRef(null);
+  React.useEffect(() => {
+    if (!box) return;
+    const off = (e) => !(ref.current && ref.current.contains(e.target)) && !(pop.current && pop.current.contains(e.target)) && setBox(null);
+    const shut = (e) => !(pop.current && pop.current.contains(e.target)) && setBox(null);
+    document.addEventListener("mousedown", off);
+    window.addEventListener("scroll", shut, true);
+    return () => { document.removeEventListener("mousedown", off); window.removeEventListener("scroll", shut, true); };
+  }, [box]);
+  const toggle = () => {
+    if (box) return setBox(null);
+    const r = ref.current.getBoundingClientRect();
+    const h = Math.min(options.length * 33 + 14, 320);
+    const below = window.innerHeight - r.bottom > h + 8 || r.top < h + 8;
+    setBox({ left: Math.max(8, Math.min(r.left, window.innerWidth - width - 8)), top: below ? r.bottom + 4 : r.top - h - 4, h });
+  };
+  return (
+    <div ref={ref} style={{ display: "inline-block", width: "100%" }}>
+      {button(toggle)}
+      {box && (
+        <div ref={pop} style={{ position: "fixed", zIndex: 1000, left: box.left, top: box.top, width, maxHeight: box.h, overflowY: "auto", background: "#fff", border: "1px solid #d5d9e0", borderRadius: 10, boxShadow: "0 10px 30px rgba(11,31,63,.18)", padding: 6 }}>
+          {options.map((o) => {
+            const on = o.value === value;
+            return (
+              <div key={o.value} onClick={() => { if (o.disabled && !on) return; onPick(o.value); setBox(null); }}
+                style={{ display: "flex", alignItems: "center", gap: 9, padding: "7px 8px", borderRadius: 6, fontSize: 13, cursor: o.disabled && !on ? "default" : "pointer",
+                  fontWeight: on ? 700 : 500, color: o.disabled && !on ? "#aab3c2" : on ? NAVY : "#3a4a63", background: on ? "#eef1f6" : "transparent" }}>
+                <span style={{ width: 15, height: 15, flex: "none", borderRadius: "50%", border: "2px solid " + (on ? NAVY : o.disabled ? "#dde2ea" : "#b8c0cc"), display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+                  {on && <span style={{ width: 7, height: 7, borderRadius: "50%", background: NAVY }} />}
+                </span>
+                <span style={{ flex: 1 }}>{o.label}</span>
+                {o.note && !on && <span style={{ fontSize: 11, fontWeight: 600 }}>{o.note}</span>}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// length · category · sub-category · product, set once for the master product
+function MasterBar({ g, lists, setGroup }) {
+  const p = g.p0;
+  const prodList = productsInList(lists, p.segCat, p.segSub);
+  const pick = (field, list, label, disabled) => (
+    <div style={{ minWidth: 0 }}>
+      <span style={{ ...lbl, fontSize: 10 }}>{label}</span>
+      <select style={sel} value={p[field] || ""} disabled={disabled} onChange={(e) => setGroup(g, field, e.target.value)}>
+        <option value="">—</option>
+        {p[field] && !list.some((x) => x.code === p[field]) && <option value={p[field]}>{p[field]} (not in list)</option>}
+        {list.map((x) => <option key={x.code} value={x.code}>{segOpt(x)}</option>)}
+      </select>
+    </div>
+  );
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "120px 140px 160px minmax(200px,1fr) auto", gap: 8, alignItems: "end", padding: "4px 2px 12px" }}>
+      {pick("segLen", lists.length, "Length")}
+      {pick("segCat", lists.category, "Category")}
+      {pick("segSub", lists.sub, "Sub-category")}
+      {pick("segProd", prodList, "Product", !p.segCat || !p.segSub)}
+      <span style={{ fontSize: 11.5, color: "#8593a8", fontWeight: 600, paddingBottom: 7 }}>
+        {"Applies to all " + g.items.length + " supplier version" + (g.items.length === 1 ? "" : "s") + " below"}
+      </span>
+    </div>
+  );
 }
 
 // ===== colours: chosen ones as chips, add more from the colour list =====
@@ -282,7 +396,7 @@ function ColourPicker({ p, lists, unknown, onChange }) {
 }
 
 // ===== one supplier's version of a master product =====
-function Version({ p, lists, rows, rowsByProduct, products, setP, removeProduct, supKey }) {
+function Version({ p, lists, rows, rowsByProduct, products, setP, removeProduct, supKey, shared, setSupplier, usedSup = [] }) {
   const base = productSkuBase(p);
   const prodList = productsInList(lists, p.segCat, p.segSub);
   const isImport = supKey === "DK" || (!supKey && (!p.code || codeSource(p.code) === "DK"));
@@ -306,7 +420,21 @@ function Version({ p, lists, rows, rowsByProduct, products, setP, removeProduct,
   return (
     <div style={{ background: "#fff", border: "1px solid #e6e9ef", borderRadius: 10, padding: "10px 12px", marginBottom: 10 }}>
       <div style={{ display: "grid", gridTemplateColumns: "110px 150px minmax(220px,2fr) 160px minmax(180px,1.4fr) 90px 90px 34px", gap: 8, alignItems: "end" }}>
-        {segSelect("segSup", lists.supplier, "Supplier code")}
+        <div style={{ minWidth: 0 }}>
+          <span style={{ ...lbl, fontSize: 10 }}>Supplier code</span>
+          <RadioPick value={p.segSup} width={340}
+            options={lists.supplier.map((x) => ({ value: x.code, label: x.code + " · " + x.key + " — " + x.label, disabled: usedSup.includes(x.code), note: usedSup.includes(x.code) ? "has a version" : "" }))}
+            onPick={(code) => setSupplier(p.id, code)}
+            button={(openIt) => {
+              const cur = lists.supplier.find((x) => x.code === p.segSup);
+              return (
+                <button type="button" onClick={openIt} style={{ ...sel, width: "100%", textAlign: "left", cursor: "pointer", display: "flex", alignItems: "center", gap: 4, borderColor: p.segSup ? "#d5d9e0" : "#E8912D", fontWeight: 700, color: cur ? NAVY : "#8593a8" }}>
+                  <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cur ? cur.code + " · " + cur.key : "Pick…"}</span>
+                  <span style={{ color: "#5a6a85", fontSize: 10 }}>▾</span>
+                </button>
+              );
+            }} />
+        </div>
         <div>
           <span style={{ ...lbl, fontSize: 10 }}>Readable code</span>
           <input key={"c" + p.id + (p.code || "")} defaultValue={p.code || ""} style={{ ...sm, fontWeight: 700, textTransform: "uppercase" }} placeholder="TG/3.6/DECK"
@@ -340,11 +468,12 @@ function Version({ p, lists, rows, rowsByProduct, products, setP, removeProduct,
         <button style={{ ...abtn, color: RED, border: "none" }} title="Remove this version" onClick={() => removeProduct(p.id)}><Icon name="x" stroke={RED} /></button>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "110px 130px 150px minmax(200px,1fr) " + (p.isKit ? "100px" : isImport ? "80px 80px 80px 80px" : ""), gap: 8, alignItems: "end", marginTop: 8 }}>
-        {segSelect("segLen", lists.length, "Length")}
-        {segSelect("segCat", lists.category, "Category")}
-        {segSelect("segSub", lists.sub, "Sub-category")}
-        {segSelect("segProd", prodList, "Product", !p.segCat || !p.segSub)}
+      {(!shared || p.isKit || isImport) && (
+      <div style={{ display: "grid", gridTemplateColumns: (shared ? "" : "110px 130px 150px minmax(200px,1fr) ") + (p.isKit ? "100px" : isImport ? "80px 80px 80px 80px" : ""), justifyContent: shared ? "end" : undefined, gap: 8, alignItems: "end", marginTop: 8 }}>
+        {!shared && segSelect("segLen", lists.length, "Length")}
+        {!shared && segSelect("segCat", lists.category, "Category")}
+        {!shared && segSelect("segSub", lists.sub, "Sub-category")}
+        {!shared && segSelect("segProd", prodList, "Product", !p.segCat || !p.segSub)}
         {p.isKit && (
           <div title="Worked out from the parts' kg / pc × qty — used on the loading bill">
             <span style={{ ...lbl, fontSize: 10 }}>Kit weight kg</span>
@@ -361,6 +490,7 @@ function Version({ p, lists, rows, rowsByProduct, products, setP, removeProduct,
           </>
         )}
       </div>
+      )}
 
       <div style={{ marginTop: 10, display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
         <span style={{ fontSize: 10.5, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", marginRight: 4 }}>
