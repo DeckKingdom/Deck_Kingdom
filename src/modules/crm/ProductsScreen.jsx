@@ -77,6 +77,8 @@ export default function ProductsScreen({ planner, update, crm, updateCrm, remove
   const srcCounts = {};
   products.forEach((p) => { const k = supKey(p); if (k) srcCounts[k] = (srcCounts[k] || 0) + 1; });
 
+  const [shownBits, setShownBits] = useState(new Set()); // "groupKey|fields" / "groupKey|skus" shown
+  const toggleBit = (k) => setShownBits((o) => { const x = new Set(o); x.has(k) ? x.delete(k) : x.add(k); return x; });
   const toggle = (k) => setOpen((o) => { const x = new Set(o); x.has(k) ? x.delete(k) : x.add(k); return x; });
   const addProduct = () => {
     const id = uid();
@@ -180,7 +182,12 @@ export default function ProductsScreen({ planner, update, crm, updateCrm, remove
                     <td style={{ ...td, fontWeight: 700 }}>
                       <span style={{ fontSize: 10, color: "#5a6a85", marginRight: 8 }}>{isOpen ? "▼" : "▶"}</span>
                       {g.name || <span style={{ color: "#aab3c2" }}>New product</span>}
-                      {g.items.some((p) => p.isKit) && <Chip tone="gold" style={{ marginLeft: 8, fontSize: 10, padding: "1px 7px" }}>KIT</Chip>}
+                      <label onClick={(e) => e.stopPropagation()} title="A kit is sold as one line but loaded and taken out of stock as its parts"
+                        style={{ display: "inline-flex", alignItems: "center", gap: 5, marginLeft: 10, fontSize: 11, fontWeight: 700, padding: "1px 8px 1px 5px", borderRadius: 999, cursor: "pointer", verticalAlign: "middle",
+                          border: "1px solid " + (g.items.some((p) => p.isKit) ? "#e9c46a" : "#dde2ea"), background: g.items.some((p) => p.isKit) ? "#fdf3dc" : "#fff", color: g.items.some((p) => p.isKit) ? "#8a5a00" : "#8593a8" }}>
+                        <input type="checkbox" style={{ margin: 0, width: 13, height: 13 }} checked={g.items.some((p) => p.isKit === true)} onChange={(e) => setGroup(g, "isKit", e.target.checked)} />
+                        KIT
+                      </label>
                       {!g.complete && <Chip tone="amber" style={{ marginLeft: 8, fontSize: 10, padding: "1px 7px" }}>SKU fields needed</Chip>}
                     </td>
                     <td style={{ ...td, color: "#5a6a85", fontWeight: 600 }}>{[segLabel(lists.category, p0.segCat), segLabel(lists.sub, p0.segSub)].filter((x) => x && x !== "N/a").join(" › ") || "—"}</td>
@@ -202,10 +209,23 @@ export default function ProductsScreen({ planner, update, crm, updateCrm, remove
                   {isOpen && (
                     <tr>
                       <td colSpan={8} style={{ padding: "8px 10px 14px 26px", background: "#f8f9fb", borderBottom: "1px solid #e6e9ef" }}>
-                        {g.complete && <MasterBar g={g} lists={lists} setGroup={setGroup} />}
+                        {g.complete && (
+                          <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+                            {[["fields", "SKU fields"], ["skus", "SKUs"]].map(([k, label]) => {
+                              const on = shownBits.has(g.key + "|" + k);
+                              return (
+                                <button key={k} type="button" onClick={() => toggleBit(g.key + "|" + k)}
+                                  style={{ fontFamily: "inherit", fontSize: 11.5, fontWeight: 700, padding: "3px 10px", borderRadius: 999, cursor: "pointer", border: "1px solid " + (on ? NAVY : "#d5d9e0"), background: on ? NAVY : "#fff", color: on ? "#fff" : "#5a6a85" }}>
+                                  {(on ? "Hide " : "Show ") + label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                        {g.complete && shownBits.has(g.key + "|fields") && <MasterBar g={g} lists={lists} setGroup={setGroup} />}
                         {g.items.map((p) => (
                           <Version key={p.id} p={p} lists={lists} rows={(rowsByProduct[p.id] || []).filter((r) => r.active !== false)} rowsByProduct={rowsByProduct} products={products} setP={setP} removeProduct={removeProduct} supKey={supKey(p)}
-                            shared={g.complete} setSupplier={setSupplier} usedSup={g.items.filter((x) => x.id !== p.id).map((x) => x.segSup)} />
+                            shared={g.complete} showSkus={!g.complete || shownBits.has(g.key + "|skus")} setSupplier={setSupplier} usedSup={g.items.filter((x) => x.id !== p.id).map((x) => x.segSup)} />
                         ))}
                         {g.complete && (
                           <RadioPick
@@ -320,16 +340,11 @@ function MasterBar({ g, lists, setGroup }) {
     </div>
   );
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "120px 140px 160px minmax(200px,1fr) auto auto", gap: 8, alignItems: "end", padding: "4px 2px 12px" }}>
+    <div style={{ display: "grid", gridTemplateColumns: "120px 140px 160px minmax(200px,1fr) auto", gap: 8, alignItems: "end", padding: "4px 2px 12px" }}>
       {pick("segLen", lists.length, "Length")}
       {pick("segCat", lists.category, "Category")}
       {pick("segSub", lists.sub, "Sub-category")}
       {pick("segProd", prodList, "Product", !p.segCat || !p.segSub)}
-      <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 700, color: g.items.some((x) => x.isKit) ? NAVY : "#5a6a85", cursor: "pointer", whiteSpace: "nowrap", paddingBottom: 7 }}
-        title="A kit is sold as one line but loaded and taken out of stock as its parts">
-        <input type="checkbox" checked={g.items.some((x) => x.isKit === true)} onChange={(e) => setGroup(g, "isKit", e.target.checked)} />
-        This is a kit
-      </label>
       <span style={{ fontSize: 11.5, color: "#8593a8", fontWeight: 600, paddingBottom: 7 }}>
         {"Applies to all " + g.items.length + " supplier version" + (g.items.length === 1 ? "" : "s") + " below"}
       </span>
@@ -402,7 +417,7 @@ function ColourPicker({ p, lists, unknown, onChange }) {
 }
 
 // ===== one supplier's version of a master product =====
-function Version({ p, lists, rows, rowsByProduct, products, setP, removeProduct, supKey, shared, setSupplier, usedSup = [] }) {
+function Version({ p, lists, rows, rowsByProduct, products, setP, removeProduct, supKey, shared, showSkus = true, setSupplier, usedSup = [] }) {
   const base = productSkuBase(p);
   const prodList = productsInList(lists, p.segCat, p.segSub);
   const isImport = supKey === "DK" || (!supKey && (!p.code || codeSource(p.code) === "DK"));
@@ -536,11 +551,12 @@ function Version({ p, lists, rows, rowsByProduct, products, setP, removeProduct,
         </div>
       )}
 
+      {(showSkus || sameCode.length > 0 || unknownColours.length > 0) && (
       <div style={{ marginTop: 10, display: "flex", gap: 6, flexWrap: skusOpen ? "wrap" : "nowrap", overflow: skusOpen ? undefined : "hidden", alignItems: "center" }}>
-        <span style={{ fontSize: 10.5, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", marginRight: 4 }}>
+        {showSkus && <span style={{ fontSize: 10.5, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", marginRight: 4, whiteSpace: "nowrap" }}>
           SKUs {base ? <span style={{ color: NAVY, letterSpacing: 1 }}>{base.replace(/(\d\d)(?=\d)/g, "$1 ")} ··</span> : <span style={{ color: "#a05f10" }}>— fill in the orange fields</span>}
-        </span>
-        {(skusOpen ? rows : rows.slice(0, SKU_PREVIEW)).map((r) => (
+        </span>}
+        {showSkus && (skusOpen ? rows : rows.slice(0, SKU_PREVIEW)).map((r) => (
           <span key={r.id} title={(r.family || "") + " · cost £" + (r.costGbp === "" || r.costGbp === null ? "—" : Number(r.costGbp).toFixed(2))}
             style={{ display: "inline-flex", gap: 6, alignItems: "center", border: "1px solid " + (/^\d{12}$/.test(r.sku) ? "#d5d9e0" : "#f0d0a8"), background: /^\d{12}$/.test(r.sku) ? "#fff" : "#fff8e6", borderRadius: 8, padding: "3px 8px", fontSize: 12 }}>
             <b style={{ letterSpacing: 0.5 }}>{r.sku}</b>
@@ -548,7 +564,7 @@ function Version({ p, lists, rows, rowsByProduct, products, setP, removeProduct,
             <span style={{ fontWeight: 700, color: Number(r.stock) ? "#28713e" : "#aab3c2" }}>{Number(r.stock) ? Number(r.stock).toLocaleString("en-GB") : "0"}</span>
           </span>
         ))}
-        {rows.length > SKU_PREVIEW && (
+        {showSkus && rows.length > SKU_PREVIEW && (
           <button type="button" onClick={() => setSkusOpen((o) => !o)}
             style={{ fontFamily: "inherit", fontSize: 12, fontWeight: 700, color: NAVY, background: "#eef1f6", border: "1px solid #d5d9e0", borderRadius: 8, padding: "3px 10px", cursor: "pointer" }}>
             {skusOpen ? "Show less ▴" : "+" + (rows.length - SKU_PREVIEW) + " more ▾"}
@@ -561,14 +577,8 @@ function Version({ p, lists, rows, rowsByProduct, products, setP, removeProduct,
           <Chip tone="red" style={{ fontSize: 11 }}>{unknownColours.join(", ") + " not in the colour list — add it under SKU lists"}</Chip>
         )}
         <span style={{ flex: 1 }} />
-        {!shared && (
-          <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 700, color: p.isKit ? NAVY : "#5a6a85", cursor: "pointer", whiteSpace: "nowrap" }}
-            title="A kit is sold as one line but loaded and taken out of stock as its parts">
-            <input type="checkbox" checked={p.isKit === true} onChange={(e) => setP(p.id, "isKit", e.target.checked)} />
-            This is a kit
-          </label>
-        )}
       </div>
+      )}
       {p.isKit && <KitEditor p={p} products={products} rowsByProduct={rowsByProduct} lists={lists} setP={setP} />}
     </div>
   );
