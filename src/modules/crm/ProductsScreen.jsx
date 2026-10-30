@@ -65,7 +65,7 @@ export default function ProductsScreen({ planner, update, crm, updateCrm, remove
     });
   }, [products]);
   const shown = groups
-    .filter((g) => !src || g.items.some((p) => supKey(p) === src))
+    .filter((g) => !src || (src === "KIT" ? g.items.some((p) => p.isKit === true) : g.items.some((p) => supKey(p) === src)))
     .filter((g) => !ql || g.items.some((p) => [p.code, p.name, p.supplier, (p.colours || []).join(" "), productSkuBase(p)].some((v) => String(v || "").toLowerCase().includes(ql))))
     .sort((a, b) =>
       (a.complete ? 1 : 0) - (b.complete ? 1 : 0) ||
@@ -82,9 +82,9 @@ export default function ProductsScreen({ planner, update, crm, updateCrm, remove
   const toggle = (k) => setOpen((o) => { const x = new Set(o); x.has(k) ? x.delete(k) : x.add(k); return x; });
   const addProduct = () => {
     const id = uid();
-    const sup = src ? lists.supplier.find((x) => x.key === src) : null;
+    const sup = src && src !== "KIT" ? lists.supplier.find((x) => x.key === src) : null;
     update((d) => {
-      d.products.unshift({ id, code: src ? src + "/" : "", name: "", colours: [], qty: 0, cost: 0, weight: 0, cbm: 0, supplier: "", category: "", salePrice: "", costGbp: "", segSup: sup ? sup.code : "", segLen: "", segCat: "", segSub: "", segProd: "" });
+      d.products.unshift({ id, code: sup ? src + "/" : "", name: "", colours: [], qty: 0, cost: 0, weight: 0, cbm: 0, supplier: "", category: "", salePrice: "", costGbp: "", segSup: sup ? sup.code : "", segLen: "", segCat: "", segSub: "", segProd: "" });
       return d;
     });
     setOpen((o) => new Set(o).add("p:" + id));
@@ -147,6 +147,10 @@ export default function ProductsScreen({ planner, update, crm, updateCrm, remove
               {k || "All"}{k ? " · " + srcCounts[k] : " · " + products.length}
             </button>
           ))}
+          <button onClick={() => setSrc(src === "KIT" ? "" : "KIT")} title="Only kits"
+            style={{ fontFamily: "inherit", fontSize: 12.5, fontWeight: 700, padding: "6px 11px", borderRadius: 999, cursor: "pointer", marginLeft: 6, border: "1px solid " + (src === "KIT" ? "#a86b12" : "#e9c46a"), background: src === "KIT" ? GOLD : "#fdf3dc", color: src === "KIT" ? NAVY : "#8a5a00" }}>
+            {"Kits · " + groups.filter((g) => g.items.some((p) => p.isKit === true)).length}
+          </button>
         </div>
         <span style={{ flex: 1 }} />
         <button style={btn} onClick={() => setListsOpen(true)} title="The two-digit lists the SKUs are built from"><Icon name="gear" />SKU lists</button>
@@ -163,8 +167,8 @@ export default function ProductsScreen({ planner, update, crm, updateCrm, remove
         <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1000, fontSize: 13 }}>
           <thead>
             <tr>
-              {["Master product", "Category", "Length", "Suppliers", "Colours", "Stock", "Retail £", "SKUs"].map((h, i) => (
-                <th key={h} style={{ ...th, textAlign: i >= 4 ? "right" : "left" }}>{h}</th>
+              {["Master product", "Kit", "Category", "Length", "Suppliers", "Colours", "Stock", "Retail £ inc VAT", "SKUs"].map((h, i) => (
+                <th key={h} style={{ ...th, textAlign: i >= 5 ? "right" : "left" }}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -182,13 +186,17 @@ export default function ProductsScreen({ planner, update, crm, updateCrm, remove
                     <td style={{ ...td, fontWeight: 700 }}>
                       <span style={{ fontSize: 10, color: "#5a6a85", marginRight: 8 }}>{isOpen ? "▼" : "▶"}</span>
                       {g.name || <span style={{ color: "#aab3c2" }}>New product</span>}
+
+                      {!g.complete && <Chip tone="amber" style={{ marginLeft: 8, fontSize: 10, padding: "1px 7px" }}>SKU fields needed</Chip>}
+                    </td>
+                    <td style={{ ...td, width: 70 }}>
                       {(() => {
                         const on = g.items.some((p) => p.isKit === true);
                         return (
                           <span role="switch" aria-checked={on} tabIndex={0} title={on ? "Kit — sold as one line, loaded and taken out of stock as its parts. Click to undo." : "Make this a kit"}
                             onClick={(e) => { e.stopPropagation(); setGroup(g, "isKit", !on); }}
                             onKeyDown={(e) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); e.stopPropagation(); setGroup(g, "isKit", !on); } }}
-                            style={{ display: "inline-flex", alignItems: "center", gap: 6, marginLeft: 12, verticalAlign: "middle", cursor: "pointer", fontSize: 11, fontWeight: 700, letterSpacing: 0.6, textTransform: "uppercase", color: on ? "#a86b12" : "#b3bccb" }}>
+                            style={{ display: "inline-flex", alignItems: "center", gap: 6, verticalAlign: "middle", cursor: "pointer", fontSize: 11, fontWeight: 700, letterSpacing: 0.6, textTransform: "uppercase", color: on ? "#a86b12" : "#b3bccb" }}>
                             <span style={{ position: "relative", width: 26, height: 15, borderRadius: 999, background: on ? GOLD : "#dde2ea", transition: "background .15s" }}>
                               <span style={{ position: "absolute", top: 2, left: on ? 13 : 2, width: 11, height: 11, borderRadius: "50%", background: "#fff", boxShadow: "0 1px 2px rgba(11,31,63,.25)", transition: "left .15s" }} />
                             </span>
@@ -196,7 +204,6 @@ export default function ProductsScreen({ planner, update, crm, updateCrm, remove
                           </span>
                         );
                       })()}
-                      {!g.complete && <Chip tone="amber" style={{ marginLeft: 8, fontSize: 10, padding: "1px 7px" }}>SKU fields needed</Chip>}
                     </td>
                     <td style={{ ...td, color: "#5a6a85", fontWeight: 600 }}>{[segLabel(lists.category, p0.segCat), segLabel(lists.sub, p0.segSub)].filter((x) => x && x !== "N/a").join(" › ") || "—"}</td>
                     <td style={{ ...td, fontWeight: 600 }}>{segLabel(lists.length, p0.segLen) || "—"}</td>
@@ -216,7 +223,7 @@ export default function ProductsScreen({ planner, update, crm, updateCrm, remove
                   </tr>
                   {isOpen && (
                     <tr>
-                      <td colSpan={8} style={{ padding: "8px 10px 14px 26px", background: "#f8f9fb", borderBottom: "1px solid #e6e9ef" }}>
+                      <td colSpan={9} style={{ padding: "8px 10px 14px 26px", background: "#f8f9fb", borderBottom: "1px solid #e6e9ef" }}>
                         {g.complete && (
                           <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
                             {[["fields", "product attributes"], ["skus", "SKUs"]].map(([k, label]) => {
@@ -252,7 +259,7 @@ export default function ProductsScreen({ planner, update, crm, updateCrm, remove
               );
             })}
             {!shown.length && (
-              <tr><td colSpan={8} style={{ ...td, textAlign: "center", color: "#8593a8", padding: 24 }}>No products match.</td></tr>
+              <tr><td colSpan={9} style={{ ...td, textAlign: "center", color: "#8593a8", padding: 24 }}>No products match.</td></tr>
             )}
           </tbody>
         </table>
@@ -391,7 +398,7 @@ function ColourPicker({ p, lists, unknown, onChange }) {
       <button type="button" onClick={() => setOpen((o) => !o)}
         style={{ ...sm, width: "100%", textAlign: "left", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, borderColor: unknown.length ? RED : open ? NAVY : "#d5d9e0" }}>
         <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: cur.length ? 700 : 400, color: cur.length ? NAVY : "#8593a8" }}>
-          {cur.length ? cur.join(", ") : "No colour — one stock row"}
+          {cur.length ? [...cur].sort((a, b) => a.localeCompare(b)).join(", ") : "No colour — one stock row"}
         </span>
         <span style={{ color: "#5a6a85", fontSize: 10 }}>▾</span>
       </button>
@@ -453,13 +460,13 @@ function Version({ p, lists, rows, rowsByProduct, products, setP, removeProduct,
     : isImport ? (money(p.cost) ? "$" + Number(p.cost).toFixed(2) + " import" : "Import costs")
     : money(p.costGbp) !== null ? "£" + Number(p.costGbp).toFixed(2) + " cost" : "Add cost";
   const ro = (label, value, title) => (
-    <div title={title} style={{ width: 110 }}>
+    <div title={title} style={{ width: 124 }}>
       <span style={{ ...lbl, fontSize: 10 }}>{label}</span>
       <input style={{ ...numI, background: "#eef1f6", color: "#3a4a63", fontWeight: 700 }} disabled value={value} />
     </div>
   );
   const num = (label, field) => (
-    <div style={{ width: 96 }}>
+    <div style={{ width: 112 }}>
       <span style={{ ...lbl, fontSize: 10 }}>{label}</span>
       <input type="number" style={numI} value={p[field] === undefined || p[field] === null ? "" : p[field]} onChange={(e) => setP(p.id, field, e.target.value)} />
     </div>
@@ -472,7 +479,7 @@ function Version({ p, lists, rows, rowsByProduct, products, setP, removeProduct,
   })();
   return (
     <div style={{ background: "#fff", border: "1px solid #e6e9ef", borderRadius: 10, padding: "10px 12px", marginBottom: 10 }}>
-      <div style={{ display: "grid", gridTemplateColumns: "110px 150px minmax(220px,2fr) 160px minmax(180px,1.4fr) 130px 90px 34px", gap: 8, alignItems: "end" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "110px 150px minmax(220px,2fr) 160px minmax(180px,1.4fr) 130px 112px 34px", gap: 8, alignItems: "end" }}>
         <div style={{ minWidth: 0 }}>
           <span style={{ ...lbl, fontSize: 10 }}>Supplier code</span>
           <RadioPick value={p.segSup} width={340}
@@ -505,10 +512,10 @@ function Version({ p, lists, rows, rowsByProduct, products, setP, removeProduct,
         </div>
         <div>
           <span style={{ ...lbl, fontSize: 10 }}>Colours</span>
-          <ColourPicker p={p} lists={lists} unknown={unknownColours} onChange={(cols) => setP(p.id, "colours", cols.join(", "))} />
+          <ColourPicker p={p} lists={lists} unknown={unknownColours} onChange={(cols) => setP(p.id, "colours", [...cols].sort((a, b) => a.localeCompare(b)).join(", "))} />
         </div>
         <div>
-          <span style={{ ...lbl, fontSize: 10 }}>Costs</span>
+          <span style={{ ...lbl, fontSize: 10 }}>Costs ex VAT</span>
           <button type="button" onClick={() => setCostsOpen((o) => !o)}
             style={{ ...sm, width: "100%", textAlign: "left", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontWeight: 700, color: NAVY, borderColor: costsOpen ? NAVY : "#d5d9e0", background: costsOpen ? "#eef1f6" : "#fff" }}>
             <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{costSummary}</span>
@@ -516,7 +523,7 @@ function Version({ p, lists, rows, rowsByProduct, products, setP, removeProduct,
           </button>
         </div>
         <div>
-          <span style={{ ...lbl, fontSize: 10 }}>Retail £ inc</span>
+          <span style={{ ...lbl, fontSize: 10 }}>Retail £ inc VAT</span>
           <input type="number" style={numI} value={p.salePrice === undefined || p.salePrice === null ? "" : p.salePrice} onChange={(e) => setP(p.id, "salePrice", e.target.value)} />
         </div>
         <button style={{ ...abtn, color: RED, border: "none" }} title="Remove this version" onClick={() => removeProduct(p.id)}><Icon name="x" stroke={RED} /></button>
@@ -535,7 +542,7 @@ function Version({ p, lists, rows, rowsByProduct, products, setP, removeProduct,
         <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end", marginTop: 8, padding: "10px 12px", background: "#f6f8fb", border: "1px solid #e6e9ef", borderRadius: 8 }}>
           {p.isKit ? (
             <>
-              {ro("Parts cost £", kitCost === null ? "—" : kitCost.toFixed(2), "Worked out from the parts' costs")}
+              {ro("Parts £ ex VAT", kitCost === null ? "—" : kitCost.toFixed(2), "Worked out from the parts' costs")}
               {ro("Kit weight kg", (() => { const w = kitWeight(p, products); return w ? String(w) : "—"; })(), "Parts' kg / pc × qty — used on the loading bill")}
             </>
           ) : isImport ? (
@@ -544,17 +551,17 @@ function Version({ p, lists, rows, rowsByProduct, products, setP, removeProduct,
               {num("Qty / plt", "qty")}
               {num("kg / pc", "weight")}
               {num("m³ / plt", "cbm")}
-              {ro("Landed £ / pc", stockCost === null ? "—" : stockCost.toFixed(2), "From the shipments this stock came in on")}
+              {ro("Landed £ ex VAT", stockCost === null ? "—" : stockCost.toFixed(2), "From the shipments this stock came in on")}
             </>
           ) : (
             <>
-              {num("UK cost £", "costGbp")}
+              {num("UK cost £ ex VAT", "costGbp")}
               {num("kg / pc", "weight")}
             </>
           )}
-          {ro("Margin", margin, "Retail ex VAT less cost")}
+          {ro("Margin ex VAT", margin, "Retail ex VAT less cost ex VAT")}
           <span style={{ fontSize: 11.5, color: "#8593a8", fontWeight: 600, paddingBottom: 7 }}>
-            {p.isKit ? "A kit costs what its parts cost." : isImport ? "Imported — cost comes from the shipment's landed cost, not a UK price." : "Bought in the UK at this price."}
+            {p.isKit ? "A kit costs what its parts cost." : isImport ? "Imported — cost comes from the shipment's landed cost, not a UK price." : "Bought in the UK — enter the price ex VAT, as on the supplier's invoice before VAT."}
           </span>
         </div>
       )}
