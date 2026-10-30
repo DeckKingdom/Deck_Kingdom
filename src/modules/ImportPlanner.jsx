@@ -23,7 +23,7 @@ import {
   money,
   int,
 } from "../lib/core.js";
-import { blankInvoice, blankQuote, blankSample, blankSampleItem, nextNumber, TRADE_COUNTER, vanReminders, syncCatalogue, renameSkus, syncOpenPicks, syncSampleConversions, cleanCode, codeSource, PRODUCT_SOURCES, dueScheduledFor, setTaskDone, describeSchedule, today as todayStr, newPurchaseFor } from "../lib/crmCore.js";
+import { blankInvoice, blankQuote, blankSample, blankSampleItem, nextNumber, TRADE_COUNTER, vanReminders, syncCatalogue, renameSkus, syncOpenPicks, colourTidyPlan, syncSampleConversions, cleanCode, codeSource, PRODUCT_SOURCES, dueScheduledFor, setTaskDone, describeSchedule, today as todayStr, newPurchaseFor } from "../lib/crmCore.js";
 import { useCrm } from "./crm/useCrm.js";
 import CustomersScreen from "./crm/CustomersScreen.jsx";
 import InvoicesScreen from "./crm/InvoicesScreen.jsx";
@@ -277,6 +277,29 @@ export default function ImportPlanner() {
     setSelCollectionId(id);
     setTab("collections");
   };
+  // product colours follow the colour list's names (Anthracite -> Grey, Charcoal -> Black);
+  // the stock rows are renamed in the same step so stock stays with them
+  useEffect(() => {
+    if (!crm || !data) return;
+    const plan = colourTidyPlan(crm, data);
+    if (!plan) return;
+    update((d) => {
+      d.products.forEach((p) => {
+        const rn = plan.renames[p.id] || {}, dr = plan.drops[p.id] || [];
+        if (!Object.keys(rn).length && !dr.length) return;
+        p.colours = (p.colours || []).filter((c) => !dr.includes(c)).map((c) => rn[c] || c).sort((a, b) => a.localeCompare(b));
+      });
+      return d;
+    });
+    updateCrm((c) => {
+      (c.masterProducts || []).forEach((m) => {
+        const rn = plan.renames[m.importProductId];
+        if (rn && rn[m.colour]) m.colour = rn[m.colour];
+      });
+      return c;
+    });
+  }, [crm, data]);
+
   // keep the background stock/SKU rows in step with the Products screen
   useEffect(() => {
     if (!crm || !data) return;

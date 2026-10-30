@@ -1143,10 +1143,12 @@ export const DEFAULT_SKU_LISTS = {
   },
   {
    "code": "12",
-   "label": "Grey/Anthracite",
+   "label": "Grey",
    "aliases": [
     "grey",
-    "anthracite"
+    "anthracite",
+    "grey/anthracite",
+    "dark grey"
    ]
   },
   {
@@ -1159,10 +1161,11 @@ export const DEFAULT_SKU_LISTS = {
   },
   {
    "code": "14",
-   "label": "Black/Charcoal",
+   "label": "Black",
    "aliases": [
     "black",
-    "charcoal"
+    "charcoal",
+    "black/charcoal"
    ]
   },
   {
@@ -1191,13 +1194,6 @@ export const DEFAULT_SKU_LISTS = {
    "label": "Light grey",
    "aliases": [
     "light grey"
-   ]
-  },
-  {
-   "code": "19",
-   "label": "Dark grey",
-   "aliases": [
-    "dark grey"
    ]
   },
   {
@@ -1232,8 +1228,41 @@ export const skuLists = (crm) => {
     category: Array.isArray(l.category) ? l.category : DEFAULT_SKU_LISTS.category,
     sub: Array.isArray(l.sub) ? l.sub : DEFAULT_SKU_LISTS.sub,
     product: l.product && typeof l.product === "object" ? l.product : DEFAULT_SKU_LISTS.product,
-    colour: Array.isArray(l.colour) ? l.colour : DEFAULT_SKU_LISTS.colour,
+    colour: Array.isArray(l.colour) ? tidyColours(l.colour) : DEFAULT_SKU_LISTS.colour,
   };
+};
+// Colour clean-up (Oct 2026): one Grey (was Grey/Anthracite, Dark grey folded in) and
+// one Black (was Black/Charcoal). Applied to a saved list too; old names stay as aliases.
+const COLOUR_MERGES = { "12": { label: "Grey", aliases: ["grey", "anthracite", "grey/anthracite", "dark grey"] }, "14": { label: "Black", aliases: ["black", "charcoal", "black/charcoal"] } };
+const tidyColours = (list) => {
+  if (!list.some((c) => c.code === "19" && /dark grey/i.test(c.label || "")) && !list.some((c) => /\/(anthracite|charcoal)$/i.test(c.label || ""))) return list;
+  return list
+    .filter((c) => !(c.code === "19" && /dark grey/i.test(c.label || "")))
+    .map((c) => (COLOUR_MERGES[c.code] && /^(grey|black)/i.test(c.label || "")
+      ? { ...c, label: COLOUR_MERGES[c.code].label, aliases: [...new Set([...(c.aliases || []), ...COLOUR_MERGES[c.code].aliases])] }
+      : c));
+};
+
+// Product colours written the list's way: "Anthracite" / "Grey/Anthracite" -> "Grey".
+// Returns { renames: { productId: { oldColour: newColour } }, drops: { productId: [colour] } } or null.
+// A product that already has the target colour just drops the duplicate.
+export const colourTidyPlan = (crm, planner) => {
+  const lists = skuLists(crm);
+  const out = { renames: {}, drops: {} };
+  let any = false;
+  ((planner && planner.products) || []).forEach((p) => {
+    const cols = p.colours || [];
+    const final = new Set();
+    cols.forEach((c) => {
+      const hit = lists.colour.find((x) => x.code !== "00" && (String(x.label).toLowerCase() === String(c).trim().toLowerCase() || (x.aliases || []).some((a) => String(a).toLowerCase() === String(c).trim().toLowerCase())));
+      const want = hit ? hit.label : c;
+      if (want === c) { final.add(c.toLowerCase()); return; }
+      any = true;
+      if (final.has(want.toLowerCase()) || cols.some((o) => o === want)) (out.drops[p.id] = out.drops[p.id] || []).push(c);
+      else { (out.renames[p.id] = out.renames[p.id] || {})[c] = want; final.add(want.toLowerCase()); }
+    });
+  });
+  return any ? out : null;
 };
 const two = (v) => /^\d{2}$/.test(String(v || "").trim());
 // the 10-digit product part, or "" while any field is missing
