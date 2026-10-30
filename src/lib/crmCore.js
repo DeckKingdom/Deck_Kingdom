@@ -1319,7 +1319,7 @@ export const syncCatalogue = (crm, planner) => {
   const next = JSON.parse(JSON.stringify(crm.masterProducts || []));
   const byKey = {};
   next.forEach((m) => {
-    if (m.importProductId) byKey[m.importProductId + "||" + (m.colour || "").trim().toLowerCase()] = m;
+    if (m.importProductId && !m.grade) byKey[m.importProductId + "||" + (m.colour || "").trim().toLowerCase()] = m;
   });
   const taken = new Set(next.map((m) => (m.sku || "").toLowerCase()));
   const renames = {};
@@ -1388,6 +1388,7 @@ export const syncCatalogue = (crm, planner) => {
   const used = skusInUse(crm);
   for (let i = next.length - 1; i >= 0; i--) {
     const m = next[i];
+    if (m.grade) continue; // damaged / returned / clearance rows are kept while they hold anything
     const keep = wanted[m.importProductId];
     if (!keep) continue; // not a catalogue row (or its product was deleted) — leave alone
     const listed = keep.has(String(m.colour || "").trim().toLowerCase());
@@ -1403,6 +1404,24 @@ export const syncCatalogue = (crm, planner) => {
       changed = true;
     }
   }
+  // graded rows (…-D / -R / -C) follow their good row: name, readable code, weight, and SKU renames
+  next.forEach((g) => {
+    if (!g.grade) return;
+    const gr = GRADES.find((x) => x.key === g.grade);
+    if (!gr) return;
+    const oldBase = baseSku(g.sku);
+    const newBase = renames[oldBase] || oldBase;
+    const parent = next.find((m) => !m.grade && String(m.sku || "").toLowerCase() === newBase.toLowerCase());
+    if (newBase !== oldBase) {
+      const sku = gradeSku(newBase, g.grade);
+      renames[g.sku] = sku;
+      g.sku = sku;
+      changed = true;
+    }
+    if (!parent) return;
+    const want = { name: parent.name, colour: parent.colour, family: parent.family ? parent.family + "-" + gr.suffix : "", category: parent.category, weightKg: parent.weightKg, importProductId: parent.importProductId };
+    Object.entries(want).forEach(([k, v]) => { if (g[k] !== v) { g[k] = v; changed = true; } });
+  });
   if (applyKits(next, products, lists)) changed = true;
   return changed ? { masterProducts: next, renames } : null;
 };
@@ -1416,7 +1435,7 @@ export const syncCatalogue = (crm, planner) => {
 const kitRowIndex = (rows) => {
   const m = {};
   rows.forEach((r) => {
-    if (!r.importProductId) return;
+    if (!r.importProductId || r.grade) return; // kits are made from good stock
     (m[r.importProductId] = m[r.importProductId] || []).push(r);
   });
   return m;
@@ -1465,6 +1484,73 @@ export const rowsByCatalogueProduct = (crm) => kitRowIndex(crm.masterProducts ||
 export const syncMasterFromProducts = (crm, planner) => {
   const r = syncCatalogue(crm, planner);
   return r ? r.masterProducts : null;
+};
+
+// ===== stock grades: damaged / returned / clearance =====
+// Each grade is its own stock row beside the good one: same product and colour,
+// SKU with a suffix (010601010114-C), its own quantity, cost and price — so it
+// can go on an invoice line, be picked, deducted and costed like anything else.
+export const GRADES = [
+  { key: "returned", label: "Returned", suffix: "R", tone: "blue", hint: "Back from a customer — check it over" },
+  { key: "damaged", label: "Damaged", suffix: "D", tone: "red", hint: "Marked or broken — sell cheap or write off" },
+  { key: "clearance", label: "Clearance", suffix: "C", tone: "gold", hint: "Ends of lines, seconds, old colours" },
+];
+export const gradeOf = (row) => GRADES.find((g) => g.key === (row && row.grade)) || null;
+export const baseSku = (sku) => String(sku || "").replace(/-[DRC]$/i, "");
+export const gradeSku = (base, grade) => { const g = GRADES.find((x) => x.key === grade); return g ? baseSku(base) + "-" + g.suffix : baseSku(base); };
+const gradeRowFor = (c, from, grade) => {
+  const rows = c.masterProducts || (c.masterProducts = []);
+  const base = from.grade ? rows.find((m) => !m.grade && String(m.sku || "").toLowerCase() === baseSku(from.sku).toLowerCase()) || null : from;
+  if (!grade) return base; // back to good stock
+  const sku = gradeSku(from.sku, grade);
+  let row = rows.find((m) => String(m.sku || "").toLowerCase() === sku.toLowerCase());
+  if (!row) {
+    const src = base || from;
+    const gr = GRADES.find((x) => x.key === grade);
+    row = { ...blankMasterProduct(), name: src.name, colour: src.colour, category: src.category, weightKg: src.weightKg, importProductId: src.importProductId, unit: src.unit || "each",
+      sku, grade, family: src.family ? baseSku(src.family).replace(/-[DRC]$/i, "") + "-" + gr.suffix : "", stock: 0, costGbp: src.costGbp, priceIncVat: "" };
+    rows.push(row);
+  }
+  return row;
+};
+// Move qty from one stock row into a grade (or back to good stock with to = "").
+// to = "writeoff" takes it out of stock altogether. Cost travels with the stock.
+export const moveStockGrade = (c, { rowId, qty, to, reason, priceIncVat, actor }) => {
+  const from = (c.masterProducts || []).find((m) => m.id === rowId);
+  const q = Number(qty) || 0;
+  if (!from || q <= 0) return null;
+  c.movements = c.movements || [];
+  const fromStock = Number(from.stock) || 0;
+  const unit = from.costGbp === "" || from.costGbp === null ? "" : Number(from.costGbp);
+  const label = to === "writeoff" ? "Written off" : to ? (GRADES.find((g) => g.key === to) || {}).label : "Good stock";
+  from.stock = fromStock - q;
+  c.movements.push({ ...blankMovement(), sku: from.sku, mpId: from.id, qty: -q, unitCost: unit, kind: to === "writeoff" ? "write-off" : "grade", ref: "→ " + label + (reason ? " — " + reason : ""), actor: actor || "" });
+  if (to === "writeoff") return from;
+  const dest = gradeRowFor(c, from, to);
+  if (!dest) return null;
+  const old = Number(dest.stock) || 0;
+  if (unit !== "") dest.costGbp = weightedCost(old, dest.costGbp, q, unit);
+  dest.stock = old + q;
+  if (priceIncVat !== "" && priceIncVat !== null && priceIncVat !== undefined && isFinite(Number(priceIncVat))) dest.priceIncVat = Number(priceIncVat);
+  c.movements.push({ ...blankMovement(), sku: dest.sku, mpId: dest.id, qty: q, unitCost: unit, kind: "grade", ref: "← " + (from.grade ? gradeOf(from).label : "Good stock") + (reason ? " — " + reason : ""), actor: actor || "" });
+  return dest;
+};
+// A customer brings goods back: they come into stock as Returned (or straight to
+// good / damaged), at the cost the job carried, logged against the job.
+export const customerReturn = (c, { invId, sku, qty, to = "returned", reason, actor }) => {
+  const inv = (c.invoices || []).find((i) => i.id === invId);
+  const good = (c.masterProducts || []).find((m) => String(m.sku || "").toLowerCase() === baseSku(sku).toLowerCase());
+  const q = Number(qty) || 0;
+  if (!inv || !good || q <= 0) return null;
+  const dest = gradeRowFor(c, good, to || "");
+  const pick = (inv.picks || []).find((p) => String(p.sku || "").toLowerCase() === String(sku).toLowerCase() && p.unitCost !== "" && p.unitCost !== null && p.unitCost !== undefined);
+  const unit = pick ? Number(pick.unitCost) : good.costGbp === "" || good.costGbp === null ? "" : Number(good.costGbp);
+  const old = Number(dest.stock) || 0;
+  if (unit !== "") dest.costGbp = weightedCost(old, dest.costGbp, q, unit);
+  dest.stock = old + q;
+  c.movements = c.movements || [];
+  c.movements.push({ ...blankMovement(), sku: dest.sku, mpId: dest.id, qty: q, unitCost: unit, kind: "return", ref: "From job #" + (inv.invNo || "") + (reason ? " — " + reason : ""), actor: actor || "" });
+  return dest;
 };
 
 // Every SKU some record points at (movements, invoice lines/picks, quotes, collections)

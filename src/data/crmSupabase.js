@@ -151,8 +151,10 @@ const invToRow = (inv, i) => {
 const MP_NUM = { priceIncVat: "price_inc_vat", costGbp: "cost_gbp", weightKg: "weight_kg", stock: "stock", stockAlert: "stock_alert" };
 const MP_TEXT = ["sku", "name", "colour", "family", "category", "unit", "notes", "importProductId"];
 
+let gradeReady = false; // master_products.grade (migration 023)
 const mpToRow = (p, i) => {
   const row = { id: p.id, is_kit: p.isKit === true, active: p.active !== false, position: i };
+  if (gradeReady) row.grade = str(p.grade);
   MP_TEXT.forEach((k) => (row[snake(k)] = str(p[k])));
   Object.entries(MP_NUM).forEach(([k, col]) => (row[col] = num(p[k])));
   return row;
@@ -442,6 +444,7 @@ async function loadAll() {
   comps_.forEach((r) => {
     (compsByKit[r.kit_id] = compsByKit[r.kit_id] || []).push({ id: r.id, componentId: r.component_id, qty: Number(r.qty) });
   });
+  gradeReady = mps_.length ? Object.prototype.hasOwnProperty.call(mps_[0], "grade") : gradeReady;
   const masterProducts = mps_.map((r) => {
     const p = {
       id: r.id, isKit: r.is_kit === true, active: r.active !== false,
@@ -450,6 +453,7 @@ async function loadAll() {
     };
     MP_TEXT.forEach((k) => (p[k] = nv(r[snake(k)])));
     Object.entries(MP_NUM).forEach(([k, col]) => (p[k] = nv(r[col])));
+    p.grade = nv(r.grade);
     return p;
   });
 
@@ -682,3 +686,5 @@ export const crmSupabaseStorage = {
     return { key, value };
   },
 };
+
+export const gradesSchemaReady = () => gradeReady;

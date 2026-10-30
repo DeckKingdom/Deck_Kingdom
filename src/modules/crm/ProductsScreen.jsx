@@ -41,7 +41,7 @@ export default function ProductsScreen({ planner, update, crm, updateCrm, remove
 
   const rowsByProduct = useMemo(() => {
     const m = {};
-    (crm.masterProducts || []).forEach((r) => (m[r.importProductId] = m[r.importProductId] || []).push(r));
+    (crm.masterProducts || []).filter((r) => !r.grade).forEach((r) => (m[r.importProductId] = m[r.importProductId] || []).push(r)); // good stock only
     return m;
   }, [crm.masterProducts]);
 

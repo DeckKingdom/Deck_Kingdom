@@ -3,7 +3,7 @@
 // click to type any amount). `edit(fn)` mutates the record that owns `lines`.
 import { useState, useMemo, useRef, useEffect } from "react";
 import { RED, NAVY } from "../../lib/core.js";
-import { blankLine, skuIndex, PRODUCT_SOURCES, skuSource, skuLists, skuOptionLabel, colourSeg } from "../../lib/crmCore.js";
+import { blankLine, skuIndex, PRODUCT_SOURCES, skuSource, skuLists, skuOptionLabel, colourSeg, gradeOf } from "../../lib/crmCore.js";
 import { Icon, SuggestInput, selectAllProps, inp, btn, abtn } from "./ui.jsx";
 
 const numInp = { ...inp, textAlign: "right" };
@@ -21,12 +21,12 @@ export const skuOption = (p, crm) => {
   const readable = p.family && p.family.includes("/") && p.family !== p.sku ? p.family : "";
   return {
     value: p.sku,
-    label: skuOptionLabel(p) + (price ? " · " + price : ""),
+    label: skuOptionLabel(p) + (gradeOf(p) ? " · " + gradeOf(p).label : "") + (price ? " · " + price : ""),
     src,
     cells: [
       { text: readable || p.sku, style: { fontWeight: 800 } },
       { text: readable ? p.sku : "", style: { fontSize: 11.5, color: "#8593a8", fontWeight: 600, letterSpacing: 0.3 } },
-      { text: p.name, style: { fontWeight: 600 } },
+      { text: (gradeOf(p) ? gradeOf(p).label.toUpperCase() + " · " + (Number(p.stock) || 0) + " left · " : "") + p.name, style: { fontWeight: 600, color: gradeOf(p) ? "#a05f10" : undefined } },
       { text: p.colour || "", style: { color: "#5a6a85", fontWeight: 600 } },
       { text: price, style: { textAlign: "right" } },
       { text: src, style: { fontSize: 10.5, fontWeight: 800, color: "#a86b12", textAlign: "center" } },
@@ -42,7 +42,7 @@ export default function LinesEditor({ doc, edit, crm, readOnly }) {
   const allSkuOpts = useMemo(
     () =>
       (crm.masterProducts || [])
-        .filter((p) => p.active !== false && p.sku)
+        .filter((p) => p.active !== false && p.sku && !(p.grade && !(Number(p.stock) > 0))) // graded stock only while there's some
         .map((p) => skuOption(p, crm)),
     [crm.masterProducts, crm.skuLists]
   );
@@ -192,7 +192,7 @@ function ColourSelect({ line, crm, bySku, onPick }) {
   }, [box]);
   const mp = bySku[String(line.code || "").trim().toLowerCase()];
   const siblings = mp && mp.importProductId
-    ? (crm.masterProducts || []).filter((m) => m.importProductId === mp.importProductId && m.active !== false && (m.colour || "").trim())
+    ? (crm.masterProducts || []).filter((m) => m.importProductId === mp.importProductId && m.active !== false && (m.colour || "").trim() && (m.grade || "") === (mp.grade || ""))
     : [];
   const lists = skuLists(crm);
   const opts = siblings.length

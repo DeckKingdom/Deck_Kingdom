@@ -36,6 +36,7 @@ const PATHS = {
   chevleft: <path d="M14.5 6l-6 6 6 6" />,
   chevright: <path d="M9.5 6l6 6-6 6" />,
   lock: <><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V8a4 4 0 018 0v3" /></>,
+  refresh: <path d="M4 12a8 8 0 0113.7-5.6L20 9M20 4v5h-5M20 12a8 8 0 01-13.7 5.6L4 15M4 20v-5h5" />,
   clock: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3.5 2" /></>,
   tag: <><path d="M3 12V3h9l9 9-8.5 8.5L3 12z" /><circle cx="7.8" cy="7.8" r="1.6" /></>,
   layers: <><path d="M12 3l9 5-9 5-9-5z" /><path d="M3 13l9 5 9-5M3 18l9 5 9-5" /></>,
@@ -74,6 +75,7 @@ export const Chip = ({ tone = "grey", children, style }) => {
     amber: { background: "#E8912D22", border: "1px solid #f0d0a8", color: "#a05f10" },
     gold: { background: "#F4B73E33", border: "1px solid #F4B73E", color: "#9a7408" },
     red: { background: "#C8102E18", border: "1px solid #ecc4cb", color: "#C8102E" },
+    blue: { background: "#2D6CDF18", border: "1px solid #c3d4f3", color: "#2251a8" },
     navy: { background: "#ffffff18", border: "1px solid #ffffff2e", color: "#cfd6e4" },
   };
   return (
