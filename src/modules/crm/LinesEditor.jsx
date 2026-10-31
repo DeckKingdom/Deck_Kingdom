@@ -179,12 +179,20 @@ export default function LinesEditor({ doc, edit, crm, readOnly }) {
 // Colour for a line: a radio list in a pop-out. When the line's SKU is a known
 // product it offers just that product's colours (and swaps the SKU to match);
 // otherwise every colour on the colour list.
-export function ColourSelect({ line, crm, bySku, onPick }) {
-  const [box, setBox] = useState(null); // where to draw the pop-out (it sits outside the scrolling table)
+// onPickMany (samples): tick several colours; the first stays on this line, the caller adds a line per extra one
+export function ColourSelect({ line, crm, bySku, onPick, onPickMany }) {
+  const [box, setBox] = useState(null);
+  const [ticked, setTicked] = useState([]);
+  const tickRef = useRef({ list: [], dirty: false }); // where to draw the pop-out (it sits outside the scrolling table)
   const btnRef = useRef(null), popRef = useRef(null);
   useEffect(() => {
     if (!box) return;
-    const off = (e) => !(btnRef.current && btnRef.current.contains(e.target)) && !(popRef.current && popRef.current.contains(e.target)) && setBox(null);
+    // clicking away keeps what was ticked (multi) rather than losing it
+    const off = (e) => {
+      if ((btnRef.current && btnRef.current.contains(e.target)) || (popRef.current && popRef.current.contains(e.target))) return;
+      if (onPickMany && tickRef.current.dirty) onPickMany(tickRef.current.list);
+      setBox(null);
+    };
     const shut = () => setBox(null);
     document.addEventListener("mousedown", off);
     window.addEventListener("scroll", shut, true);
@@ -205,7 +213,13 @@ export function ColourSelect({ line, crm, bySku, onPick }) {
     const w = siblings.length ? Math.max(r.width, 180) : 300;
     const below = window.innerHeight - r.bottom > 300;
     setBox({ left: Math.min(r.left, window.innerWidth - w - 8), top: below ? r.bottom + 4 : undefined, bottom: below ? undefined : window.innerHeight - r.top + 4, width: w });
+    setTicked(line.colour ? [line.colour] : []);
+    tickRef.current = { list: line.colour ? [line.colour] : [], dirty: false };
   };
+  const multi = !!onPickMany;
+  const setT = (list) => { tickRef.current = { list, dirty: true }; setTicked(list); };
+  const tick = (label) => setT(ticked.some((x) => x.toLowerCase() === label.toLowerCase()) ? ticked.filter((x) => x.toLowerCase() !== label.toLowerCase()) : [...ticked, label]);
+  const done = () => { onPickMany(ticked); tickRef.current.dirty = false; setBox(null); };
   return (
     <>
       <button ref={btnRef} type="button" onClick={() => (box ? setBox(null) : open())}
@@ -218,19 +232,34 @@ export function ColourSelect({ line, crm, bySku, onPick }) {
           {siblings.length > 0 && <div style={{ fontSize: 10.5, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", padding: "2px 6px 6px" }}>Colours for this product</div>}
           <div style={{ display: "grid", gridTemplateColumns: siblings.length ? "1fr" : "1fr 1fr", gap: "2px 8px", maxHeight: 280, overflowY: "auto" }}>
             {opts.map((o) => {
-              const on = isOn(o);
+              const on = multi ? ticked.some((x) => x.toLowerCase() === String(o.label).toLowerCase()) : isOn(o);
               return (
-                <label key={o.label + o.sku} onClick={() => { onPick(o.label, o.sku); setBox(null); }}
+                <label key={o.label + o.sku} onClick={() => { if (multi) tick(o.label); else { onPick(o.label, o.sku); setBox(null); } }}
                   style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 6px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: on ? 700 : 500, color: on ? NAVY : "#3a4a63", background: on ? "#eef1f6" : "transparent" }}>
+                  {multi ? (
+                    <span style={{ width: 15, height: 15, flex: "none", borderRadius: 4, border: "2px solid " + (on ? NAVY : "#b8c0cc"), background: on ? NAVY : "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+                      {on && <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>}
+                    </span>
+                  ) : (
                   <span style={{ width: 15, height: 15, flex: "none", borderRadius: "50%", border: "2px solid " + (on ? NAVY : "#b8c0cc"), display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
                     {on && <span style={{ width: 7, height: 7, borderRadius: "50%", background: NAVY }} />}
                   </span>
+                  )}
                   {o.label}
                 </label>
               );
             })}
           </div>
-          {line.colour && (
+          {multi && (
+            <div style={{ borderTop: "1px solid #eef0f4", marginTop: 6, paddingTop: 7, display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 11.5, fontWeight: 600, color: "#8593a8", flex: 1 }}>
+                {ticked.length > 1 ? ticked.length + " colours — a line each" : "Tick one or more"}
+              </span>
+              {ticked.length > 0 && <button type="button" onClick={() => setT([])} style={{ border: "none", background: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 700, color: "#8593a8", padding: "2px 4px" }}>Clear</button>}
+              <button type="button" onClick={done} style={{ border: "none", borderRadius: 8, background: NAVY, color: "#fff", cursor: "pointer", fontFamily: "inherit", fontSize: 12.5, fontWeight: 700, padding: "5px 12px" }}>Done</button>
+            </div>
+          )}
+          {!multi && line.colour && (
             <div style={{ borderTop: "1px solid #eef0f4", marginTop: 6, paddingTop: 6 }}>
               <button type="button" onClick={() => { onPick("", ""); setBox(null); }}
                 style={{ border: "none", background: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 700, color: "#8593a8", padding: "2px 6px" }}>No colour</button>

@@ -500,7 +500,18 @@ export default function SamplesScreen({ crm, updateCrm, askConfirm, selId, setSe
                 return (
                   <tr key={it.id}>
                     <td style={{ ...tdc, padding: "6px 6px", minWidth: 220 }}><SuggestInput value={it.description} options={productNames.names} onChange={(v) => setItem("description", v)} placeholder="e.g. Composite decking board" /></td>
-                    <td style={{ ...tdc, padding: "6px 6px", width: 170 }}><ColourSelect line={{ code: "", colour: it.colour }} crm={crm} bySku={{}} onPick={(c) => setItem("colour", c)} /></td>
+                    <td style={{ ...tdc, padding: "6px 6px", width: 170 }}><ColourSelect line={{ code: "", colour: it.colour }} crm={crm} bySku={{}} onPick={(c) => setItem("colour", c)}
+                      onPickMany={(cols) => setSample((x) => {
+                        // first colour stays on this line; each extra one becomes its own line (same product, size, qty)
+                        const i = x.items.findIndex((y) => y.id === it.id);
+                        if (i < 0) return;
+                        const t = x.items[i];
+                        const keep = cols.some((c) => c.toLowerCase() === String(t.colour || "").toLowerCase()) ? t.colour : (cols[0] || "");
+                        t.colour = keep;
+                        const extra = cols.filter((c) => c.toLowerCase() !== String(keep).toLowerCase())
+                          .filter((c) => !x.items.some((y) => y.id !== t.id && (y.description || "") === (t.description || "") && String(y.colour || "").toLowerCase() === c.toLowerCase()));
+                        x.items.splice(i + 1, 0, ...extra.map((c) => ({ ...blankSampleItem(), description: t.description, size: t.size, qty: t.qty, colour: c })));
+                      })} /></td>
                     <td style={{ ...tdc, padding: "6px 6px", width: 110 }}>
                       <select style={inp} value={it.size} onChange={(e) => setItem("size", e.target.value)}>
                         {SAMPLE_SIZES.map((z) => <option key={z} value={z}>{z === "Large" ? "Large (£2.95)" : z}</option>)}
