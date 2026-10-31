@@ -446,23 +446,20 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
             <button style={{ ...btn, marginBottom: 12 }} onClick={() => setSelId(null)}><Icon name="back" stroke={NAVY} />All customers</button>
 
             {/* hero */}
-            <div style={{ background: "linear-gradient(135deg,#0B1F3F 0%,#13294f 100%)", borderRadius: 14, padding: "20px 22px", color: "#fff", marginBottom: 14, display: "flex", gap: 18, alignItems: "center", flexWrap: "wrap" }}>
+            <div style={{ background: "linear-gradient(135deg,#0B1F3F 0%,#13294f 100%)", borderRadius: 14, padding: "20px 22px", color: "#fff", marginBottom: 14, display: "flex", gap: 18, alignItems: "flex-end", flexWrap: "wrap" }}>
               <div style={{ width: 54, height: 54, borderRadius: 14, background: GOLD, color: NAVY, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, fontWeight: 700, flex: "none" }}>
                 {(sel.name || "?").trim().charAt(0).toUpperCase() || "?"}
               </div>
               <div style={{ minWidth: 180 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <h2 style={{ margin: 0, fontSize: 21 }}>{sel.name || "Unnamed account"}</h2>
-                  <button title="Edit account" onClick={() => openCustDraft({ ...sel })}
-                    style={{ width: 28, height: 28, borderRadius: 7, border: "1px solid #33466b", background: "transparent", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0 }}>
-                    <Icon name="pen" stroke="#cfd6e4" size={13} />
-                  </button>
-                </div>
+                <h2 style={{ margin: 0, fontSize: 21 }}>{sel.name || "Unnamed account"}</h2>
                 <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 7 }}>
                   <Chip tone="navy">Account #{sel.accountNo || "—"}</Chip>
                   {sel.trader && <Chip tone="red" style={{ background: RED, color: "#fff", border: "none" }}>Trade</Chip>}
                   {Number(sel.discountPct) > 0 && <Chip tone="gold">−{Number(sel.discountPct)}% discount</Chip>}
                   {sel.source && <Chip tone="navy">Source · {sel.source}</Chip>}
+                  <button title="Edit account" onClick={() => openCustDraft({ ...sel })} style={{ width: 28, height: 28, borderRadius: 7, border: "1px solid #33466b", background: "transparent", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0, flex: "none" }}>
+                    <Icon name="pen" stroke="#cfd6e4" size={13} />
+                  </button>
                 </div>
               </div>
               <div style={{ marginLeft: "auto", display: "flex", background: "#ffffff14", border: "1px solid #ffffff22", borderRadius: 12, overflow: "hidden", flexWrap: "wrap" }}>
@@ -483,22 +480,9 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
                   </span>
                 </button>
               </div>
-              <button title="Delete this account" onClick={() => removeCustomer(sel)}
-                style={{ width: 34, height: 34, borderRadius: 8, border: "1px dashed #3a4f78", background: "transparent", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0, alignSelf: "center" }}>
-                <Icon name="bin" stroke="#8fa0c0" />
+              <button title="Delete this account" onClick={() => removeCustomer(sel)} style={{ ...{ width: 28, height: 28, borderRadius: 7, border: "1px solid #33466b", background: "transparent", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0, flex: "none" }, border: "1px dashed #3a4f78" }}>
+                <Icon name="bin" stroke="#8fa0c0" size={13} />
               </button>
-              <div style={{ display: "flex", gap: 8, flexBasis: "100%", marginTop: 2, flexWrap: "wrap" }}>
-                {newQuoteFor && (
-                  <button style={{ ...navyBtn, borderColor: GOLD, color: GOLD }} onClick={() => newQuoteFor(sel.id, (sites[0] && sites[0].id) || "")}>
-                    <Icon name="tag" stroke={GOLD} />New quote
-                  </button>
-                )}
-                {newSampleFor && (
-                  <button style={navyBtn} onClick={() => newSampleFor(sel.id)}>
-                    <Icon name="leaf" stroke="#fff" />Log sample
-                  </button>
-                )}
-              </div>
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 14 }}>
