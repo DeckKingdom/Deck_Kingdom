@@ -224,10 +224,11 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
 
   // ===== summary =====
   // retail top-ups (an extra board, trim and clips) under this value don't make a repeat customer
+  const [topUpOpen, setTopUpOpen] = useState(false);
   const [topUp, setTopUp] = useState(() => { try { return Number(localStorage.getItem("dk-topup")) || 150; } catch (e) { return 150; } });
   const stats = useMemo(() => {
     const yearAgo = addDaysC(todayC(), -365), monthAgo = addDaysC(todayC(), -30);
-    const seg = () => ({ accounts: 0, active: 0, buyers: 0, oneTime: 0, repeat: 0, topUps: 0 });
+    const seg = () => ({ accounts: 0, active: 0, buyers: 0, oneTime: 0, repeat: 0, topUps: 0, never: 0 });
     const out = { total: crm.customers.length, trade: seg(), retail: seg(), never: 0, newMonth: 0 };
     crm.customers.forEach((c) => {
       const sales = (invByCust[c.id] || []).filter(isSaleInvoice);
@@ -235,7 +236,7 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
       g.accounts++;
       if ((c.created || "") >= monthAgo) out.newMonth++;
       if (sales.some((i) => (i.date || "") >= yearAgo)) g.active++;
-      if (!sales.length) { out.never++; return; }
+      if (!sales.length) { out.never++; g.never++; return; }
       g.buyers++;
       // trade: every order counts; retail: only orders over the top-up value
       const main = c.trader ? sales : sales.filter((i) => invoiceTotals(i).total >= topUp);
@@ -328,25 +329,33 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
             </div>
             <div style={{ ...box, flex: "2 1 340px" }}>
               <div style={lab}>Buyers — one-time vs repeat</div>
-              <div style={{ display: "grid", gridTemplateColumns: "auto 1fr 1fr", gap: "2px 14px", alignItems: "baseline", marginTop: 4, fontSize: 12.5 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "auto 1fr 1fr 1fr", gap: "2px 14px", alignItems: "baseline", marginTop: 4, fontSize: 12.5 }}>
                 <span />
                 <span style={{ ...lab, fontSize: 10 }}>One-time</span>
                 <span style={{ ...lab, fontSize: 10 }}>Repeat</span>
-                {[["Trade", tr], ["Retail", rt], ["All", { oneTime: tr.oneTime + rt.oneTime, repeat: tr.repeat + rt.repeat, buyers: tr.buyers + rt.buyers }]].map(([name, g]) => (
+                <span style={{ ...lab, fontSize: 10 }}>Never ordered</span>
+                {[["Trade", tr], ["Retail", rt], ["All", { oneTime: tr.oneTime + rt.oneTime, repeat: tr.repeat + rt.repeat, buyers: tr.buyers + rt.buyers, never: tr.never + rt.never, accounts: tr.accounts + rt.accounts }]].map(([name, g]) => (
                   <React.Fragment key={name}>
                     <span style={{ fontWeight: 700, color: "#5a6a85" }}>{name}</span>
                     <span style={{ fontWeight: 800, color: NAVY, fontSize: name === "All" ? 16 : 13.5 }}>{g.oneTime.toLocaleString("en-GB")} <span style={{ fontWeight: 600, color: "#8593a8", fontSize: 11.5 }}>{pct(g.oneTime, g.buyers)}</span></span>
                     <span style={{ fontWeight: 800, color: NAVY, fontSize: name === "All" ? 16 : 13.5 }}>{g.repeat.toLocaleString("en-GB")} <span style={{ fontWeight: 600, color: "#8593a8", fontSize: 11.5 }}>{pct(g.repeat, g.buyers)}</span></span>
+                    <span style={{ fontWeight: 800, color: "#5a6a85", fontSize: name === "All" ? 16 : 13.5 }}>{g.never.toLocaleString("en-GB")} <span style={{ fontWeight: 600, color: "#8593a8", fontSize: 11.5 }}>{pct(g.never, g.accounts)}</span></span>
                   </React.Fragment>
                 ))}
               </div>
-              <div style={{ ...sub, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
-                Retail orders under £
-                <input type="number" min="0" step="10" value={topUp}
-                  onChange={(e) => { const v = Math.max(0, Number(e.target.value) || 0); setTopUp(v); try { localStorage.setItem("dk-topup", String(v)); } catch (err) {} }}
-                  style={{ ...inp, width: 64, padding: "2px 6px", fontSize: 12, textAlign: "right" }} />
-                are top-ups, not a new purchase{rt.topUps ? " (" + rt.topUps + " so far)" : ""} · {stats.never.toLocaleString("en-GB")} never ordered
-              </div>
+              <button type="button" onClick={() => setTopUpOpen((o) => !o)}
+                style={{ fontFamily: "inherit", border: "none", background: "none", padding: 0, marginTop: 6, cursor: "pointer", ...sub, color: "#8593a8" }}>
+                {(topUpOpen ? "▾ " : "▸ ") + "Retail top-ups under £" + topUp + " don't count as a new purchase"}
+              </button>
+              {topUpOpen && (
+                <div style={{ ...sub, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginTop: 4 }}>
+                  Retail orders under £
+                  <input type="number" min="0" step="10" value={topUp}
+                    onChange={(e) => { const v = Math.max(0, Number(e.target.value) || 0); setTopUp(v); try { localStorage.setItem("dk-topup", String(v)); } catch (err) {} }}
+                    style={{ ...inp, width: 64, padding: "2px 6px", fontSize: 12, textAlign: "right" }} />
+                  are top-ups (an extra board, trim, clips), not a new purchase{rt.topUps ? " · " + rt.topUps + " set aside so far" : ""}
+                </div>
+              )}
             </div>
           </div>
         );
