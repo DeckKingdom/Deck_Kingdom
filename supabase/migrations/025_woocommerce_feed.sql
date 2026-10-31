@@ -154,7 +154,7 @@ begin
         n := 0;
         for it in select * from jsonb_array_elements(samples) loop
           insert into public.sample_items (id, sample_id, description, colour, size, qty, position)
-          values (sid || '-' || n, sid, coalesce(it ->> 'name', ''), coalesce(it ->> 'colour', ''), 'Free', coalesce(nullif(it ->> 'qty', '')::numeric, 1), n);
+          values (sid || '-' || n, sid, coalesce(it ->> 'name', ''), coalesce(it ->> 'colour', ''), coalesce(nullif(it ->> 'size', ''), 'Free'), coalesce(nullif(it ->> 'qty', '')::numeric, 1), n);
           n := n + 1;
         end loop;
         smp_count := smp_count + 1;

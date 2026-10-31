@@ -30,8 +30,29 @@ if ( ! defined( 'DK_OPS_START' ) ) {
 	define( 'DK_OPS_START', '2026-10-31' ); // first run sends orders changed on/after this date
 }
 
-/* ---------- which order lines are free samples ---------- */
+/* ---------- which order lines are samples ----------
+   The "Order a sample" pop-up adds one of two sample products (small free / large paid)
+   with "Sample for: <the product they were looking at>" on the line. */
+if ( ! defined( 'DK_OPS_SAMPLE_IDS' ) ) {
+	define( 'DK_OPS_SAMPLE_IDS', '16361:Small (free),16362:Large' );
+}
+function dk_ops_sample_ids() {
+	$out = array();
+	foreach ( explode( ',', DK_OPS_SAMPLE_IDS ) as $pair ) {
+		$p = explode( ':', $pair, 2 );
+		if ( (int) $p[0] ) {
+			$out[ (int) $p[0] ] = isset( $p[1] ) ? trim( $p[1] ) : 'Free';
+		}
+	}
+	return $out;
+}
 function dk_ops_is_sample( $product, $name, $item = null ) {
+	if ( $product && array_key_exists( (int) ( $product->get_parent_id() ? $product->get_parent_id() : $product->get_id() ), dk_ops_sample_ids() ) ) {
+		return true;
+	}
+	if ( $item && $item->get_meta( 'Sample for', true ) ) {
+		return true;
+	}
 	// a sample option picked on the product (e.g. Length: "Free Sample") shows in the line's details
 	if ( $item ) {
 		foreach ( $item->get_formatted_meta_data( '' ) as $m ) {
@@ -62,6 +83,16 @@ function dk_ops_is_sample( $product, $name, $item = null ) {
 		}
 	}
 	return (bool) preg_match( '/\bsamples?\b/i', (string) $name );
+}
+
+function dk_ops_colour_from_text( $text ) {
+	$known = array( 'Ash White', 'Red/Brown', 'Red Brown', 'Golden Teak', 'Golden Oak', 'Anthracite', 'Chocolate', 'Charcoal', 'Walnut', 'Silver', 'Maple', 'Antique', 'Black', 'Grey', 'Teak', 'Oak', 'Galvanised', 'Slate' );
+	foreach ( $known as $c ) {
+		if ( false !== stripos( (string) $text, $c ) ) {
+			return $c;
+		}
+	}
+	return '';
 }
 
 /* ---------- colour of an order line: variation attribute, else from the title ---------- */
@@ -112,7 +143,7 @@ function dk_ops_order_payload( $order ) {
 		$product = $item->get_product();
 		$qty     = (float) $item->get_quantity();
 		$total   = (float) $item->get_total() + (float) $item->get_total_tax();
-		$items[] = array(
+		$line = array(
 			'sku'      => $product ? (string) $product->get_sku() : '',
 			'name'     => (string) $item->get_name(),
 			'colour'   => dk_ops_colour( $item, $product ),
@@ -120,6 +151,18 @@ function dk_ops_order_payload( $order ) {
 			'price'    => $qty ? round( $total / $qty, 2 ) : 0, // per piece, inc VAT, after any discount
 			'isSample' => dk_ops_is_sample( $product, $item->get_name(), $item ),
 		);
+		if ( $line['isSample'] ) {
+			// the sample is OF the product they were viewing: name it so, with its colour and size
+			$for = (string) $item->get_meta( 'Sample for', true );
+			if ( '' !== $for ) {
+				$line['name']   = $for;
+				$line['colour'] = dk_ops_colour_from_text( $for );
+			}
+			$ids  = dk_ops_sample_ids();
+			$base = $product ? (int) ( $product->get_parent_id() ? $product->get_parent_id() : $product->get_id() ) : 0;
+			$line['size'] = isset( $ids[ $base ] ) ? $ids[ $base ] : 'Free';
+		}
+		$items[] = $line;
 	}
 	$created = $order->get_date_created();
 	$paid    = $order->get_date_paid();
