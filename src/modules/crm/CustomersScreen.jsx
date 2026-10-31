@@ -24,7 +24,7 @@ export const waNumber = (v) => {
 const isUkMobile = (v) => /^447\d{9}$/.test(waNumber(v));
 const firstName = (v) => String(v || "").trim().split(/\s+/)[0] || "";
 // per-PC choice: "app" = WhatsApp (Business) desktop app, "web" = WhatsApp Web tab
-export const getWaMode = () => { try { return localStorage.getItem("dk-wa-mode") || "app"; } catch { return "app"; } };
+export const getWaMode = () => "app";
 export const waLink = (num, name, mode = getWaMode()) => (mode === "web" ? "https://web.whatsapp.com/send?phone=" : "whatsapp://send?phone=") + waNumber(num) + "&text=" + encodeURIComponent((firstName(name) ? "Hi " + firstName(name) + ", " : "Hi, ") + "it's Deck Kingdom. ");
 // Gmail compose in the browser (not the PC's default mail app)
 export const mailLink = (email, name) => "https://mail.google.com/mail/?view=cm&fs=1&to=" + encodeURIComponent(String(email || "").trim()) + "&su=" + encodeURIComponent("Deck Kingdom") + "&body=" + encodeURIComponent((firstName(name) ? "Hi " + firstName(name) : "Hi") + ",\n\n");
@@ -259,11 +259,10 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
   // retail top-ups (an extra board, trim and clips) under this value don't make a repeat customer
   const [topUpOpen, setTopUpOpen] = useState(false);
   const [stampOpen, setStampOpen] = useState(false);
+  const [jump, setJump] = useState("");
   const [compose, setCompose] = useState(null); // { to, name, customerId, siteId }
   const [emailTick, setEmailTick] = useState(0);
   const composeFor = (to, name, customerId, siteId) => emailReady ? () => setCompose({ to, name, customerId, siteId }) : undefined;
-  const [waMode, setWaModeState] = useState(getWaMode);
-  const setWaMode = (m) => { setWaModeState(m); try { localStorage.setItem("dk-wa-mode", m); } catch {} };
   const [topUp, setTopUp] = useState(() => { try { return Number(localStorage.getItem("dk-topup")) || 150; } catch (e) { return 150; } });
   const stats = useMemo(() => {
     const yearAgo = addDaysC(todayC(), -365), monthAgo = addDaysC(todayC(), -30);
@@ -482,7 +481,50 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
         };
         return (
           <>
-            <button style={{ ...btn, marginBottom: 12 }} onClick={() => setSelId(null)}><Icon name="back" stroke={NAVY} />All customers</button>
+            {(() => {
+              // step through the list in its current order (newest account first, current search applied)
+              const order = sorted.some((c) => c.id === sel.id) ? sorted : [...crm.customers].sort((a, b) => (Number(b.accountNo) || 1e9) - (Number(a.accountNo) || 1e9));
+              const at = order.findIndex((c) => c.id === sel.id);
+              const prev = at > 0 ? order[at - 1] : null;
+              const next = at >= 0 && at < order.length - 1 ? order[at + 1] : null;
+              const jq = jump.trim().toLowerCase();
+              const hits = jq ? crm.customers.filter((c) =>
+                [c.name, c.town, c.postcode, c.contact, c.mobile, c.landline, c.email, String(c.accountNo || "")]
+                  .some((v) => String(v || "").toLowerCase().includes(jq))).slice(0, 8) : [];
+              const go = (c) => { if (c) { setSelId(c.id); setJump(""); } };
+              const arrow = (c, up) => (
+                <button style={{ ...abtn, width: 36, height: 36, opacity: c ? 1 : 0.4, cursor: c ? "pointer" : "default" }} disabled={!c} onClick={() => go(c)}
+                  title={c ? (up ? "Previous: " : "Next: ") + "#" + (c.accountNo || "—") + " " + (c.name || "") : up ? "First account" : "Last account"}>
+                  <span style={{ display: "inline-flex", transform: up ? "rotate(90deg)" : "rotate(-90deg)" }}><Icon name="back" stroke={NAVY} /></span>
+                </button>
+              );
+              return (
+                <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
+                  <button style={btn} onClick={() => setSelId(null)}><Icon name="back" stroke={NAVY} />All customers</button>
+                  {arrow(prev, true)}
+                  {arrow(next, false)}
+                  {at >= 0 && <span style={{ fontSize: 12, fontWeight: 700, color: "#8593a8" }}>{(at + 1).toLocaleString("en-GB")} of {order.length.toLocaleString("en-GB")}</span>}
+                  <div style={{ position: "relative", marginLeft: "auto", width: 320, maxWidth: "100%" }}>
+                    <span style={{ position: "absolute", left: 11, top: 10 }}><Icon name="search" /></span>
+                    <input style={{ ...inp, paddingLeft: 34, width: "100%", boxSizing: "border-box" }} placeholder="Jump to account — name, postcode, #…"
+                      value={jump} onChange={(e) => setJump(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter" && hits[0]) go(hits[0]); if (e.key === "Escape") setJump(""); }} />
+                    {hits.length > 0 && (
+                      <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 30, background: "#fff", border: "1px solid #e6e9ef", borderRadius: 10, boxShadow: "0 10px 28px rgba(11,31,63,.18)", overflow: "hidden" }}>
+                        {hits.map((c) => (
+                          <button key={c.id} onClick={() => go(c)}
+                            style={{ display: "flex", gap: 8, width: "100%", padding: "8px 11px", background: "none", border: "none", borderBottom: "1px solid #f0f2f6", cursor: "pointer", fontFamily: "inherit", textAlign: "left", fontSize: 13 }}>
+                            <span style={{ color: "#8593a8", fontWeight: 700, width: 46, flex: "none" }}>#{c.accountNo || "—"}</span>
+                            <b style={{ color: NAVY, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name || "Unnamed"}</b>
+                            <span style={{ color: "#5a6a85", fontWeight: 600, whiteSpace: "nowrap" }}>{[c.town, c.postcode].filter(Boolean).join(" · ")}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* hero */}
             <div style={{ background: "linear-gradient(135deg,#0B1F3F 0%,#13294f 100%)", borderRadius: 14, padding: "20px 22px", color: "#fff", marginBottom: 14, display: "flex", gap: 18, alignItems: "center", flexWrap: "wrap" }}>
@@ -551,17 +593,10 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
               <div style={{ ...card, marginBottom: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
                   <p style={{ ...sect, margin: 0 }}>Contact &amp; invoice address</p>
-                  <span style={{ marginLeft: "auto", fontSize: 10.5, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4 }} title="Where the WhatsApp buttons open on this PC">WHATSAPP</span>
-                  <div style={{ display: "inline-flex", border: "1px solid #dde2ea", borderRadius: 999, overflow: "hidden" }}>
-                    {[["app", "App"], ["web", "Web"]].map(([k, l]) => (
-                      <button key={k} onClick={() => setWaMode(k)} title={k === "app" ? "Open chats in the WhatsApp Business desktop app" : "Open chats in a WhatsApp Web tab"}
-                        style={{ border: "none", padding: "3px 10px", fontSize: 11, fontWeight: 700, fontFamily: "inherit", cursor: "pointer", background: waMode === k ? "#128C7E" : "transparent", color: waMode === k ? "#fff" : "#5a6a85" }}>{l}</button>
-                    ))}
-                  </div>
                 </div>
                 <FieldRow icon="user" label="Contact" value={sel.contact} />
-                <FieldRow icon="mob" label="Mobile" value={sel.mobile} actions={<QuickWa mode={waMode} num={sel.mobile} name={sel.contact || sel.name} />} />
-                <FieldRow icon="phone" label="Landline" value={sel.landline} actions={isUkMobile(sel.landline) ? <QuickWa mode={waMode} num={sel.landline} name={sel.contact || sel.name} /> : null} />
+                <FieldRow icon="mob" label="Mobile" value={sel.mobile} actions={<QuickWa num={sel.mobile} name={sel.contact || sel.name} />} />
+                <FieldRow icon="phone" label="Landline" value={sel.landline} actions={isUkMobile(sel.landline) ? <QuickWa num={sel.landline} name={sel.contact || sel.name} /> : null} />
                 <FieldRow icon="mail" label="Email" value={sel.email} actions={<QuickMail email={sel.email} name={sel.contact || sel.name} onCompose={composeFor(sel.email, sel.contact || sel.name, sel.id, "")} />} />
                 <FieldRow icon="share" label="Preferred contact" value={sel.contactMethod} />
                 <FieldRow icon="pin" label="Invoice address" value={[sel.address, sel.town, sel.postcode].filter(Boolean).join(", ")} />
@@ -597,8 +632,6 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
                       {s.notes && <NoteBox>{s.notes}</NoteBox>}
                     </div>
                     <div style={{ display: "flex", gap: 5 }}>
-                      <QuickWa mode={waMode} num={isUkMobile(s.landline) && !isUkMobile(s.mobile) ? s.landline : s.mobile} name={s.contact || sel.contact || sel.name} size={28} />
-                      <QuickMail email={s.email} name={s.contact || sel.contact || sel.name} size={28} onCompose={composeFor(s.email, s.contact || sel.contact || sel.name, sel.id, s.id)} />
                       {newQuoteFor && <button style={abtn} title="New quote for this site" onClick={() => newQuoteFor(sel.id, s.id)}><Icon name="tag" /></button>}
                       <button style={abtn} title="New invoice for this site" onClick={() => newInvoiceFor(sel.id, s.id)}><Icon name="plus" /></button>
                       <button style={abtn} title="Edit site" onClick={() => openSiteDraft({ ...s })}><Icon name="pen" /></button>
