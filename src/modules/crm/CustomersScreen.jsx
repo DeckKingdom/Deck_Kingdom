@@ -305,7 +305,7 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
       {/* summary */}
       {!sel && crm.customers.length > 0 && (() => {
         const pct = (n, d) => (d ? Math.round((n / d) * 100) + "%" : "—");
-        const box = { flex: "1 1 170px", background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, padding: "12px 16px", minWidth: 160 };
+        const box = { flex: "1 1 140px", background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, padding: "12px 14px", minWidth: 135 };
         const lab = { fontSize: 10.5, fontWeight: 700, color: "#8593a8", letterSpacing: 0.5, textTransform: "uppercase" };
         const big = { fontSize: 22, fontWeight: 800, color: NAVY, marginTop: 2 };
         const sub = { fontSize: 11.5, fontWeight: 600, color: "#5a6a85", marginTop: 2 };
@@ -327,20 +327,23 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
               <div style={big}>{(tr.active + rt.active).toLocaleString("en-GB")}</div>
               <div style={sub}>{"ordered in the last 12 months · " + tr.active + " trade, " + rt.active + " retail"}</div>
             </div>
-            <div style={{ ...box, flex: "2 1 340px" }}>
+            <div style={box}>
+              <div style={lab}>Never ordered</div>
+              <div style={big}>{stats.never.toLocaleString("en-GB")} <span style={{ fontSize: 14, color: "#5a6a85" }}>{pct(stats.never, stats.total)}</span></div>
+              <div style={sub}>{tr.never + " trade, " + rt.never + " retail · accounts with no order yet"}</div>
+            </div>
+            <div style={{ ...box, flex: "1.8 1 250px" }}>
               <div style={lab}>Buyers — one-time vs repeat</div>
-              <div style={{ display: "grid", gridTemplateColumns: "auto 1fr 1fr 1fr 18px", gap: "2px 14px", alignItems: "baseline", marginTop: 4, fontSize: 12.5 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "auto 1fr 1fr 18px", gap: "2px 14px", alignItems: "baseline", marginTop: 4, fontSize: 12.5 }}>
                 <span />
                 <span style={{ ...lab, fontSize: 10 }}>One-time</span>
                 <span style={{ ...lab, fontSize: 10 }}>Repeat</span>
-                <span style={{ ...lab, fontSize: 10 }}>Never ordered</span>
                 <span />
                 {[["Trade", tr], ["Retail", rt], ["All", { oneTime: tr.oneTime + rt.oneTime, repeat: tr.repeat + rt.repeat, buyers: tr.buyers + rt.buyers, never: tr.never + rt.never, accounts: tr.accounts + rt.accounts }]].map(([name, g]) => (
                   <React.Fragment key={name}>
                     <span style={{ fontWeight: 700, color: "#5a6a85" }}>{name}</span>
                     <span style={{ fontWeight: 800, color: NAVY, fontSize: name === "All" ? 16 : 13.5 }}>{g.oneTime.toLocaleString("en-GB")} <span style={{ fontWeight: 600, color: "#8593a8", fontSize: 11.5 }}>{pct(g.oneTime, g.buyers)}</span></span>
                     <span style={{ fontWeight: 800, color: NAVY, fontSize: name === "All" ? 16 : 13.5 }}>{g.repeat.toLocaleString("en-GB")} <span style={{ fontWeight: 600, color: "#8593a8", fontSize: 11.5 }}>{pct(g.repeat, g.buyers)}</span></span>
-                    <span style={{ fontWeight: 800, color: "#5a6a85", fontSize: name === "All" ? 16 : 13.5 }}>{g.never.toLocaleString("en-GB")} <span style={{ fontWeight: 600, color: "#8593a8", fontSize: 11.5 }}>{pct(g.never, g.accounts)}</span></span>
                     {name === "All" ? (
                       <button type="button" onClick={() => setTopUpOpen((o) => !o)} title={"Retail top-ups under £" + topUp + " don't count as a new purchase — click to change"}
                         style={{ fontFamily: "inherit", border: "none", background: "none", padding: 0, cursor: "pointer", color: "#8593a8", fontSize: 11 }}>
@@ -448,7 +451,13 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
                 {(sel.name || "?").trim().charAt(0).toUpperCase() || "?"}
               </div>
               <div style={{ minWidth: 180 }}>
-                <h2 style={{ margin: 0, fontSize: 21 }}>{sel.name || "Unnamed account"}</h2>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <h2 style={{ margin: 0, fontSize: 21 }}>{sel.name || "Unnamed account"}</h2>
+                  <button title="Edit account" onClick={() => openCustDraft({ ...sel })}
+                    style={{ width: 28, height: 28, borderRadius: 7, border: "1px solid #33466b", background: "transparent", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0 }}>
+                    <Icon name="pen" stroke="#cfd6e4" size={13} />
+                  </button>
+                </div>
                 <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 7 }}>
                   <Chip tone="navy">Account #{sel.accountNo || "—"}</Chip>
                   {sel.trader && <Chip tone="red" style={{ background: RED, color: "#fff", border: "none" }}>Trade</Chip>}
@@ -474,8 +483,11 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
                   </span>
                 </button>
               </div>
+              <button title="Delete this account" onClick={() => removeCustomer(sel)}
+                style={{ width: 34, height: 34, borderRadius: 8, border: "1px dashed #3a4f78", background: "transparent", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0, alignSelf: "center" }}>
+                <Icon name="bin" stroke="#8fa0c0" />
+              </button>
               <div style={{ display: "flex", gap: 8, flexBasis: "100%", marginTop: 2, flexWrap: "wrap" }}>
-                <button style={navyBtn} onClick={() => openCustDraft({ ...sel })}><Icon name="pen" stroke="#fff" />Edit account</button>
                 {newQuoteFor && (
                   <button style={{ ...navyBtn, borderColor: GOLD, color: GOLD }} onClick={() => newQuoteFor(sel.id, (sites[0] && sites[0].id) || "")}>
                     <Icon name="tag" stroke={GOLD} />New quote
@@ -486,8 +498,6 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
                     <Icon name="leaf" stroke="#fff" />Log sample
                   </button>
                 )}
-                <span style={{ flex: 1 }} />
-                <button style={{ ...navyBtn, border: "1px dashed #3a4f78", color: "#8fa0c0" }} onClick={() => removeCustomer(sel)}><Icon name="bin" stroke="#8fa0c0" />Delete</button>
               </div>
             </div>
 
