@@ -1,0 +1,65 @@
+{
+  "_read_me": "Settings for the FileMaker bridge. Fill in the bridge account password and the start date. The field names below are first guesses - Claude sets them from fm-discover.txt.",
+  "dsn": "DeckKingdomFM",
+  "user": "bridge",
+  "password": "",
+  "supabaseUrl": "https://wttgznlukleiunczaqoh.supabase.co",
+  "supabaseKey": "sb_publishable_8lBS1gL2zMxM7bHj2mlHbA_y-RbcsuD",
+  "secret": "SET-IN-crm_settings-fmBridge",
+  "startDate": "2026-01-01",
+  "lookbackDays": 14,
+  "dateLiteral": "DATE '{0}'",
+  "timestampLiteral": "TIMESTAMP '{0}'",
+  "customers": {
+    "table": "Customers",
+    "id": "Customer ID",
+    "modified": "",
+    "created": "",
+    "fields": {
+      "accountNo": "Account No",
+      "name": "Name",
+      "address": "Address",
+      "town": "Town",
+      "postcode": "Postcode",
+      "contact": "Contact",
+      "landline": "Landline",
+      "mobile": "Mobile",
+      "email": "Email",
+      "trader": "Trader"
+    }
+  },
+  "invoices": {
+    "table": "Invoices",
+    "id": "Invoice ID",
+    "customerId": "Customer ID",
+    "date": "Date",
+    "modified": "",
+    "where": "",
+    "fields": {
+      "invNo": "Invoice No",
+      "date": "Date",
+      "orderRef": "Order Ref",
+      "jobType": "Job Type",
+      "deliveryDate": "Delivery Date",
+      "deliveryTime": "Delivery Time",
+      "deliveryCompleted": "Delivery Completed",
+      "paymentType": "Payment Type",
+      "paymentDate": "Payment Date",
+      "deliveryCharge": "Delivery Charge",
+      "jobNotes": "Job Notes",
+      "raisedBy": "Raised By"
+    }
+  },
+  "lines": {
+    "table": "Invoice Items",
+    "invoiceId": "Invoice ID",
+    "order": "",
+    "fields": {
+      "code": "Code",
+      "description": "Description",
+      "colour": "Colour",
+      "qty": "Qty",
+      "price": "Price"
+    }
+  }
+}

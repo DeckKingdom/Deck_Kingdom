@@ -551,6 +551,8 @@ async function loadAll() {
 
   const data = { customers, sites, invoices, masterProducts, collections, movements, vans, numbering, reminders, quotes, samples, tasks, taskLog, staff, suppliers, purchases };
   if (skuListsRow && skuListsRow.value) data.skuLists = skuListsRow.value;
+  const fmRow = settingRow("fmBridgeLast"); // FileMaker feed status (written by fm_sync, read-only here)
+  if (fmRow && fmRow.value) data.fmBridge = fmRow.value;
   snapshot = rowsFromData(data);
   settingsSnapshot = { numbering: JSON.stringify(numbering), reminders: JSON.stringify(reminders), skuLists: skuListsRow ? JSON.stringify(skuListsRow.value) : undefined };
 

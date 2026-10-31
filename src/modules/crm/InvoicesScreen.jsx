@@ -114,6 +114,16 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
             <input style={{ ...inp, paddingLeft: 34 }} placeholder="Search inv #, customer, order ref…" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
           <span style={{ fontSize: 12, color: "#5a6a85", fontWeight: 700 }}>{crm.invoices.length.toLocaleString("en-GB")} invoices</span>
+          {crm.fmBridge && crm.fmBridge.at && (() => {
+            const mins = Math.round((Date.now() - new Date(crm.fmBridge.at).getTime()) / 60000);
+            const stale = mins > 30;
+            return (
+              <span title={"Last FileMaker update: " + new Date(crm.fmBridge.at).toLocaleString("en-GB") + " — " + (crm.fmBridge.invoices || 0) + " invoices, " + (crm.fmBridge.customers || 0) + " customers. Reload to see the newest."}
+                style={{ fontSize: 11.5, fontWeight: 700, padding: "3px 9px", borderRadius: 999, background: stale ? "#E8912D22" : "#3FA55C18", color: stale ? "#a05f10" : "#28713e", border: "1px solid " + (stale ? "#f0d0a8" : "#bfe3ca") }}>
+                {"FileMaker feed · " + (mins < 1 ? "just now" : mins < 90 ? mins + " min ago" : Math.round(mins / 60) + " h ago")}
+              </span>
+            );
+          })()}
           <span style={{ flex: 1 }} />
           <button style={goldBtn} onClick={newInvoice}><Icon name="plus" stroke={NAVY} />New invoice</button>
         </div>
@@ -155,7 +165,10 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
                         <tr key={i.id} onClick={() => setSelId(i.id)} style={{ cursor: "pointer" }}
                           onMouseEnter={(e) => (e.currentTarget.style.background = "#f6f8fb")}
                           onMouseLeave={(e) => (e.currentTarget.style.background = "")}>
-                          <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", fontWeight: 700, color: "#185FA5" }}>{i.invNo || "—"}</td>
+                          <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", fontWeight: 700, color: "#185FA5", whiteSpace: "nowrap" }}>
+                            {i.invNo || "—"}
+                            {String(i.id).startsWith("fm-i-") && <span title="Came across from FileMaker" style={{ marginLeft: 6, fontSize: 9.5, fontWeight: 800, padding: "1px 5px", borderRadius: 4, background: "#eef1f6", color: "#5a6a85", letterSpacing: 0.3 }}>FM</span>}
+                          </td>
                           <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", whiteSpace: "nowrap" }}>{prettyDate(i.date)}</td>
                           <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", fontWeight: 700 }}>{c ? c.name : <span style={{ color: RED }}>No customer</span>}</td>
                           <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6" }}>{i.jobType}</td>
