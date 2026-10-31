@@ -140,7 +140,7 @@ export const blankCustomer = () => ({
   landline: "",
   mobile: "",
   email: "",
-  source: "Manual entry",
+  source: "",
   trader: false,
   discountPct: "",
   contactMethod: "",

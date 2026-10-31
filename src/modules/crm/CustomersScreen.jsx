@@ -1,6 +1,6 @@
 // Customers tab: searchable account list -> account view with sites and
 // invoice history, per the approved mockup.
-import { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { NAVY, GOLD, RED, prettyDate, prettyDateTime, addDays as addDaysC } from "../../lib/core.js";
 import {
   originText, recordOrigin,
@@ -115,7 +115,7 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
   };
 
   const startNewCustomer = () =>
-    openCustDraft({ ...blankCustomer(), accountNo: nextNumber(crm.customers, "accountNo", crm.numbering.account), createdBy: me || "", _new: true });
+    openCustDraft({ ...blankCustomer(), source: "Manual entry", accountNo: nextNumber(crm.customers, "accountNo", crm.numbering.account), createdBy: me || "", _new: true });
 
   const saveCustomer = () => {
     const d = custDraft;
@@ -223,23 +223,28 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
   const shown = sorted.slice(0, 50);
 
   // ===== summary =====
+  // retail top-ups (an extra board, trim and clips) under this value don't make a repeat customer
+  const [topUp, setTopUp] = useState(() => { try { return Number(localStorage.getItem("dk-topup")) || 150; } catch (e) { return 150; } });
   const stats = useMemo(() => {
     const yearAgo = addDaysC(todayC(), -365), monthAgo = addDaysC(todayC(), -30);
-    const seg = () => ({ accounts: 0, active: 0, sales: 0 });
-    const out = { total: crm.customers.length, trade: seg(), retail: seg(), active: 0, oneTime: 0, repeat: 0, never: 0, newMonth: 0, buyers: 0 };
+    const seg = () => ({ accounts: 0, active: 0, buyers: 0, oneTime: 0, repeat: 0, topUps: 0 });
+    const out = { total: crm.customers.length, trade: seg(), retail: seg(), never: 0, newMonth: 0 };
     crm.customers.forEach((c) => {
       const sales = (invByCust[c.id] || []).filter(isSaleInvoice);
-      const recent = sales.filter((i) => (i.date || "") >= yearAgo);
       const g = c.trader ? out.trade : out.retail;
       g.accounts++;
-      if (recent.length) { out.active++; g.active++; }
-      g.sales += recent.reduce((t, i) => t + invoiceTotals(i).total, 0);
-      if (!sales.length) out.never++;
-      else { out.buyers++; if (sales.length === 1) out.oneTime++; else out.repeat++; }
       if ((c.created || "") >= monthAgo) out.newMonth++;
+      if (sales.some((i) => (i.date || "") >= yearAgo)) g.active++;
+      if (!sales.length) { out.never++; return; }
+      g.buyers++;
+      // trade: every order counts; retail: only orders over the top-up value
+      const main = c.trader ? sales : sales.filter((i) => invoiceTotals(i).total >= topUp);
+      if (!c.trader) g.topUps += sales.length - main.length;
+      if (main.length >= 2) g.repeat++;
+      else g.oneTime++;
     });
     return out;
-  }, [crm.customers, invByCust]);
+  }, [crm.customers, invByCust, topUp]);
 
   const siteSuggestions = useMemo(() => {
     if (!siteDraft) return null;
@@ -317,19 +322,31 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
               <div style={sub}>{pct(tr.accounts, stats.total) + " trade accounts"}</div>
             </div>
             <div style={box}>
-              <div style={lab}>Sales last 12 months</div>
-              <div style={big}>{gbp(tr.sales + rt.sales)}</div>
-              <div style={sub}>{"Trade " + gbp(tr.sales) + " (" + pct(tr.sales, tr.sales + rt.sales) + ") · Retail " + gbp(rt.sales)}</div>
-            </div>
-            <div style={box}>
               <div style={lab}>Active</div>
-              <div style={big}>{stats.active.toLocaleString("en-GB")}</div>
+              <div style={big}>{(tr.active + rt.active).toLocaleString("en-GB")}</div>
               <div style={sub}>{"ordered in the last 12 months · " + tr.active + " trade, " + rt.active + " retail"}</div>
             </div>
-            <div style={box}>
-              <div style={lab}>One-time buyers</div>
-              <div style={big}>{stats.oneTime.toLocaleString("en-GB")} <span style={{ fontSize: 14, color: "#5a6a85" }}>{pct(stats.oneTime, stats.buyers)}</span></div>
-              <div style={sub}>{stats.repeat.toLocaleString("en-GB") + " repeat · " + stats.never.toLocaleString("en-GB") + " never ordered"}</div>
+            <div style={{ ...box, flex: "2 1 340px" }}>
+              <div style={lab}>Buyers — one-time vs repeat</div>
+              <div style={{ display: "grid", gridTemplateColumns: "auto 1fr 1fr", gap: "2px 14px", alignItems: "baseline", marginTop: 4, fontSize: 12.5 }}>
+                <span />
+                <span style={{ ...lab, fontSize: 10 }}>One-time</span>
+                <span style={{ ...lab, fontSize: 10 }}>Repeat</span>
+                {[["Trade", tr], ["Retail", rt], ["All", { oneTime: tr.oneTime + rt.oneTime, repeat: tr.repeat + rt.repeat, buyers: tr.buyers + rt.buyers }]].map(([name, g]) => (
+                  <React.Fragment key={name}>
+                    <span style={{ fontWeight: 700, color: "#5a6a85" }}>{name}</span>
+                    <span style={{ fontWeight: 800, color: NAVY, fontSize: name === "All" ? 16 : 13.5 }}>{g.oneTime.toLocaleString("en-GB")} <span style={{ fontWeight: 600, color: "#8593a8", fontSize: 11.5 }}>{pct(g.oneTime, g.buyers)}</span></span>
+                    <span style={{ fontWeight: 800, color: NAVY, fontSize: name === "All" ? 16 : 13.5 }}>{g.repeat.toLocaleString("en-GB")} <span style={{ fontWeight: 600, color: "#8593a8", fontSize: 11.5 }}>{pct(g.repeat, g.buyers)}</span></span>
+                  </React.Fragment>
+                ))}
+              </div>
+              <div style={{ ...sub, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
+                Retail orders under £
+                <input type="number" min="0" step="10" value={topUp}
+                  onChange={(e) => { const v = Math.max(0, Number(e.target.value) || 0); setTopUp(v); try { localStorage.setItem("dk-topup", String(v)); } catch (err) {} }}
+                  style={{ ...inp, width: 64, padding: "2px 6px", fontSize: 12, textAlign: "right" }} />
+                are top-ups, not a new purchase{rt.topUps ? " (" + rt.topUps + " so far)" : ""} · {stats.never.toLocaleString("en-GB")} never ordered
+              </div>
             </div>
           </div>
         );
