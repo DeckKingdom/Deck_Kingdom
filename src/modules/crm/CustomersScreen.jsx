@@ -712,10 +712,10 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
                         return (
                           <tr key={x.id}>
                             <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", whiteSpace: "nowrap" }}>{prettyDate(x.date)}</td>
-                            <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6" }}>
-                              <button onClick={() => openSample(x.id)} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontWeight: 700, color: "#185FA5", fontSize: 13, padding: 0 }}>{sampleRef(x)}</button>
+                            <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", cursor: "pointer" }} onClick={() => openSample(x.id)}>
+                              <button onClick={(e) => { e.stopPropagation(); openSample(x.id); }} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontWeight: 700, color: "#185FA5", fontSize: 13, padding: 0 }}>{sampleRef(x)}</button>
                             </td>
-                            <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", color: "#5a6a85", fontWeight: 600 }}>
+                            <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", color: "#5a6a85", fontWeight: 600, cursor: "pointer" }} onClick={() => openSample(x.id)} title="Open sample request">
                               {(x.items || []).map((it) => [it.colour, it.description].filter(Boolean).join(" ")).filter(Boolean).join(", ") || "—"}
                             </td>
                             <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6" }}><Chip tone={SAMPLE_TONES[st]}>{st}</Chip></td>

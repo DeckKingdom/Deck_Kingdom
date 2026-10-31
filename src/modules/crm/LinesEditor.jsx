@@ -236,15 +236,9 @@ export function ColourSelect({ line, crm, bySku, onPick, onPickMany }) {
               return (
                 <label key={o.label + o.sku} onClick={() => { if (multi) tick(o.label); else { onPick(o.label, o.sku); setBox(null); } }}
                   style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 6px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: on ? 700 : 500, color: on ? NAVY : "#3a4a63", background: on ? "#eef1f6" : "transparent" }}>
-                  {multi ? (
-                    <span style={{ width: 15, height: 15, flex: "none", borderRadius: 4, border: "2px solid " + (on ? NAVY : "#b8c0cc"), background: on ? NAVY : "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
-                      {on && <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>}
-                    </span>
-                  ) : (
                   <span style={{ width: 15, height: 15, flex: "none", borderRadius: "50%", border: "2px solid " + (on ? NAVY : "#b8c0cc"), display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
                     {on && <span style={{ width: 7, height: 7, borderRadius: "50%", background: NAVY }} />}
                   </span>
-                  )}
                   {o.label}
                 </label>
               );

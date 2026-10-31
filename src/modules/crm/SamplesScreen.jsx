@@ -6,7 +6,7 @@ import { NAVY, GOLD, RED, prettyDate, prettyDateTime, addDays, daysBetween } fro
 import {
   blankSample, blankSampleItem, blankCustomer, nextNumber, gbp, today, invoiceTotals, isSaleInvoice,
   sampleRef, sampleStatus, sampleInvoice, sampleIsOpen, sampleStats, SAMPLE_TONES,
-  originText, SAMPLE_SOURCES, SAMPLE_DISPATCH, SAMPLE_SIZES, SAMPLE_WINDOW_DAYS, SAMPLE_FOLLOWUP_DAYS, SOURCES, FIELD_FORMATS,
+  originText, userInitials, SAMPLE_SOURCES, SAMPLE_DISPATCH, SAMPLE_SIZES, SAMPLE_WINDOW_DAYS, SAMPLE_FOLLOWUP_DAYS, SOURCES, FIELD_FORMATS,
 } from "../../lib/crmCore.js";
 import { samplesAvailable } from "../../data/crmStorage.js";
 import { Icon, Chip, SuggestInput, selectAllProps, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
@@ -30,12 +30,16 @@ const PERIODS = [["30", "Last 30 days"], ["90", "Last 90 days"], ["365", "Last 1
 const FILTERS = ["To send", "Follow-up due", "Open", "Converted", "Closed", "All"];
 const itemsSummary = (x) => (x.items || []).map((it) => (Number(it.qty) > 1 ? it.qty + "× " : "") + [it.colour, it.description].filter(Boolean).join(" ")).filter(Boolean).join(", ");
 
+// how an invoice is known: its number, else the website order ref
+const invRef = (i) => (i.invNo ? "invoice #" + i.invNo : i.orderRef ? "order " + i.orderRef : "invoice (not numbered yet)");
+
 export default function SamplesScreen({ crm, updateCrm, askConfirm, selId, setSelId, goCustomer, openInvoice, me }) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState(null); // null = pick a sensible default
   const [period, setPeriod] = useState("90");
   const [custQuery, setCustQuery] = useState("");
   const [newCust, setNewCust] = useState(null);
+  const [stampOpen, setStampOpen] = useState(false);
   const [notice, setNotice] = useState("");
   const ready = samplesAvailable();
   const samples = crm.samples || [];
@@ -345,15 +349,19 @@ export default function SamplesScreen({ crm, updateCrm, askConfirm, selId, setSe
       <div style={{ background: "linear-gradient(135deg,#0B1F3F 0%,#13294f 100%)", borderRadius: 12, padding: "16px 22px", color: "#fff", marginBottom: 14, display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
         <div>
           <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-            <h2 style={{ margin: 0, fontSize: 19 }}>
-              Sample {sampleRef(smp)}
-              <span style={{ color: "#aeb9cf", fontWeight: 600, fontSize: 14, marginLeft: 12 }}>{prettyDate(smp.date)}</span>
-            </h2>
-            <Chip tone={SAMPLE_TONES[st]} style={statusChipStyle}>{st}</Chip>
-          </div>
-          <div style={{ fontSize: 12.5, color: "#aeb9cf", fontWeight: 600, marginTop: 5 }}>
-            {originText(smp, prettyDate(smp.created))}
-            {smp.updatedAt ? " · Updated " + prettyDateTime(smp.updatedAt) + (smp.modifiedBy ? " by " + smp.modifiedBy.split("@")[0] : "") : ""}
+            <span style={{ position: "relative", display: "inline-block" }} onMouseEnter={() => setStampOpen(true)} onMouseLeave={() => setStampOpen(false)}>
+              <h2 style={{ margin: 0, fontSize: 19, cursor: "default" }}>
+                Sample {sampleRef(smp)}
+                <span style={{ color: "#aeb9cf", fontWeight: 600, fontSize: 14, marginLeft: 12 }}>{prettyDate(smp.date)}</span>
+              </h2>
+              {stampOpen && (
+                <span style={{ position: "absolute", left: 0, top: "calc(100% + 6px)", zIndex: 20, background: "#fff", color: NAVY, border: "1px solid #e6e9ef", borderRadius: 12, padding: "8px 12px", boxShadow: "0 8px 24px rgba(0,0,0,.28)", whiteSpace: "nowrap", fontSize: 12, fontWeight: 600, lineHeight: 1.6 }}>
+                  <span style={{ display: "block" }}>{originText(smp, prettyDate(smp.created))}</span>
+                  {smp.updatedAt && <span style={{ display: "block" }}>{"Updated " + prettyDateTime(smp.updatedAt) + (smp.modifiedBy ? " by " + smp.modifiedBy.split("@")[0] + " (" + userInitials(crm, smp.modifiedBy) + ")" : "")}</span>}
+                </span>
+              )}
+            </span>
+            {st !== "Converted" && <Chip tone={SAMPLE_TONES[st]} style={statusChipStyle}>{st}</Chip>}
           </div>
         </div>
         <span style={{ flex: 1 }} />
@@ -377,14 +385,10 @@ export default function SamplesScreen({ crm, updateCrm, askConfirm, selId, setSe
               <div style={{ width: 40, height: 40, borderRadius: 12, background: GOLD, color: NAVY, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17, fontWeight: 700, flex: "none" }}>
                 {(cust.name || "?").trim().charAt(0).toUpperCase() || "?"}
               </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <b style={{ fontSize: 15 }}>{cust.name}</b>
-                <div style={{ fontSize: 12, color: "#5a6a85", fontWeight: 600, marginTop: 2 }}>
-                  {[[cust.address, cust.town, cust.postcode].filter(Boolean).join(", "), cust.mobile || cust.landline, cust.email].filter(Boolean).join(" · ")}
-                </div>
-              </div>
-              <button style={abtn} title="Open account" onClick={() => goCustomer(cust.id)}><Icon name="user" /></button>
-              <button style={abtn} title="Change customer" onClick={() => { setSample((x) => (x.customerId = "")); setCustQuery(""); }}><Icon name="x" /></button>
+              <button onClick={() => goCustomer(cust.id)} title="Open the customer's account"
+                style={{ flex: 1, minWidth: 0, background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit", textAlign: "left", fontSize: 15, fontWeight: 700, color: "#185FA5", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {cust.name || "Unnamed account"}
+              </button>
             </div>
           ) : newCust ? (
             <div>
@@ -438,12 +442,14 @@ export default function SamplesScreen({ crm, updateCrm, askConfirm, selId, setSe
                 <Icon name="pound" size={18} stroke="#fff" />
               </div>
               <div style={{ flex: 1, minWidth: 160 }}>
-                <b style={{ fontSize: 15, color: "#28713e" }}>{"Ordered — invoice #" + (inv.invNo || "—") + " · " + gbp(invoiceTotals(inv).total)}</b>
+                <button onClick={() => openInvoice(inv.id)} title="Open the order"
+                  style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit", textAlign: "left", fontSize: 15, fontWeight: 700, color: "#28713e", textDecoration: "underline", textDecorationColor: "#28713e55", textUnderlineOffset: 3 }}>
+                  {"Ordered — " + invRef(inv) + " · " + gbp(invoiceTotals(inv).total)}
+                </button>
                 <div style={{ fontSize: 12, color: "#5a6a85", fontWeight: 600, marginTop: 2 }}>
                   {prettyDate(inv.date)}{daysBetween(smp.date, inv.date) !== null ? " · " + daysBetween(smp.date, inv.date) + " days after the request" : ""} · {smp.linkManual ? "linked by hand" : "matched automatically"}
                 </div>
               </div>
-              <button style={goldBtn} onClick={() => openInvoice(inv.id)}><Icon name="doc" stroke={NAVY} />Open</button>
             </div>
           ) : smp.outcome === "lost" ? (
             <div>
@@ -467,7 +473,7 @@ export default function SamplesScreen({ crm, updateCrm, askConfirm, selId, setSe
           )}
           {cust && custInvoices.length > 0 && smp.outcome !== "lost" && (
             <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid #eef0f4" }}>
-              <span style={lbl}>Credited order</span>
+              <span style={lbl}>Which order did this sample lead to?</span>
               <select style={{ ...inp, fontSize: 13 }} value={smp.linkManual ? smp.convertedInvoiceId || "__none__" : ""}
                 onChange={(e) => setSample((x) => {
                   const v = e.target.value;
@@ -477,10 +483,10 @@ export default function SamplesScreen({ crm, updateCrm, askConfirm, selId, setSe
                   const i = crm.invoices.find((y) => y.id === v);
                   x.convertedAt = i ? i.date || "" : "";
                 })}>
-                <option value="">Automatic (first order after the request)</option>
-                <option value="__none__">None — don't credit an order</option>
+                <option value="">Work it out — their first order after the sample</option>
+                <option value="__none__">None — the sample didn't lead to an order</option>
                 {custInvoices.map((i) => (
-                  <option key={i.id} value={i.id}>{"#" + (i.invNo || "—") + " · " + prettyDate(i.date) + " · " + gbp(invoiceTotals(i).total)}</option>
+                  <option key={i.id} value={i.id}>{"This one: " + invRef(i) + " · " + prettyDate(i.date) + " · " + gbp(invoiceTotals(i).total)}</option>
                 ))}
               </select>
             </div>
