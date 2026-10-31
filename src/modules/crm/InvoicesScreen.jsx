@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import { NAVY, GOLD, RED, uid, prettyDate, prettyDateTime } from "../../lib/core.js";
 import {
-  blankInvoice, blankLine, nextNumber, invoiceTotals, gbp, isPaid,
+  recordOrigin, blankInvoice, blankLine, nextNumber, invoiceTotals, gbp, isPaid,
   JOB_TYPES, PAYMENT_TYPES, PREP_FLAGS, FOLLOWUP_FLAGS, today, TIME_SLOTS, vanOptions,
   skuIndex, invoiceCost, buildPicks, pickLandedCost, jobCost, blankPick, invoiceLoadKg, applyInvoiceStockDeduction,
   TRADE_COUNTER, TRADE_COUNTER_LABEL, quoteRef, sampleRef,
@@ -260,6 +260,7 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
           </div>
           <div style={{ fontSize: 12.5, color: "#aeb9cf", fontWeight: 600, marginTop: 5 }}>
             Raised {prettyDate(inv.created)}{inv.raisedBy ? " by " + inv.raisedBy.split("@")[0] : ""}
+            {recordOrigin(inv).key === "filemaker" ? " · came across from FileMaker" : recordOrigin(inv).key === "website" ? " · came in from the website" : ""}
             {inv.updatedAt ? " · Updated " + prettyDateTime(inv.updatedAt) + (inv.modifiedBy ? " by " + inv.modifiedBy.split("@")[0] : "") : ""}
           </div>
         </div>

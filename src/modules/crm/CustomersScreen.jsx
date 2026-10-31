@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { NAVY, GOLD, RED, prettyDate, prettyDateTime } from "../../lib/core.js";
 import {
+  originText,
   blankCustomer, blankSite, nextNumber, SOURCES,
   invoiceTotals, gbp, isPaid, followUpDone, FOLLOWUP_FLAGS, FIELD_FORMATS, CONTACT_METHODS,
   TRADE_COUNTER, TRADE_COUNTER_LABEL, quoteTotals, quoteStatus, quoteInvoice, quoteRef, QUOTE_TONES, sampleRef, sampleStatus, sampleInvoice, SAMPLE_TONES,
@@ -449,7 +450,7 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
                   </div>
                 ))}
                 <div style={{ fontSize: 11.5, color: "#8593a8", fontWeight: 600, marginTop: 10 }}>
-                  Created {prettyDate(sel.created)}{sel.createdBy ? " by " + sel.createdBy.split("@")[0] : ""}
+                  {originText(sel, prettyDate(sel.created))}
                   {sel.updatedAt ? " · Updated " + prettyDateTime(sel.updatedAt) + (sel.modifiedBy ? " by " + sel.modifiedBy.split("@")[0] : "") : sel.modifiedBy ? " · Last modified by " + sel.modifiedBy.split("@")[0] : ""}
                 </div>
               </div>

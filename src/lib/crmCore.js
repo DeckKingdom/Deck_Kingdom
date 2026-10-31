@@ -1955,7 +1955,24 @@ export const duplicateQuote = (c, quoteId, actor, newId) => {
 // staff can pin a different invoice by hand, or mark the request as no sale.
 export const SAMPLE_WINDOW_DAYS = 180;
 export const SAMPLE_FOLLOWUP_DAYS = 7;
-export const SAMPLE_SOURCES = ["Website", "Phone", "Showroom", "Email", "Market Place", "Social", "Trade"];
+export const SAMPLE_SOURCES = ["Manual entry", "Phone", "Showroom", "Email", "Website", "Market Place", "Social", "Trade"];
+
+// Where a record came from: FileMaker (the bridge), the website (the ops feed) or keyed in here.
+export const recordOrigin = (rec) => {
+  const id = String((rec && rec.id) || "");
+  const by = String((rec && (rec.createdBy || rec.raisedBy)) || "");
+  if (id.startsWith("fm-") || by === "FileMaker") return { key: "filemaker", label: "FileMaker" };
+  if (id.startsWith("web-") || by === "Website") return { key: "website", label: "the website" };
+  return { key: "manual", label: by ? by.split("@")[0] : "" };
+};
+// "Came across from FileMaker 31 Oct 2026" / "Came in from the website …" / "Keyed in by jon …"
+export const originText = (rec, date) => {
+  const o = recordOrigin(rec);
+  const when = date ? " " + date : "";
+  if (o.key === "filemaker") return "Came across from FileMaker" + when;
+  if (o.key === "website") return "Came in from the website" + when;
+  return "Keyed in" + (o.label ? " by " + o.label : "") + when;
+};
 export const SAMPLE_DISPATCH = ["Royal Mail", "Evri", "Collected", "Showroom hand-out", "With a delivery"];
 export const SAMPLE_SIZES = ["Free", "Large"];
 export const sampleRef = (s) => "S-" + (s && s.sampleNo ? s.sampleNo : "—");
@@ -1967,7 +1984,7 @@ export const blankSample = (customerId) => ({
   sampleNo: null,
   customerId: customerId || "",
   date: today(),
-  source: "Website",
+  source: "Manual entry",
   dispatchMethod: "",
   dispatchedDate: "",
   trackingRef: "",

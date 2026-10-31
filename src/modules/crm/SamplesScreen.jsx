@@ -6,7 +6,7 @@ import { NAVY, GOLD, RED, prettyDate, prettyDateTime, addDays, daysBetween } fro
 import {
   blankSample, blankSampleItem, blankCustomer, nextNumber, gbp, today, invoiceTotals, isSaleInvoice,
   sampleRef, sampleStatus, sampleInvoice, sampleIsOpen, sampleStats, SAMPLE_TONES,
-  SAMPLE_SOURCES, SAMPLE_DISPATCH, SAMPLE_SIZES, SAMPLE_WINDOW_DAYS, SAMPLE_FOLLOWUP_DAYS, SOURCES, FIELD_FORMATS,
+  originText, SAMPLE_SOURCES, SAMPLE_DISPATCH, SAMPLE_SIZES, SAMPLE_WINDOW_DAYS, SAMPLE_FOLLOWUP_DAYS, SOURCES, FIELD_FORMATS,
 } from "../../lib/crmCore.js";
 import { samplesAvailable } from "../../data/crmStorage.js";
 import { Icon, Chip, SuggestInput, selectAllProps, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
@@ -352,7 +352,7 @@ export default function SamplesScreen({ crm, updateCrm, askConfirm, selId, setSe
             <Chip tone={SAMPLE_TONES[st]} style={statusChipStyle}>{st}</Chip>
           </div>
           <div style={{ fontSize: 12.5, color: "#aeb9cf", fontWeight: 600, marginTop: 5 }}>
-            Logged {prettyDate(smp.created)}{smp.raisedBy ? " by " + smp.raisedBy.split("@")[0] : ""}
+            {originText(smp, prettyDate(smp.created))}
             {smp.updatedAt ? " · Updated " + prettyDateTime(smp.updatedAt) + (smp.modifiedBy ? " by " + smp.modifiedBy.split("@")[0] : "") : ""}
           </div>
         </div>
