@@ -329,26 +329,29 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
             </div>
             <div style={{ ...box, flex: "2 1 340px" }}>
               <div style={lab}>Buyers — one-time vs repeat</div>
-              <div style={{ display: "grid", gridTemplateColumns: "auto 1fr 1fr 1fr", gap: "2px 14px", alignItems: "baseline", marginTop: 4, fontSize: 12.5 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "auto 1fr 1fr 1fr 18px", gap: "2px 14px", alignItems: "baseline", marginTop: 4, fontSize: 12.5 }}>
                 <span />
                 <span style={{ ...lab, fontSize: 10 }}>One-time</span>
                 <span style={{ ...lab, fontSize: 10 }}>Repeat</span>
                 <span style={{ ...lab, fontSize: 10 }}>Never ordered</span>
+                <span />
                 {[["Trade", tr], ["Retail", rt], ["All", { oneTime: tr.oneTime + rt.oneTime, repeat: tr.repeat + rt.repeat, buyers: tr.buyers + rt.buyers, never: tr.never + rt.never, accounts: tr.accounts + rt.accounts }]].map(([name, g]) => (
                   <React.Fragment key={name}>
                     <span style={{ fontWeight: 700, color: "#5a6a85" }}>{name}</span>
                     <span style={{ fontWeight: 800, color: NAVY, fontSize: name === "All" ? 16 : 13.5 }}>{g.oneTime.toLocaleString("en-GB")} <span style={{ fontWeight: 600, color: "#8593a8", fontSize: 11.5 }}>{pct(g.oneTime, g.buyers)}</span></span>
                     <span style={{ fontWeight: 800, color: NAVY, fontSize: name === "All" ? 16 : 13.5 }}>{g.repeat.toLocaleString("en-GB")} <span style={{ fontWeight: 600, color: "#8593a8", fontSize: 11.5 }}>{pct(g.repeat, g.buyers)}</span></span>
                     <span style={{ fontWeight: 800, color: "#5a6a85", fontSize: name === "All" ? 16 : 13.5 }}>{g.never.toLocaleString("en-GB")} <span style={{ fontWeight: 600, color: "#8593a8", fontSize: 11.5 }}>{pct(g.never, g.accounts)}</span></span>
+                    {name === "All" ? (
+                      <button type="button" onClick={() => setTopUpOpen((o) => !o)} title={"Retail top-ups under £" + topUp + " don't count as a new purchase — click to change"}
+                        style={{ fontFamily: "inherit", border: "none", background: "none", padding: 0, cursor: "pointer", color: "#8593a8", fontSize: 11 }}>
+                        {topUpOpen ? "▾" : "▸"}
+                      </button>
+                    ) : <span />}
                   </React.Fragment>
                 ))}
               </div>
-              <button type="button" onClick={() => setTopUpOpen((o) => !o)}
-                style={{ fontFamily: "inherit", border: "none", background: "none", padding: 0, marginTop: 6, cursor: "pointer", ...sub, color: "#8593a8" }}>
-                {(topUpOpen ? "▾ " : "▸ ") + "Retail top-ups under £" + topUp + " don't count as a new purchase"}
-              </button>
               {topUpOpen && (
-                <div style={{ ...sub, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginTop: 4 }}>
+                <div style={{ ...sub, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
                   Retail orders under £
                   <input type="number" min="0" step="10" value={topUp}
                     onChange={(e) => { const v = Math.max(0, Number(e.target.value) || 0); setTopUp(v); try { localStorage.setItem("dk-topup", String(v)); } catch (err) {} }}
@@ -376,9 +379,6 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
                   <input style={{ ...inp, paddingLeft: 34 }} placeholder="Search name, postcode, phone, account #…"
                     value={search} onChange={(e) => setSearch(e.target.value)} />
                 </div>
-                <span style={{ fontSize: 12, color: "#5a6a85", fontWeight: 700 }}>
-                  {(q ? matches.length.toLocaleString("en-GB") + " of " : "") + crm.customers.length.toLocaleString("en-GB")} customers · newest first
-                </span>
                 <span style={{ flex: 1 }} />
                 <button style={{ ...abtn, width: 36, height: 36 }} title="Numbering — next account / site / invoice numbers"
                   onClick={() => { setNumDraft({ ...crm.numbering }); setNumPanel(true); }}>
@@ -388,7 +388,7 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13.5 }}>
                 <thead>
                   <tr>
-                    {["Acc #", "Name", "Town", "Postcode", "Contact", "Source", "", "Invoices"].map((h, i) => (
+                    {["#", "Name", "Town", "Postcode", "Contact", "Source", "", "Invoices"].map((h, i) => (
                       <th key={i} style={{ textAlign: i === 7 ? "right" : "left", fontSize: 11, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", padding: "8px 8px", borderBottom: "2px solid #e6e9ef", whiteSpace: "nowrap" }}>{h}</th>
                     ))}
                   </tr>
