@@ -367,13 +367,15 @@ export default function SamplesScreen({ crm, updateCrm, askConfirm, selId, setSe
         <span style={{ flex: 1 }} />
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
           <Chip tone={SAMPLE_TONES[st]} style={{ ...statusChipStyle, marginRight: 4 }}>{st}</Chip>
-          <button style={navyBtn} onClick={tryPrint}><Icon name="doc" stroke="#fff" />Dispatch slip</button>
-          <button style={{ ...navyBtn, border: "1px dashed #3a4f78", color: "#8fa0c0" }} onClick={remove}><Icon name="bin" stroke="#8fa0c0" />Delete</button>
           {!smp.dispatchedDate ? (
             <button style={goldBtn} onClick={markSent}><Icon name="truck" stroke={NAVY} />Mark as sent</button>
           ) : !smp.followedUp && !inv && smp.outcome !== "lost" ? (
             <button style={goldBtn} onClick={() => setSample((x) => { x.followedUp = true; x.followedUpDate = today(); })}><Icon name="phone" stroke={NAVY} />Followed up</button>
           ) : null}
+          <button title="Delete this sample request" onClick={remove}
+            style={{ width: 28, height: 28, borderRadius: 8, border: "1px dashed #3a4f78", background: "transparent", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0, flex: "none" }}>
+            <Icon name="bin" stroke="#8fa0c0" size={13} />
+          </button>
         </div>
       </div>
 
@@ -505,7 +507,11 @@ export default function SamplesScreen({ crm, updateCrm, askConfirm, selId, setSe
 
       {/* samples requested */}
       <div style={card}>
-        <p style={sect}>Samples requested</p>
+        <div style={{ display: "flex", alignItems: "center", marginBottom: 10 }}>
+          <p style={{ ...sect, margin: 0 }}>Samples requested</p>
+          <span style={{ flex: 1 }} />
+          <button style={{ ...btn, padding: "6px 11px", fontSize: 12.5 }} onClick={tryPrint}><Icon name="doc" stroke={NAVY} />Print ticket</button>
+        </div>
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 560 }}>
             <thead><tr>{["Product", "Colour", "Size", "Qty", ""].map((h, i) => <th key={i} style={{ ...th, padding: "8px 6px" }}>{h}</th>)}</tr></thead>
