@@ -539,12 +539,7 @@ export default function SamplesScreen({ crm, updateCrm, askConfirm, selId, setSe
 
       {/* samples requested */}
       <div style={card}>
-        <div style={{ display: "flex", alignItems: "center", marginBottom: 10 }}>
-          <p style={{ ...sect, margin: 0 }}>Samples requested</p>
-          <span style={{ flex: 1 }} />
-          {/* right edge lines up with the qty box (the delete column sits beyond it) */}
-          <button style={{ ...btn, padding: "6px 11px", fontSize: 12.5, marginRight: 42 }} onClick={tryPrint}><Icon name="doc" stroke={NAVY} />Print ticket</button>
-        </div>
+        <p style={sect}>Samples requested</p>
         <div className="dk-bleed" style={{ overflowX: "auto" }}>
           <table className="dk-t" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 560 }}>
             <thead><tr>{["Product", "Colour", "Size", "Qty", ""].map((h, i) => <th key={i} style={{ ...th, padding: "8px 6px" }}>{h}</th>)}</tr></thead>
@@ -603,7 +598,11 @@ export default function SamplesScreen({ crm, updateCrm, askConfirm, selId, setSe
 
       {/* request, dispatch, follow-up */}
       <div style={card}>
-        <p style={sect}>Request, dispatch &amp; follow-up</p>
+        <div style={{ display: "flex", alignItems: "center", marginBottom: 10 }}>
+          <p style={{ ...sect, margin: 0 }}>Request, dispatch &amp; follow-up</p>
+          <span style={{ flex: 1 }} />
+          <button style={{ ...btn, padding: "6px 11px", fontSize: 12.5 }} onClick={tryPrint}><Icon name="doc" stroke={NAVY} />Print ticket</button>
+        </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 14, alignItems: "start" }}>
           <div>
             <span style={lbl}>Requested</span>
