@@ -362,11 +362,11 @@ export default function SamplesScreen({ crm, updateCrm, askConfirm, selId, setSe
                 </span>
               )}
             </span>
-            <Chip tone={SAMPLE_TONES[st]} style={statusChipStyle}>{st}</Chip>
           </div>
         </div>
         <span style={{ flex: 1 }} />
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <Chip tone={SAMPLE_TONES[st]} style={{ ...statusChipStyle, marginRight: 4 }}>{st}</Chip>
           <button style={navyBtn} onClick={tryPrint}><Icon name="doc" stroke="#fff" />Dispatch slip</button>
           <button style={{ ...navyBtn, border: "1px dashed #3a4f78", color: "#8fa0c0" }} onClick={remove}><Icon name="bin" stroke="#8fa0c0" />Delete</button>
           {!smp.dispatchedDate ? (
@@ -382,15 +382,14 @@ export default function SamplesScreen({ crm, updateCrm, askConfirm, selId, setSe
         <div style={{ ...card, marginBottom: 0 }}>
           <p style={sect}>Customer</p>
           {cust ? (
-            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <div className="dk-row-link" onClick={() => goCustomer(cust.id)} title="Open the customer's account" style={{ display: "flex", gap: 10, alignItems: "center" }}>
               <div style={{ width: 40, height: 40, borderRadius: 12, background: GOLD, color: NAVY, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17, fontWeight: 700, flex: "none" }}>
                 {(cust.name || "?").trim().charAt(0).toUpperCase() || "?"}
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <button className="dk-title-link" onClick={() => goCustomer(cust.id)} title="Open the customer's account"
-                  style={{ fontSize: 15, fontWeight: 700, color: NAVY, maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>
+                <span className="dk-title-link" style={{ fontSize: 15, fontWeight: 700, color: NAVY, maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>
                   {cust.name || "Unnamed account"}
-                </button>
+                </span>
                 <div style={{ fontSize: 12, color: "#5a6a85", fontWeight: 600, marginTop: 2 }}>
                   {[[cust.address, cust.town, cust.postcode].filter(Boolean).join(", "), cust.mobile || cust.landline, cust.email].filter(Boolean).join(" · ")}
                 </div>
@@ -443,15 +442,14 @@ export default function SamplesScreen({ crm, updateCrm, askConfirm, selId, setSe
         <div style={{ ...card, marginBottom: 0, borderColor: inv ? "#bfe3ca" : "#e6e9ef", background: inv ? "#3FA55C0d" : "#fff" }}>
           <p style={sect}>Conversion</p>
           {inv ? (
-            <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+            <div className="dk-row-link" onClick={() => openInvoice(inv.id)} title="Open the order" style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
               <div style={{ width: 40, height: 40, borderRadius: 12, background: "#3FA55C", display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>
                 <Icon name="pound" size={18} stroke="#fff" />
               </div>
               <div style={{ flex: 1, minWidth: 160 }}>
-                <button className="dk-title-link" onClick={() => openInvoice(inv.id)} title="Open the order"
-                  style={{ fontSize: 15, fontWeight: 700, color: "#28713e" }}>
+                <span className="dk-title-link" style={{ fontSize: 15, fontWeight: 700, color: "#28713e" }}>
                   {"Ordered — " + invRef(inv) + " · " + gbp(invoiceTotals(inv).total)}
-                </button>
+                </span>
                 <div style={{ fontSize: 12, color: "#5a6a85", fontWeight: 600, marginTop: 2 }}>
                   {prettyDate(inv.date)}{daysBetween(smp.date, inv.date) !== null ? " · " + daysBetween(smp.date, inv.date) + " days after the request" : ""} · {smp.linkManual ? "linked by hand" : "matched automatically"}
                 </div>
@@ -534,8 +532,20 @@ export default function SamplesScreen({ crm, updateCrm, askConfirm, selId, setSe
                         {SAMPLE_SIZES.map((z) => <option key={z} value={z}>{z === "Large" ? "Large (£2.95)" : z}</option>)}
                       </select>
                     </td>
-                    <td style={{ ...tdc, padding: "6px 6px", width: 70 }}>
-                      <input style={{ ...inp, textAlign: "right" }} inputMode="numeric" value={it.qty} {...selectAllProps} onChange={(e) => setItem("qty", e.target.value)} />
+                    <td style={{ ...tdc, padding: "6px 6px", width: 84 }}>
+                      <div style={{ position: "relative" }}>
+                        <input style={{ ...inp, textAlign: "right", paddingRight: 26 }} inputMode="numeric" value={it.qty} {...selectAllProps}
+                          onChange={(e) => setItem("qty", e.target.value.replace(/[^0-9]/g, ""))}
+                          onKeyDown={(e) => { if (e.key === "ArrowUp" || e.key === "ArrowDown") { e.preventDefault(); setItem("qty", Math.max(1, (parseInt(it.qty, 10) || 0) + (e.key === "ArrowUp" ? 1 : -1))); } }} />
+                        <div style={{ position: "absolute", right: 3, top: 3, bottom: 3, display: "flex", flexDirection: "column", width: 18 }}>
+                          {[[1, "M6 15l6-6 6 6", "More"], [-1, "M6 9l6 6 6-6", "Fewer"]].map(([d, path, t]) => (
+                            <button key={d} type="button" title={t} tabIndex={-1} onClick={() => setItem("qty", Math.max(1, (parseInt(it.qty, 10) || 0) + d))}
+                              style={{ flex: 1, border: "none", background: "#f0f3f8", borderRadius: 4, margin: "0.5px 0", padding: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                              <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke={NAVY} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d={path} /></svg>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                     </td>
                     <td style={{ ...tdc, padding: "6px 2px", width: 34, textAlign: "right" }}>
                       <button style={{ ...abtn, border: "none" }} title="Remove" onClick={() => setSample((x) => (x.items = x.items.filter((y) => y.id !== it.id)))}><Icon name="x" stroke={RED} /></button>

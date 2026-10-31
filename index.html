@@ -7,7 +7,10 @@
     <style>
       /* clickable titles keep their own colour; hover shows they're a link */
       .dk-title-link { background: none; border: none; padding: 0; margin: 0; cursor: pointer; font: inherit; color: inherit; text-align: left; }
-      .dk-title-link:hover { color: #185FA5 !important; text-decoration: underline; text-underline-offset: 3px; }
+      .dk-title-link:hover, .dk-row-link:hover .dk-title-link { color: #185FA5 !important; text-decoration: underline; text-underline-offset: 3px; }
+      /* a whole block that opens something: the title inside highlights */
+      .dk-row-link { cursor: pointer; border-radius: 10px; margin: -6px; padding: 6px; transition: background .12s; }
+      .dk-row-link:hover { background: rgba(24, 95, 165, 0.06); }
     </style>
   </head>
   <body style="margin:0">
