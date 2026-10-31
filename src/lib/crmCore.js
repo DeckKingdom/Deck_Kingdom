@@ -2021,7 +2021,9 @@ export const syncSampleConversions = (crm) => {
     const next = list[list.indexOf(s) + 1];
     let end = addDays(s.date, SAMPLE_WINDOW_DAYS);
     if (next && next.date && next.date > s.date && next.date < end) end = next.date;
-    const hit = (invsByCust[s.customerId] || []).find((i) => (i.date || "") >= s.date && (i.date || "") < end);
+    // samples sent out with an order (web-s-o<order>) don't count as converting into that same order
+    const sameOrder = String(s.id || "").startsWith("web-s-o") ? "web-i-" + String(s.id).slice(7) : "";
+    const hit = (invsByCust[s.customerId] || []).find((i) => i.id !== sameOrder && (i.date || "") >= s.date && (i.date || "") < end);
     want[s.id] = hit ? { id: hit.id, at: hit.date || "" } : { id: "", at: "" };
   });
   let changed = false;

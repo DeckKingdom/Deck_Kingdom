@@ -553,6 +553,8 @@ async function loadAll() {
   if (skuListsRow && skuListsRow.value) data.skuLists = skuListsRow.value;
   const fmRow = settingRow("fmBridgeLast"); // FileMaker feed status (written by fm_sync, read-only here)
   if (fmRow && fmRow.value) data.fmBridge = fmRow.value;
+  const wooRow = settingRow("wooBridgeLast"); // website feed status (written by woo_sync)
+  if (wooRow && wooRow.value) data.wooBridge = wooRow.value;
   snapshot = rowsFromData(data);
   settingsSnapshot = { numbering: JSON.stringify(numbering), reminders: JSON.stringify(reminders), skuLists: skuListsRow ? JSON.stringify(skuListsRow.value) : undefined };
 

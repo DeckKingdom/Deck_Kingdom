@@ -48,6 +48,10 @@ begin
       if nullif(c ->> 'accountNo', '') is not null then
         select id into cid from public.customers where account_no = (c ->> 'accountNo')::int order by (id like 'fm-c-%') limit 1;
       end if;
+      -- or one that came in from the website with the same email address
+      if cid is null and nullif(trim(c ->> 'email'), '') is not null then
+        select id into cid from public.customers where lower(email) = lower(trim(c ->> 'email')) order by (account_no is not null) desc limit 1;
+      end if;
       cid := coalesce(cid, 'fm-c-' || (c ->> 'fmId'));
       insert into public.fm_links (kind, fm_id, ops_id) values ('customer', c ->> 'fmId', cid) on conflict do nothing;
     end if;
@@ -65,7 +69,16 @@ begin
 
   -- ===== invoices + their lines =====
   for i in select * from jsonb_array_elements(coalesce(p_payload -> 'invoices', '[]'::jsonb)) loop
-    iid := 'fm-i-' || (i ->> 'fmId');
+    iid := (select ops_id from public.fm_links where kind = 'invoice' and fm_id = i ->> 'fmId');
+    if iid is null then
+      -- a website order already in ops (order ref WEB-12345) is the same job once FileMaker has it
+      if regexp_replace(coalesce(i ->> 'orderRef', ''), '\D', '', 'g') <> '' then
+        select id into iid from public.invoices
+          where id like 'web-i-%' and order_ref = 'WEB-' || regexp_replace(i ->> 'orderRef', '\D', '', 'g') limit 1;
+      end if;
+      iid := coalesce(iid, 'fm-i-' || (i ->> 'fmId'));
+      insert into public.fm_links (kind, fm_id, ops_id) values ('invoice', i ->> 'fmId', iid) on conflict do nothing;
+    end if;
     -- the invoice's customer: by FileMaker id, else by account number
     cid := (select ops_id from public.fm_links where kind = 'customer' and fm_id = i ->> 'customerFmId');
     if cid is null then select id into cid from public.customers where id = 'fm-c-' || (i ->> 'customerFmId'); end if;
@@ -94,7 +107,7 @@ begin
 
     -- lines: FileMaker's list replaces the invoice's lines when it sends any
     if jsonb_array_length(coalesce(i -> 'lines', '[]'::jsonb)) > 0 then
-      delete from public.invoice_items where invoice_id = iid and id like 'fm-l-%';
+      delete from public.invoice_items where invoice_id = iid and (id like 'fm-l-%' or id like 'web-l-%');
       n := 0;
       for l in select * from jsonb_array_elements(i -> 'lines') loop
         insert into public.invoice_items (id, invoice_id, code, description, colour, qty, price, position)

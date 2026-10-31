@@ -114,16 +114,16 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
             <input style={{ ...inp, paddingLeft: 34 }} placeholder="Search inv #, customer, order ref…" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
           <span style={{ fontSize: 12, color: "#5a6a85", fontWeight: 700 }}>{crm.invoices.length.toLocaleString("en-GB")} invoices</span>
-          {crm.fmBridge && crm.fmBridge.at && (() => {
-            const mins = Math.round((Date.now() - new Date(crm.fmBridge.at).getTime()) / 60000);
-            const stale = mins > 30;
+          {[["FileMaker feed", crm.fmBridge, 30], ["Website feed", crm.wooBridge, 24 * 60]].filter(([, f]) => f && f.at).map(([label, f, staleAfter]) => {
+            const mins = Math.round((Date.now() - new Date(f.at).getTime()) / 60000);
+            const stale = mins > staleAfter;
             return (
-              <span title={"Last FileMaker update: " + new Date(crm.fmBridge.at).toLocaleString("en-GB") + " — " + (crm.fmBridge.invoices || 0) + " invoices, " + (crm.fmBridge.customers || 0) + " customers. Reload to see the newest."}
+              <span key={label} title={"Last " + label.toLowerCase() + " update: " + new Date(f.at).toLocaleString("en-GB") + ". Reload to see the newest."}
                 style={{ fontSize: 11.5, fontWeight: 700, padding: "3px 9px", borderRadius: 999, background: stale ? "#E8912D22" : "#3FA55C18", color: stale ? "#a05f10" : "#28713e", border: "1px solid " + (stale ? "#f0d0a8" : "#bfe3ca") }}>
-                {"FileMaker feed · " + (mins < 1 ? "just now" : mins < 90 ? mins + " min ago" : Math.round(mins / 60) + " h ago")}
+                {label + " · " + (mins < 1 ? "just now" : mins < 90 ? mins + " min ago" : mins < 2880 ? Math.round(mins / 60) + " h ago" : Math.round(mins / 1440) + " days ago")}
               </span>
             );
-          })()}
+          })}
           <span style={{ flex: 1 }} />
           <button style={goldBtn} onClick={newInvoice}><Icon name="plus" stroke={NAVY} />New invoice</button>
         </div>
@@ -166,8 +166,9 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
                           onMouseEnter={(e) => (e.currentTarget.style.background = "#f6f8fb")}
                           onMouseLeave={(e) => (e.currentTarget.style.background = "")}>
                           <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", fontWeight: 700, color: "#185FA5", whiteSpace: "nowrap" }}>
-                            {i.invNo || "—"}
+                            {i.invNo || (String(i.id).startsWith("web-i-") ? <span title="Website order — FileMaker gives it its invoice number">{i.orderRef}</span> : "—")}
                             {String(i.id).startsWith("fm-i-") && <span title="Came across from FileMaker" style={{ marginLeft: 6, fontSize: 9.5, fontWeight: 800, padding: "1px 5px", borderRadius: 4, background: "#eef1f6", color: "#5a6a85", letterSpacing: 0.3 }}>FM</span>}
+                            {String(i.id).startsWith("web-i-") && <span title="Came in from the website" style={{ marginLeft: 6, fontSize: 9.5, fontWeight: 800, padding: "1px 5px", borderRadius: 4, background: "#fdf3dc", color: "#8a5a00", letterSpacing: 0.3 }}>WEB</span>}
                           </td>
                           <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", whiteSpace: "nowrap" }}>{prettyDate(i.date)}</td>
                           <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", fontWeight: 700 }}>{c ? c.name : <span style={{ color: RED }}>No customer</span>}</td>
