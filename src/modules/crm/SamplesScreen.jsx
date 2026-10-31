@@ -374,7 +374,26 @@ export default function SamplesScreen({ crm, updateCrm, askConfirm, selId, setSe
 
   return (
     <div style={{ maxWidth: 1140, margin: "0 auto", padding: "18px 22px" }}>
-      <button style={{ ...btn, marginBottom: 12 }} onClick={() => setSelId(null)}><Icon name="back" stroke={NAVY} />All samples</button>
+      {(() => {
+        // step through every sample, newest first (same order as the list)
+        const order = [...samples].sort((a, b) => (b.date || "").localeCompare(a.date || "") || (Number(b.sampleNo) || 0) - (Number(a.sampleNo) || 0));
+        const at = order.findIndex((x) => x.id === smp.id);
+        const prev = at > 0 ? order[at - 1] : null, next = at >= 0 && at < order.length - 1 ? order[at + 1] : null;
+        const arrow = (x, up) => (
+          <button style={{ ...abtn, width: 36, height: 36, opacity: x ? 1 : 0.4, cursor: x ? "pointer" : "default" }} disabled={!x} onClick={() => x && setSelId(x.id)}
+            title={x ? (up ? "Previous: " : "Next: ") + sampleRef(x) : up ? "First sample" : "Last sample"}>
+            <span style={{ display: "inline-flex", transform: up ? "rotate(90deg)" : "rotate(-90deg)" }}><Icon name="back" stroke={NAVY} /></span>
+          </button>
+        );
+        return (
+          <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12 }}>
+            <button style={btn} onClick={() => setSelId(null)}><Icon name="back" stroke={NAVY} />All samples</button>
+            {arrow(prev, true)}
+            {arrow(next, false)}
+            {at >= 0 && <span style={{ fontSize: 12, fontWeight: 700, color: "#8593a8" }}>{(at + 1).toLocaleString("en-GB")} of {order.length.toLocaleString("en-GB")}</span>}
+          </div>
+        );
+      })()}
       {!ready && <SchemaNotice />}
       {notice && (
         <div style={{ ...card, borderColor: GOLD, background: "#fff8e6", display: "flex", gap: 10, alignItems: "center", fontWeight: 600, fontSize: 13 }}>
@@ -539,7 +558,12 @@ export default function SamplesScreen({ crm, updateCrm, askConfirm, selId, setSe
 
       {/* samples requested */}
       <div style={card}>
-        <p style={sect}>Samples requested</p>
+        <div style={{ display: "flex", alignItems: "center", marginBottom: 10 }}>
+          <p style={{ ...sect, margin: 0 }}>Samples requested</p>
+          <span style={{ flex: 1 }} />
+          {/* right edge lines up with the qty box (the delete column sits beyond it) */}
+          <button style={{ ...btn, padding: "6px 11px", fontSize: 12.5, marginRight: 42 }} onClick={tryPrint}><Icon name="doc" stroke={NAVY} />Print ticket</button>
+        </div>
         <div className="dk-bleed" style={{ overflowX: "auto" }}>
           <table className="dk-t" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 560 }}>
             <thead><tr>{["Product", "Colour", "Size", "Qty", ""].map((h, i) => <th key={i} style={{ ...th, padding: "8px 6px" }}>{h}</th>)}</tr></thead>
@@ -598,38 +622,31 @@ export default function SamplesScreen({ crm, updateCrm, askConfirm, selId, setSe
 
       {/* request, dispatch, follow-up */}
       <div style={card}>
-        <div style={{ display: "flex", alignItems: "center", marginBottom: 10 }}>
-          <p style={{ ...sect, margin: 0 }}>Request, dispatch &amp; follow-up</p>
-          <span style={{ flex: 1 }} />
-          <button style={{ ...btn, padding: "6px 11px", fontSize: 12.5 }} onClick={tryPrint}><Icon name="doc" stroke={NAVY} />Print ticket</button>
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 14, alignItems: "start" }}>
-          <div>
-            <span style={lbl}>Came from</span>
-            {smp.source && (smp.raisedBy === "Website" || smp.raisedBy === "FileMaker") ? (
+        <p style={sect}>Request, dispatch &amp; follow-up</p>
+        {(() => {
+          const method = smp.dispatchMethod || "Evri";
+          const tracked = ["Evri", "Royal Mail"].includes(method);
+          const cells = [
+            ["Came from", smp.source && (smp.raisedBy === "Website" || smp.raisedBy === "FileMaker") ? (
               <div style={plainVal}>{smp.source}</div>
             ) : (
               <select style={inp} value={smp.source} onChange={(e) => setSample((x) => (x.source = e.target.value))}>
                 {smp.source && !SAMPLE_SOURCES.includes(smp.source) && <option value={smp.source}>{smp.source}</option>}
                 {SAMPLE_SOURCES.map((s2) => <option key={s2} value={s2}>{s2}</option>)}
               </select>
-            )}
-          </div>
-          <div>
-            <span style={lbl}>Sent by</span>
-            <select style={inp} value={smp.dispatchMethod || "Evri"} onChange={(e) => setSample((x) => (x.dispatchMethod = e.target.value))}>
-              {smp.dispatchMethod && !SAMPLE_DISPATCH.includes(smp.dispatchMethod) && <option value={smp.dispatchMethod}>{smp.dispatchMethod}</option>}
-              {SAMPLE_DISPATCH.map((s2) => <option key={s2} value={s2}>{s2}</option>)}
-            </select>
-          </div>
-          {["Evri", "Royal Mail"].includes(smp.dispatchMethod || "Evri") ? (
-            <div>
-              <span style={lbl}>{(smp.dispatchMethod || "Evri") + " tracking no."}</span>
+            )],
+            ["Sent by", (
+              <select style={inp} value={method} onChange={(e) => setSample((x) => (x.dispatchMethod = e.target.value))}>
+                {smp.dispatchMethod && !SAMPLE_DISPATCH.includes(smp.dispatchMethod) && <option value={smp.dispatchMethod}>{smp.dispatchMethod}</option>}
+                {SAMPLE_DISPATCH.map((s2) => <option key={s2} value={s2}>{s2}</option>)}
+              </select>
+            )],
+            [tracked ? method + " tracking no." : "", tracked ? (
               <div style={{ position: "relative" }}>
-                <input style={{ ...inp, paddingRight: smp.trackingRef ? 64 : undefined }} value={smp.trackingRef || ""} placeholder={"paste from " + (smp.dispatchMethod || "Evri")}
+                <input style={{ ...inp, paddingRight: smp.trackingRef ? 64 : undefined }} value={smp.trackingRef || ""} placeholder={"paste from " + method}
                   onChange={(e) => setSample((x) => (x.trackingRef = e.target.value.trim().toUpperCase()))} />
                 {smp.trackingRef && (
-                  <a href={(smp.dispatchMethod || "Evri") === "Royal Mail"
+                  <a href={method === "Royal Mail"
                       ? "https://www.royalmail.com/track-your-item#/tracking-results/" + encodeURIComponent(smp.trackingRef)
                       : "https://www.evri.com/track/parcel/" + encodeURIComponent(smp.trackingRef) + "/details"} target="_blank" rel="noopener noreferrer"
                     title="Open tracking" style={{ position: "absolute", right: 4, top: 4, bottom: 4, display: "inline-flex", alignItems: "center", gap: 3, padding: "0 8px", borderRadius: 6, background: "#eef1f6", color: NAVY, fontSize: 12, fontWeight: 700, textDecoration: "none" }}>
@@ -637,23 +654,30 @@ export default function SamplesScreen({ crm, updateCrm, askConfirm, selId, setSe
                   </a>
                 )}
               </div>
+            ) : null],
+            ["Sent", (
+              <StepDate value={smp.dispatchedDate} icon="truck" todo="Mark as sent" done="Sent"
+                onDate={(d) => setSample((x) => {
+                  x.dispatchedDate = d;
+                  if (!x.dispatchMethod) x.dispatchMethod = "Evri";
+                  if (d && !x.followUpDate) x.followUpDate = addDays(d, SAMPLE_FOLLOWUP_DAYS);
+                })} />
+            )],
+            [smp.followedUp ? "Followed up" : smp.followUpDate ? "Follow up · due " + prettyDate(smp.followUpDate).slice(0, 6) : "Follow up", (
+              <StepDate value={smp.followedUp ? smp.followedUpDate || today() : ""} icon="phone" todo="Followed up" done="Followed up"
+                onDate={(d) => setSample((x) => { x.followedUp = !!d; x.followedUpDate = d; })} />
+            )],
+          ];
+          // laid out like the samples table: headings with a rule underneath, then the controls
+          return (
+            <div className="dk-bleed" style={{ overflowX: "auto" }}>
+              <table className="dk-t" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 720, tableLayout: "fixed" }}>
+                <thead><tr>{cells.map(([l], k) => <th key={k} style={{ ...th, padding: "8px 6px" }}>{l}</th>)}</tr></thead>
+                <tbody><tr>{cells.map(([, c], k) => <td key={k} style={{ padding: "8px 6px", verticalAlign: "middle" }}>{c}</td>)}</tr></tbody>
+              </table>
             </div>
-          ) : <div />}
-          <div>
-            <span style={lbl}>Sent</span>
-            <StepDate value={smp.dispatchedDate} icon="truck" todo="Mark as sent" done="Sent"
-              onDate={(d) => setSample((x) => {
-                x.dispatchedDate = d;
-                if (!x.dispatchMethod) x.dispatchMethod = "Evri";
-                if (d && !x.followUpDate) x.followUpDate = addDays(d, SAMPLE_FOLLOWUP_DAYS);
-              })} />
-          </div>
-          <div>
-            <span style={lbl}>{smp.followedUp ? "Followed up" : smp.followUpDate ? "Follow up · due " + prettyDate(smp.followUpDate).slice(0, 6) : "Follow up"}</span>
-            <StepDate value={smp.followedUp ? smp.followedUpDate || today() : ""} icon="phone" todo="Followed up" done="Followed up"
-              onDate={(d) => setSample((x) => { x.followedUp = !!d; x.followedUpDate = d; })} />
-          </div>
-        </div>
+          );
+        })()}
       </div>
     </div>
   );
