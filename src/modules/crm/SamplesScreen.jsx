@@ -597,7 +597,19 @@ export default function SamplesScreen({ crm, updateCrm, askConfirm, selId, setSe
                 if (x.dispatchedDate && !x.followUpDate) x.followUpDate = addDays(x.dispatchedDate, SAMPLE_FOLLOWUP_DAYS);
               })} />
           </div>
-          {field("Tracking ref", "trackingRef")}
+          <div>
+            <span style={lbl}>Evri tracking no.</span>
+            <div style={{ position: "relative" }}>
+              <input style={{ ...inp, paddingRight: smp.trackingRef ? 64 : undefined }} value={smp.trackingRef || ""} placeholder="paste from Evri"
+                onChange={(e) => setSample((x) => (x.trackingRef = e.target.value.trim().toUpperCase()))} />
+              {smp.trackingRef && (
+                <a href={"https://www.evri.com/track/parcel/" + encodeURIComponent(smp.trackingRef) + "/details"} target="_blank" rel="noopener noreferrer"
+                  title="Open Evri tracking" style={{ position: "absolute", right: 4, top: 4, bottom: 4, display: "inline-flex", alignItems: "center", gap: 3, padding: "0 8px", borderRadius: 6, background: "#eef1f6", color: NAVY, fontSize: 12, fontWeight: 700, textDecoration: "none" }}>
+                  Track ↗
+                </a>
+              )}
+            </div>
+          </div>
           {field("Follow up on", "followUpDate", { type: "date" })}
           <div>
             <span style={lbl}>Followed up</span>
