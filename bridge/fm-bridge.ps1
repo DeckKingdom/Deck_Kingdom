@@ -45,13 +45,33 @@ function Open-FM {
   $c.Open()
   return $c
 }
+function OdbcDetail($err) {
+  # the ODBC driver's own messages (the .NET message is sometimes blank)
+  $e = $err.Exception
+  while ($e -and -not ($e -is [System.Data.Odbc.OdbcException])) { $e = $e.InnerException }
+  if ($e -and $e.Errors.Count) { return (($e.Errors | ForEach-Object { "[" + $_.SQLState + "] " + $_.Message }) -join " | ") }
+  return $err.Exception.Message
+}
 function Query($conn, [string]$sql) {
+  # read with a data reader, column by column, so one awkward value can't stop the lot
   $cmd = $conn.CreateCommand()
   $cmd.CommandText = $sql
   $cmd.CommandTimeout = 300
-  $da = New-Object System.Data.Odbc.OdbcDataAdapter($cmd)
+  try { $rd = $cmd.ExecuteReader() } catch { throw ("FileMaker couldn't run: " + $sql + " — " + (OdbcDetail $_)) }
   $dt = New-Object System.Data.DataTable
-  [void]$da.Fill($dt)
+  for ($i = 0; $i -lt $rd.FieldCount; $i++) {
+    $name = $rd.GetName($i); if ($dt.Columns.Contains($name)) { $name = $name + "_" + $i }
+    [void]$dt.Columns.Add($name, [object])
+  }
+  try {
+    while ($rd.Read()) {
+      $row = $dt.NewRow()
+      for ($i = 0; $i -lt $rd.FieldCount; $i++) {
+        try { $row[$i] = $rd.GetValue($i) } catch { try { $row[$i] = $rd.GetString($i) } catch { $row[$i] = [System.DBNull]::Value } }
+      }
+      $dt.Rows.Add($row)
+    }
+  } finally { $rd.Close() }
   return ,$dt
 }
 function Q([string]$name) { return '"' + $name.Replace('"', '""') + '"' }   # FileMaker field/table names can contain spaces
@@ -129,38 +149,51 @@ function Send($payload) {
 
 # =====================================================================
 if ($Discover) {
-  $conn = Open-FM
   $out = New-Object System.Collections.Generic.List[string]
-  $out.Add("FileMaker discovery — " + (Get-Date -Format "yyyy-MM-dd HH:mm") + " — DSN " + $cfg.dsn)
-  $tables = Query $conn "SELECT TableName, BaseTableName FROM FileMaker_Tables"
-  $fields = Query $conn "SELECT TableName, FieldName, FieldType, FieldClass FROM FileMaker_Fields"
-  foreach ($t in $tables.Rows) {
-    $tn = [string]$t.TableName
-    $count = "?"
-    try { $count = (Query $conn ("SELECT COUNT(*) AS n FROM " + (Q $tn))).Rows[0].n } catch { $count = "can't count" }
-    $out.Add("")
-    $out.Add("== " + $tn + "  (base table " + $t.BaseTableName + ", " + $count + " records)")
-    foreach ($f in ($fields.Rows | Where-Object { $_.TableName -eq $tn })) {
-      $out.Add("   " + $f.FieldName + "  [" + $f.FieldType + ", " + $f.FieldClass + "]")
-    }
-    # one example record from the order/customer tables, so the formats can be seen
-    if ($tn -match "(?i)invoice|customer|account|item|line|order|client") {
-      try {
-        $one = Query $conn ("SELECT * FROM " + (Q $tn) + " FETCH FIRST 1 ROWS ONLY")
-        if ($one.Rows.Count) {
-          $out.Add("   -- example record:")
-          foreach ($col in $one.Columns) {
-            $v = $one.Rows[0][$col.ColumnName]
-            if ($v -isnot [System.DBNull] -and ([string]$v).Trim() -ne "") { $s = ([string]$v).Trim(); if ($s.Length -gt 60) { $s = $s.Substring(0, 60) + "…" }; $out.Add("      " + $col.ColumnName + " = " + $s) }
-          }
-        }
-      } catch { $out.Add("   -- (couldn't read an example: " + $_.Exception.Message + ")") }
-    }
-  }
-  $conn.Close()
   $file = Join-Path $here "fm-discover.txt"
+  $out.Add("FileMaker discovery — " + (Get-Date -Format "yyyy-MM-dd HH:mm") + " — DSN " + $cfg.dsn + " — PowerShell " + $(if ([Environment]::Is64BitProcess) { "64-bit" } else { "32-bit" }))
+  try {
+    $conn = Open-FM
+    $out.Add("Connected: " + $conn.Driver + " " + $conn.ServerVersion)
+    # tables and fields from the driver's catalogue (works on every FileMaker version)
+    $tables = $conn.GetSchema("Tables")
+    $cols = $null
+    try { $cols = $conn.GetSchema("Columns") } catch { $out.Add("(field list via catalogue failed: " + (OdbcDetail $_) + ")") }
+    foreach ($t in $tables.Rows) {
+      $tn = [string]$t["TABLE_NAME"]
+      if (-not $tn -or $tn -like "FileMaker_*") { continue }
+      $count = "?"
+      try { $count = (Query $conn ("SELECT COUNT(*) FROM " + (Q $tn))).Rows[0][0] } catch { $count = "can't count" }
+      $out.Add("")
+      $out.Add("== " + $tn + "  (" + $count + " records)")
+      if ($cols) {
+        foreach ($c in ($cols.Rows | Where-Object { $_["TABLE_NAME"] -eq $tn })) { $out.Add("   " + $c["COLUMN_NAME"] + "  [" + $c["TYPE_NAME"] + "]") }
+      }
+      # one example record from the order/customer tables, so the formats can be seen
+      if ($tn -match "(?i)invoice|customer|account|item|line|order|client|job|sale") {
+        try {
+          $cmd = $conn.CreateCommand(); $cmd.CommandText = "SELECT * FROM " + (Q $tn); $cmd.CommandTimeout = 120
+          $rd = $cmd.ExecuteReader()
+          if (-not $cols) { for ($i = 0; $i -lt $rd.FieldCount; $i++) { $out.Add("   " + $rd.GetName($i) + "  [" + $rd.GetDataTypeName($i) + "]") } }
+          if ($rd.Read()) {
+            $out.Add("   -- example record:")
+            for ($i = 0; $i -lt $rd.FieldCount; $i++) {
+              $v = ""; try { $v = [string]$rd.GetValue($i) } catch { $v = "(unreadable)" }
+              $v = $v.Trim(); if ($v.Length -gt 60) { $v = $v.Substring(0, 60) + "…" }
+              if ($v -ne "") { $out.Add("      " + $rd.GetName($i) + " = " + $v) }
+            }
+          }
+          $rd.Close()
+        } catch { $out.Add("   -- (couldn't read an example: " + (OdbcDetail $_) + ")") }
+      }
+    }
+    $conn.Close()
+    Log ("Discovery written to " + $file)
+  } catch {
+    $out.Add("FAILED: " + (OdbcDetail $_))
+    Log ("Discovery FAILED: " + (OdbcDetail $_))
+  }
   $out | Set-Content -Path $file -Encoding UTF8
-  Log ("Discovery written to " + $file + " — " + $tables.Rows.Count + " tables")
   exit 0
 }
 
