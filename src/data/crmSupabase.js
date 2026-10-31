@@ -57,13 +57,16 @@ const quoteLineToRow = (l, quoteId, i) => ({
 
 // Sample requests (017_samples.sql): same tolerance as quotes.
 let samplesReady = false;
+let sample2Ready = false; // samples.followed_up2_date (migration 029)
 export const samplesSchemaReady = () => samplesReady;
+export const samples2SchemaReady = () => sample2Ready;
 
 const SAMPLE_TEXT = ["customerId", "date", "source", "dispatchMethod", "dispatchedDate", "trackingRef", "followUpDate", "followedUpDate", "project", "notes", "outcome", "lostReason", "convertedInvoiceId", "convertedAt", "raisedBy", "created"];
 
 const sampleToRow = (x, i) => {
   const row = { id: x.id, sample_no: intOrNull(x.sampleNo), followed_up: x.followedUp === true, link_manual: x.linkManual === true, position: i };
   SAMPLE_TEXT.forEach((k) => (row[snake(k)] = str(x[k])));
+  if (sample2Ready) row.followed_up2_date = str(x.followedUp2Date);
   return row;
 };
 
@@ -387,6 +390,8 @@ async function loadAll() {
   const numbering = (settingRow("numbering") || {}).value || { account: 1, site: 1, invoice: 1 };
   const reminders = (settingRow("reminders") || {}).value || {};
   const skuListsRow = settingRow("skuLists");
+  const sampleEmailsRow = settingRow("sampleEmails");
+  sample2Ready = !!(sampleData && sampleData.sm && sampleData.sm.length && Object.prototype.hasOwnProperty.call(sampleData.sm[0], "followed_up2_date"));
 
   const customers = cs.map((r) => {
     const c = { id: r.id, accountNo: r.account_no, trader: r.trader === true, discountPct: nv(r.discount_pct), updatedAt: r.updated_at || "" };
@@ -519,6 +524,7 @@ async function loadAll() {
       items: itemsBySample[r.id] || [],
     };
     SAMPLE_TEXT.forEach((k) => (x[k] = nv(r[snake(k)])));
+    x.followedUp2Date = nv(r.followed_up2_date);
     return x;
   });
 
@@ -551,12 +557,13 @@ async function loadAll() {
 
   const data = { customers, sites, invoices, masterProducts, collections, movements, vans, numbering, reminders, quotes, samples, tasks, taskLog, staff, suppliers, purchases };
   if (skuListsRow && skuListsRow.value) data.skuLists = skuListsRow.value;
+  if (sampleEmailsRow && sampleEmailsRow.value) data.sampleEmails = sampleEmailsRow.value;
   const fmRow = settingRow("fmBridgeLast"); // FileMaker feed status (written by fm_sync, read-only here)
   if (fmRow && fmRow.value) data.fmBridge = fmRow.value;
   const wooRow = settingRow("wooBridgeLast"); // website feed status (written by woo_sync)
   if (wooRow && wooRow.value) data.wooBridge = wooRow.value;
   snapshot = rowsFromData(data);
-  settingsSnapshot = { numbering: JSON.stringify(numbering), reminders: JSON.stringify(reminders), skuLists: skuListsRow ? JSON.stringify(skuListsRow.value) : undefined };
+  settingsSnapshot = { numbering: JSON.stringify(numbering), reminders: JSON.stringify(reminders), skuLists: skuListsRow ? JSON.stringify(skuListsRow.value) : undefined, sampleEmails: sampleEmailsRow ? JSON.stringify(sampleEmailsRow.value) : undefined };
 
   if (!customers.length && !sites.length && !invoices.length && !masterProducts.length && !collections.length && !vans.length && !quotes.length && !samples.length && !tasks.length && !suppliers.length && !purchases.length && !settings.length) return null;
   return data;
@@ -658,6 +665,7 @@ async function saveAll(d) {
     reminders: d.reminders || {},
   };
   if (d.skuLists) settingsToSave.skuLists = d.skuLists; // only once someone has edited the SKU lists
+  if (d.sampleEmails) settingsToSave.sampleEmails = d.sampleEmails;
   for (const [key, value] of Object.entries(settingsToSave)) {
     const j = JSON.stringify(value);
     if (j !== settingsSnapshot[key]) {

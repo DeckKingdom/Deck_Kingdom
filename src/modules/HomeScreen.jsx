@@ -11,6 +11,7 @@ import {
 import { tasksAvailable } from "../data/crmStorage.js";
 import { Icon, Chip, card, sect, lbl, inp, btn, goldBtn } from "./crm/ui.jsx";
 import WebsiteCard from "./WebsiteCard.jsx";
+import { samplesIn, SAMPLE_GROUPS, printAllToSend, emailFollowUpGroup } from "./crm/sampleActions.js";
 import { analyticsReady } from "../data/analytics.js";
 import { TaskModal, TasksSchemaNotice, PRIORITY_TONES, STATUS_TONES } from "./crm/TasksScreen.jsx";
 
@@ -40,6 +41,7 @@ export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTa
   const [viewAs, setViewAs] = useState(me || "");
   const [draft, setDraft] = useState(null);
   const [showDone, setShowDone] = useState(false);
+  const [homeNotice, setHomeNotice] = useState("");
   const ready = tasksAvailable();
   const who = viewAs; // "" = everyone's view (preview / unassigned)
 
@@ -235,6 +237,32 @@ export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTa
         {/* ===== reports column ===== */}
         <div>
           {analyticsReady && <WebsiteCard />}
+          {crm && (() => {
+            const rows = [
+              ["To send", samplesIn(crm, SAMPLE_GROUPS.send).length, "Print all", "doc", () => printAllToSend(crm, updateCrm, askConfirm, setHomeNotice)],
+              ["Follow-up due", samplesIn(crm, SAMPLE_GROUPS.first).length, "Email all", "mail", () => emailFollowUpGroup(crm, updateCrm, askConfirm, "first", setHomeNotice)],
+              ["2nd follow-up (discount code)", samplesIn(crm, SAMPLE_GROUPS.second).length, "Email all", "mail", () => emailFollowUpGroup(crm, updateCrm, askConfirm, "second", setHomeNotice)],
+            ];
+            return (
+              <div style={card}>
+                <div style={{ display: "flex", alignItems: "center", marginBottom: 6 }}>
+                  <p style={{ ...sect, margin: 0 }}>Samples</p>
+                  <span style={{ flex: 1 }} />
+                  <button onClick={() => setTab("samples")} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 700, color: "#185FA5", padding: 0 }}>Open samples ▸</button>
+                </div>
+                {homeNotice && <div style={{ fontSize: 12.5, fontWeight: 600, color: "#6b5305", background: "#fff8e6", border: "1px solid #f4d78f", borderRadius: 8, padding: "6px 10px", marginBottom: 6 }}>{homeNotice}</div>}
+                {rows.map(([label, n, act, icon, run]) => (
+                  <div key={label} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", borderBottom: "1px solid #f0f2f6", fontSize: 13, fontWeight: 600 }}>
+                    <b style={{ minWidth: 26, textAlign: "center", fontSize: 15, color: n ? (label === "To send" ? RED : "#a05f10") : "#aab3c2" }}>{n}</b>
+                    <span style={{ flex: 1, color: n ? NAVY : "#8593a8" }}>{label}</span>
+                    {n > 0 && (
+                      <button onClick={run} style={{ ...goldBtn, padding: "5px 10px", fontSize: 12 }}><Icon name={icon} stroke={NAVY} size={13} />{act}</button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
           <div style={card}>
             <p style={sect}>Reports</p>
             {!crm ? (

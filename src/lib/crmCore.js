@@ -1956,6 +1956,24 @@ export const duplicateQuote = (c, quoteId, actor, newId) => {
 // staff can pin a different invoice by hand, or mark the request as no sale.
 export const SAMPLE_WINDOW_DAYS = 180;
 export const SAMPLE_FOLLOWUP_DAYS = 7;
+export const SAMPLE_FOLLOWUP2_DAYS = 14; // second follow-up (with the discount code) this long after the first
+// follow-up emails: {name} = customer's first name, {code} / {offer} = the discount
+export const SAMPLE_EMAIL_DEFAULTS = {
+  code: "",
+  offer: "10% off",
+  first: {
+    subject: "Your Deck Kingdom samples",
+    body: "Hi {name},\n\nJust checking your samples arrived safely and that you've had a chance to look at them.\n\nIf you have any questions about colours, quantities or fitting, just reply to this email or call us on 0161 399 1837 — we're happy to help you plan your project.\n\nKind regards,\nDeck Kingdom",
+  },
+  second: {
+    subject: "{offer} your Deck Kingdom order",
+    body: "Hi {name},\n\nThanks again for requesting samples from Deck Kingdom. If you're ready to go ahead, here's {offer} your order — just use code {code} at checkout on deckkingdom.co.uk, or quote it when you call us on 0161 399 1837.\n\nAny questions at all, just reply to this email.\n\nKind regards,\nDeck Kingdom",
+  },
+};
+export const sampleEmailSettings = (crm) => {
+  const v = (crm && crm.sampleEmails) || {};
+  return { ...SAMPLE_EMAIL_DEFAULTS, ...v, first: { ...SAMPLE_EMAIL_DEFAULTS.first, ...(v.first || {}) }, second: { ...SAMPLE_EMAIL_DEFAULTS.second, ...(v.second || {}) } };
+};
 export const SAMPLE_SOURCES = ["Manual entry", "Phone", "Showroom", "Email", "Website", "Market Place", "Social", "Trade"];
 
 // Where a record came from: FileMaker (the bridge), the website (the ops feed) or keyed in here.
@@ -1992,6 +2010,7 @@ export const blankSample = (customerId) => ({
   followUpDate: "",
   followedUp: false,
   followedUpDate: "",
+  followedUp2Date: "", // second follow-up (discount code) sent
   project: "",
   notes: "",
   outcome: "",        // "" | "lost"
@@ -2062,12 +2081,16 @@ export const sampleStatus = (s, crm) => {
   if (s.outcome === "lost") return "No sale";
   if (s.date && addDays(s.date, SAMPLE_WINDOW_DAYS) < today()) return "Lapsed";
   if (!s.dispatchedDate) return "To send";
-  if (s.followedUp) return "Followed up";
+  if (s.followedUp) {
+    if (s.followedUp2Date) return "Followed up";
+    const first = s.followedUpDate || s.followUpDate;
+    return first && addDays(first, SAMPLE_FOLLOWUP2_DAYS) <= today() ? "2nd follow-up due" : "Followed up";
+  }
   if (s.followUpDate && s.followUpDate <= today()) return "Follow-up due";
   return "Sent";
 };
-export const SAMPLE_TONES = { Converted: "green", "No sale": "red", Lapsed: "grey", "To send": "red", "Follow-up due": "amber", "Followed up": "gold", Sent: "grey" };
-export const sampleIsOpen = (s, crm) => ["To send", "Sent", "Follow-up due", "Followed up"].includes(sampleStatus(s, crm));
+export const SAMPLE_TONES = { Converted: "green", "No sale": "red", Lapsed: "grey", "To send": "red", "Follow-up due": "amber", "2nd follow-up due": "amber", "Followed up": "gold", Sent: "grey" };
+export const sampleIsOpen = (s, crm) => ["To send", "Sent", "Follow-up due", "2nd follow-up due", "Followed up"].includes(sampleStatus(s, crm));
 
 // Conversion figures for a set of sample requests
 export const sampleStats = (list, crm) => {

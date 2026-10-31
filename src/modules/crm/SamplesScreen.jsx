@@ -6,12 +6,13 @@ import { NAVY, GOLD, RED, prettyDate, prettyDateTime, addDays, daysBetween } fro
 import {
   blankSample, blankSampleItem, blankCustomer, nextNumber, gbp, today, invoiceTotals, isSaleInvoice,
   sampleRef, sampleStatus, sampleInvoice, sampleIsOpen, sampleStats, SAMPLE_TONES,
-  originText, userInitials, SAMPLE_SOURCES, SAMPLE_DISPATCH, SAMPLE_SIZES, SAMPLE_WINDOW_DAYS, SAMPLE_FOLLOWUP_DAYS, SOURCES, FIELD_FORMATS,
+  originText, userInitials, sampleEmailSettings, SAMPLE_EMAIL_DEFAULTS, SAMPLE_FOLLOWUP2_DAYS, SAMPLE_SOURCES, SAMPLE_DISPATCH, SAMPLE_SIZES, SAMPLE_WINDOW_DAYS, SAMPLE_FOLLOWUP_DAYS, SOURCES, FIELD_FORMATS,
 } from "../../lib/crmCore.js";
 import { samplesAvailable } from "../../data/crmStorage.js";
-import { Icon, Chip, SuggestInput, selectAllProps, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
+import { Icon, Chip, Modal, SuggestInput, selectAllProps, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
 import { ColourSelect } from "./LinesEditor.jsx";
 import { printSampleSlip } from "./printDocs.js";
+import { printAllToSend, emailFollowUpGroup } from "./sampleActions.js";
 
 const navyBtn = { ...btn, background: "transparent", border: "1px solid #3a4f78", color: "#fff" };
 const th = { fontSize: 11, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", padding: "8px 8px", borderBottom: "2px solid #e6e9ef", whiteSpace: "nowrap", textAlign: "left" };
@@ -27,12 +28,46 @@ const SchemaNotice = () => (
 );
 
 const PERIODS = [["30", "Last 30 days"], ["90", "Last 90 days"], ["365", "Last 12 months"], ["all", "All time"]];
-const FILTERS = ["To send", "Follow-up due", "Converted", "All"];
+const FILTERS = ["To send", "Follow-up due", "2nd follow-up due", "Converted", "All"];
+const FILTER_LABEL = { "2nd follow-up due": "2nd follow-up" };
 const SAMPLE_COST = 3.17; // average cost of one sample sent (product, packaging, postage)
 const itemsSummary = (x) => (x.items || []).map((it) => (Number(it.qty) > 1 ? it.qty + "× " : "") + [it.colour, it.description].filter(Boolean).join(" ")).filter(Boolean).join(", ");
 
 // how an invoice is known: its number, else the website order ref
 const invRef = (i) => (i.invNo ? "invoice #" + i.invNo : i.orderRef ? "order " + i.orderRef : "invoice (not numbered yet)");
+
+// wording of the two follow-up emails and the discount code for the second
+function FollowUpEmailSettings({ crm, updateCrm, onClose }) {
+  const [d, setD] = useState(() => sampleEmailSettings(crm));
+  const set = (path, v) => setD((x) => { const y = { ...x, first: { ...x.first }, second: { ...x.second } }; if (path.length === 1) y[path[0]] = v; else y[path[0]][path[1]] = v; return y; });
+  const area = { ...inp, width: "100%", boxSizing: "border-box", fontFamily: "inherit", lineHeight: 1.5, resize: "vertical" };
+  const save = () => { updateCrm((c) => { c.sampleEmails = d; return c; }); onClose(); };
+  return (
+    <Modal title="Follow-up emails" onClose={onClose} width={640}>
+      <div style={{ fontSize: 12.5, color: "#5a6a85", fontWeight: 600, marginBottom: 10 }}>
+        "Email all" opens Gmail with the group in Bcc. Use <b>{"{name}"}</b> for the customer's name (becomes "there" in group emails), <b>{"{code}"}</b> and <b>{"{offer}"}</b> for the discount.
+        The 2nd follow-up comes due {SAMPLE_FOLLOWUP2_DAYS} days after the first if they haven't ordered.
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
+        <label><span style={lbl}>Discount code</span><input style={inp} value={d.code} placeholder="e.g. SAMPLE10" onChange={(e) => set(["code"], e.target.value.toUpperCase().replace(/\s+/g, ""))} /></label>
+        <label><span style={lbl}>Offer wording</span><input style={inp} value={d.offer} placeholder="10% off" onChange={(e) => set(["offer"], e.target.value)} /></label>
+      </div>
+      {[["first", "1st follow-up"], ["second", "2nd follow-up (with the code)"]].map(([k, l]) => (
+        <div key={k} style={{ marginBottom: 12 }}>
+          <span style={lbl}>{l}</span>
+          <input style={{ ...inp, marginBottom: 6 }} value={d[k].subject} onChange={(e) => set([k, "subject"], e.target.value)} />
+          <textarea style={area} rows={6} value={d[k].body} onChange={(e) => set([k, "body"], e.target.value)} onKeyDown={(e) => e.stopPropagation()} />
+        </div>
+      ))}
+      <div style={{ display: "flex", gap: 8 }}>
+        <button style={btn} onClick={() => setD(JSON.parse(JSON.stringify(SAMPLE_EMAIL_DEFAULTS)))}>Reset wording</button>
+        <span style={{ flex: 1 }} />
+        <button style={btn} onClick={onClose}>Cancel</button>
+        <button style={goldBtn} onClick={save}>Save</button>
+      </div>
+    </Modal>
+  );
+}
 
 const plainVal = { fontSize: 14, fontWeight: 700, color: NAVY, padding: "8px 0", lineHeight: "19px" };
 
@@ -80,6 +115,7 @@ export default function SamplesScreen({ crm, updateCrm, askConfirm, selId, setSe
   const [stampOpen, setStampOpen] = useState(false);
   const [periodOpen, setPeriodOpen] = useState(false);
   const [rowLimit, setRowLimit] = useState(10);
+  const [emailCfg, setEmailCfg] = useState(false);
   const [creditOpen, setCreditOpen] = useState(false);
   const [notice, setNotice] = useState("");
   const ready = samplesAvailable();
@@ -132,12 +168,12 @@ export default function SamplesScreen({ crm, updateCrm, askConfirm, selId, setSe
 
   // ===== list view =====
   if (!smp) {
-    const counts = { "To send": 0, "Follow-up due": 0 };
+    const counts = { "To send": 0, "Follow-up due": 0, "2nd follow-up due": 0 };
     samples.forEach((x) => {
       const st = sampleStatus(x, crm);
       if (counts[st] !== undefined) counts[st]++;
     });
-    const filterNow = statusFilter && FILTERS.includes(statusFilter) ? statusFilter : counts["To send"] ? "To send" : counts["Follow-up due"] ? "Follow-up due" : "All";
+    const filterNow = statusFilter && FILTERS.includes(statusFilter) ? statusFilter : counts["To send"] ? "To send" : counts["Follow-up due"] ? "Follow-up due" : counts["2nd follow-up due"] ? "2nd follow-up due" : "All";
 
     const since = period === "all" ? "" : addDays(today(), -Number(period));
     const inPeriod = samples.filter((x) => !since || (x.date || "") >= since);
@@ -164,7 +200,7 @@ export default function SamplesScreen({ crm, updateCrm, askConfirm, selId, setSe
         const st = sampleStatus(x, crm);
         if (filterNow === "Open" && !sampleIsOpen(x, crm)) return false;
         if (filterNow === "Closed" && !["No sale", "Lapsed"].includes(st)) return false;
-        if (["To send", "Follow-up due", "Converted"].includes(filterNow) && st !== filterNow) return false;
+        if (["To send", "Follow-up due", "2nd follow-up due", "Converted"].includes(filterNow) && st !== filterNow) return false;
         if (!q) return true;
         const c = custById[x.customerId];
         return [sampleRef(x), String(x.sampleNo || ""), c && c.name, c && c.postcode, c && c.email, itemsSummary(x)].some((v) => String(v || "").toLowerCase().includes(q));
@@ -202,6 +238,13 @@ export default function SamplesScreen({ crm, updateCrm, askConfirm, selId, setSe
     return (
       <div style={{ maxWidth: 1140, margin: "0 auto", padding: "18px 22px" }}>
         {!ready && <SchemaNotice />}
+        {notice && (
+          <div style={{ ...card, borderColor: GOLD, background: "#fff8e6", display: "flex", gap: 10, alignItems: "center", fontWeight: 600, fontSize: 13 }}>
+            <span style={{ flex: 1 }}>{notice}</span>
+            <button style={abtn} onClick={() => setNotice("")}><Icon name="x" /></button>
+          </div>
+        )}
+        {emailCfg && <FollowUpEmailSettings crm={crm} updateCrm={updateCrm} onClose={() => setEmailCfg(false)} />}
 
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, flexWrap: "wrap", minHeight: 30 }}>
           <button type="button" onClick={() => setPeriodOpen((o) => !o)} title="Change the period"
@@ -223,7 +266,7 @@ export default function SamplesScreen({ crm, updateCrm, askConfirm, selId, setSe
           {[
             ["Sample requests", <>{stats.requests.toLocaleString("en-GB")} <span style={{ fontSize: 14, color: "#8593a8", fontWeight: 700 }}>· {stats.open.toLocaleString("en-GB")} still open</span></>, itemsSent.toLocaleString("en-GB") + " sample" + (itemsSent === 1 ? "" : "s") + " in them"],
             ["Converted to orders", stats.converted.toLocaleString("en-GB") + " · " + pct(stats.rate), stats.lost ? pct(stats.decidedRate) + " of closed requests" : "of all requests"],
-            ["Sales from samples", gbp(stats.revenue), gbp(spent) + " spent on samples" + (spent ? " · " + gbp(stats.revenue / spent) + " back per £1" : "")],
+            ["Sales · spent on samples", <>{gbp(stats.revenue)} <span style={{ fontSize: 14, color: "#8593a8", fontWeight: 700 }}>· {gbp(spent)}</span></>, spent ? gbp(stats.revenue / spent) + " back per £1 · " + gbp(SAMPLE_COST) + " a sample" : gbp(SAMPLE_COST) + " a sample"],
             ["Avg time to order", stats.avgDays === null ? "—" : stats.avgDays + " days", "request → invoice"],
           ].map(([k, v, sub]) => (
             <div key={k} style={{ ...card, marginBottom: 0, padding: "12px 16px" }}>
@@ -246,13 +289,14 @@ export default function SamplesScreen({ crm, updateCrm, askConfirm, selId, setSe
               return (
                 <button key={f} onClick={() => { setStatusFilter(f); setRowLimit(10); }}
                   style={{ fontFamily: "inherit", fontSize: 12.5, fontWeight: 700, padding: "6px 11px", minWidth: 128, justifyContent: "center", borderRadius: 999, cursor: "pointer", border: "1px solid " + (on ? NAVY : "#d5d9e0"), background: on ? NAVY : "#fff", color: on ? "#fff" : "#5a6a85", display: "inline-flex", gap: 6, alignItems: "center" }}>
-                  {f}
+                  {FILTER_LABEL[f] || f}
                   {n ? <span style={{ background: f === "To send" ? RED : "#E8912D", color: "#fff", borderRadius: 99, fontSize: 10.5, padding: "0 6px", lineHeight: "16px" }}>{n}</span> : null}
                 </button>
               );
             })}
           </div>
           <span style={{ flex: 1 }} />
+          <button title="Follow-up emails — wording and discount code" style={{ ...abtn, width: 36, height: 36 }} onClick={() => setEmailCfg(true)}><Icon name="gear" /></button>
           <button title="Log a sample request" style={{ ...goldBtn, width: 36, height: 36, padding: 0, justifyContent: "center", opacity: ready ? 1 : 0.5 }} disabled={!ready} onClick={newSample}><Icon name="plus" stroke={NAVY} size={16} /></button>
         </div>
 
@@ -266,7 +310,22 @@ export default function SamplesScreen({ crm, updateCrm, askConfirm, selId, setSe
               <div className="dk-bleed" style={{ overflowX: "auto" }}>
                 <table className="dk-t" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 820 }}>
                   <thead>
-                    <tr>{["Sample", "Date", "Customer", "Samples", "Source", "Status", "Order", ""].map((h, i) => <th key={i} style={th}>{h}</th>)}</tr>
+                    <tr>
+                      {["Sample", "Date", "Customer", "Samples", "Source", "Status", "Order"].map((h, i) => <th key={i} style={th}>{h}</th>)}
+                      <th style={{ ...th, textAlign: "right", padding: "4px 8px" }}>
+                        {filterNow === "To send" && counts["To send"] > 0 && (
+                          <button style={{ ...goldBtn, padding: "5px 10px", fontSize: 12, whiteSpace: "nowrap" }} onClick={() => printAllToSend(crm, updateCrm, askConfirm, setNotice)}>
+                            <Icon name="doc" stroke={NAVY} size={13} />Print all
+                          </button>
+                        )}
+                        {(filterNow === "Follow-up due" || filterNow === "2nd follow-up due") && counts[filterNow] > 0 && (
+                          <button style={{ ...goldBtn, padding: "5px 10px", fontSize: 12, whiteSpace: "nowrap" }}
+                            onClick={() => emailFollowUpGroup(crm, updateCrm, askConfirm, filterNow === "2nd follow-up due" ? "second" : "first", setNotice)}>
+                            <Icon name="mail" stroke={NAVY} size={13} />Email all
+                          </button>
+                        )}
+                      </th>
+                    </tr>
                   </thead>
                   <tbody>
                     {shown.map((x) => {
@@ -681,13 +740,17 @@ export default function SamplesScreen({ crm, updateCrm, askConfirm, selId, setSe
             )],
             [smp.followedUp ? "Followed up" : smp.followUpDate ? "Follow up · due " + prettyDate(smp.followUpDate).slice(0, 6) : "Follow up", (
               <StepDate value={smp.followedUp ? smp.followedUpDate || today() : ""} icon="phone" todo="Followed up" done="Followed up"
-                onDate={(d) => setSample((x) => { x.followedUp = !!d; x.followedUpDate = d; })} />
+                onDate={(d) => setSample((x) => { x.followedUp = !!d; x.followedUpDate = d; if (!d) x.followedUp2Date = ""; })} />
             )],
+            [smp.followedUp2Date ? "2nd follow-up" : smp.followedUp ? "2nd follow-up · due " + prettyDate(addDays(smp.followedUpDate || today(), SAMPLE_FOLLOWUP2_DAYS)).slice(0, 6) : "2nd follow-up", smp.followedUp ? (
+              <StepDate value={smp.followedUp2Date} icon="mail" todo="Code sent" done="Code sent"
+                onDate={(d) => setSample((x) => (x.followedUp2Date = d))} />
+            ) : <span style={{ fontSize: 12, color: "#aab3c2", fontWeight: 600 }}>after the 1st</span>],
           ];
           // laid out like the samples table: headings with a rule underneath, then the controls
           return (
             <div className="dk-bleed" style={{ overflowX: "auto" }}>
-              <table className="dk-t" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 720, tableLayout: "fixed" }}>
+              <table className="dk-t" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 860, tableLayout: "fixed" }}>
                 <thead><tr>{cells.map(([l], k) => <th key={k} style={{ ...th, padding: "8px 6px" }}>{l}</th>)}</tr></thead>
                 <tbody><tr>{cells.map(([, c], k) => <td key={k} style={{ padding: "8px 6px", verticalAlign: "middle" }}>{c}</td>)}</tr></tbody>
               </table>

@@ -135,7 +135,7 @@ ${String(q.notes || "").trim() ? `<div class="note">${esc(q.notes).replace(/\n/g
 }
 
 // Sample dispatch slip: big address block for the envelope + what to pack.
-export function printSampleSlip(smp, cust) {
+const sampleSlipBody = (smp, cust) => {
   const items = (smp.items || []).map((it) => `<tr><td class="r" style="width:50px"><b>${esc(it.qty)}</b></td><td>${esc(it.description)}</td><td>${esc(it.colour)}</td><td>${esc(it.size)}</td></tr>`).join("");
   const addr = cust ? [cust.name, cust.address, cust.town, cust.postcode].filter(Boolean) : [];
   const body = head("Sample", "S-" + (smp.sampleNo || "—"), pretty(smp.date)) + `
@@ -145,7 +145,16 @@ export function printSampleSlip(smp, cust) {
 <table><tr><th class="r">Qty</th><th>Sample</th><th>Colour</th><th>Size</th></tr>${items}</table>
 ${smp.dispatchMethod ? `<div class="sub">Dispatch: ${esc(smp.dispatchMethod)}${smp.trackingRef ? " · " + esc(smp.trackingRef) : ""}</div>` : ""}
 <div class="foot">Thanks for requesting samples · questions or ready to order? ${esc(COMPANY.phone)} · ${esc(COMPANY.email)}</div>`;
-  return openDoc(shell("Sample S-" + (smp.sampleNo || ""), body));
+  return body;
+};
+export function printSampleSlip(smp, cust) {
+  return openDoc(shell("Sample S-" + (smp.sampleNo || ""), sampleSlipBody(smp, cust)));
+}
+// several tickets in one print job, one per page
+export function printSampleSlips(list, custOf) {
+  if (!list.length) return true;
+  const body = list.map((smp, i) => `<div style="${i < list.length - 1 ? "page-break-after:always;break-after:page;" : ""}">${sampleSlipBody(smp, custOf(smp))}</div>`).join("");
+  return openDoc(shell(list.length + " sample tickets", body));
 }
 
 // Warehouse picking list: kit lines pull their component SKUs through.
