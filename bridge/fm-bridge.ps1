@@ -49,10 +49,66 @@ function OdbcDetail($err) {
   # the ODBC driver's own messages (the .NET message is sometimes blank)
   $e = $err.Exception
   while ($e -and -not ($e -is [System.Data.Odbc.OdbcException])) { $e = $e.InnerException }
-  if ($e -and $e.Errors.Count) { return (($e.Errors | ForEach-Object { "[" + $_.SQLState + "] " + $_.Message }) -join " | ") }
-  return $err.Exception.Message
+  if ($e -and $e.Errors.Count) { return (($e.Errors | ForEach-Object { "[" + $_.SQLState + "] " + $_.Message + " (native " + $_.NativeError + ")" }) -join " | ") }
+  $chain = @(); $x = $err.Exception; while ($x) { $chain += ($x.GetType().Name + ": " + $x.Message); $x = $x.InnerException }
+  return ($chain -join " <- ")
+}
+$script:ado = $null          # Windows' own ADO route to the same DSN, used if .NET's ODBC can't talk to the driver
+$script:useAdo = ($cfg.engine -eq "ado")
+function Open-ADO {
+  if ($script:ado) { return $script:ado }
+  $c = New-Object -ComObject ADODB.Connection
+  $cs = "DSN=" + $cfg.dsn
+  if ($cfg.user) { $cs += ";UID=" + $cfg.user + ";PWD=" + $cfg.password }
+  $c.ConnectionTimeout = 30
+  $c.CommandTimeout = 300
+  $c.Open($cs)
+  $script:ado = $c
+  return $c
+}
+function AdoErrors() {
+  if (-not $script:ado) { return "" }
+  $m = @(); foreach ($e in $script:ado.Errors) { $m += ("[" + $e.SQLState + "] " + $e.Description) }
+  return ($m -join " | ")
+}
+function RsToTable($rs) {
+  $dt = New-Object System.Data.DataTable
+  for ($i = 0; $i -lt $rs.Fields.Count; $i++) {
+    $name = [string]$rs.Fields.Item($i).Name; if ($dt.Columns.Contains($name)) { $name = $name + "_" + $i }
+    [void]$dt.Columns.Add($name, [object])
+  }
+  while (-not $rs.EOF) {
+    $row = $dt.NewRow()
+    for ($i = 0; $i -lt $rs.Fields.Count; $i++) {
+      $v = $null; try { $v = $rs.Fields.Item($i).Value } catch { $v = $null }
+      if ($null -eq $v) { $row[$i] = [System.DBNull]::Value } else { $row[$i] = $v }
+    }
+    $dt.Rows.Add($row)
+    $rs.MoveNext()
+  }
+  $rs.Close()
+  return ,$dt
+}
+function QueryAdo([string]$sql) {
+  $c = Open-ADO
+  try { $rs = $c.Execute($sql) } catch { throw ("FileMaker couldn't run: " + $sql + " — " + (AdoErrors) + " " + $_.Exception.Message) }
+  $dt = RsToTable $rs
+  return ,$dt
 }
 function Query($conn, [string]$sql) {
+  if ($script:useAdo) { $dt = QueryAdo $sql; return ,$dt }
+  try { $dt = QueryNet $conn $sql; return ,$dt }
+  catch {
+    $first = $_.Exception.Message
+    try {
+      $dt = QueryAdo $sql
+      $script:useAdo = $true
+      Log ("Using Windows ADO to read FileMaker (.NET ODBC said: " + $first + ")")
+      return ,$dt
+    } catch { throw ($first + " / ADO: " + $_.Exception.Message) }
+  }
+}
+function QueryNet($conn, [string]$sql) {
   # read with a data reader, column by column, so one awkward value can't stop the lot
   $cmd = $conn.CreateCommand()
   $cmd.CommandText = $sql
@@ -152,48 +208,59 @@ if ($Discover) {
   $out = New-Object System.Collections.Generic.List[string]
   $file = Join-Path $here "fm-discover.txt"
   $out.Add("FileMaker discovery — " + (Get-Date -Format "yyyy-MM-dd HH:mm") + " — DSN " + $cfg.dsn + " — PowerShell " + $(if ([Environment]::Is64BitProcess) { "64-bit" } else { "32-bit" }))
+  $tableNames = @(); $colsByTable = @{}
+  # 1. try .NET ODBC, 2. fall back to Windows ADO
   try {
     $conn = Open-FM
-    $out.Add("Connected: " + $conn.Driver + " " + $conn.ServerVersion)
-    # tables and fields from the driver's catalogue (works on every FileMaker version)
-    $tables = $conn.GetSchema("Tables")
-    $cols = $null
-    try { $cols = $conn.GetSchema("Columns") } catch { $out.Add("(field list via catalogue failed: " + (OdbcDetail $_) + ")") }
-    foreach ($t in $tables.Rows) {
-      $tn = [string]$t["TABLE_NAME"]
-      if (-not $tn -or $tn -like "FileMaker_*") { continue }
-      $count = "?"
-      try { $count = (Query $conn ("SELECT COUNT(*) FROM " + (Q $tn))).Rows[0][0] } catch { $count = "can't count" }
-      $out.Add("")
-      $out.Add("== " + $tn + "  (" + $count + " records)")
-      if ($cols) {
-        foreach ($c in ($cols.Rows | Where-Object { $_["TABLE_NAME"] -eq $tn })) { $out.Add("   " + $c["COLUMN_NAME"] + "  [" + $c["TYPE_NAME"] + "]") }
-      }
-      # one example record from the order/customer tables, so the formats can be seen
-      if ($tn -match "(?i)invoice|customer|account|item|line|order|client|job|sale") {
-        try {
-          $cmd = $conn.CreateCommand(); $cmd.CommandText = "SELECT * FROM " + (Q $tn); $cmd.CommandTimeout = 120
-          $rd = $cmd.ExecuteReader()
-          if (-not $cols) { for ($i = 0; $i -lt $rd.FieldCount; $i++) { $out.Add("   " + $rd.GetName($i) + "  [" + $rd.GetDataTypeName($i) + "]") } }
-          if ($rd.Read()) {
-            $out.Add("   -- example record:")
-            for ($i = 0; $i -lt $rd.FieldCount; $i++) {
-              $v = ""; try { $v = [string]$rd.GetValue($i) } catch { $v = "(unreadable)" }
-              $v = $v.Trim(); if ($v.Length -gt 60) { $v = $v.Substring(0, 60) + "…" }
-              if ($v -ne "") { $out.Add("      " + $rd.GetName($i) + " = " + $v) }
-            }
-          }
-          $rd.Close()
-        } catch { $out.Add("   -- (couldn't read an example: " + (OdbcDetail $_) + ")") }
-      }
+    $out.Add("Connected (.NET ODBC): " + $conn.Driver + " " + $conn.ServerVersion)
+    try {
+      foreach ($t in $conn.GetSchema("Tables").Rows) { $tableNames += [string]$t["TABLE_NAME"] }
+      try { foreach ($c in $conn.GetSchema("Columns").Rows) { $k = [string]$c["TABLE_NAME"]; if (-not $colsByTable[$k]) { $colsByTable[$k] = @() }; $colsByTable[$k] += ([string]$c["COLUMN_NAME"] + "  [" + $c["TYPE_NAME"] + "]") } } catch { }
+    } catch {
+      $out.Add(".NET ODBC couldn't list tables: " + (OdbcDetail $_))
+      $script:useAdo = $true
     }
-    $conn.Close()
-    Log ("Discovery written to " + $file)
   } catch {
-    $out.Add("FAILED: " + (OdbcDetail $_))
-    Log ("Discovery FAILED: " + (OdbcDetail $_))
+    $out.Add(".NET ODBC couldn't connect: " + (OdbcDetail $_))
+    $script:useAdo = $true
   }
+  if ($script:useAdo) {
+    try {
+      $a = Open-ADO
+      $out.Add("Connected (Windows ADO): " + $a.Provider + " " + $a.Version)
+      $rs = $a.OpenSchema(20)   # tables
+      while (-not $rs.EOF) { $tableNames += [string]$rs.Fields.Item("TABLE_NAME").Value; $rs.MoveNext() }; $rs.Close()
+      try {
+        $rs = $a.OpenSchema(4)  # columns
+        while (-not $rs.EOF) { $k = [string]$rs.Fields.Item("TABLE_NAME").Value; if (-not $colsByTable[$k]) { $colsByTable[$k] = @() }; $colsByTable[$k] += ([string]$rs.Fields.Item("COLUMN_NAME").Value + "  [type " + $rs.Fields.Item("DATA_TYPE").Value + "]"); $rs.MoveNext() }; $rs.Close()
+      } catch { $out.Add("(field list via ADO failed: " + (AdoErrors) + " " + $_.Exception.Message + ")") }
+    } catch {
+      $out.Add("Windows ADO couldn't list tables either: " + (AdoErrors) + " " + $_.Exception.Message)
+    }
+  }
+  foreach ($tn in ($tableNames | Where-Object { $_ -and $_ -notlike "FileMaker_*" } | Select-Object -Unique)) {
+    $count = "?"
+    try { $count = (Query $conn ("SELECT COUNT(*) FROM " + (Q $tn))).Rows[0][0] } catch { $count = "can't count: " + $_.Exception.Message }
+    $out.Add("")
+    $out.Add("== " + $tn + "  (" + $count + " records)")
+    foreach ($c in @($colsByTable[$tn])) { if ($c) { $out.Add("   " + $c) } }
+    if ($tn -match "(?i)invoice|customer|account|item|line|order|client|job|sale") {
+      try {
+        $one = Query $conn ("SELECT * FROM " + (Q $tn) + " FETCH FIRST 1 ROWS ONLY")
+        if (-not $colsByTable[$tn]) { foreach ($col in $one.Columns) { $out.Add("   " + $col.ColumnName) } }
+        if ($one.Rows.Count) {
+          $out.Add("   -- example record:")
+          foreach ($col in $one.Columns) {
+            $v = ([string]$one.Rows[0][$col.ColumnName]).Trim(); if ($v.Length -gt 60) { $v = $v.Substring(0, 60) + "…" }
+            if ($v -ne "") { $out.Add("      " + $col.ColumnName + " = " + $v) }
+          }
+        }
+      } catch { $out.Add("   -- (couldn't read an example: " + $_.Exception.Message + ")") }
+    }
+  }
+  if (-not $tableNames.Count) { $out.Add(""); $out.Add("No tables could be listed — see the messages above.") }
   $out | Set-Content -Path $file -Encoding UTF8
+  Log ("Discovery written to " + $file + " — " + @($tableNames).Count + " tables" + $(if ($script:useAdo) { " (via Windows ADO)" } else { "" }))
   exit 0
 }
 
