@@ -10,6 +10,7 @@ import {
 } from "../../lib/crmCore.js";
 import { samplesAvailable } from "../../data/crmStorage.js";
 import { Icon, Chip, SuggestInput, selectAllProps, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
+import { ColourSelect } from "./LinesEditor.jsx";
 import { printSampleSlip } from "./printDocs.js";
 
 const navyBtn = { ...btn, background: "transparent", border: "1px solid #3a4f78", color: "#fff" };
@@ -499,7 +500,7 @@ export default function SamplesScreen({ crm, updateCrm, askConfirm, selId, setSe
                 return (
                   <tr key={it.id}>
                     <td style={{ ...tdc, padding: "6px 6px", minWidth: 220 }}><SuggestInput value={it.description} options={productNames.names} onChange={(v) => setItem("description", v)} placeholder="e.g. Composite decking board" /></td>
-                    <td style={{ ...tdc, padding: "6px 6px", width: 170 }}><SuggestInput value={it.colour} options={productNames.colours} onChange={(v) => setItem("colour", v)} /></td>
+                    <td style={{ ...tdc, padding: "6px 6px", width: 170 }}><ColourSelect line={{ code: "", colour: it.colour }} crm={crm} bySku={{}} onPick={(c) => setItem("colour", c)} /></td>
                     <td style={{ ...tdc, padding: "6px 6px", width: 110 }}>
                       <select style={inp} value={it.size} onChange={(e) => setItem("size", e.target.value)}>
                         {SAMPLE_SIZES.map((z) => <option key={z} value={z}>{z === "Large" ? "Large (£2.95)" : z}</option>)}

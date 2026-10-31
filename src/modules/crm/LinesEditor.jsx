@@ -179,7 +179,7 @@ export default function LinesEditor({ doc, edit, crm, readOnly }) {
 // Colour for a line: a radio list in a pop-out. When the line's SKU is a known
 // product it offers just that product's colours (and swaps the SKU to match);
 // otherwise every colour on the colour list.
-function ColourSelect({ line, crm, bySku, onPick }) {
+export function ColourSelect({ line, crm, bySku, onPick }) {
   const [box, setBox] = useState(null); // where to draw the pop-out (it sits outside the scrolling table)
   const btnRef = useRef(null), popRef = useRef(null);
   useEffect(() => {
