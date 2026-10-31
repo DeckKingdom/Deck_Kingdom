@@ -10,7 +10,7 @@ import {
 } from "../../lib/crmCore.js";
 import { ComposeEmail, EmailHistory } from "./EmailPanels.jsx";
 import { emailReady } from "../../data/email.js";
-import { ListHero, heroTile, heroLab, heroSub } from "./ui.jsx";
+import { ListHero, heroTile, heroLab, heroSub, RiskChip } from "./ui.jsx";
 import { Icon, Chip, Modal, SuggestInput, selectAllProps, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
 
 const navyBtn = { ...btn, background: "transparent", border: "1px solid #3a4f78", color: "#fff" };
@@ -818,7 +818,7 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
                               <button onClick={() => openInvoice(i.id)} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontWeight: 700, color: "#185FA5", fontSize: 13, padding: 0 }}>{i.invNo || "—"}</button>
                             </td>
                             <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6" }}>
-                              <b>{siteName(i.siteId) || "Invoice address"}</b> <span style={{ color: "#5a6a85", fontWeight: 600 }}>· {i.jobType}</span>
+                              <b>{siteName(i.siteId) || "Invoice address"}</b> <span style={{ color: "#5a6a85", fontWeight: 600 }}>· {i.jobType}</span><RiskChip inv={i} style={{ marginLeft: 8 }} />
                             </td>
                             <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", textAlign: "right", fontWeight: 700 }}>{t.total.toLocaleString("en-GB", { minimumFractionDigits: 2 })}</td>
                             <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6" }}>

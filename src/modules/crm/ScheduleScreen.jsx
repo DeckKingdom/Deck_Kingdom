@@ -6,7 +6,7 @@ import {
   invoiceTotals, gbp, isPaid, scheduleStatus, STRIPE_COLOURS, daysSinceRaised, isCollectionJob, invoiceLoadKg, collectionProgress,
   PREP_FLAGS, FOLLOWUP_FLAGS, today,
 } from "../../lib/crmCore.js";
-import { Icon, Chip, Tg, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
+import { Icon, Chip, Tg, sect, lbl, card, abtn, inp, btn, goldBtn, RiskChip } from "./ui.jsx";
 
 const RANGE_OPTS = [
   ["upcoming", "Upcoming + last 7 days"],
@@ -117,6 +117,7 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
               {c ? c.name || "Unnamed" : "No customer"}
             </button>
             <span style={{ fontSize: 11.5, fontWeight: 700, color: "#185FA5" }}>#{i.invNo || "—"}</span>
+            <RiskChip inv={i} />
           </div>
           <div style={{ fontSize: 11.5, color: "#5a6a85", fontWeight: 600, marginTop: 2, display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
             {(s && s.postcode) || (c && c.postcode) || "—"}

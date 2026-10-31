@@ -25,6 +25,7 @@ const PATHS = {
   leaf: <path d="M5 19C5 9.5 12.5 4.5 20 4.5 20 13 15 19 5 19zM5 19c3-5.5 7-8.5 11-10.5" />,
   pinPlus: <><path d="M9.5 21s-6-5.3-6-9.6a6 6 0 0112 0c0 4.3-6 9.6-6 9.6z" /><circle cx="9.5" cy="11.4" r="2" /><path d="M19 2.5v6M16 5.5h6" /></>,
   docPlus: <><path d="M13 21H5V2h8l4 4v6M13 2v4h4M8 11h6M8 15h3" /><path d="M18 14.5v7M14.5 18h7" /></>,
+  warn: <><path d="M12 3.5L22 20.5H2z" /><path d="M12 10v4.5M12 17.6v.1" /></>,
   wa: <><path d="M3.5 20.5l1.3-4.2A8.5 8.5 0 1112 20.5a8.4 8.4 0 01-4.2-1.1z" /><path d="M9 8.5c0 3.5 2.5 6.5 6.5 6.5l1-1.5-2-1-1 .8c-1-.5-2-1.5-2.5-2.5l.8-1-1-2z" /></>,
   bin: <path d="M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14M10 11v6M14 11v6" />,
   gear: <><circle cx="12" cy="12" r="3" /><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.5 4.5l2 2M17.5 17.5l2 2M19.5 4.5l-2 2M6.5 17.5l-2 2" /></>,
@@ -304,3 +305,16 @@ export const SearchBox = ({ value, onChange, placeholder, width = 340 }) => (
     {value && <button title="Clear" onClick={() => onChange("")} style={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", width: 24, height: 24, borderRadius: 999, border: "none", background: "#eef1f6", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0 }}><Icon name="x" size={12} /></button>}
   </div>
 );
+
+// red "check this job" marker for risky payments; nothing once someone has checked it
+export const RiskChip = ({ inv, style }) => {
+  const f = inv && inv.riskFlag;
+  if (!f || inv.riskChecked) return null;
+  return (
+    <span title={(f === "manual" ? "Flagged high risk by hand" : "Payment risk from the website: " + f) + (inv.riskNote ? " — " + inv.riskNote : "") + ". Check before dispatch."}
+      style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 800, padding: "2px 8px", borderRadius: 999, background: "#C8102E", color: "#fff", whiteSpace: "nowrap", ...style }}>
+      <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3.5L22 20.5H2z" /><path d="M12 10v4.5M12 17.6v.1" /></svg>
+      {f === "elevated" ? "Risk" : "High risk"}
+    </span>
+  );
+};

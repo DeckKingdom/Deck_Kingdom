@@ -148,6 +148,7 @@ const invToRow = (inv, i) => {
   const f = inv.flags || {};
   Object.entries(FLAG_COLS).forEach(([k, col]) => (row[col] = f[k] === true));
   if (quotesReady) row.quote_id = str(inv.quoteId);
+  if (riskReady) { row.risk_flag = str(inv.riskFlag); row.risk_note = str(inv.riskNote); row.risk_checked = str(inv.riskChecked); }
   return row;
 };
 
@@ -155,6 +156,7 @@ const MP_NUM = { priceIncVat: "price_inc_vat", costGbp: "cost_gbp", weightKg: "w
 const MP_TEXT = ["sku", "name", "colour", "family", "category", "unit", "notes", "importProductId"];
 
 let gradeReady = false; // master_products.grade (migration 023)
+let riskReady = false;  // invoices.risk_flag / risk_note / risk_checked (migration 030)
 const mpToRow = (p, i) => {
   const row = { id: p.id, is_kit: p.isKit === true, active: p.active !== false, position: i };
   if (gradeReady) row.grade = str(p.grade);
@@ -441,6 +443,7 @@ async function loadAll() {
     };
     INV_TEXT.forEach((k) => (inv[k] = nv(r[snake(k)])));
     inv.quoteId = nv(r.quote_id);
+    inv.riskFlag = nv(r.risk_flag); inv.riskNote = nv(r.risk_note); inv.riskChecked = nv(r.risk_checked);
     Object.entries(FLAG_COLS).forEach(([k, col]) => (inv.flags[k] = r[col] === true));
     return inv;
   });
@@ -450,6 +453,7 @@ async function loadAll() {
     (compsByKit[r.kit_id] = compsByKit[r.kit_id] || []).push({ id: r.id, componentId: r.component_id, qty: Number(r.qty) });
   });
   gradeReady = mps_.length ? Object.prototype.hasOwnProperty.call(mps_[0], "grade") : gradeReady;
+  riskReady = is_.length ? Object.prototype.hasOwnProperty.call(is_[0], "risk_flag") : riskReady;
   const masterProducts = mps_.map((r) => {
     const p = {
       id: r.id, isKit: r.is_kit === true, active: r.active !== false,
@@ -701,3 +705,4 @@ export const crmSupabaseStorage = {
 };
 
 export const gradesSchemaReady = () => gradeReady;
+export const riskSchemaReady = () => riskReady;

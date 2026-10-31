@@ -120,6 +120,39 @@ function dk_ops_colour( $item, $product ) {
 }
 
 /* ---------- one order as ops wants it ---------- */
+/* ---------- payment risk (Stripe Radar etc.) ---------- */
+// Looks at the order's meta and notes for a fraud-risk result and returns
+// level '' (nothing to flag) / 'elevated' / 'high', with the wording found.
+function dk_ops_risk( $order ) {
+	$found = array();
+	foreach ( $order->get_meta_data() as $m ) {
+		$k = (string) $m->key;
+		$v = $m->value;
+		if ( ! is_scalar( $v ) || '' === (string) $v ) {
+			continue;
+		}
+		if ( preg_match( '/risk|fraud|radar|outcome/i', $k ) ) {
+			$found[] = trim( $k, '_' ) . ': ' . $v;
+		}
+	}
+	if ( function_exists( 'wc_get_order_notes' ) ) {
+		foreach ( wc_get_order_notes( array( 'order_id' => $order->get_id(), 'limit' => 30 ) ) as $n ) {
+			$t = wp_strip_all_tags( (string) $n->content );
+			if ( preg_match( '/radar|risk|fraud/i', $t ) ) {
+				$found[] = $t;
+			}
+		}
+	}
+	$text = implode( ' | ', $found );
+	$level = '';
+	if ( preg_match( '/highest|high[ _-]?risk|risk[^a-z]{0,20}high|fraudulent/i', $text ) ) {
+		$level = 'high';
+	} elseif ( preg_match( '/elevated|review|suspicious|fraud/i', $text ) ) {
+		$level = 'elevated';
+	}
+	return array( 'level' => $level, 'note' => $level ? substr( $text, 0, 480 ) : '' );
+}
+
 function dk_ops_order_payload( $order ) {
 	$addr = function ( $type ) use ( $order ) {
 		$g = function ( $f ) use ( $order, $type ) {
@@ -179,6 +212,7 @@ function dk_ops_order_payload( $order ) {
 		'billing'        => $addr( 'billing' ),
 		'shipping'       => $addr( 'shipping' ),
 		'items'          => $items,
+		'risk'           => dk_ops_risk( $order ),
 	);
 }
 

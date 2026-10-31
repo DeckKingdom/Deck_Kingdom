@@ -438,6 +438,13 @@ export const FOLLOWUP_FLAGS = [
 ];
 
 export const isPaid = (inv) => Boolean(inv.paymentDate);
+// payment / fraud risk on a job: from the website (Stripe Radar) or flagged by hand
+export const RISK_LABELS = { elevated: "Elevated payment risk", high: "High payment risk", manual: "Flagged high risk" };
+export const riskOf = (inv) => {
+  const f = inv && inv.riskFlag;
+  if (!f) return null;
+  return { level: f, label: RISK_LABELS[f] || "Flagged", note: inv.riskNote || "", checked: inv.riskChecked || "", open: !inv.riskChecked };
+};
 
 // Row colour for the schedule: red = no date, gold = collection,
 // green = prep complete (courier n/a for collections; payment link or payment taken), amber = outstanding.

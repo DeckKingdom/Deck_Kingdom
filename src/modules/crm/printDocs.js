@@ -50,6 +50,10 @@ const shell = (title, body) => `<!doctype html><html><head><meta charset="utf-8"
 <script>window.onload = function(){ setTimeout(function(){ window.print(); }, 300); };</script>
 </body></html>`;
 
+// red strip on warehouse paperwork while a job's payment risk hasn't been checked
+const riskBanner = (inv) => (inv && inv.riskFlag && !inv.riskChecked
+  ? `<div style="background:#C8102E;color:#fff;font-weight:700;border-radius:8px;padding:8px 12px;margin-bottom:14px;font-size:14px">⚠ ${inv.riskFlag === "manual" ? "FLAGGED HIGH RISK" : "PAYMENT RISK: " + esc(String(inv.riskFlag).toUpperCase())} — check with the office before this goes out</div>`
+  : "");
 const head = (docType, no, date) => `
 <div class="top">
   <div class="logo">DK</div>
@@ -197,7 +201,7 @@ export function printLoadingBill(inv, cust, site, crm, planner) {
   }).join("");
 
   const dest = site || cust || {};
-  const body = head("Loading bill", inv.invNo, pretty(inv.deliveryDate || inv.date)) + `
+  const body = head("Loading bill", inv.invNo, pretty(inv.deliveryDate || inv.date)) + riskBanner(inv) + `
 <div class="grid">
   ${addrBlock("Job", [cust && cust.name, inv.jobType, "Delivery: " + pretty(inv.deliveryDate) + (inv.deliveryTime ? " " + inv.deliveryTime : ""), inv.van ? "Van: " + inv.van : ""])}
   ${addrBlock("Deliver to", [dest.name, dest.address !== dest.name ? dest.address : "", [dest.town, dest.postcode].filter(Boolean).join(" ")])}
@@ -250,7 +254,7 @@ export function printJobSheet(inv, cust, site) {
     <td class="r big">${esc(l.qty)}</td></tr>`).join("");
 
   const dest = site || cust || {};
-  const body = head("Job sheet", inv.invNo, pretty(inv.deliveryDate || inv.date)) + `
+  const body = head("Job sheet", inv.invNo, pretty(inv.deliveryDate || inv.date)) + riskBanner(inv) + `
 <div class="grid">
   ${addrBlock("Deliver to", [cust && cust.name, dest.name && dest.name !== (cust && cust.name) ? dest.name : "", dest.address, [dest.town, dest.postcode].filter(Boolean).join(" ")])}
   ${addrBlock("Contact", [dest.contact || (cust && cust.contact), dest.mobile || (cust && cust.mobile), dest.landline || (cust && cust.landline)])}

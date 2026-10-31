@@ -6,9 +6,9 @@ import {
   recordOrigin, blankInvoice, blankLine, nextNumber, invoiceTotals, gbp, isPaid,
   JOB_TYPES, PAYMENT_TYPES, PREP_FLAGS, FOLLOWUP_FLAGS, today, TIME_SLOTS, vanOptions,
   skuIndex, invoiceCost, buildPicks, pickLandedCost, jobCost, blankPick, invoiceLoadKg, applyInvoiceStockDeduction,
-  TRADE_COUNTER, TRADE_COUNTER_LABEL, quoteRef, sampleRef, isSaleInvoice,
+  TRADE_COUNTER, TRADE_COUNTER_LABEL, quoteRef, sampleRef, isSaleInvoice, riskOf, staffName,
 } from "../../lib/crmCore.js";
-import { ListHero, HeroStat, HeroAdd, SearchBox } from "./ui.jsx";
+import { ListHero, HeroStat, HeroAdd, SearchBox, RiskChip } from "./ui.jsx";
 import { Icon, Chip, Tg, Modal, selectAllProps, SuggestInput, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
 import { printInvoice, printJobSheet, printLoadingBill } from "./printDocs.js";
 import { readableFor } from "./LinesEditor.jsx";
@@ -199,7 +199,7 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
                             {String(i.id).startsWith("web-i-") && <span title="Came in from the website" style={{ marginLeft: 6, fontSize: 9.5, fontWeight: 800, padding: "1px 5px", borderRadius: 8, background: "#fdf3dc", color: "#8a5a00", letterSpacing: 0.3 }}>WEB</span>}
                           </td>
                           <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", whiteSpace: "nowrap" }}>{prettyDate(i.date)}</td>
-                          <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", fontWeight: 700 }}>{c ? c.name : <span style={{ color: RED }}>No customer</span>}</td>
+                          <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", fontWeight: 700 }}>{c ? c.name : <span style={{ color: RED }}>No customer</span>}<RiskChip inv={i} style={{ marginLeft: 8 }} /></td>
                           <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6" }}>{i.jobType}</td>
                           <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6" }}>
                             {i.deliveryCompleted ? <Chip tone="green">Done</Chip> : i.deliveryDate ? <Chip tone="gold">{prettyDate(i.deliveryDate).slice(0, 6)}</Chip> : <Chip tone="red">Not booked</Chip>}
@@ -297,9 +297,53 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
           <button style={navyBtn} onClick={() => tryPrint("invoice")}><Icon name="doc" stroke="#fff" />Invoice PDF</button>
           <button style={navyBtn} onClick={() => tryPrint("job")}><Icon name="truck" stroke="#fff" />Job sheet</button>
           <button style={navyBtn} onClick={() => tryPrint("loading")}><Icon name="box" stroke="#fff" />Loading bill</button>
+          {!inv.riskFlag && (
+            <button style={{ ...navyBtn, border: "1px solid #7a2a3a", color: "#f2a6b1" }} title="Flag this job as high risk — it gets a red warning until someone checks it"
+              onClick={() => setInv((t) => { t.riskFlag = "manual"; t.riskNote = ""; t.riskChecked = ""; })}>
+              <Icon name="warn" stroke="#f2a6b1" />Flag risk
+            </button>
+          )}
           <button style={{ ...navyBtn, border: "1px dashed #3a4f78", color: "#8fa0c0" }} onClick={() => removeInvoice(inv)}><Icon name="bin" stroke="#8fa0c0" />Delete</button>
         </div>
       </div>
+
+      {/* payment risk */}
+      {(() => {
+        const r = riskOf(inv);
+        if (!r) return null;
+        const who = (me || "").split("@")[0];
+        if (!r.open) return (
+          <div style={{ ...card, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "9px 14px", fontSize: 12.5, fontWeight: 600, color: "#5a6a85" }}>
+            <Icon name="warn" stroke="#8593a8" size={14} />
+            <span><b style={{ color: NAVY }}>{r.label}</b> — checked by {r.checked}{r.note ? " · " + r.note : ""}</span>
+            <span style={{ flex: 1 }} />
+            <button style={{ ...btn, padding: "4px 10px", fontSize: 12 }} onClick={() => setInv((t) => (t.riskChecked = ""))}>Re-open</button>
+            <button style={{ ...btn, padding: "4px 10px", fontSize: 12 }} onClick={() => setInv((t) => { t.riskFlag = ""; t.riskNote = ""; t.riskChecked = ""; })}>Remove flag</button>
+          </div>
+        );
+        return (
+          <div style={{ ...card, borderColor: "#C8102E", background: "#C8102E0d", display: "flex", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
+            <div style={{ width: 36, height: 36, borderRadius: 8, background: "#C8102E", display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>
+              <Icon name="warn" stroke="#fff" size={18} />
+            </div>
+            <div style={{ flex: 1, minWidth: 220 }}>
+              <b style={{ fontSize: 14.5, color: "#9b1c2e" }}>{r.label} — check before dispatch</b>
+              <div style={{ fontSize: 12.5, color: "#5a6a85", fontWeight: 600, marginTop: 2 }}>
+                {r.level === "manual" ? "Flagged by hand." : "From the payment on the website (Stripe)."} Call the customer and confirm the order and delivery address before it goes out.
+              </div>
+              <input style={{ ...inp, marginTop: 8, fontSize: 13 }} placeholder={r.level === "manual" ? "Why is it flagged? (e.g. delivery address differs, new card, unusual order)" : "Notes"}
+                value={inv.riskNote || ""} onChange={(e) => setInv((t) => (t.riskNote = e.target.value))} />
+            </div>
+            <div style={{ display: "flex", gap: 6, flexDirection: "column" }}>
+              <button style={{ ...goldBtn, background: "#3FA55C", borderColor: "#3FA55C", color: "#fff" }}
+                onClick={() => setInv((t) => (t.riskChecked = (staffName(crm, me) || who || "staff") + " · " + prettyDate(today())))}>
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>Checked — OK to send
+              </button>
+              {r.level === "manual" && <button style={{ ...btn, fontSize: 12.5 }} onClick={() => setInv((t) => { t.riskFlag = ""; t.riskNote = ""; })}>Remove flag</button>}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* customer + site */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 14, marginBottom: 14 }}>
