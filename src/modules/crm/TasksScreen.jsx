@@ -301,8 +301,8 @@ export default function TasksScreen({ crm, updateCrm, askConfirm, me, goHome }) 
             No {kind === "daily" ? "daily list items" : kind === "project" ? "projects" : "scheduled tasks"} yet.
           </div>
         ) : (
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 720 }}>
+          <div className="dk-bleed" style={{ overflowX: "auto" }}>
+            <table className="dk-t" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 720 }}>
               <thead>
                 <tr>
                   {["Task", "Who", kind === "daily" ? "Repeats" : kind === "project" ? "Status" : "When", kind === "scheduled" ? "Next / now" : kind === "project" ? "Finish by" : "", ""].map((h, i) => <th key={i} style={th}>{h}</th>)}

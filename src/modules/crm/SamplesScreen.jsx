@@ -135,8 +135,8 @@ export default function SamplesScreen({ crm, updateCrm, askConfirm, selId, setSe
     const ReportTable = ({ title, rows, label }) => (
       <div style={{ ...card, marginBottom: 0 }}>
         <p style={sect}>{title}</p>
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
+        <div className="dk-bleed" style={{ overflowX: "auto" }}>
+          <table className="dk-t" style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
             <thead>
               <tr>{["", "Requests", "Orders", "Rate", "Sales £"].map((h, i) => <th key={i} style={{ ...th, textAlign: i ? "right" : "left", padding: "6px 6px" }}>{h}</th>)}</tr>
             </thead>
@@ -213,8 +213,8 @@ export default function SamplesScreen({ crm, updateCrm, askConfirm, selId, setSe
             </div>
           ) : (
             <>
-              <div style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 820 }}>
+              <div className="dk-bleed" style={{ overflowX: "auto" }}>
+                <table className="dk-t" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 820 }}>
                   <thead>
                     <tr>{["Sample", "Date", "Customer", "Samples", "Source", "Status", "Order", ""].map((h, i) => <th key={i} style={th}>{h}</th>)}</tr>
                   </thead>
@@ -510,10 +510,11 @@ export default function SamplesScreen({ crm, updateCrm, askConfirm, selId, setSe
         <div style={{ display: "flex", alignItems: "center", marginBottom: 10 }}>
           <p style={{ ...sect, margin: 0 }}>Samples requested</p>
           <span style={{ flex: 1 }} />
-          <button style={{ ...btn, padding: "6px 11px", fontSize: 12.5 }} onClick={tryPrint}><Icon name="doc" stroke={NAVY} />Print ticket</button>
+          {/* right edge lines up with the qty box (the delete column sits beyond it) */}
+          <button style={{ ...btn, padding: "6px 11px", fontSize: 12.5, marginRight: 42 }} onClick={tryPrint}><Icon name="doc" stroke={NAVY} />Print ticket</button>
         </div>
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 560 }}>
+        <div className="dk-bleed" style={{ overflowX: "auto" }}>
+          <table className="dk-t" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 560 }}>
             <thead><tr>{["Product", "Colour", "Size", "Qty", ""].map((h, i) => <th key={i} style={{ ...th, padding: "8px 6px" }}>{h}</th>)}</tr></thead>
             <tbody>
               {smp.items.map((it) => {

@@ -159,7 +159,7 @@ export default function CollectionsScreen({ crm, updateCrm, askConfirm, selId, s
               No collections yet — raise one when a van needs to pick goods up from a UK supplier.
             </div>
           ) : (
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+            <table className="dk-t dk-bleed" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
               <thead><tr>{["COL #", "Supplier", "Postcode", "Collect", "Van", "Lines", "Done", "Value £", "Status", ""].map((h, i) => (
                 <th key={i} style={{ textAlign: i >= 5 && i <= 7 ? "right" : "left", fontSize: 10.5, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", padding: "8px 7px", borderBottom: "2px solid #e6e9ef", whiteSpace: "nowrap" }}>{h}</th>
               ))}</tr></thead>
@@ -342,8 +342,8 @@ export default function CollectionsScreen({ crm, updateCrm, askConfirm, selId, s
             <span style={{ fontSize: 12, fontWeight: 600, color: "#8593a8" }}>No catalogue products list {coll.supplier} as supplier — showing all</span>
           ) : null}
         </div>
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 780 }}>
+        <div className="dk-bleed" style={{ overflowX: "auto" }}>
+          <table className="dk-t" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 780 }}>
             <thead><tr>{["SKU", "Description", "Colour", "Qty", "Unit cost £", "Line £", "Where it went", ""].map((h, i) => (
               <th key={i} style={{ textAlign: i >= 3 && i <= 5 ? "right" : "left", fontSize: 10.5, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", padding: "7px 6px", borderBottom: "2px solid #e6e9ef", whiteSpace: "nowrap" }}>{h}</th>
             ))}</tr></thead>

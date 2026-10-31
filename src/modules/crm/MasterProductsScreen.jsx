@@ -133,8 +133,8 @@ export default function MasterProductsScreen({ crm, updateCrm, askConfirm, plann
             stock and kit contents all hang off this list.
           </div>
         ) : (
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1080 }}>
+          <div className="dk-bleed" style={{ overflowX: "auto" }}>
+            <table className="dk-t" style={{ width: "100%", borderCollapse: "collapse", minWidth: 1080 }}>
               <thead>
                 <tr>
                   {["SKU", "Product", "Colour", "Category", "Price £ inc", "Cost £", "Margin", "Wt kg", "Stock", "Allocated", "Free", ""].map((h, i) => (

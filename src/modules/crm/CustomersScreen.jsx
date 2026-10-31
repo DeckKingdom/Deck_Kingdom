@@ -467,7 +467,7 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
                   <Icon name="gear" />
                 </button>
               </div>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13.5 }}>
+              <table className="dk-t dk-bleed" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13.5 }}>
                 <thead>
                   <tr>
                     {["#", "Name", "Town", "Postcode", "Contact", "Source", "", "Invoices"].map((h, i) => (
@@ -696,8 +696,8 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
                 {(samplesByCust[sel.id] || []).length === 0 ? (
                   <div style={{ fontSize: 13, color: "#8593a8", fontWeight: 600 }}>No sample requests yet.</div>
                 ) : (
-                <div style={{ overflowX: "auto" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 600 }}>
+                <div className="dk-bleed" style={{ overflowX: "auto" }}>
+                  <table className="dk-t" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 600 }}>
                     <thead>
                       <tr>
                         {["Date", "Sample", "Samples", "Status", "Order", ""].map((h, i) => (
@@ -754,8 +754,8 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
                   {qs.length === 0 ? (
                     <div style={{ fontSize: 13, color: "#8593a8", fontWeight: 600 }}>No quotes yet.</div>
                   ) : (
-                    <div style={{ overflowX: "auto" }}>
-                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 640 }}>
+                    <div className="dk-bleed" style={{ overflowX: "auto" }}>
+                      <table className="dk-t" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 640 }}>
                         <thead>
                           <tr>
                             {["Date", "Quote", "Site", "Total £", "Valid until", "Status", ""].map((h, i) => (
@@ -798,8 +798,8 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
               {invs.length === 0 ? (
                 <div style={{ fontSize: 13, color: "#8593a8", fontWeight: 600 }}>No invoices yet.</div>
               ) : (
-                <div style={{ overflowX: "auto" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 760 }}>
+                <div className="dk-bleed" style={{ overflowX: "auto" }}>
+                  <table className="dk-t" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 760 }}>
                     <thead>
                       <tr>
                         {["Date", "Inv #", "Site · Job", "Total £", "Payment", "Delivery", "Follow-up", ""].map((h, i) => (

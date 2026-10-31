@@ -157,8 +157,8 @@ export default function QuotesScreen({ crm, updateCrm, askConfirm, selId, setSel
             </div>
           ) : (
             <>
-              <div style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 780 }}>
+              <div className="dk-bleed" style={{ overflowX: "auto" }}>
+                <table className="dk-t" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 780 }}>
                   <thead>
                     <tr>
                       {["Quote", "Date", "Customer", "Valid until", "Total £", "Status", "Invoice", ""].map((h, i) => (

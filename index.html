@@ -11,6 +11,12 @@
       /* a whole block that opens something: the title inside highlights */
       .dk-row-link { cursor: pointer; border-radius: 10px; margin: -6px; padding: 6px; transition: background .12s; }
       .dk-row-link:hover { background: rgba(24, 95, 165, 0.06); }
+      /* tables line up with the card edge: first/last cells get the same 8px inset,
+         and the table bleeds 8px either side so text sits on the card's content edge */
+      .dk-t > * > tr > *:first-child { padding-left: 8px !important; }
+      .dk-t > * > tr > *:last-child { padding-right: 8px !important; }
+      .dk-bleed { margin-left: -8px !important; margin-right: -8px !important; }
+      table.dk-bleed { width: calc(100% + 16px) !important; }
     </style>
   </head>
   <body style="margin:0">

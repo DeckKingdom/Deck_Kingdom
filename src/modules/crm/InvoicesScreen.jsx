@@ -148,8 +148,8 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
             <div style={{ textAlign: "center", padding: "30px 10px", color: "#5a6a85", fontWeight: 600 }}>No invoices yet.</div>
           ) : (
             <>
-              <div style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 780 }}>
+              <div className="dk-bleed" style={{ overflowX: "auto" }}>
+                <table className="dk-t" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 780 }}>
                   <thead>
                     <tr>
                       {["Inv #", "Date", "Customer", "Job", "Delivery", "Total £", "Payment", ""].map((h, i) => (
@@ -437,8 +437,8 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
                 </div>
               ) : (
                 <>
-                  <div style={{ overflowX: "auto", marginTop: 8 }}>
-                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, minWidth: 760 }}>
+                  <div className="dk-bleed" style={{ overflowX: "auto", marginTop: 8 }}>
+                    <table className="dk-t" style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, minWidth: 760 }}>
                       <thead>
                         <tr>
                           {["SKU", "Description", "Qty", "Stock from (batch)", "Landed £/pc", "Line £", "Picked", ""].map((h, i) => (

@@ -101,8 +101,8 @@ export default function StockCheck({ inv, crm, planner, updatePlanner, updateCrm
           </button>
         )}
       </div>
-      <div style={{ overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 620 }}>
+      <div className="dk-bleed" style={{ overflowX: "auto" }}>
+        <table className="dk-t" style={{ width: "100%", borderCollapse: "collapse", minWidth: 620 }}>
           <thead><tr>
             <th style={th}>Part</th><th style={{ ...th, textAlign: "right" }}>Needed</th><th style={{ ...th, textAlign: "right" }}>On collection</th>
             <th style={{ ...th, textAlign: "right" }}>Free in stock</th><th style={{ ...th, textAlign: "right" }}>Short</th>

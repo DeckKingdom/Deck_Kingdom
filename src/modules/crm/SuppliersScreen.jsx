@@ -153,8 +153,8 @@ export default function SuppliersScreen({ crm, updateCrm, askConfirm, selId, set
           {rows.length === 0 ? (
             <div style={{ textAlign: "center", padding: "30px 10px", color: "#5a6a85", fontWeight: 600 }}>{suppliers.length ? "No suppliers match." : "No suppliers yet."}</div>
           ) : (
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 760 }}>
+            <div className="dk-bleed" style={{ overflowX: "auto" }}>
+              <table className="dk-t" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 760 }}>
                 <thead><tr>{["Supplier", "Account #", "Town", "Category", "Purchases", "Spend £", "Unpaid £", ""].map((h, i) => <th key={i} style={{ ...th, textAlign: i >= 4 && i <= 6 ? "right" : "left" }}>{h}</th>)}</tr></thead>
                 <tbody>
                   {rows.map(({ x, st }) => (
@@ -254,8 +254,8 @@ export default function SuppliersScreen({ crm, updateCrm, askConfirm, selId, set
         {purchases.length === 0 ? (
           <div style={{ fontSize: 13, color: "#8593a8", fontWeight: 600 }}>No purchases yet.</div>
         ) : (
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 680 }}>
+          <div className="dk-bleed" style={{ overflowX: "auto" }}>
+            <table className="dk-t" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 680 }}>
               <thead><tr>{["PO", "Inv date", "Inv #", "Detail", "Total £", "Paid", ""].map((h, i) => <th key={i} style={{ ...th, textAlign: i === 4 ? "right" : "left" }}>{h}</th>)}</tr></thead>
               <tbody>
                 {purchases.map((p) => (

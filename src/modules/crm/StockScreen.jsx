@@ -142,8 +142,8 @@ export default function StockScreen({ crm, updateCrm, planner, updatePlanner, as
           {moves.length === 0 ? (
             <div style={{ fontSize: 13, color: "#8593a8", fontWeight: 600 }}>No movements yet — post a shipment or a collection into stock.</div>
           ) : (
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 680 }}>
+            <div className="dk-bleed" style={{ overflowX: "auto" }}>
+              <table className="dk-t" style={{ width: "100%", borderCollapse: "collapse", minWidth: 680 }}>
                 <thead><tr>{["When", "SKU", "Qty", "Unit £", "Type", "Reference", "By"].map((h, i) => (
                   <th key={i} style={{ textAlign: i === 2 || i === 3 ? "right" : "left", fontSize: 10.5, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", padding: "7px 7px", borderBottom: "2px solid #e6e9ef", whiteSpace: "nowrap" }}>{h}</th>
                 ))}</tr></thead>
@@ -168,8 +168,8 @@ export default function StockScreen({ crm, updateCrm, planner, updatePlanner, as
 
       {/* stock table */}
       <div style={card}>
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1100 }}>
+        <div className="dk-bleed" style={{ overflowX: "auto" }}>
+          <table className="dk-t" style={{ width: "100%", borderCollapse: "collapse", minWidth: 1100 }}>
             <thead>
               <tr>
                 {["SKU", "Product", "Colour", "Stock", "Alloc", "Free", "Cost £/pc", "Cost value £", "Sale £/pc", "Sale value £", "Trade £/pc", "Trade value £", ""].map((h, i) => (

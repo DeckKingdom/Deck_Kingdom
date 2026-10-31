@@ -163,8 +163,8 @@ export default function PurchasesScreen({ crm, updateCrm, askConfirm, selId, set
             </div>
           ) : (
             <>
-              <div style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 900 }}>
+              <div className="dk-bleed" style={{ overflowX: "auto" }}>
+                <table className="dk-t" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 900 }}>
                   <thead><tr>{["PO#", "Inv date", "Supplier", "Inv #", "Detail", "Category", "Sub £", "VAT £", "Total £", "Paid", ""].map((h, i) => <th key={i} style={{ ...th, textAlign: i >= 6 && i <= 8 ? "right" : "left" }}>{h}</th>)}</tr></thead>
                   <tbody>
                     {shown.map((x) => {
