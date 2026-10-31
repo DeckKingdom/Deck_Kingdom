@@ -70,7 +70,7 @@ export default function run(React, renderToString) {
   const props = { crm, updateCrm: noop, askConfirm: noop, me: "jon@deckkingdom.co.uk", openInvoice: noop, newInvoiceFor: noop, goCustomer: noop };
 
   let html = renderToString(React.createElement(CustomersScreen, { ...props, selId: null, setSelId: noop }));
-  assert(html.includes("New customer") && html.includes("Bob"), "customers list");
+  assert(html.includes("One-time buyers") && html.includes("Bob"), "customers list");
   html = renderToString(React.createElement(CustomersScreen, { ...props, selId: cust.id, setSelId: noop }));
   ["Account #","2670","10710","rear car park","1,452.00"].forEach((s)=>{ if(!html.includes(s)) console.error("missing:", s); }); assert(["Account #","2670","10710","rear car park","1,452.00"].every((s)=>html.includes(s)), "account view");
   html = renderToString(React.createElement(InvoicesScreen, { ...props, selId: null, setSelId: noop }));

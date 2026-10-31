@@ -1,11 +1,11 @@
 // Customers tab: searchable account list -> account view with sites and
 // invoice history, per the approved mockup.
 import { useState, useMemo, useEffect } from "react";
-import { NAVY, GOLD, RED, prettyDate, prettyDateTime } from "../../lib/core.js";
+import { NAVY, GOLD, RED, prettyDate, prettyDateTime, addDays as addDaysC } from "../../lib/core.js";
 import {
   originText,
   blankCustomer, blankSite, nextNumber, SOURCES,
-  invoiceTotals, gbp, isPaid, followUpDone, FOLLOWUP_FLAGS, FIELD_FORMATS, CONTACT_METHODS,
+  invoiceTotals, gbp, isPaid, isSaleInvoice, today as todayC, followUpDone, FOLLOWUP_FLAGS, FIELD_FORMATS, CONTACT_METHODS,
   TRADE_COUNTER, TRADE_COUNTER_LABEL, quoteTotals, quoteStatus, quoteInvoice, quoteRef, QUOTE_TONES, sampleRef, sampleStatus, sampleInvoice, SAMPLE_TONES,
 } from "../../lib/crmCore.js";
 import { Icon, Chip, Modal, SuggestInput, selectAllProps, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
@@ -214,7 +214,32 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
         [c.name, c.town, c.postcode, c.contact, c.mobile, c.landline, c.email, String(c.accountNo || "")]
           .some((v) => String(v || "").toLowerCase().includes(q)))
     : crm.customers;
-  const shown = matches.slice(0, 50);
+  // newest first: accounts still waiting for a number (just in from the website) on top, then highest account # down
+  const sorted = [...matches].sort((a, b) => {
+    const na = Number(a.accountNo) || 0, nb = Number(b.accountNo) || 0;
+    if (!na !== !nb) return na ? 1 : -1;
+    return nb - na || String(b.created || "").localeCompare(String(a.created || ""));
+  });
+  const shown = sorted.slice(0, 50);
+
+  // ===== summary =====
+  const stats = useMemo(() => {
+    const yearAgo = addDaysC(todayC(), -365), monthAgo = addDaysC(todayC(), -30);
+    const seg = () => ({ accounts: 0, active: 0, sales: 0 });
+    const out = { total: crm.customers.length, trade: seg(), retail: seg(), active: 0, oneTime: 0, repeat: 0, never: 0, newMonth: 0, buyers: 0 };
+    crm.customers.forEach((c) => {
+      const sales = (invByCust[c.id] || []).filter(isSaleInvoice);
+      const recent = sales.filter((i) => (i.date || "") >= yearAgo);
+      const g = c.trader ? out.trade : out.retail;
+      g.accounts++;
+      if (recent.length) { out.active++; g.active++; }
+      g.sales += recent.reduce((t, i) => t + invoiceTotals(i).total, 0);
+      if (!sales.length) out.never++;
+      else { out.buyers++; if (sales.length === 1) out.oneTime++; else out.repeat++; }
+      if ((c.created || "") >= monthAgo) out.newMonth++;
+    });
+    return out;
+  }, [crm.customers, invByCust]);
 
   const siteSuggestions = useMemo(() => {
     if (!siteDraft) return null;
@@ -271,25 +296,44 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
   return (
     <div style={{ maxWidth: 1140, margin: "0 auto", padding: "18px 22px" }}>
 
-      {/* search / actions bar */}
-      <div style={{ ...card, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "10px 14px" }}>
-        <div style={{ position: "relative", flex: 1, minWidth: 200, maxWidth: 360 }}>
-          <span style={{ position: "absolute", left: 11, top: 10 }}><Icon name="search" /></span>
-          <input
-            style={{ ...inp, paddingLeft: 34 }}
-            placeholder="Search name, postcode, phone, account #…"
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); if (sel) setSelId(null); }}
-          />
-        </div>
-        <span style={{ fontSize: 12, color: "#5a6a85", fontWeight: 700 }}>{crm.customers.length.toLocaleString("en-GB")} customers</span>
-        <span style={{ flex: 1 }} />
-        <button style={{ ...abtn, width: 36, height: 36 }} title="Numbering — next account / site / invoice numbers"
-          onClick={() => { setNumDraft({ ...crm.numbering }); setNumPanel(true); }}>
-          <Icon name="gear" />
-        </button>
-        <button style={goldBtn} onClick={startNewCustomer}><Icon name="plus" stroke={NAVY} />New customer</button>
-      </div>
+      {/* summary */}
+      {!sel && crm.customers.length > 0 && (() => {
+        const pct = (n, d) => (d ? Math.round((n / d) * 100) + "%" : "—");
+        const box = { flex: "1 1 170px", background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, padding: "12px 16px", minWidth: 160 };
+        const lab = { fontSize: 10.5, fontWeight: 700, color: "#8593a8", letterSpacing: 0.5, textTransform: "uppercase" };
+        const big = { fontSize: 22, fontWeight: 800, color: NAVY, marginTop: 2 };
+        const sub = { fontSize: 11.5, fontWeight: 600, color: "#5a6a85", marginTop: 2 };
+        const tr = stats.trade, rt = stats.retail;
+        return (
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
+            <div style={box}>
+              <div style={lab}>Customer accounts</div>
+              <div style={big}>{stats.total.toLocaleString("en-GB")}</div>
+              <div style={sub}>{stats.newMonth.toLocaleString("en-GB")} new in the last 30 days</div>
+            </div>
+            <div style={box}>
+              <div style={lab}>Trade · Retail</div>
+              <div style={big}>{tr.accounts.toLocaleString("en-GB")} <span style={{ color: "#aab3c2", fontWeight: 600 }}>·</span> {rt.accounts.toLocaleString("en-GB")}</div>
+              <div style={sub}>{pct(tr.accounts, stats.total) + " trade accounts"}</div>
+            </div>
+            <div style={box}>
+              <div style={lab}>Sales last 12 months</div>
+              <div style={big}>{gbp(tr.sales + rt.sales)}</div>
+              <div style={sub}>{"Trade " + gbp(tr.sales) + " (" + pct(tr.sales, tr.sales + rt.sales) + ") · Retail " + gbp(rt.sales)}</div>
+            </div>
+            <div style={box}>
+              <div style={lab}>Active</div>
+              <div style={big}>{stats.active.toLocaleString("en-GB")}</div>
+              <div style={sub}>{"ordered in the last 12 months · " + tr.active + " trade, " + rt.active + " retail"}</div>
+            </div>
+            <div style={box}>
+              <div style={lab}>One-time buyers</div>
+              <div style={big}>{stats.oneTime.toLocaleString("en-GB")} <span style={{ fontSize: 14, color: "#5a6a85" }}>{pct(stats.oneTime, stats.buyers)}</span></div>
+              <div style={sub}>{stats.repeat.toLocaleString("en-GB") + " repeat · " + stats.never.toLocaleString("en-GB") + " never ordered"}</div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ===== list view ===== */}
       {!sel && (
@@ -300,6 +344,21 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
             </div>
           ) : (
             <>
+              <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 6 }}>
+                <div style={{ position: "relative", flex: 1, minWidth: 200, maxWidth: 360 }}>
+                  <span style={{ position: "absolute", left: 11, top: 10 }}><Icon name="search" /></span>
+                  <input style={{ ...inp, paddingLeft: 34 }} placeholder="Search name, postcode, phone, account #…"
+                    value={search} onChange={(e) => setSearch(e.target.value)} />
+                </div>
+                <span style={{ fontSize: 12, color: "#5a6a85", fontWeight: 700 }}>
+                  {(q ? matches.length.toLocaleString("en-GB") + " of " : "") + crm.customers.length.toLocaleString("en-GB")} customers · newest first
+                </span>
+                <span style={{ flex: 1 }} />
+                <button style={{ ...abtn, width: 36, height: 36 }} title="Numbering — next account / site / invoice numbers"
+                  onClick={() => { setNumDraft({ ...crm.numbering }); setNumPanel(true); }}>
+                  <Icon name="gear" />
+                </button>
+              </div>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13.5 }}>
                 <thead>
                   <tr>
@@ -313,7 +372,7 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
                     <tr key={c.id} onClick={() => setSelId(c.id)} style={{ cursor: "pointer" }}
                       onMouseEnter={(e) => (e.currentTarget.style.background = "#f6f8fb")}
                       onMouseLeave={(e) => (e.currentTarget.style.background = "")}>
-                      <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", fontWeight: 700 }}>{c.accountNo || "—"}</td>
+                      <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", fontWeight: 700 }}>{c.accountNo || <span title="Waiting for FileMaker to give it an account number" style={{ fontSize: 10.5, fontWeight: 800, color: "#8a5a00", background: "#fdf3dc", borderRadius: 4, padding: "1px 5px" }}>NEW</span>}</td>
                       <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", fontWeight: 700 }}>{c.name || "—"}</td>
                       <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6" }}>{c.town}</td>
                       <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6" }}>{c.postcode}</td>
