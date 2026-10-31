@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { NAVY, GOLD, RED, prettyDate, prettyDateTime, addDays as addDaysC } from "../../lib/core.js";
 import {
-  originText, recordOrigin,
+  originText, recordOrigin, userInitials,
   blankCustomer, blankSite, nextNumber, SOURCES,
   invoiceTotals, gbp, isPaid, isSaleInvoice, today as todayC, followUpDone, FOLLOWUP_FLAGS, FIELD_FORMATS, CONTACT_METHODS,
   TRADE_COUNTER, TRADE_COUNTER_LABEL, quoteTotals, quoteStatus, quoteInvoice, quoteRef, QUOTE_TONES, sampleRef, sampleStatus, sampleInvoice, SAMPLE_TONES,
@@ -468,7 +468,7 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
                   const short = (d) => (d ? new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "2-digit" }) : "");
                   const who = (v) => String(v || "").split("@")[0];
                   const tag = o.key === "filemaker" ? "FM" : o.key === "website" ? "Web" : "Manual";
-                  const brief = tag + (sel.created ? " " + short(sel.created) : "") + (sel.updatedAt ? " · upd " + short(sel.updatedAt) : "");
+                  const brief = tag + (sel.created ? " " + short(sel.created) : "") + (sel.updatedAt ? " · upd " + short(sel.updatedAt) + (sel.modifiedBy ? " " + userInitials(crm, sel.modifiedBy) : "") : "");
                   const full = originText(sel, prettyDate(sel.created)) +
                     (sel.updatedAt ? " · Updated " + prettyDateTime(sel.updatedAt) + (sel.modifiedBy ? " by " + who(sel.modifiedBy) : "") : sel.modifiedBy ? " · Last modified by " + who(sel.modifiedBy) : "");
                   return (

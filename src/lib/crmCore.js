@@ -2242,6 +2242,21 @@ export const staffName = (crm, email) => {
 };
 
 // Everyone who can be given a task: logins (profiles) plus anyone already assigned
+// Initials for whoever made a change: staff name if known ("Jon Cheetham" -> JC),
+// else from the email (jon.cheetham@… -> JC, fastfireengineer@… -> FA); the feeds as FM / Web.
+export const userInitials = (crm, who) => {
+  const w = String(who || "").trim();
+  if (!w) return "";
+  if (w === "FileMaker") return "FM";
+  if (w === "Website") return "Web";
+  if (w === "system") return "SYS";
+  const st = ((crm && crm.staff) || []).find((x) => String(x.email || "").toLowerCase() === w.toLowerCase());
+  const src = st && st.name ? st.name : w.split("@")[0];
+  const parts = src.split(/[\s._-]+/).filter(Boolean);
+  if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  return src.slice(0, 2).toUpperCase();
+};
+
 export const staffList = (crm, me) => {
   const seen = new Map();
   const add = (email, name) => {
