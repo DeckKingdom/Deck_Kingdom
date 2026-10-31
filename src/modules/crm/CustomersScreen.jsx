@@ -45,34 +45,45 @@ export const QuickMail = ({ email, name, size = 30, onCompose }) => !String(emai
 );
 
 // hover a record's name to see when it was created / last changed and by whom
-const StampHover = ({ crm, rec, children }) => {
+// small white pill shown while hovering its children
+const HoverPill = ({ lines, children, block, head, foot }) => {
   const [open, setOpen] = useState(false);
-  const who = (v) => String(v || "").split("@")[0];
-  const lines = [
-    rec.created ? originText(rec, prettyDate(rec.created)) : "",
-    rec.updatedAt ? "Updated " + prettyDateTime(rec.updatedAt) + (rec.modifiedBy ? " by " + who(rec.modifiedBy) + " (" + userInitials(crm, rec.modifiedBy) + ")" : "")
-      : rec.modifiedBy ? "Last modified by " + who(rec.modifiedBy) : "",
-  ].filter(Boolean);
+  const ls = (lines || []).filter(Boolean), fs = (foot || []).filter(Boolean);
   return (
-    <span style={{ position: "relative", display: "inline-block" }} onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
+    <span style={{ position: "relative", display: block ? "block" : "inline-block", minWidth: 0 }} onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
       {children}
-      {open && lines.length > 0 && (
+      {open && ls.length > 0 && (
         <span style={{ position: "absolute", left: 0, top: "calc(100% + 6px)", zIndex: 20, background: "#fff", color: NAVY, border: "1px solid #e6e9ef", borderRadius: 12, padding: "8px 12px", boxShadow: "0 8px 24px rgba(11,31,63,.2)", whiteSpace: "nowrap", fontSize: 12, fontWeight: 600, lineHeight: 1.6 }}>
-          {lines.map((l) => <span key={l} style={{ display: "block" }}>{l}</span>)}
+          {head && <b style={{ display: "block", fontSize: 12.5 }}>{head}</b>}
+          {ls.map((l, k) => <span key={k} style={{ display: "block" }}>{l}</span>)}
+          {fs.length > 0 && <span style={{ display: "block", borderTop: "1px solid #f0f2f6", marginTop: 5, paddingTop: 5, color: "#8593a8", fontSize: 11.5 }}>{fs.map((l, k) => <span key={k} style={{ display: "block" }}>{l}</span>)}</span>}
         </span>
       )}
     </span>
   );
 };
+const stampLines = (crm, rec) => {
+  const who = (v) => String(v || "").split("@")[0];
+  return [
+    rec.created ? originText(rec, prettyDate(rec.created)) : "",
+    rec.updatedAt ? "Updated " + prettyDateTime(rec.updatedAt) + (rec.modifiedBy ? " by " + who(rec.modifiedBy) + " (" + userInitials(crm, rec.modifiedBy) + ")" : "")
+      : rec.modifiedBy ? "Last modified by " + who(rec.modifiedBy) : "",
+  ].filter(Boolean);
+};
+const oneLine = { display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
 
-const FieldRow = ({ icon, label, value, actions }) => (
+const FieldRow = ({ icon, label, value, actions, full }) => (
   <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 0", borderBottom: "1px solid #f0f2f6" }}>
     <div style={{ width: 30, height: 30, borderRadius: 8, background: "#f0f3f8", display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>
       <Icon name={icon} stroke={NAVY} />
     </div>
-    <div style={{ minWidth: 0 }}>
+    <div style={{ minWidth: 0, flex: 1 }}>
       <span style={{ ...lbl, marginBottom: 0 }}>{label}</span>
-      <b style={{ fontSize: 14, color: value ? NAVY : "#aab3c2", overflowWrap: "anywhere" }}>{value || "—"}</b>
+      {full && value ? (
+        <HoverPill lines={full} block><b style={{ ...oneLine, fontSize: 14, color: NAVY, cursor: "default" }}>{value}</b></HoverPill>
+      ) : (
+        <b style={{ fontSize: 14, color: value ? NAVY : "#aab3c2", overflowWrap: "anywhere" }}>{value || "—"}</b>
+      )}
     </div>
     {actions && <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>{actions}</div>}
   </div>
@@ -252,6 +263,14 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
           c.sites = c.sites.filter((x) => x.id !== site.id);
           return c;
         }),
+    });
+
+  const removeSample = (smp) =>
+    askConfirm({
+      message: "Delete sample request " + sampleRef(smp) + "? It will drop out of the conversion figures.",
+      confirmLabel: "Delete",
+      danger: true,
+      action: () => updateCrm((c) => { c.samples = c.samples.filter((x) => x.id !== smp.id); return c; }),
     });
 
   const copyFromAccount = () =>
@@ -622,7 +641,8 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
                 <FieldRow icon="phone" label="Landline" value={sel.landline} actions={isUkMobile(sel.landline) ? <QuickWa num={sel.landline} name={sel.contact || sel.name} /> : null} />
                 <FieldRow icon="mail" label="Email" value={sel.email} actions={<QuickMail email={sel.email} name={sel.contact || sel.name} onCompose={composeFor(sel.email, sel.contact || sel.name, sel.id, "")} />} />
                 <FieldRow icon="share" label="Preferred contact" value={sel.contactMethod} />
-                <FieldRow icon="pin" label="Invoice address" value={[sel.address, sel.town, sel.postcode].filter(Boolean).join(", ")} />
+                <FieldRow icon="pin" label="Invoice address" value={[sel.address, sel.town, sel.postcode].filter(Boolean).join(", ")}
+                  full={[...String(sel.address || "").split(/\s*,\s*/), sel.town, sel.postcode]} />
               </div>
 
               <div style={{ ...card, marginBottom: 0 }}>
@@ -644,12 +664,15 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
                       <Icon name="pin" size={17} stroke={GOLD} />
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: "flex", gap: 7, alignItems: "baseline", flexWrap: "wrap" }}>
-                        <StampHover crm={crm} rec={s}><b style={{ fontSize: 14, cursor: "default" }}>{s.name || s.address || "Unnamed site"}</b></StampHover>
-                      </div>
-                      <div style={{ fontSize: 12.5, color: "#5a6a85", fontWeight: 600, marginTop: 2 }}>
-                        {[s.address !== s.name ? s.address : "", s.town, s.postcode, s.mobile || s.landline].filter(Boolean).join(" · ")}
-                      </div>
+                      <HoverPill block head={s.name || s.address || "Unnamed site"} lines={[
+                        ...(s.address && s.address !== s.name ? String(s.address).split(/\s*,\s*/) : []), s.town, s.postcode,
+                        s.contact ? "Contact: " + s.contact : "", s.mobile ? "Mobile: " + s.mobile : "", s.landline ? "Landline: " + s.landline : "", s.email ? "Email: " + s.email : "",
+                      ]} foot={stampLines(crm, s)}>
+                        <b style={{ ...oneLine, fontSize: 14, cursor: "default" }}>{s.name || s.address || "Unnamed site"}</b>
+                        <span style={{ ...oneLine, fontSize: 12.5, color: "#5a6a85", fontWeight: 600, marginTop: 2 }}>
+                          {[s.address !== s.name ? s.address : "", s.town, s.postcode, s.mobile || s.landline].filter(Boolean).join(" · ")}
+                        </span>
+                      </HoverPill>
                       {s.notes && <NoteBox>{s.notes}</NoteBox>}
                     </div>
                     <div style={{ display: "flex", gap: 5 }}>
@@ -663,13 +686,16 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
               </div>
             </div>
 
-            {(samplesByCust[sel.id] || []).length > 0 && (
+            {(
               <div style={{ ...card, marginTop: 14 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-                  <p style={{ ...sect, margin: 0 }}>Sample requests ({samplesByCust[sel.id].length})</p>
+                  <p style={{ ...sect, margin: 0 }}>Sample requests ({(samplesByCust[sel.id] || []).length})</p>
                   <span style={{ flex: 1 }} />
                   <button style={{ ...btn, padding: "6px 11px", fontSize: 12.5 }} onClick={() => newSampleFor(sel.id)}><Icon name="plus" stroke={NAVY} />Log sample</button>
                 </div>
+                {(samplesByCust[sel.id] || []).length === 0 ? (
+                  <div style={{ fontSize: 13, color: "#8593a8", fontWeight: 600 }}>No sample requests yet.</div>
+                ) : (
                 <div style={{ overflowX: "auto" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 600 }}>
                     <thead>
@@ -697,7 +723,10 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
                               {si ? <button onClick={() => openInvoice(si.id)} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontWeight: 700, color: "#185FA5", fontSize: 13, padding: 0 }}>{"#" + (si.invNo || "—")}</button> : <span style={{ color: "#aab3c2" }}>—</span>}
                             </td>
                             <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", textAlign: "right" }}>
-                              <button style={abtn} title="Open sample request" onClick={() => openSample(x.id)}><Icon name="pen" /></button>
+                              <span style={{ display: "inline-flex", gap: 5 }}>
+                                <button style={abtn} title="Open sample request" onClick={() => openSample(x.id)}><Icon name="pen" /></button>
+                                <button style={abtn} title="Delete sample request" onClick={() => removeSample(x)}><Icon name="bin" /></button>
+                              </span>
                             </td>
                           </tr>
                         );
@@ -705,6 +734,7 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
                     </tbody>
                   </table>
                 </div>
+                )}
               </div>
             )}
 
