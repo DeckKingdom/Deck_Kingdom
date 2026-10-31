@@ -21,16 +21,17 @@ export const waNumber = (v) => {
 };
 const isUkMobile = (v) => /^447\d{9}$/.test(waNumber(v));
 const firstName = (v) => String(v || "").trim().split(/\s+/)[0] || "";
-export const waLink = (num, name) => "https://wa.me/" + waNumber(num) + "?text=" + encodeURIComponent((firstName(name) ? "Hi " + firstName(name) + ", " : "Hi, ") + "it's Deck Kingdom. ");
-export const mailLink = (email, name) => "mailto:" + String(email || "").trim() + "?subject=" + encodeURIComponent("Deck Kingdom") + "&body=" + encodeURIComponent((firstName(name) ? "Hi " + firstName(name) : "Hi") + ",\n\n");
+export const waLink = (num, name) => "https://web.whatsapp.com/send?phone=" + waNumber(num) + "&text=" + encodeURIComponent((firstName(name) ? "Hi " + firstName(name) + ", " : "Hi, ") + "it's Deck Kingdom. ");
+// Gmail compose in the browser (not the PC's default mail app)
+export const mailLink = (email, name) => "https://mail.google.com/mail/?view=cm&fs=1&to=" + encodeURIComponent(String(email || "").trim()) + "&su=" + encodeURIComponent("Deck Kingdom") + "&body=" + encodeURIComponent((firstName(name) ? "Hi " + firstName(name) : "Hi") + ",\n\n");
 const qbtn = (bg, fg) => ({ width: 30, height: 30, borderRadius: 8, border: "none", background: bg, color: fg, display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0, flex: "none", textDecoration: "none" });
 export const QuickWa = ({ num, name, size = 30 }) => waNumber(num) ? (
-  <a href={waLink(num, name)} target="_blank" rel="noopener noreferrer" title={"WhatsApp " + num} style={{ ...qbtn("#25D36622", "#128C7E"), width: size, height: size }}>
+  <a href={waLink(num, name)} target="dk-whatsapp" title={"WhatsApp " + num} style={{ ...qbtn("#25D36622", "#128C7E"), width: size, height: size }}>
     <Icon name="wa" stroke="#128C7E" size={size > 26 ? 16 : 14} />
   </a>
 ) : null;
 export const QuickMail = ({ email, name, size = 30 }) => String(email || "").includes("@") ? (
-  <a href={mailLink(email, name)} title={"Email " + email} style={{ ...qbtn("#185FA51a", "#185FA5"), width: size, height: size }}>
+  <a href={mailLink(email, name)} target="dk-gmail" title={"Email " + email} style={{ ...qbtn("#185FA51a", "#185FA5"), width: size, height: size }}>
     <Icon name="mail" stroke="#185FA5" size={size > 26 ? 15 : 13} />
   </a>
 ) : null;
