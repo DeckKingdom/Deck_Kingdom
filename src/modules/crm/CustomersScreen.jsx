@@ -528,7 +528,7 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
                   </span>
                 </button>
               </div>
-              <button title="Delete this account" onClick={() => removeCustomer(sel)} style={{ width: 28, height: 28, borderRadius: 7, border: "1px dashed #3a4f78", background: "transparent", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0, flex: "none" }}>
+              <button title="Delete this account" onClick={() => removeCustomer(sel)} style={{ alignSelf: "flex-end", width: 28, height: 28, borderRadius: 7, border: "1px dashed #3a4f78", background: "transparent", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0, flex: "none" }}>
                 <Icon name="bin" stroke="#8fa0c0" size={13} />
               </button>
             </div>
