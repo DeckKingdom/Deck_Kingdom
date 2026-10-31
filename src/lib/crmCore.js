@@ -1986,7 +1986,7 @@ export const blankSample = (customerId) => ({
   customerId: customerId || "",
   date: today(),
   source: "Manual entry",
-  dispatchMethod: "",
+  dispatchMethod: "Evri",
   dispatchedDate: "",
   trackingRef: "",
   followUpDate: "",

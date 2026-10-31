@@ -1,7 +1,7 @@
 // Samples tab: sample requests (S-n) with the day's work lists (to send,
 // follow-ups due) and conversion reporting; entry screen per request.
 // Conversions are credited automatically (see syncSampleConversions).
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { NAVY, GOLD, RED, prettyDate, prettyDateTime, addDays, daysBetween } from "../../lib/core.js";
 import {
   blankSample, blankSampleItem, blankCustomer, nextNumber, gbp, today, invoiceTotals, isSaleInvoice,
@@ -32,6 +32,43 @@ const itemsSummary = (x) => (x.items || []).map((it) => (Number(it.qty) > 1 ? it
 
 // how an invoice is known: its number, else the website order ref
 const invRef = (i) => (i.invNo ? "invoice #" + i.invNo : i.orderRef ? "order " + i.orderRef : "invoice (not numbered yet)");
+
+const plainVal = { fontSize: 14, fontWeight: 700, color: NAVY, padding: "8px 0", lineHeight: "19px" };
+
+// a step you tick off: gold "do it" button -> green button showing the date.
+// Clicking the green button changes the date; the × undoes it. plain = just the date as text (click to change).
+function StepDate({ value, onDate, todo, done, icon, plain }) {
+  const ref = useRef(null);
+  const pick = () => { const el = ref.current; if (!el) return; try { el.showPicker(); } catch { el.focus(); el.click(); } };
+  const hidden = <input ref={ref} type="date" value={value || ""} onChange={(e) => e.target.value && onDate(e.target.value)}
+    style={{ position: "absolute", opacity: 0, pointerEvents: "none", width: 1, height: 1, left: 0, bottom: 0 }} tabIndex={-1} />;
+  if (plain) return (
+    <div style={{ position: "relative" }}>
+      <button type="button" onClick={pick} title="Change the date" className="dk-title-link" style={{ ...plainVal, display: "block" }}>{value ? prettyDate(value) : "—"}</button>
+      {hidden}
+    </div>
+  );
+  const base = { width: "100%", height: 34, borderRadius: 8, fontFamily: "inherit", fontSize: 13.5, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 7, border: "none", padding: "0 10px" };
+  return (
+    <div style={{ position: "relative" }}>
+      {value ? (
+        <div style={{ display: "flex", gap: 0 }}>
+          <button type="button" onClick={pick} title="Change the date" style={{ ...base, background: "#3FA55C", color: "#fff", borderRadius: "8px 0 0 8px" }}>
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
+            {done} {prettyDate(value).slice(0, 6)}
+          </button>
+          <button type="button" onClick={() => onDate("")} title="Undo"
+            style={{ ...base, width: 30, padding: 0, background: "#359050", color: "#fff", borderRadius: "0 8px 8px 0", borderLeft: "1px solid #ffffff40" }}>×</button>
+        </div>
+      ) : (
+        <button type="button" onClick={() => onDate(today())} style={{ ...base, background: GOLD, color: NAVY }}>
+          <Icon name={icon} stroke={NAVY} size={14} />{todo}
+        </button>
+      )}
+      {hidden}
+    </div>
+  );
+}
 
 export default function SamplesScreen({ crm, updateCrm, askConfirm, selId, setSelId, goCustomer, openInvoice, me }) {
   const [search, setSearch] = useState("");
@@ -367,11 +404,6 @@ export default function SamplesScreen({ crm, updateCrm, askConfirm, selId, setSe
         <span style={{ flex: 1 }} />
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
           <Chip tone={SAMPLE_TONES[st]} style={{ ...statusChipStyle, marginRight: 4 }}>{st}</Chip>
-          {!smp.dispatchedDate ? (
-            <button style={goldBtn} onClick={markSent}><Icon name="truck" stroke={NAVY} />Mark as sent</button>
-          ) : !smp.followedUp && !inv && smp.outcome !== "lost" ? (
-            <button style={goldBtn} onClick={() => setSample((x) => { x.followedUp = true; x.followedUpDate = today(); })}><Icon name="phone" stroke={NAVY} />Followed up</button>
-          ) : null}
           <button title="Delete this sample request" onClick={remove}
             style={{ width: 28, height: 28, borderRadius: 8, border: "1px dashed #3a4f78", background: "transparent", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0, flex: "none" }}>
             <Icon name="bin" stroke="#8fa0c0" size={13} />
@@ -572,64 +604,59 @@ export default function SamplesScreen({ crm, updateCrm, askConfirm, selId, setSe
       {/* request, dispatch, follow-up */}
       <div style={card}>
         <p style={sect}>Request, dispatch &amp; follow-up</p>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12, marginBottom: 12 }}>
-          {field("Requested", "date", { type: "date" })}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 14, alignItems: "start" }}>
+          <div>
+            <span style={lbl}>Requested</span>
+            <StepDate value={smp.date} plain onDate={(d) => setSample((x) => (x.date = d))} />
+          </div>
           <div>
             <span style={lbl}>Came from</span>
-            <select style={inp} value={smp.source} onChange={(e) => setSample((x) => (x.source = e.target.value))}>
-              {smp.source && !SAMPLE_SOURCES.includes(smp.source) && <option value={smp.source}>{smp.source}</option>}
-              {SAMPLE_SOURCES.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
+            {smp.source && (smp.raisedBy === "Website" || smp.raisedBy === "FileMaker") ? (
+              <div style={plainVal}>{smp.source}</div>
+            ) : (
+              <select style={inp} value={smp.source} onChange={(e) => setSample((x) => (x.source = e.target.value))}>
+                {smp.source && !SAMPLE_SOURCES.includes(smp.source) && <option value={smp.source}>{smp.source}</option>}
+                {SAMPLE_SOURCES.map((s2) => <option key={s2} value={s2}>{s2}</option>)}
+              </select>
+            )}
           </div>
           <div>
             <span style={lbl}>Sent by</span>
-            <select style={inp} value={smp.dispatchMethod} onChange={(e) => setSample((x) => (x.dispatchMethod = e.target.value))}>
-              <option value="">—</option>
+            <select style={inp} value={smp.dispatchMethod || "Evri"} onChange={(e) => setSample((x) => (x.dispatchMethod = e.target.value))}>
               {smp.dispatchMethod && !SAMPLE_DISPATCH.includes(smp.dispatchMethod) && <option value={smp.dispatchMethod}>{smp.dispatchMethod}</option>}
-              {SAMPLE_DISPATCH.map((s) => <option key={s} value={s}>{s}</option>)}
+              {SAMPLE_DISPATCH.map((s2) => <option key={s2} value={s2}>{s2}</option>)}
             </select>
           </div>
+          {["Evri", "Royal Mail"].includes(smp.dispatchMethod || "Evri") ? (
+            <div>
+              <span style={lbl}>{(smp.dispatchMethod || "Evri") + " tracking no."}</span>
+              <div style={{ position: "relative" }}>
+                <input style={{ ...inp, paddingRight: smp.trackingRef ? 64 : undefined }} value={smp.trackingRef || ""} placeholder={"paste from " + (smp.dispatchMethod || "Evri")}
+                  onChange={(e) => setSample((x) => (x.trackingRef = e.target.value.trim().toUpperCase()))} />
+                {smp.trackingRef && (
+                  <a href={(smp.dispatchMethod || "Evri") === "Royal Mail"
+                      ? "https://www.royalmail.com/track-your-item#/tracking-results/" + encodeURIComponent(smp.trackingRef)
+                      : "https://www.evri.com/track/parcel/" + encodeURIComponent(smp.trackingRef) + "/details"} target="_blank" rel="noopener noreferrer"
+                    title="Open tracking" style={{ position: "absolute", right: 4, top: 4, bottom: 4, display: "inline-flex", alignItems: "center", gap: 3, padding: "0 8px", borderRadius: 6, background: "#eef1f6", color: NAVY, fontSize: 12, fontWeight: 700, textDecoration: "none" }}>
+                    Track ↗
+                  </a>
+                )}
+              </div>
+            </div>
+          ) : <div />}
           <div>
-            <span style={lbl}>Sent on</span>
-            <input style={inp} type="date" value={smp.dispatchedDate}
-              onChange={(e) => setSample((x) => {
-                x.dispatchedDate = e.target.value;
-                if (x.dispatchedDate && !x.followUpDate) x.followUpDate = addDays(x.dispatchedDate, SAMPLE_FOLLOWUP_DAYS);
+            <span style={lbl}>Sent</span>
+            <StepDate value={smp.dispatchedDate} icon="truck" todo="Mark as sent" done="Sent"
+              onDate={(d) => setSample((x) => {
+                x.dispatchedDate = d;
+                if (!x.dispatchMethod) x.dispatchMethod = "Evri";
+                if (d && !x.followUpDate) x.followUpDate = addDays(d, SAMPLE_FOLLOWUP_DAYS);
               })} />
           </div>
           <div>
-            <span style={lbl}>Evri tracking no.</span>
-            <div style={{ position: "relative" }}>
-              <input style={{ ...inp, paddingRight: smp.trackingRef ? 64 : undefined }} value={smp.trackingRef || ""} placeholder="paste from Evri"
-                onChange={(e) => setSample((x) => (x.trackingRef = e.target.value.trim().toUpperCase()))} />
-              {smp.trackingRef && (
-                <a href={"https://www.evri.com/track/parcel/" + encodeURIComponent(smp.trackingRef) + "/details"} target="_blank" rel="noopener noreferrer"
-                  title="Open Evri tracking" style={{ position: "absolute", right: 4, top: 4, bottom: 4, display: "inline-flex", alignItems: "center", gap: 3, padding: "0 8px", borderRadius: 6, background: "#eef1f6", color: NAVY, fontSize: 12, fontWeight: 700, textDecoration: "none" }}>
-                  Track ↗
-                </a>
-              )}
-            </div>
-          </div>
-          {field("Follow up on", "followUpDate", { type: "date" })}
-          <div>
-            <span style={lbl}>Followed up</span>
-            <label style={{ display: "flex", alignItems: "center", gap: 8, height: 35, fontSize: 13.5, fontWeight: 700 }}>
-              <input type="checkbox" checked={smp.followedUp}
-                onChange={(e) => setSample((x) => { x.followedUp = e.target.checked; x.followedUpDate = e.target.checked ? x.followedUpDate || today() : ""; })} />
-              {smp.followedUp ? (smp.followedUpDate ? prettyDate(smp.followedUpDate) : "Yes") : "Not yet"}
-            </label>
-          </div>
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 12 }}>
-          <div>
-            <span style={lbl}>Their project</span>
-            <textarea style={{ ...inp, resize: "vertical" }} rows={3} placeholder="e.g. ~30m² deck, raised, wants it fitted by spring; also asked about balustrade"
-              value={smp.project} onChange={(e) => setSample((x) => (x.project = e.target.value))} />
-          </div>
-          <div>
-            <span style={lbl}>Notes</span>
-            <textarea style={{ ...inp, resize: "vertical" }} rows={3} placeholder="Follow-up calls, what they said, next steps…"
-              value={smp.notes} onChange={(e) => setSample((x) => (x.notes = e.target.value))} />
+            <span style={lbl}>{smp.followedUp ? "Followed up" : smp.followUpDate ? "Follow up · due " + prettyDate(smp.followUpDate).slice(0, 6) : "Follow up"}</span>
+            <StepDate value={smp.followedUp ? smp.followedUpDate || today() : ""} icon="phone" todo="Followed up" done="Followed up"
+              onDate={(d) => setSample((x) => { x.followedUp = !!d; x.followedUpDate = d; })} />
           </div>
         </div>
       </div>
