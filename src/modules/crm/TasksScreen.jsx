@@ -210,7 +210,7 @@ export function TaskModal({ crm, updateCrm, me, draft, onClose, askConfirm }) {
       </div>
 
       {t.kind === "scheduled" && t.assignees.length > 1 && (
-        <div style={{ background: "#f8f9fb", border: "1px solid #e6e9ef", borderRadius: 10, padding: "10px 12px", marginBottom: 10 }}>
+        <div style={{ background: "#f8f9fb", border: "1px solid #e6e9ef", borderRadius: 12, padding: "10px 12px", marginBottom: 10 }}>
           <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13.5, fontWeight: 700 }}>
             <input type="checkbox" checked={t.rotate} onChange={(e) => set("rotate", e.target.checked)} />
             Take turns (rota) — otherwise it goes to all of them

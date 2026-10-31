@@ -82,7 +82,7 @@ export default function StockCheck({ inv, crm, planner, updatePlanner, updateCrm
   };
 
   return (
-    <div style={{ background: "#fff", border: "1px solid " + (short.length ? "#ecc4cb" : "#e6e9ef"), borderRadius: 10, padding: "10px 14px", marginTop: 16 }}>
+    <div style={{ background: "#fff", border: "1px solid " + (short.length ? "#ecc4cb" : "#e6e9ef"), borderRadius: 12, padding: "10px 14px", marginTop: 16 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
         <p style={{ fontSize: 11.5, fontWeight: 700, color: "#8593a8", letterSpacing: 0.6, textTransform: "uppercase", margin: 0 }}>Stock check</p>
         {inv.deliveryCompleted ? <Chip tone="green">Delivered</Chip>

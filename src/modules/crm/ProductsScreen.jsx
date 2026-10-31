@@ -333,12 +333,12 @@ function RadioPick({ value, options, onPick, button, width = 300 }) {
     <div ref={ref} style={{ display: "inline-block", width: "100%" }}>
       {button(toggle)}
       {box && (
-        <div ref={pop} style={{ position: "fixed", zIndex: 1000, left: box.left, top: box.top, width, maxHeight: box.h, overflowY: "auto", background: "#fff", border: "1px solid #d5d9e0", borderRadius: 10, boxShadow: "0 10px 30px rgba(11,31,63,.18)", padding: 6 }}>
+        <div ref={pop} style={{ position: "fixed", zIndex: 1000, left: box.left, top: box.top, width, maxHeight: box.h, overflowY: "auto", background: "#fff", border: "1px solid #d5d9e0", borderRadius: 12, boxShadow: "0 10px 30px rgba(11,31,63,.18)", padding: 6 }}>
           {options.map((o) => {
             const on = o.value === value;
             return (
               <div key={o.value} onClick={() => { if (o.disabled && !on) return; onPick(o.value); setBox(null); }}
-                style={{ display: "flex", alignItems: "center", gap: 9, padding: "7px 8px", borderRadius: 6, fontSize: 13, cursor: o.disabled && !on ? "default" : "pointer",
+                style={{ display: "flex", alignItems: "center", gap: 9, padding: "7px 8px", borderRadius: 8, fontSize: 13, cursor: o.disabled && !on ? "default" : "pointer",
                   fontWeight: on ? 700 : 500, color: o.disabled && !on ? "#aab3c2" : on ? NAVY : "#3a4a63", background: on ? "#eef1f6" : "transparent" }}>
                 <span style={{ width: 15, height: 15, flex: "none", borderRadius: "50%", border: "2px solid " + (on ? NAVY : o.disabled ? "#dde2ea" : "#b8c0cc"), display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
                   {on && <span style={{ width: 7, height: 7, borderRadius: "50%", background: NAVY }} />}
@@ -556,20 +556,20 @@ function ColourPicker({ p, lists, unknown, onChange }) {
         <span style={{ color: "#5a6a85", fontSize: 10 }}>▾</span>
       </button>
       {open && (
-        <div style={{ position: "absolute", zIndex: 30, top: "calc(100% + 4px)", left: 0, width: 300, background: "#fff", border: "1px solid #d5d9e0", borderRadius: 10, boxShadow: "0 10px 30px rgba(11,31,63,.18)", padding: 10 }}>
+        <div style={{ position: "absolute", zIndex: 30, top: "calc(100% + 4px)", left: 0, width: 300, background: "#fff", border: "1px solid #d5d9e0", borderRadius: 12, boxShadow: "0 10px 30px rgba(11,31,63,.18)", padding: 10 }}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "2px 8px", maxHeight: 260, overflowY: "auto" }}>
             {opts.map((x) => {
               const on = has.has(x.code);
               return (
                 <label key={x.code} onClick={() => toggle(x)}
-                  style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 6px", borderRadius: 6, cursor: "pointer", fontSize: 12.5, fontWeight: on ? 700 : 500, color: on ? NAVY : "#3a4a63", background: on ? "#eef1f6" : "transparent" }}>
+                  style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 6px", borderRadius: 8, cursor: "pointer", fontSize: 12.5, fontWeight: on ? 700 : 500, color: on ? NAVY : "#3a4a63", background: on ? "#eef1f6" : "transparent" }}>
                   {dot(on)}{x.label}
                 </label>
               );
             })}
             {unknown.map((c) => (
               <label key={"u" + c} onClick={() => dropUnknown(c)} title="Not in the colour list — add it under SKU lists"
-                style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 6px", borderRadius: 6, cursor: "pointer", fontSize: 12.5, fontWeight: 700, color: RED, background: "#fdecef" }}>
+                style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 6px", borderRadius: 8, cursor: "pointer", fontSize: 12.5, fontWeight: 700, color: RED, background: "#fdecef" }}>
                 {dot(true)}{c}
               </label>
             ))}
@@ -630,7 +630,7 @@ function Version({ p, lists, rows, rowsByProduct, products, setP, removeProduct,
     return out;
   })();
   return (
-    <div style={{ background: "#fff", border: "1px solid #e6e9ef", borderRadius: 10, padding: "10px 12px", marginBottom: 10 }}>
+    <div style={{ background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, padding: "10px 12px", marginBottom: 10 }}>
       <div style={{ display: "grid", gridTemplateColumns: "110px 150px minmax(220px,2fr) 160px minmax(180px,1.4fr) 112px 34px", gap: 8, alignItems: "end" }}>
         <div style={{ minWidth: 0 }}>
           <span style={{ ...lbl, fontSize: 10 }}>Supplier code</span>
@@ -768,11 +768,11 @@ function KitEditor({ p, products, rowsByProduct, lists, setP }) {
               <div key={kc || "none"} style={{ fontSize: 12, display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
                 <b style={{ minWidth: 92, color: NAVY }}>{kc ? kc + " kit" : "Each kit"}</b>
                 {parts.map((x) => x.row ? (
-                  <span key={x.i} style={{ border: "1px solid #d5d9e0", borderRadius: 7, padding: "2px 7px", background: "#fff" }}>
+                  <span key={x.i} style={{ border: "1px solid #d5d9e0", borderRadius: 8, padding: "2px 7px", background: "#fff" }}>
                     {(Number(x.line.qty) || 0) + " × "}<b>{x.row.sku}</b>{x.row.colour ? " " + x.row.colour : ""}
                   </span>
                 ) : (
-                  <span key={x.i} style={{ border: "1px solid " + RED, borderRadius: 7, padding: "2px 7px", color: RED, fontWeight: 700 }}>
+                  <span key={x.i} style={{ border: "1px solid " + RED, borderRadius: 8, padding: "2px 7px", color: RED, fontWeight: 700 }}>
                     {(byId[x.line.productId] ? byId[x.line.productId].code || byId[x.line.productId].name : "part") + " has no " + (x.line.colour || kc || "") + " — add the colour to that part"}
                   </span>
                 ))}
@@ -831,7 +831,7 @@ function ListsEditor({ lists, custom, onClose, onSave }) {
           <select style={sel} value={ps} onChange={(e) => setPs(e.target.value)}>{draft.sub.map((x) => <option key={x.code} value={x.code}>{x.code + " · " + x.label}</option>)}</select>
         </div>
       )}
-      <div style={{ maxHeight: "48vh", overflowY: "auto", border: "1px solid #e6e9ef", borderRadius: 9 }}>
+      <div style={{ maxHeight: "48vh", overflowY: "auto", border: "1px solid #e6e9ef", borderRadius: 8 }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <thead><tr>
             <th style={{ textAlign: "left", fontSize: 10.5, color: "#8593a8", padding: "6px 8px", width: 70 }}>No.</th>

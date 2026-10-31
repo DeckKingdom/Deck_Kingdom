@@ -214,14 +214,14 @@ export function ColourSelect({ line, crm, bySku, onPick }) {
         <span style={{ color: "#5a6a85", fontSize: 10 }}>▾</span>
       </button>
       {box && (
-        <div ref={popRef} style={{ position: "fixed", zIndex: 1000, left: box.left, top: box.top, bottom: box.bottom, width: box.width, background: "#fff", border: "1px solid #d5d9e0", borderRadius: 10, boxShadow: "0 10px 30px rgba(11,31,63,.18)", padding: 8 }}>
+        <div ref={popRef} style={{ position: "fixed", zIndex: 1000, left: box.left, top: box.top, bottom: box.bottom, width: box.width, background: "#fff", border: "1px solid #d5d9e0", borderRadius: 12, boxShadow: "0 10px 30px rgba(11,31,63,.18)", padding: 8 }}>
           {siblings.length > 0 && <div style={{ fontSize: 10.5, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", padding: "2px 6px 6px" }}>Colours for this product</div>}
           <div style={{ display: "grid", gridTemplateColumns: siblings.length ? "1fr" : "1fr 1fr", gap: "2px 8px", maxHeight: 280, overflowY: "auto" }}>
             {opts.map((o) => {
               const on = isOn(o);
               return (
                 <label key={o.label + o.sku} onClick={() => { onPick(o.label, o.sku); setBox(null); }}
-                  style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 6px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: on ? 700 : 500, color: on ? NAVY : "#3a4a63", background: on ? "#eef1f6" : "transparent" }}>
+                  style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 6px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: on ? 700 : 500, color: on ? NAVY : "#3a4a63", background: on ? "#eef1f6" : "transparent" }}>
                   <span style={{ width: 15, height: 15, flex: "none", borderRadius: "50%", border: "2px solid " + (on ? NAVY : "#b8c0cc"), display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
                     {on && <span style={{ width: 7, height: 7, borderRadius: "50%", background: NAVY }} />}
                   </span>

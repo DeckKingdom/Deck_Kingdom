@@ -23,6 +23,8 @@ const PATHS = {
   cam: <><rect x="3" y="7" width="18" height="13" rx="2" /><circle cx="12" cy="13.5" r="3.5" /><path d="M8.5 7L10 4.5h4L15.5 7" /></>,
   share: <><circle cx="6" cy="12" r="2.5" /><circle cx="17.5" cy="5.5" r="2.5" /><circle cx="17.5" cy="18.5" r="2.5" /><path d="M8.3 10.7l6.9-4M8.3 13.3l6.9 4" /></>,
   leaf: <path d="M5 19C5 9.5 12.5 4.5 20 4.5 20 13 15 19 5 19zM5 19c3-5.5 7-8.5 11-10.5" />,
+  pinPlus: <><path d="M9.5 21s-6-5.3-6-9.6a6 6 0 0112 0c0 4.3-6 9.6-6 9.6z" /><circle cx="9.5" cy="11.4" r="2" /><path d="M19 2.5v6M16 5.5h6" /></>,
+  docPlus: <><path d="M13 21H5V2h8l4 4v6M13 2v4h4M8 11h6M8 15h3" /><path d="M18 14.5v7M14.5 18h7" /></>,
   wa: <><path d="M3.5 20.5l1.3-4.2A8.5 8.5 0 1112 20.5a8.4 8.4 0 01-4.2-1.1z" /><path d="M9 8.5c0 3.5 2.5 6.5 6.5 6.5l1-1.5-2-1-1 .8c-1-.5-2-1.5-2.5-2.5l.8-1-1-2z" /></>,
   bin: <path d="M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14M10 11v6M14 11v6" />,
   gear: <><circle cx="12" cy="12" r="3" /><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.5 4.5l2 2M17.5 17.5l2 2M19.5 4.5l-2 2M6.5 17.5l-2 2" /></>,
@@ -88,10 +90,10 @@ export const Chip = ({ tone = "grey", children, style }) => {
 
 export const inp = {
   fontFamily: "inherit", fontSize: 14, padding: "7px 9px", border: "1px solid #d5d9e0",
-  borderRadius: 7, background: "#fff", color: NAVY, width: "100%", boxSizing: "border-box",
+  borderRadius: 8, background: "#fff", color: NAVY, width: "100%", boxSizing: "border-box",
 };
 export const btn = {
-  fontFamily: "inherit", fontSize: 13.5, fontWeight: 700, padding: "9px 14px", borderRadius: 9,
+  fontFamily: "inherit", fontSize: 13.5, fontWeight: 700, padding: "9px 14px", borderRadius: 8,
   border: "1px solid #d5d9e0", background: "#fff", color: NAVY, cursor: "pointer",
   display: "inline-flex", alignItems: "center", gap: 6,
 };
@@ -226,7 +228,7 @@ export const enterToNext = (e) => {
 export const Modal = ({ title, onClose, children, width = 560 }) => (
   <div style={{ position: "fixed", inset: 0, background: "rgba(11,31,63,0.45)", zIndex: 60, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "6vh 16px", overflowY: "auto" }}
     onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-    <div onKeyDown={enterToNext} style={{ background: "#fff", borderRadius: 14, padding: "18px 20px", width: "100%", maxWidth: width, boxShadow: "0 18px 50px rgba(11,31,63,0.35)" }}>
+    <div onKeyDown={enterToNext} style={{ background: "#fff", borderRadius: 12, padding: "18px 20px", width: "100%", maxWidth: width, boxShadow: "0 18px 50px rgba(11,31,63,0.35)" }}>
       <div style={{ display: "flex", alignItems: "center", marginBottom: 14 }}>
         <b style={{ fontSize: 16, color: NAVY }}>{title}</b>
         <span style={{ flex: 1 }} />

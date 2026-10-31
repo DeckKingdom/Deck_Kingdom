@@ -94,7 +94,7 @@ export default function VansScreen({ crm, updateCrm, askConfirm, me }) {
         return (
           <div key={v.id} style={{ ...card, opacity: v.active === false ? 0.5 : 1 }}>
             <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-              <div style={{ width: 42, height: 42, borderRadius: 11, background: NAVY, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>
+              <div style={{ width: 42, height: 42, borderRadius: 12, background: NAVY, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>
                 <Icon name="truck" size={20} stroke={GOLD} />
               </div>
               <div style={{ minWidth: 150 }}>
@@ -205,7 +205,7 @@ export default function VansScreen({ crm, updateCrm, askConfirm, me }) {
                 onChange={(e) => setCheckDraft({ ...checkDraft, check: { ...checkDraft.check, mileage: e.target.value } })} />
             </div>
           </div>
-          <div style={{ background: "#f8f9fb", border: "1px solid #e6e9ef", borderRadius: 10, padding: "10px 13px", marginTop: 12 }}>
+          <div style={{ background: "#f8f9fb", border: "1px solid #e6e9ef", borderRadius: 12, padding: "10px 13px", marginTop: 12 }}>
             {VAN_CHECK_ITEMS.map(([k, label]) => (
               <label key={k} style={{ display: "flex", alignItems: "center", gap: 9, fontSize: 13.5, fontWeight: 600, padding: "5px 0" }}>
                 <input type="checkbox" checked={checkDraft.check[k] !== false}

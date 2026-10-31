@@ -75,7 +75,7 @@ export default function Sidebar({ tab, setTab, open, footer, onNew }) {
       }}
     >
       <div style={{ padding: open ? "16px 14px 10px" : "16px 10px 10px", display: "flex", alignItems: "center", gap: 10, justifyContent: open ? "flex-start" : "center" }}>
-        <div style={{ width: 36, height: 36, borderRadius: 9, background: GOLD, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, color: NAVY, fontSize: 17, flex: "none" }}>
+        <div style={{ width: 36, height: 36, borderRadius: 8, background: GOLD, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, color: NAVY, fontSize: 17, flex: "none" }}>
           DK
         </div>
         {open && (
@@ -122,7 +122,7 @@ export default function Sidebar({ tab, setTab, open, footer, onNew }) {
                     width: "100%",
                     padding: open ? "9px 11px" : "9px 0",
                     justifyContent: open ? "flex-start" : "center",
-                    borderRadius: 9,
+                    borderRadius: 8,
                     border: "none",
                     cursor: "pointer",
                     fontFamily: "inherit",
@@ -142,7 +142,7 @@ export default function Sidebar({ tab, setTab, open, footer, onNew }) {
                     title={"New " + label.replace(/s$/, "").toLowerCase()}
                     style={{
                       position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)",
-                      width: 24, height: 24, borderRadius: 7, padding: 0, cursor: "pointer",
+                      width: 24, height: 24, borderRadius: 8, padding: 0, cursor: "pointer",
                       display: "flex", alignItems: "center", justifyContent: "center",
                       border: "1px solid " + (on ? NAVY : "#3a4f78"), background: on ? "#ffffff55" : "transparent",
                     }}

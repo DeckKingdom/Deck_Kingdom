@@ -250,7 +250,7 @@ export default function PurchasesScreen({ crm, updateCrm, askConfirm, selId, set
       <button style={{ ...btn, marginBottom: 12 }} onClick={() => setSelId(null)}><Icon name="back" stroke={NAVY} />All purchases</button>
       {!ready && <PurchasesSchemaNotice />}
 
-      <div style={{ background: "linear-gradient(135deg,#0B1F3F 0%,#13294f 100%)", borderRadius: 14, padding: "16px 22px", color: "#fff", marginBottom: 14, display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
+      <div style={{ background: "linear-gradient(135deg,#0B1F3F 0%,#13294f 100%)", borderRadius: 12, padding: "16px 22px", color: "#fff", marginBottom: 14, display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
         <div>
           <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
             <h2 style={{ margin: 0, fontSize: 19 }}>{"PO# " + (p.poNo || "—")}</h2>
@@ -275,7 +275,7 @@ export default function PurchasesScreen({ crm, updateCrm, askConfirm, selId, set
         <p style={sect}>Supplier</p>
         {sup ? (
           <div style={{ display: "flex", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
-            <div style={{ width: 40, height: 40, borderRadius: 10, background: NAVY, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>
+            <div style={{ width: 40, height: 40, borderRadius: 12, background: NAVY, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>
               <Icon name="box" size={18} stroke={GOLD} />
             </div>
             <div style={{ flex: 1, minWidth: 220 }}>
@@ -360,7 +360,7 @@ export default function PurchasesScreen({ crm, updateCrm, askConfirm, selId, set
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                     {t.manualVat && (
                       <button title="Back to the worked-out VAT" onClick={() => setP((x) => (x.vatAmount = ""))}
-                        style={{ fontFamily: "inherit", fontSize: 11, fontWeight: 700, padding: "2px 7px", borderRadius: 6, border: "1px solid #3a4f78", background: "transparent", color: GOLD, cursor: "pointer" }}>auto</button>
+                        style={{ fontFamily: "inherit", fontSize: 11, fontWeight: 700, padding: "2px 7px", borderRadius: 8, border: "1px solid #3a4f78", background: "transparent", color: GOLD, cursor: "pointer" }}>auto</button>
                     )}
                     <input style={{ ...dark, width: 110 }} inputMode="decimal" title="Worked out from the rate — type over it for mixed-rate invoices"
                       value={t.manualVat ? p.vatAmount : t.vat ? t.vat.toFixed(2) : ""} placeholder="0.00" {...selectAllProps}
@@ -369,7 +369,7 @@ export default function PurchasesScreen({ crm, updateCrm, askConfirm, selId, set
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 12 }}>
                   <span style={{ fontWeight: 700, letterSpacing: 0.5 }}>TOTAL</span>
-                  <span style={{ fontSize: 20, fontWeight: 700, background: GOLD, color: NAVY, borderRadius: 9, padding: "4px 14px" }}>{gbp(t.total)}</span>
+                  <span style={{ fontSize: 20, fontWeight: 700, background: GOLD, color: NAVY, borderRadius: 8, padding: "4px 14px" }}>{gbp(t.total)}</span>
                 </div>
               </>
             );

@@ -23,7 +23,7 @@ export default function LoginScreen() {
   };
 
   const inp = {
-    fontFamily: "inherit", fontSize: 15, padding: "11px 12px", borderRadius: 9,
+    fontFamily: "inherit", fontSize: 15, padding: "11px 12px", borderRadius: 8,
     border: "1px solid #33466b", background: "#122b52", color: "#fff",
     width: "100%", boxSizing: "border-box", marginBottom: 12,
   };
@@ -32,7 +32,7 @@ export default function LoginScreen() {
     <div style={{ fontFamily: "Quicksand, sans-serif", background: NAVY, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&display=swap');`}</style>
       <div style={{ textAlign: "center", width: "100%", maxWidth: 320 }}>
-        <div style={{ width: 46, height: 46, borderRadius: 10, background: GOLD, display: "inline-flex", alignItems: "center", justifyContent: "center", fontWeight: 700, color: NAVY, fontSize: 22, marginBottom: 12 }}>
+        <div style={{ width: 46, height: 46, borderRadius: 12, background: GOLD, display: "inline-flex", alignItems: "center", justifyContent: "center", fontWeight: 700, color: NAVY, fontSize: 22, marginBottom: 12 }}>
           DK
         </div>
         <div style={{ color: "#fff", fontWeight: 700, fontSize: 19 }}>Deck Kingdom Ops</div>
@@ -44,7 +44,7 @@ export default function LoginScreen() {
         />
         <button
           onClick={submit} disabled={busy}
-          style={{ fontFamily: "inherit", fontSize: 15, fontWeight: 700, padding: "11px 0", borderRadius: 9, border: "1px solid " + GOLD, background: GOLD, color: NAVY, cursor: "pointer", width: "100%", opacity: busy ? 0.7 : 1 }}
+          style={{ fontFamily: "inherit", fontSize: 15, fontWeight: 700, padding: "11px 0", borderRadius: 8, border: "1px solid " + GOLD, background: GOLD, color: NAVY, cursor: "pointer", width: "100%", opacity: busy ? 0.7 : 1 }}
         >
           {busy ? "Signing in..." : "Sign in"}
         </button>

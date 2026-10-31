@@ -342,7 +342,7 @@ export default function SamplesScreen({ crm, updateCrm, askConfirm, selId, setSe
       )}
 
       {/* header band */}
-      <div style={{ background: "linear-gradient(135deg,#0B1F3F 0%,#13294f 100%)", borderRadius: 14, padding: "16px 22px", color: "#fff", marginBottom: 14, display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
+      <div style={{ background: "linear-gradient(135deg,#0B1F3F 0%,#13294f 100%)", borderRadius: 12, padding: "16px 22px", color: "#fff", marginBottom: 14, display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
         <div>
           <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
             <h2 style={{ margin: 0, fontSize: 19 }}>
@@ -374,7 +374,7 @@ export default function SamplesScreen({ crm, updateCrm, askConfirm, selId, setSe
           <p style={sect}>Customer</p>
           {cust ? (
             <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-              <div style={{ width: 40, height: 40, borderRadius: 10, background: GOLD, color: NAVY, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17, fontWeight: 700, flex: "none" }}>
+              <div style={{ width: 40, height: 40, borderRadius: 12, background: GOLD, color: NAVY, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17, fontWeight: 700, flex: "none" }}>
                 {(cust.name || "?").trim().charAt(0).toUpperCase() || "?"}
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -413,7 +413,7 @@ export default function SamplesScreen({ crm, updateCrm, askConfirm, selId, setSe
                 </button>
               </div>
               {custMatches.length > 0 && (
-                <div style={{ border: "1px solid #e6e9ef", borderRadius: 9, marginTop: 6, overflow: "hidden" }}>
+                <div style={{ border: "1px solid #e6e9ef", borderRadius: 8, marginTop: 6, overflow: "hidden" }}>
                   {custMatches.map((c) => (
                     <button key={c.id} onClick={() => { setSample((x) => (x.customerId = c.id)); setCustQuery(""); }}
                       style={{ display: "block", width: "100%", textAlign: "left", background: "#fff", border: "none", borderBottom: "1px solid #f0f2f6", padding: "9px 12px", fontFamily: "inherit", fontSize: 13.5, cursor: "pointer" }}>
@@ -434,7 +434,7 @@ export default function SamplesScreen({ crm, updateCrm, askConfirm, selId, setSe
           <p style={sect}>Conversion</p>
           {inv ? (
             <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-              <div style={{ width: 40, height: 40, borderRadius: 10, background: "#3FA55C", display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>
+              <div style={{ width: 40, height: 40, borderRadius: 12, background: "#3FA55C", display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>
                 <Icon name="pound" size={18} stroke="#fff" />
               </div>
               <div style={{ flex: 1, minWidth: 160 }}>

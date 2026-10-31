@@ -433,7 +433,7 @@ export default function ImportPlanner() {
       <div style={{ fontFamily: "Quicksand, sans-serif", background: NAVY, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
         <style>{`@import url('https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&display=swap');`}</style>
         <div style={{ textAlign: "center", width: "100%", maxWidth: 300 }}>
-          <div style={{ width: 46, height: 46, borderRadius: 10, background: GOLD, display: "inline-flex", alignItems: "center", justifyContent: "center", fontWeight: 700, color: NAVY, fontSize: 22, marginBottom: 12 }}>
+          <div style={{ width: 46, height: 46, borderRadius: 12, background: GOLD, display: "inline-flex", alignItems: "center", justifyContent: "center", fontWeight: 700, color: NAVY, fontSize: 22, marginBottom: 12 }}>
             DK
           </div>
           <div style={{ color: "#fff", fontWeight: 700, fontSize: 19 }}>Import planner</div>
@@ -445,11 +445,11 @@ export default function ImportPlanner() {
             value={pinEntry}
             onChange={(e) => setPinEntry(e.target.value.replace(/[^0-9]/g, "").slice(0, 8))}
             onKeyDown={(e) => e.key === "Enter" && tryUnlock()}
-            style={{ fontFamily: "inherit", fontSize: 22, letterSpacing: 8, textAlign: "center", padding: "10px 12px", borderRadius: 9, border: "1px solid #33466b", background: "#122b52", color: "#fff", width: "100%", boxSizing: "border-box", marginBottom: 12 }}
+            style={{ fontFamily: "inherit", fontSize: 22, letterSpacing: 8, textAlign: "center", padding: "10px 12px", borderRadius: 8, border: "1px solid #33466b", background: "#122b52", color: "#fff", width: "100%", boxSizing: "border-box", marginBottom: 12 }}
           />
           <button
             onClick={tryUnlock}
-            style={{ fontFamily: "inherit", fontSize: 15, fontWeight: 700, padding: "10px 0", borderRadius: 9, border: "1px solid " + GOLD, background: GOLD, color: NAVY, cursor: "pointer", width: "100%" }}
+            style={{ fontFamily: "inherit", fontSize: 15, fontWeight: 700, padding: "10px 0", borderRadius: 8, border: "1px solid " + GOLD, background: GOLD, color: NAVY, cursor: "pointer", width: "100%" }}
           >
             Unlock
           </button>
@@ -920,7 +920,7 @@ export default function ImportPlanner() {
     fontSize: 14,
     padding: "7px 9px",
     border: "1px solid #d5d9e0",
-    borderRadius: 7,
+    borderRadius: 8,
     background: "#fff",
     color: NAVY,
     width: "100%",
@@ -998,7 +998,7 @@ export default function ImportPlanner() {
         <>
           {crmError && (
             <div style={{ maxWidth: 1140, margin: "14px auto 0", padding: "0 22px" }}>
-              <div style={{ background: "#C8102E10", border: "1px solid #ecc4cb", borderRadius: 10, padding: "10px 14px", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", fontSize: 13, fontWeight: 600, color: "#8a0b20" }}>
+              <div style={{ background: "#C8102E10", border: "1px solid #ecc4cb", borderRadius: 12, padding: "10px 14px", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", fontSize: 13, fontWeight: 600, color: "#8a0b20" }}>
                 <span style={{ flex: 1 }}>
                   Couldn't load the customer/stock data — usually a migration hasn't been run in Supabase yet (latest: 012_vans.sql). Nothing is lost.
                 </span>
@@ -1124,7 +1124,7 @@ export default function ImportPlanner() {
       {tab === "overview" && (
         <div style={{ padding: "18px 22px", maxWidth: 1100, margin: "0 auto" }}>
           <h2 style={{ fontSize: 19, fontWeight: 700, margin: "0 0 14px" }}>All shipments</h2>
-          <div style={{ background: "#fff", borderRadius: 10, border: "1px solid #e6e9ef", padding: "4px 12px 12px", overflowX: "auto", overflowY: "auto", maxHeight: "max(320px, calc(100vh - " + (headerH + 130) + "px))" }}>
+          <div style={{ background: "#fff", borderRadius: 12, border: "1px solid #e6e9ef", padding: "4px 12px 12px", overflowX: "auto", overflowY: "auto", maxHeight: "max(320px, calc(100vh - " + (headerH + 130) + "px))" }}>
             <table className="dk-sticky-table" style={{ width: "100%", borderCollapse: "collapse", minWidth: 920 }}>
               <thead>
                 <tr>
@@ -1285,7 +1285,7 @@ export default function ImportPlanner() {
                       zIndex: 31,
                       background: "#fff",
                       border: "1px solid #d5d9e0",
-                      borderRadius: 10,
+                      borderRadius: 12,
                       boxShadow: "0 10px 28px rgba(11,31,63,0.2)",
                       width: 320,
                       fontFamily: "inherit",
@@ -1375,7 +1375,7 @@ export default function ImportPlanner() {
                 )}
               </div>
 
-              <div style={{ background: "#fff", border: "1px solid #e6e9ef", borderRadius: 10, padding: "12px 16px", display: "flex", gap: 24, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 16 }}>
+              <div style={{ background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, padding: "12px 16px", display: "flex", gap: 24, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 16 }}>
                 <div>
                   <span style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#5a6a85", marginBottom: 4 }}>Status</span>
                   <select
@@ -1437,12 +1437,12 @@ export default function ImportPlanner() {
                   ["Total weight", int(Math.round(totals.kg)) + " kg"],
                   ["Total volume", (Math.round(totals.cbm * 10) / 10).toLocaleString("en-US") + " m³"],
                 ].map(([label, value]) => (
-                  <div key={label} style={{ background: "#fff", borderRadius: 10, padding: "14px 16px", border: "1px solid #e6e9ef" }}>
+                  <div key={label} style={{ background: "#fff", borderRadius: 12, padding: "14px 16px", border: "1px solid #e6e9ef" }}>
                     <div style={{ fontSize: 12.5, color: "#5a6a85", fontWeight: 600 }}>{label}</div>
                     <div style={{ fontSize: 24, fontWeight: 700, marginTop: 2 }}>{value}</div>
                   </div>
                 ))}
-                <div style={{ background: "#fff", borderRadius: 10, padding: "14px 16px", border: "1px solid #e6e9ef" }}>
+                <div style={{ background: "#fff", borderRadius: 12, padding: "14px 16px", border: "1px solid #e6e9ef" }}>
                   <div style={{ fontSize: 12.5, color: "#5a6a85", fontWeight: 600 }}>Total cost</div>
                   <div style={{ fontSize: 24, fontWeight: 700, marginTop: 2 }}>
                     ${money(active.surchargeOn !== false ? totals.cost * 1.03 : totals.cost)}
@@ -1459,7 +1459,7 @@ export default function ImportPlanner() {
                 </div>
               </div>
 
-              <div style={{ background: "#fff", borderRadius: 10, border: "1px solid #e6e9ef", padding: "4px 12px 12px", overflowX: "auto", overflowY: "auto", maxHeight: "max(320px, calc(100vh - " + (headerH + 210) + "px))" }}>
+              <div style={{ background: "#fff", borderRadius: 12, border: "1px solid #e6e9ef", padding: "4px 12px 12px", overflowX: "auto", overflowY: "auto", maxHeight: "max(320px, calc(100vh - " + (headerH + 210) + "px))" }}>
                 <table className="dk-sticky-table" style={{ width: "100%", borderCollapse: "collapse", minWidth: 800 }}>
                   <thead>
                     <tr>
@@ -1605,7 +1605,7 @@ export default function ImportPlanner() {
               const sumLbl = { fontSize: 13.5, fontWeight: 600, color: "#5a6a85" };
               const sumVal = { fontSize: 15, fontWeight: 700 };
               return (
-                <div style={{ background: stageTint(active.status) || "#fff", borderRadius: 10, border: "1px solid " + (active.status !== "Planning" && STATUS_COLOURS[active.status] ? STATUS_COLOURS[active.status] : "#e6e9ef"), padding: "18px 20px" }}>
+                <div style={{ background: stageTint(active.status) || "#fff", borderRadius: 12, border: "1px solid " + (active.status !== "Planning" && STATUS_COLOURS[active.status] ? STATUS_COLOURS[active.status] : "#e6e9ef"), padding: "18px 20px" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 18 }}>
                     <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0, flex: 1, minWidth: 220 }}>{active.name} — completion report</h2>
                     <span
@@ -1630,7 +1630,7 @@ export default function ImportPlanner() {
                   </div>
 
                   <p style={sectionLbl}>Key dates</p>
-                  <div style={{ background: "#f8f9fb", border: "1px solid #e6e9ef", borderRadius: 10, padding: "8px 16px", marginBottom: 20 }}>
+                  <div style={{ background: "#f8f9fb", border: "1px solid #e6e9ef", borderRadius: 12, padding: "8px 16px", marginBottom: 20 }}>
                     {[
                       ["1", "Order date", "orderDate", null],
                       ["2", "Deposit paid", "depositDate", ["depositUsd", "depositFx", 0.3]],
@@ -1720,7 +1720,7 @@ export default function ImportPlanner() {
                     })}
                   </div>
 
-                  <div style={{ background: "#f8f9fb", border: "1px solid #e6e9ef", borderRadius: 10, padding: "6px 16px 12px" }}>
+                  <div style={{ background: "#f8f9fb", border: "1px solid #e6e9ef", borderRadius: 12, padding: "6px 16px 12px" }}>
                     <div style={{ padding: "10px 0 2px", fontSize: 15, fontWeight: 700, color: NAVY }}>£ Cost summary</div>
                     <div style={sumRow}>
                       <span style={sumLbl}>Total value ($)</span>
@@ -1844,7 +1844,7 @@ export default function ImportPlanner() {
               const dutyPerPc = dutyOn && totals.pieces > 0 ? duty / totals.pieces : 0;
               return (
                 <>
-                  <div style={{ background: "#fff", borderRadius: 10, border: "1px solid #e6e9ef", padding: "14px 16px", marginBottom: 14, display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 18, flexWrap: "wrap", position: "sticky", top: headerH + 62, zIndex: 15, boxShadow: "0 6px 10px -6px rgba(11,31,63,0.18)" }}>
+                  <div style={{ background: "#fff", borderRadius: 12, border: "1px solid #e6e9ef", padding: "14px 16px", marginBottom: 14, display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 18, flexWrap: "wrap", position: "sticky", top: headerH + 62, zIndex: 15, boxShadow: "0 6px 10px -6px rgba(11,31,63,0.18)" }}>
                     <div style={{ fontSize: 17, fontWeight: 700, color: NAVY, paddingTop: 2 }}>Shipping &amp; duty per piece</div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "flex-end" }}>
                     <div style={{ display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "flex-end", alignItems: "center" }}>
@@ -1890,7 +1890,7 @@ export default function ImportPlanner() {
                       Enter the deposit and balance payments with their exchange rates on the Completion tab to calculate £ landed costs (a blended rate across both payments is used here).
                     </p>
                   )}
-                  <div style={{ background: "#fff", borderRadius: 10, border: "1px solid #e6e9ef", padding: "4px 12px 12px", overflowX: "auto", overflowY: "auto", maxHeight: "max(320px, calc(100vh - " + (headerH + 170) + "px))" }}>
+                  <div style={{ background: "#fff", borderRadius: 12, border: "1px solid #e6e9ef", padding: "4px 12px 12px", overflowX: "auto", overflowY: "auto", maxHeight: "max(320px, calc(100vh - " + (headerH + 170) + "px))" }}>
                     <table className="dk-sticky-table" style={{ width: "100%", borderCollapse: "collapse", minWidth: 840 }}>
                       <thead>
                         <tr>
@@ -1955,7 +1955,7 @@ export default function ImportPlanner() {
         ))}
       {dueReminders.length > 0 && !remindersClosed && !locked && (
         <div style={{ position: "fixed", inset: 0, zIndex: 55, background: "rgba(11,31,63,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-          <div style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 560, overflow: "hidden", boxShadow: "0 24px 70px rgba(11,31,63,0.5)" }}>
+          <div style={{ background: "#fff", borderRadius: 12, width: "100%", maxWidth: 560, overflow: "hidden", boxShadow: "0 24px 70px rgba(11,31,63,0.5)" }}>
             <div style={{ background: "linear-gradient(135deg,#C8102E 0%,#8a0b20 100%)", padding: "18px 22px", display: "flex", alignItems: "center", gap: 12 }}>
               <span style={{ fontSize: 26 }}>🚐</span>
               <div>
@@ -1992,9 +1992,9 @@ export default function ImportPlanner() {
 
       {dueTasks.length > 0 && !taskPopClosed && !taskSnoozedToday && !locked && (remindersClosed || dueReminders.length === 0) && (
         <div style={{ position: "fixed", inset: 0, zIndex: 55, background: "rgba(11,31,63,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-          <div style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 540, overflow: "hidden", boxShadow: "0 24px 70px rgba(11,31,63,0.5)" }}>
+          <div style={{ background: "#fff", borderRadius: 12, width: "100%", maxWidth: 540, overflow: "hidden", boxShadow: "0 24px 70px rgba(11,31,63,0.5)" }}>
             <div style={{ background: "linear-gradient(135deg,#0B1F3F 0%,#13294f 100%)", padding: "18px 22px", display: "flex", alignItems: "center", gap: 12 }}>
-              <span style={{ width: 40, height: 40, borderRadius: 10, background: GOLD, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <span style={{ width: 40, height: 40, borderRadius: 12, background: GOLD, display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <Icon name="cal" size={20} stroke={NAVY} />
               </span>
               <div>
@@ -2008,7 +2008,7 @@ export default function ImportPlanner() {
               {dueTasks.map(({ task: t, occ, overdueDays }) => (
                 <div key={t.id} style={{ display: "flex", gap: 11, alignItems: "center", padding: "10px 0", borderBottom: "1px solid #f0f2f6" }}>
                   <button title="Done" onClick={() => updateCrm((c) => { setTaskDone(c, t.id, occ.date, me, true); return c; })}
-                    style={{ width: 26, height: 26, borderRadius: 7, border: "2px solid #c9d0db", background: "#fff", cursor: "pointer", flex: "none" }} />
+                    style={{ width: 26, height: 26, borderRadius: 8, border: "2px solid #c9d0db", background: "#fff", cursor: "pointer", flex: "none" }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 14.5, fontWeight: 700, color: NAVY }}>{t.title}</div>
                     <div style={{ fontSize: 12, fontWeight: 600, color: overdueDays > 0 ? RED : "#5a6a85" }}>

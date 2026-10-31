@@ -196,7 +196,7 @@ export default function SuppliersScreen({ crm, updateCrm, askConfirm, selId, set
     <div style={{ maxWidth: 1140, margin: "0 auto", padding: "18px 22px" }}>
       <button style={{ ...btn, marginBottom: 12 }} onClick={() => setSelId(null)}><Icon name="back" stroke={NAVY} />All suppliers</button>
       {!ready && <PurchasesSchemaNotice />}
-      <div style={{ background: "linear-gradient(135deg,#0B1F3F 0%,#13294f 100%)", borderRadius: 14, padding: "18px 22px", color: "#fff", marginBottom: 14, display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
+      <div style={{ background: "linear-gradient(135deg,#0B1F3F 0%,#13294f 100%)", borderRadius: 12, padding: "18px 22px", color: "#fff", marginBottom: 14, display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
         <div style={{ minWidth: 180 }}>
           <h2 style={{ margin: 0, fontSize: 20 }}>{sel.name}</h2>
           <div style={{ display: "flex", gap: 8, marginTop: 7, flexWrap: "wrap" }}>

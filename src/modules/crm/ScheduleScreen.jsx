@@ -109,8 +109,8 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
     const days = daysSinceRaised(i);
     const paid = isPaid(i);
     return (
-      <div style={{ display: "flex", alignItems: "center", gap: 12, background: "#fff", border: "1px solid #e6e9ef", borderRadius: 10, padding: "9px 12px 9px 0", marginBottom: 6, overflow: "hidden", flexWrap: "wrap" }}>
-        <div style={{ width: 4, alignSelf: "stretch", borderRadius: "4px 0 0 4px", margin: "-9px 0", background: STRIPE_COLOURS[status], flex: "none" }} />
+      <div style={{ display: "flex", alignItems: "center", gap: 12, background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, padding: "9px 12px 9px 0", marginBottom: 6, overflow: "hidden", flexWrap: "wrap" }}>
+        <div style={{ width: 4, alignSelf: "stretch", borderRadius: "12px 0 0 12px", margin: "-9px 0", background: STRIPE_COLOURS[status], flex: "none" }} />
         <div style={{ flex: "1 1 190px", minWidth: 170 }}>
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
             <button onClick={() => openInvoice(i.id)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit", fontWeight: 700, fontSize: 14, color: NAVY }}>
@@ -160,8 +160,8 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
     const done = pr.total > 0 && pr.pending === 0;
     const items = (c.items || []).reduce((t, it) => t + (Number(it.qty) || 0), 0);
     return (
-      <div style={{ display: "flex", alignItems: "center", gap: 12, background: "#fff", border: "1px solid #e6e9ef", borderRadius: 10, padding: "9px 12px 9px 0", marginBottom: 6, overflow: "hidden", flexWrap: "wrap" }}>
-        <div style={{ width: 4, alignSelf: "stretch", borderRadius: "4px 0 0 4px", margin: "-9px 0", background: COLLECTION_BLUE, flex: "none" }} />
+      <div style={{ display: "flex", alignItems: "center", gap: 12, background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, padding: "9px 12px 9px 0", marginBottom: 6, overflow: "hidden", flexWrap: "wrap" }}>
+        <div style={{ width: 4, alignSelf: "stretch", borderRadius: "12px 0 0 12px", margin: "-9px 0", background: COLLECTION_BLUE, flex: "none" }} />
         <div style={{ flex: "1 1 190px", minWidth: 170 }}>
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
             <button onClick={() => openCollection && openCollection(c.id)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit", fontWeight: 700, fontSize: 14, color: COLLECTION_BLUE }}>
@@ -204,7 +204,7 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
   };
 
   const GroupHead = ({ label, meta, red }) => (
-    <div style={{ display: "flex", alignItems: "center", gap: 12, background: red ? RED : NAVY, color: "#fff", borderRadius: 10, padding: "10px 16px", margin: "18px 0 8px", flexWrap: "wrap" }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 12, background: red ? RED : NAVY, color: "#fff", borderRadius: 12, padding: "10px 16px", margin: "18px 0 8px", flexWrap: "wrap" }}>
       <b style={{ color: red ? "#fff" : GOLD, fontSize: 15 }}>{label}</b>
       <span style={{ fontSize: 12.5, color: red ? "#ffd8dd" : "#cfd6e4", fontWeight: 600 }}>{meta}</span>
     </div>

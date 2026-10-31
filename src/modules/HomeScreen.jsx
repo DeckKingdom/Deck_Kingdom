@@ -14,7 +14,7 @@ import { TaskModal, TasksSchemaNotice, PRIORITY_TONES, STATUS_TONES } from "./cr
 
 const Check = ({ on, onClick, title }) => (
   <button onClick={onClick} title={title}
-    style={{ width: 24, height: 24, borderRadius: 7, flex: "none", cursor: "pointer", padding: 0, display: "flex", alignItems: "center", justifyContent: "center",
+    style={{ width: 24, height: 24, borderRadius: 8, flex: "none", cursor: "pointer", padding: 0, display: "flex", alignItems: "center", justifyContent: "center",
       border: "2px solid " + (on ? "#3FA55C" : "#c9d0db"), background: on ? "#3FA55C" : "#fff" }}>
     {on && <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#fff" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>}
   </button>
@@ -22,7 +22,7 @@ const Check = ({ on, onClick, title }) => (
 
 const Report = ({ label, value, sub, tone, onClick }) => (
   <button onClick={onClick}
-    style={{ textAlign: "left", background: "#fff", border: "1px solid #e6e9ef", borderRadius: 11, padding: "11px 14px", cursor: onClick ? "pointer" : "default", fontFamily: "inherit", width: "100%" }}
+    style={{ textAlign: "left", background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, padding: "11px 14px", cursor: onClick ? "pointer" : "default", fontFamily: "inherit", width: "100%" }}
     onMouseEnter={(e) => onClick && (e.currentTarget.style.borderColor = GOLD)}
     onMouseLeave={(e) => (e.currentTarget.style.borderColor = "#e6e9ef")}>
     <span style={{ ...lbl, marginBottom: 2 }}>{label}</span>
@@ -103,7 +103,7 @@ export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTa
   return (
     <div style={{ maxWidth: 1180, margin: "0 auto", padding: "18px 22px" }}>
       {/* hero */}
-      <div style={{ background: "linear-gradient(135deg,#0B1F3F 0%,#13294f 100%)", borderRadius: 14, padding: "18px 22px", color: "#fff", marginBottom: 16, display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
+      <div style={{ background: "linear-gradient(135deg,#0B1F3F 0%,#13294f 100%)", borderRadius: 12, padding: "18px 22px", color: "#fff", marginBottom: 16, display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
         <div style={{ minWidth: 200 }}>
           <h2 style={{ margin: 0, fontSize: 21 }}>{greeting}{firstName ? " " + firstName : ""}</h2>
           <div style={{ fontSize: 13, color: "#aeb9cf", fontWeight: 600, marginTop: 4 }}>

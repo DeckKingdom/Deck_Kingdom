@@ -167,8 +167,8 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
                           onMouseLeave={(e) => (e.currentTarget.style.background = "")}>
                           <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", fontWeight: 700, color: "#185FA5", whiteSpace: "nowrap" }}>
                             {i.invNo || (String(i.id).startsWith("web-i-") ? <span title="Website order — FileMaker gives it its invoice number">{i.orderRef}</span> : "—")}
-                            {String(i.id).startsWith("fm-i-") && <span title="Came across from FileMaker" style={{ marginLeft: 6, fontSize: 9.5, fontWeight: 800, padding: "1px 5px", borderRadius: 4, background: "#eef1f6", color: "#5a6a85", letterSpacing: 0.3 }}>FM</span>}
-                            {String(i.id).startsWith("web-i-") && <span title="Came in from the website" style={{ marginLeft: 6, fontSize: 9.5, fontWeight: 800, padding: "1px 5px", borderRadius: 4, background: "#fdf3dc", color: "#8a5a00", letterSpacing: 0.3 }}>WEB</span>}
+                            {String(i.id).startsWith("fm-i-") && <span title="Came across from FileMaker" style={{ marginLeft: 6, fontSize: 9.5, fontWeight: 800, padding: "1px 5px", borderRadius: 8, background: "#eef1f6", color: "#5a6a85", letterSpacing: 0.3 }}>FM</span>}
+                            {String(i.id).startsWith("web-i-") && <span title="Came in from the website" style={{ marginLeft: 6, fontSize: 9.5, fontWeight: 800, padding: "1px 5px", borderRadius: 8, background: "#fdf3dc", color: "#8a5a00", letterSpacing: 0.3 }}>WEB</span>}
                           </td>
                           <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", whiteSpace: "nowrap" }}>{prettyDate(i.date)}</td>
                           <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", fontWeight: 700 }}>{c ? c.name : <span style={{ color: RED }}>No customer</span>}</td>
@@ -235,7 +235,7 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
       )}
 
       {/* header band */}
-      <div style={{ background: "linear-gradient(135deg,#0B1F3F 0%,#13294f 100%)", borderRadius: 14, padding: "16px 22px", color: "#fff", marginBottom: 14, display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
+      <div style={{ background: "linear-gradient(135deg,#0B1F3F 0%,#13294f 100%)", borderRadius: 12, padding: "16px 22px", color: "#fff", marginBottom: 14, display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
         <div>
           <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
             <h2 style={{ margin: 0, fontSize: 19 }}>
@@ -279,7 +279,7 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
           <p style={sect}>Customer</p>
           {cust ? (
             <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-              <div style={{ width: 40, height: 40, borderRadius: 10, background: GOLD, color: NAVY, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17, fontWeight: 700, flex: "none" }}>
+              <div style={{ width: 40, height: 40, borderRadius: 12, background: GOLD, color: NAVY, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17, fontWeight: 700, flex: "none" }}>
                 {(cust.name || "?").trim().charAt(0).toUpperCase() || "?"}
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -295,7 +295,7 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
             <div style={{ position: "relative" }}>
               <input style={inp} autoFocus placeholder="Type to find the customer — name, postcode, account #…" value={custQuery} onChange={(e) => setCustQuery(e.target.value)} />
               {custMatches.length > 0 && (
-                <div style={{ border: "1px solid #e6e9ef", borderRadius: 9, marginTop: 6, overflow: "hidden" }}>
+                <div style={{ border: "1px solid #e6e9ef", borderRadius: 8, marginTop: 6, overflow: "hidden" }}>
                   {custMatches.map((c) => (
                     <button key={c.id} onClick={() => { setInv((x) => { x.customerId = c.id; const fs = crm.sites.find((s) => s.customerId === c.id); x.siteId = fs ? fs.id : ""; if (x.discountPct === "" || x.discountPct === null) x.discountPct = c.discountPct || ""; }); setCustQuery(""); }}
                       style={{ display: "block", width: "100%", textAlign: "left", background: "#fff", border: "none", borderBottom: "1px solid #f0f2f6", padding: "9px 12px", fontFamily: "inherit", fontSize: 13.5, cursor: "pointer" }}>
@@ -314,7 +314,7 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
         <div style={{ ...card, marginBottom: 0 }}>
           <p style={sect}>Deliver to</p>
           <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-            <div style={{ width: 40, height: 40, borderRadius: 10, background: NAVY, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>
+            <div style={{ width: 40, height: 40, borderRadius: 12, background: NAVY, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>
               <Icon name="pin" size={17} stroke={GOLD} />
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
@@ -405,7 +405,7 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
               if (p) p[k] = v;
             });
           return (
-            <div style={{ background: "#f8f9fb", border: "1px solid #e6e9ef", borderRadius: 10, padding: "12px 14px", marginTop: 16 }}>
+            <div style={{ background: "#f8f9fb", border: "1px solid #e6e9ef", borderRadius: 12, padding: "12px 14px", marginTop: 16 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                 <p style={{ ...sect, margin: 0 }}>Loading &amp; job cost</p>
                 <span style={{ flex: 1 }} />
@@ -506,7 +506,7 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
                     </table>
                   </div>
                   <div style={{ display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap", marginTop: 10, fontSize: 12.5, fontWeight: 700 }}>
-                    <span>Actual job cost: <span style={{ background: "#fff", border: "1px solid #e6e9ef", borderRadius: 7, padding: "3px 9px" }}>{gbp(jc.total)}</span></span>
+                    <span>Actual job cost: <span style={{ background: "#fff", border: "1px solid #e6e9ef", borderRadius: 8, padding: "3px 9px" }}>{gbp(jc.total)}</span></span>
                     <span style={{ color: t.net > 0 && jc.costed > 0 ? (t.net - jc.total > 0 ? "#28713e" : RED) : "#8593a8" }}>
                       Margin: {t.net > 0 && jc.costed > 0 ? gbp(t.net - jc.total) + " (" + (((t.net - jc.total) / t.net) * 100).toFixed(0) + "% of net)" : "—"}
                     </span>
@@ -530,7 +530,7 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
           {(() => {
             const lk = invoiceLoadKg(inv, crm);
             return (
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#f8f9fb", border: "1px solid #e6e9ef", borderRadius: 10, padding: "8px 16px", marginBottom: 8, fontSize: 13 }}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#f8f9fb", border: "1px solid #e6e9ef", borderRadius: 12, padding: "8px 16px", marginBottom: 8, fontSize: 13 }}
                 title="Summed from the master-product weights of the lines (kits as their parts)">
                 <span style={{ color: "#5a6a85", fontWeight: 600 }}>Load</span>
                 <b>{lk === null ? "—" : "≈ " + lk.toLocaleString("en-GB", { maximumFractionDigits: 0 }) + " kg"}</b>
@@ -546,7 +546,7 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 0", borderBottom: "1px solid #ffffff1c", fontSize: 13.5 }}>
               <span style={{ color: "#aeb9cf", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 6 }}>
                 Discount
-                <input style={{ width: 46, textAlign: "right", fontFamily: "inherit", fontSize: 12.5, fontWeight: 700, padding: "3px 6px", border: "1px solid #3a4f78", borderRadius: 6, background: "#ffffff12", color: "#fff" }}
+                <input style={{ width: 46, textAlign: "right", fontFamily: "inherit", fontSize: 12.5, fontWeight: 700, padding: "3px 6px", border: "1px solid #3a4f78", borderRadius: 8, background: "#ffffff12", color: "#fff" }}
                   inputMode="decimal" placeholder="0" title="Set on the customer account; editable per invoice"
                   value={inv.discountPct === null ? "" : inv.discountPct}
                   onChange={(e) => setInv((x) => (x.discountPct = e.target.value))} />
@@ -556,7 +556,7 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 0", borderBottom: "1px solid #ffffff1c", fontSize: 13.5 }}>
               <span style={{ color: "#aeb9cf", fontWeight: 600 }}>Delivery charge</span>
-              <input style={{ width: 92, textAlign: "right", fontFamily: "inherit", fontSize: 13.5, fontWeight: 700, padding: "5px 8px", border: "1px solid #3a4f78", borderRadius: 7, background: "#ffffff12", color: "#fff" }}
+              <input style={{ width: 92, textAlign: "right", fontFamily: "inherit", fontSize: 13.5, fontWeight: 700, padding: "5px 8px", border: "1px solid #3a4f78", borderRadius: 8, background: "#ffffff12", color: "#fff" }}
                 inputMode="decimal" value={inv.deliveryCharge} placeholder="0.00"
                 onChange={(e) => setInv((x) => (x.deliveryCharge = e.target.value))} />
             </div>
@@ -567,7 +567,7 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
             ))}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 12 }}>
               <span style={{ fontWeight: 700, letterSpacing: 0.5 }}>TOTAL</span>
-              <span style={{ fontSize: 20, fontWeight: 700, background: GOLD, color: NAVY, borderRadius: 9, padding: "4px 14px" }}>{gbp(t.total)}</span>
+              <span style={{ fontSize: 20, fontWeight: 700, background: GOLD, color: NAVY, borderRadius: 8, padding: "4px 14px" }}>{gbp(t.total)}</span>
             </div>
             {estCost.matched > 0 && (
               <div style={{ fontSize: 11, color: "#8fa0c0", fontWeight: 600, textAlign: "right", paddingTop: 7 }}>

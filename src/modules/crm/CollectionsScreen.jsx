@@ -239,7 +239,7 @@ export default function CollectionsScreen({ crm, updateCrm, askConfirm, selId, s
         </div>
       )}
 
-      <div style={{ background: "linear-gradient(135deg,#0B1F3F 0%,#13294f 100%)", borderRadius: 14, padding: "16px 22px", color: "#fff", marginBottom: 14, display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
+      <div style={{ background: "linear-gradient(135deg,#0B1F3F 0%,#13294f 100%)", borderRadius: 12, padding: "16px 22px", color: "#fff", marginBottom: 14, display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
         <div>
           <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
             <h2 style={{ margin: 0, fontSize: 19 }}>Collection COL-{coll.collectionNo || "—"}</h2>
@@ -422,7 +422,7 @@ export default function CollectionsScreen({ crm, updateCrm, askConfirm, selId, s
             cost uses what you actually paid. Stock is not changed.
           </p>
           <input style={inp} autoFocus placeholder="Search invoice # or customer…" value={assignQuery} onChange={(e) => setAssignQuery(e.target.value)} />
-          <div style={{ border: "1px solid #e6e9ef", borderRadius: 9, marginTop: 8, maxHeight: 260, overflowY: "auto" }}>
+          <div style={{ border: "1px solid #e6e9ef", borderRadius: 8, marginTop: 8, maxHeight: 260, overflowY: "auto" }}>
             {assignable.map((i) => (
               <button key={i.id} onClick={() => assignItems(i.id)}
                 style={{ display: "block", width: "100%", textAlign: "left", background: "#fff", border: "none", borderBottom: "1px solid #f0f2f6", padding: "9px 12px", fontFamily: "inherit", fontSize: 13.5, cursor: "pointer" }}>

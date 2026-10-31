@@ -300,7 +300,7 @@ export default function StockScreen({ crm, updateCrm, planner, updatePlanner, as
               </select>
               {match && (
                 <>
-                  <div style={{ maxHeight: 260, overflowY: "auto", border: "1px solid #e6e9ef", borderRadius: 9, marginTop: 12 }}>
+                  <div style={{ maxHeight: 260, overflowY: "auto", border: "1px solid #e6e9ef", borderRadius: 8, marginTop: 12 }}>
                     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
                       <thead><tr>{["SKU", "Product", "Qty in", "Landed £/pc"].map((h, i) => (
                         <th key={i} style={{ textAlign: i >= 2 ? "right" : "left", fontSize: 10.5, fontWeight: 700, color: "#8593a8", padding: "7px 9px", borderBottom: "2px solid #e6e9ef", position: "sticky", top: 0, background: "#fff" }}>{h}</th>

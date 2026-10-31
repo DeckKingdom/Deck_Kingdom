@@ -149,7 +149,7 @@ export function EmailSettings({ me, onClose }) {
           {err && <div style={note("red")}>{err}</div>}
           {rows === null ? <div style={{ fontSize: 13, color: "#8593a8" }}>Loading…</div> : rows.map((r) => (
             <button key={r.login_email} onClick={() => open(r)}
-              style={{ display: "flex", width: "100%", alignItems: "center", gap: 10, padding: "10px 12px", marginBottom: 6, border: "1px solid #e6e9ef", borderRadius: 10, background: "#fff", cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}>
+              style={{ display: "flex", width: "100%", alignItems: "center", gap: 10, padding: "10px 12px", marginBottom: 6, border: "1px solid #e6e9ef", borderRadius: 12, background: "#fff", cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}>
               <div style={{ width: 30, height: 30, borderRadius: 999, background: NAVY, color: "#fff", fontSize: 11.5, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>
                 {userInitials({ staff: [{ email: r.login_email, name: r.full_name }] }, r.login_email)}
               </div>

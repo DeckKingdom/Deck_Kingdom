@@ -44,6 +44,27 @@ export const QuickMail = ({ email, name, size = 30, onCompose }) => !String(emai
   </a>
 );
 
+// hover a record's name to see when it was created / last changed and by whom
+const StampHover = ({ crm, rec, children }) => {
+  const [open, setOpen] = useState(false);
+  const who = (v) => String(v || "").split("@")[0];
+  const lines = [
+    rec.created ? originText(rec, prettyDate(rec.created)) : "",
+    rec.updatedAt ? "Updated " + prettyDateTime(rec.updatedAt) + (rec.modifiedBy ? " by " + who(rec.modifiedBy) + " (" + userInitials(crm, rec.modifiedBy) + ")" : "")
+      : rec.modifiedBy ? "Last modified by " + who(rec.modifiedBy) : "",
+  ].filter(Boolean);
+  return (
+    <span style={{ position: "relative", display: "inline-block" }} onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
+      {children}
+      {open && lines.length > 0 && (
+        <span style={{ position: "absolute", left: 0, top: "calc(100% + 6px)", zIndex: 20, background: "#fff", color: NAVY, border: "1px solid #e6e9ef", borderRadius: 12, padding: "8px 12px", boxShadow: "0 8px 24px rgba(11,31,63,.2)", whiteSpace: "nowrap", fontSize: 12, fontWeight: 600, lineHeight: 1.6 }}>
+          {lines.map((l) => <span key={l} style={{ display: "block" }}>{l}</span>)}
+        </span>
+      )}
+    </span>
+  );
+};
+
 const FieldRow = ({ icon, label, value, actions }) => (
   <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 0", borderBottom: "1px solid #f0f2f6" }}>
     <div style={{ width: 30, height: 30, borderRadius: 8, background: "#f0f3f8", display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>
@@ -417,8 +438,9 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
               <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 6 }}>
                 <div style={{ position: "relative", flex: 1, minWidth: 200, maxWidth: 360 }}>
                   <span style={{ position: "absolute", left: 11, top: 10 }}><Icon name="search" /></span>
-                  <input style={{ ...inp, paddingLeft: 34 }} placeholder="Search name, postcode, phone, account #…"
+                  <input style={{ ...inp, paddingLeft: 34, paddingRight: 34 }} placeholder="Search name, postcode, phone, account #…"
                     value={search} onChange={(e) => setSearch(e.target.value)} />
+                    {search && <button title="Clear" onClick={() => setSearch("")} style={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", width: 24, height: 24, borderRadius: 999, border: "none", background: "#eef1f6", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0 }}><Icon name="x" size={12} /></button>}
                 </div>
                 <span style={{ flex: 1 }} />
                 <button style={{ ...abtn, width: 36, height: 36 }} title="Numbering — next account / site / invoice numbers"
@@ -439,7 +461,7 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
                     <tr key={c.id} onClick={() => setSelId(c.id)} style={{ cursor: "pointer" }}
                       onMouseEnter={(e) => (e.currentTarget.style.background = "#f6f8fb")}
                       onMouseLeave={(e) => (e.currentTarget.style.background = "")}>
-                      <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", fontWeight: 700 }}>{c.accountNo || <span title="Waiting for FileMaker to give it an account number" style={{ fontSize: 10.5, fontWeight: 800, color: "#8a5a00", background: "#fdf3dc", borderRadius: 4, padding: "1px 5px" }}>NEW</span>}</td>
+                      <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", fontWeight: 700 }}>{c.accountNo || <span title="Waiting for FileMaker to give it an account number" style={{ fontSize: 10.5, fontWeight: 800, color: "#8a5a00", background: "#fdf3dc", borderRadius: 8, padding: "1px 5px" }}>NEW</span>}</td>
                       <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", fontWeight: 700 }}>{c.name || "—"}</td>
                       <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6" }}>{c.town}</td>
                       <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6" }}>{c.postcode}</td>
@@ -506,11 +528,12 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
                   {at >= 0 && <span style={{ fontSize: 12, fontWeight: 700, color: "#8593a8" }}>{(at + 1).toLocaleString("en-GB")} of {order.length.toLocaleString("en-GB")}</span>}
                   <div style={{ position: "relative", marginLeft: "auto", width: 320, maxWidth: "100%" }}>
                     <span style={{ position: "absolute", left: 11, top: 10 }}><Icon name="search" /></span>
-                    <input style={{ ...inp, paddingLeft: 34, width: "100%", boxSizing: "border-box" }} placeholder="Jump to account — name, postcode, #…"
+                    <input style={{ ...inp, paddingLeft: 34, paddingRight: 34, width: "100%", boxSizing: "border-box" }} placeholder="Jump to account — name, postcode, #…"
                       value={jump} onChange={(e) => setJump(e.target.value)}
                       onKeyDown={(e) => { if (e.key === "Enter" && hits[0]) go(hits[0]); if (e.key === "Escape") setJump(""); }} />
+                    {jump && <button title="Clear" onClick={() => setJump("")} style={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", width: 24, height: 24, borderRadius: 999, border: "none", background: "#eef1f6", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0 }}><Icon name="x" size={12} /></button>}
                     {hits.length > 0 && (
-                      <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 30, background: "#fff", border: "1px solid #e6e9ef", borderRadius: 10, boxShadow: "0 10px 28px rgba(11,31,63,.18)", overflow: "hidden" }}>
+                      <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 30, background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, boxShadow: "0 10px 28px rgba(11,31,63,.18)", overflow: "hidden" }}>
                         {hits.map((c) => (
                           <button key={c.id} onClick={() => go(c)}
                             style={{ display: "flex", gap: 8, width: "100%", padding: "8px 11px", background: "none", border: "none", borderBottom: "1px solid #f0f2f6", cursor: "pointer", fontFamily: "inherit", textAlign: "left", fontSize: 13 }}>
@@ -527,8 +550,8 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
             })()}
 
             {/* hero */}
-            <div style={{ background: "linear-gradient(135deg,#0B1F3F 0%,#13294f 100%)", borderRadius: 14, padding: "20px 22px", color: "#fff", marginBottom: 14, display: "flex", gap: 18, alignItems: "center", flexWrap: "wrap" }}>
-              <div style={{ width: 54, height: 54, borderRadius: 14, background: GOLD, color: NAVY, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, fontWeight: 700, flex: "none" }}>
+            <div style={{ background: "linear-gradient(135deg,#0B1F3F 0%,#13294f 100%)", borderRadius: 12, padding: "20px 22px", color: "#fff", marginBottom: 14, display: "flex", gap: 18, alignItems: "center", flexWrap: "wrap" }}>
+              <div style={{ width: 54, height: 54, borderRadius: 12, background: GOLD, color: NAVY, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, fontWeight: 700, flex: "none" }}>
                 {(sel.name || "?").trim().charAt(0).toUpperCase() || "?"}
               </div>
               <div style={{ minWidth: 180 }}>
@@ -545,7 +568,7 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
                     <div style={{ position: "relative", display: "inline-block" }} onMouseEnter={() => setStampOpen(true)} onMouseLeave={() => setStampOpen(false)}>
                       <h2 style={{ margin: 0, fontSize: 21, cursor: "default" }}>{sel.name || "Unnamed account"}</h2>
                       {stampOpen && (
-                        <div style={{ position: "absolute", left: 0, top: "calc(100% + 6px)", zIndex: 20, background: "#fff", color: NAVY, borderRadius: 10, padding: "8px 12px", boxShadow: "0 8px 24px rgba(0,0,0,.28)", whiteSpace: "nowrap", fontSize: 12, fontWeight: 600, lineHeight: 1.6 }}>
+                        <div style={{ position: "absolute", left: 0, top: "calc(100% + 6px)", zIndex: 20, background: "#fff", color: NAVY, borderRadius: 12, padding: "8px 12px", boxShadow: "0 8px 24px rgba(0,0,0,.28)", whiteSpace: "nowrap", fontSize: 12, fontWeight: 600, lineHeight: 1.6 }}>
                           <span style={{ display: "inline-block", fontSize: 10, fontWeight: 800, letterSpacing: 0.4, padding: "1px 7px", borderRadius: 999, marginBottom: 3,
                             background: o.key === "filemaker" ? "#eef1f6" : o.key === "website" ? "#fdf3dc" : "#3FA55C22", color: o.key === "filemaker" ? "#5a6a85" : o.key === "website" ? "#8a5a00" : "#28713e" }}>
                             {o.key === "filemaker" ? "FROM FILEMAKER" : o.key === "website" ? "FROM THE WEBSITE" : "KEYED IN"}
@@ -561,7 +584,7 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
                   {sel.trader && <Chip tone="red" style={{ background: RED, color: "#fff", border: "none" }}>Trade</Chip>}
                   {Number(sel.discountPct) > 0 && <Chip tone="gold">−{Number(sel.discountPct)}% discount</Chip>}
                   {sel.source && <Chip tone="navy">Source · {sel.source}</Chip>}
-                  <button title="Edit account" onClick={() => openCustDraft({ ...sel })} style={{ width: 28, height: 28, borderRadius: 7, border: "1px solid #33466b", background: "transparent", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0, flex: "none" }}>
+                  <button title="Edit account" onClick={() => openCustDraft({ ...sel })} style={{ width: 28, height: 28, borderRadius: 8, border: "1px solid #33466b", background: "transparent", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0, flex: "none" }}>
                     <Icon name="pen" stroke="#cfd6e4" size={13} />
                   </button>
                 </div>
@@ -584,7 +607,7 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
                   </span>
                 </button>
               </div>
-              <button title="Delete this account" onClick={() => removeCustomer(sel)} style={{ alignSelf: "flex-end", width: 28, height: 28, borderRadius: 7, border: "1px dashed #3a4f78", background: "transparent", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0, flex: "none" }}>
+              <button title="Delete this account" onClick={() => removeCustomer(sel)} style={{ alignSelf: "flex-end", width: 28, height: 28, borderRadius: 8, border: "1px dashed #3a4f78", background: "transparent", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0, flex: "none" }}>
                 <Icon name="bin" stroke="#8fa0c0" size={13} />
               </button>
             </div>
@@ -604,30 +627,28 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
 
               <div style={{ ...card, marginBottom: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-                  <button style={{ ...btn, padding: "7px 12px", fontSize: 13 }} onClick={startNewSite}>
-                    <Icon name="plus" stroke={NAVY} />Add site
-                  </button>
-                  <button style={{ ...goldBtn, padding: "7px 12px", fontSize: 13 }} title="Raise an invoice collected from the trade counter — no delivery site"
-                    onClick={() => newInvoiceFor(sel.id, TRADE_COUNTER)}>
-                    <Icon name="plus" stroke={NAVY} />Trade counter inv
-                  </button>
-                  <span style={{ flex: 1 }} />
                   <p style={{ ...sect, margin: 0 }}>Sites ({sites.length})</p>
+                  <span style={{ flex: 1 }} />
+                  <button style={abtn} title="Add site" onClick={startNewSite}>
+                    <Icon name="pinPlus" size={16} stroke={NAVY} />
+                  </button>
+                  <button style={{ ...abtn, background: GOLD, borderColor: GOLD }} title="Trade counter invoice — collected from the trade counter, no delivery site"
+                    onClick={() => newInvoiceFor(sel.id, TRADE_COUNTER)}>
+                    <Icon name="docPlus" size={16} stroke={NAVY} />
+                  </button>
                 </div>
                 {sites.length === 0 && <div style={{ fontSize: 13, color: "#8593a8", fontWeight: 600 }}>No sites yet — add one for deliveries to a different address.</div>}
                 {sites.map((s) => (
                   <div key={s.id} style={{ border: "1px solid #e6e9ef", borderRadius: 12, padding: "13px 15px", display: "flex", gap: 12, alignItems: "flex-start", marginBottom: 10 }}>
-                    <div style={{ width: 36, height: 36, borderRadius: 10, background: NAVY, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 12, background: NAVY, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>
                       <Icon name="pin" size={17} stroke={GOLD} />
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: "flex", gap: 7, alignItems: "baseline", flexWrap: "wrap" }}>
-                        <span style={{ color: "#8593a8", fontWeight: 700, fontSize: 12.5 }}>#{s.siteNo || "—"}</span>
-                        <b style={{ fontSize: 14 }}>{s.name || s.address || "Unnamed site"}</b>
+                        <StampHover crm={crm} rec={s}><b style={{ fontSize: 14, cursor: "default" }}>{s.name || s.address || "Unnamed site"}</b></StampHover>
                       </div>
                       <div style={{ fontSize: 12.5, color: "#5a6a85", fontWeight: 600, marginTop: 2 }}>
                         {[s.address !== s.name ? s.address : "", s.town, s.postcode, s.mobile || s.landline].filter(Boolean).join(" · ")}
-                        {s.updatedAt ? <span style={{ color: "#aab3c2" }}> · updated {prettyDateTime(s.updatedAt)}{s.modifiedBy ? " by " + s.modifiedBy.split("@")[0] : ""}</span> : null}
                       </div>
                       {s.notes && <NoteBox>{s.notes}</NoteBox>}
                     </div>

@@ -236,7 +236,7 @@ export default function MasterProductsScreen({ crm, updateCrm, askConfirm, plann
           </div>
 
           {draft.isKit && (
-            <div style={{ background: "#f8f9fb", border: "1px solid #e6e9ef", borderRadius: 10, padding: "10px 13px", marginTop: 8 }}>
+            <div style={{ background: "#f8f9fb", border: "1px solid #e6e9ef", borderRadius: 12, padding: "10px 13px", marginTop: 8 }}>
               <p style={{ ...sect, marginBottom: 8 }}>Kit contents — what gets loaded per kit</p>
               {(draft.components || []).map((c) => (
                 <div key={c.id} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>

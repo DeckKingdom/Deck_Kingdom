@@ -169,7 +169,7 @@ export default function ActivityScreen({ crm, data, storageMode }) {
 
       {groups.map((g) => (
         <div key={g.day}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12, background: NAVY, color: "#fff", borderRadius: 10, padding: "9px 16px", margin: "16px 0 8px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, background: NAVY, color: "#fff", borderRadius: 12, padding: "9px 16px", margin: "16px 0 8px" }}>
             <b style={{ color: GOLD, fontSize: 14 }}>{dayLabel(g.day)}</b>
             <span style={{ fontSize: 12, color: "#cfd6e4", fontWeight: 600 }}>{g.rows.length} changes</span>
           </div>
@@ -177,7 +177,7 @@ export default function ActivityScreen({ crm, data, storageMode }) {
             const isOpen = open === e.id;
             const changeKeys = e.action === "updated" ? Object.keys(e.changes || {}) : [];
             return (
-              <div key={e.id} style={{ background: "#fff", border: "1px solid #e6e9ef", borderRadius: 10, padding: "9px 13px", marginBottom: 5 }}>
+              <div key={e.id} style={{ background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, padding: "9px 13px", marginBottom: 5 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap", cursor: "pointer" }} onClick={() => setOpen(isOpen ? null : e.id)}>
                   <span style={{ fontSize: 11.5, fontWeight: 700, color: "#8593a8", width: 42 }}>{(e.at || "").slice(11, 16)}</span>
                   <Chip>{(e.actor || "system").split("@")[0]}</Chip>
