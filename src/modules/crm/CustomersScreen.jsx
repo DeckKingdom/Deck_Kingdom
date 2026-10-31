@@ -21,12 +21,14 @@ export const waNumber = (v) => {
 };
 const isUkMobile = (v) => /^447\d{9}$/.test(waNumber(v));
 const firstName = (v) => String(v || "").trim().split(/\s+/)[0] || "";
-export const waLink = (num, name) => "https://web.whatsapp.com/send?phone=" + waNumber(num) + "&text=" + encodeURIComponent((firstName(name) ? "Hi " + firstName(name) + ", " : "Hi, ") + "it's Deck Kingdom. ");
+// per-PC choice: "app" = WhatsApp (Business) desktop app, "web" = WhatsApp Web tab
+export const getWaMode = () => { try { return localStorage.getItem("dk-wa-mode") || "app"; } catch { return "app"; } };
+export const waLink = (num, name, mode = getWaMode()) => (mode === "web" ? "https://web.whatsapp.com/send?phone=" : "whatsapp://send?phone=") + waNumber(num) + "&text=" + encodeURIComponent((firstName(name) ? "Hi " + firstName(name) + ", " : "Hi, ") + "it's Deck Kingdom. ");
 // Gmail compose in the browser (not the PC's default mail app)
 export const mailLink = (email, name) => "https://mail.google.com/mail/?view=cm&fs=1&to=" + encodeURIComponent(String(email || "").trim()) + "&su=" + encodeURIComponent("Deck Kingdom") + "&body=" + encodeURIComponent((firstName(name) ? "Hi " + firstName(name) : "Hi") + ",\n\n");
 const qbtn = (bg, fg) => ({ width: 30, height: 30, borderRadius: 8, border: "none", background: bg, color: fg, display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0, flex: "none", textDecoration: "none" });
-export const QuickWa = ({ num, name, size = 30 }) => waNumber(num) ? (
-  <a href={waLink(num, name)} target="dk-whatsapp" title={"WhatsApp " + num} style={{ ...qbtn("#25D36622", "#128C7E"), width: size, height: size }}>
+export const QuickWa = ({ num, name, size = 30, mode = getWaMode() }) => waNumber(num) ? (
+  <a href={waLink(num, name, mode)} {...(mode === "web" ? { target: "dk-whatsapp" } : {})} title={"WhatsApp " + num} style={{ ...qbtn("#25D36622", "#128C7E"), width: size, height: size }}>
     <Icon name="wa" stroke="#128C7E" size={size > 26 ? 16 : 14} />
   </a>
 ) : null;
@@ -251,6 +253,8 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
   // retail top-ups (an extra board, trim and clips) under this value don't make a repeat customer
   const [topUpOpen, setTopUpOpen] = useState(false);
   const [stampOpen, setStampOpen] = useState(false);
+  const [waMode, setWaModeState] = useState(getWaMode);
+  const setWaMode = (m) => { setWaModeState(m); try { localStorage.setItem("dk-wa-mode", m); } catch {} };
   const [topUp, setTopUp] = useState(() => { try { return Number(localStorage.getItem("dk-topup")) || 150; } catch (e) { return 150; } });
   const stats = useMemo(() => {
     const yearAgo = addDaysC(todayC(), -365), monthAgo = addDaysC(todayC(), -30);
@@ -536,10 +540,19 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 14 }}>
               <div style={{ ...card, marginBottom: 0 }}>
-                <p style={sect}>Contact &amp; invoice address</p>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                  <p style={{ ...sect, margin: 0 }}>Contact &amp; invoice address</p>
+                  <span style={{ marginLeft: "auto", fontSize: 10.5, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4 }} title="Where the WhatsApp buttons open on this PC">WHATSAPP</span>
+                  <div style={{ display: "inline-flex", border: "1px solid #dde2ea", borderRadius: 999, overflow: "hidden" }}>
+                    {[["app", "App"], ["web", "Web"]].map(([k, l]) => (
+                      <button key={k} onClick={() => setWaMode(k)} title={k === "app" ? "Open chats in the WhatsApp Business desktop app" : "Open chats in a WhatsApp Web tab"}
+                        style={{ border: "none", padding: "3px 10px", fontSize: 11, fontWeight: 700, fontFamily: "inherit", cursor: "pointer", background: waMode === k ? "#128C7E" : "transparent", color: waMode === k ? "#fff" : "#5a6a85" }}>{l}</button>
+                    ))}
+                  </div>
+                </div>
                 <FieldRow icon="user" label="Contact" value={sel.contact} />
-                <FieldRow icon="mob" label="Mobile" value={sel.mobile} actions={<QuickWa num={sel.mobile} name={sel.contact || sel.name} />} />
-                <FieldRow icon="phone" label="Landline" value={sel.landline} actions={isUkMobile(sel.landline) ? <QuickWa num={sel.landline} name={sel.contact || sel.name} /> : null} />
+                <FieldRow icon="mob" label="Mobile" value={sel.mobile} actions={<QuickWa mode={waMode} num={sel.mobile} name={sel.contact || sel.name} />} />
+                <FieldRow icon="phone" label="Landline" value={sel.landline} actions={isUkMobile(sel.landline) ? <QuickWa mode={waMode} num={sel.landline} name={sel.contact || sel.name} /> : null} />
                 <FieldRow icon="mail" label="Email" value={sel.email} actions={<QuickMail email={sel.email} name={sel.contact || sel.name} />} />
                 <FieldRow icon="share" label="Preferred contact" value={sel.contactMethod} />
                 <FieldRow icon="pin" label="Invoice address" value={[sel.address, sel.town, sel.postcode].filter(Boolean).join(", ")} />
@@ -575,7 +588,7 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
                       {s.notes && <NoteBox>{s.notes}</NoteBox>}
                     </div>
                     <div style={{ display: "flex", gap: 5 }}>
-                      <QuickWa num={isUkMobile(s.landline) && !isUkMobile(s.mobile) ? s.landline : s.mobile} name={s.contact || sel.contact || sel.name} size={28} />
+                      <QuickWa mode={waMode} num={isUkMobile(s.landline) && !isUkMobile(s.mobile) ? s.landline : s.mobile} name={s.contact || sel.contact || sel.name} size={28} />
                       <QuickMail email={s.email} name={s.contact || sel.contact || sel.name} size={28} />
                       {newQuoteFor && <button style={abtn} title="New quote for this site" onClick={() => newQuoteFor(sel.id, s.id)}><Icon name="tag" /></button>}
                       <button style={abtn} title="New invoice for this site" onClick={() => newInvoiceFor(sel.id, s.id)}><Icon name="plus" /></button>
