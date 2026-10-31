@@ -386,11 +386,6 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
               <div style={big}>{(tr.active + rt.active).toLocaleString("en-GB")}</div>
               <div style={sub}>{"ordered in the last 12 months · " + tr.active + " trade, " + rt.active + " retail"}</div>
             </div>
-            <div style={box}>
-              <div style={lab}>Never ordered</div>
-              <div style={big}>{stats.never.toLocaleString("en-GB")} <span style={{ fontSize: 14, color: "#5a6a85" }}>{pct(stats.never, stats.total)}</span></div>
-              <div style={sub}>{tr.never + " trade, " + rt.never + " retail · accounts with no order yet"}</div>
-            </div>
             <div style={{ ...box, flex: "1.8 1 250px" }}>
               <div style={lab}>Buyers — one-time vs repeat</div>
               <div style={{ display: "grid", gridTemplateColumns: "auto 1fr 1fr 18px", gap: "2px 14px", alignItems: "baseline", marginTop: 4, fontSize: 12.5 }}>
@@ -421,6 +416,11 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
                   are top-ups (an extra board, trim, clips), not a new purchase{rt.topUps ? " · " + rt.topUps + " set aside so far" : ""}
                 </div>
               )}
+            </div>
+            <div style={box}>
+              <div style={lab}>Never ordered</div>
+              <div style={big}>{stats.never.toLocaleString("en-GB")} <span style={{ fontSize: 14, color: "#5a6a85" }}>{pct(stats.never, stats.total)}</span></div>
+              <div style={sub}>{tr.never + " trade, " + rt.never + " retail · accounts with no order yet"}</div>
             </div>
           </div>
         );
