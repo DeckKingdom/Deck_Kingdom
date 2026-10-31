@@ -225,6 +225,7 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
   // ===== summary =====
   // retail top-ups (an extra board, trim and clips) under this value don't make a repeat customer
   const [topUpOpen, setTopUpOpen] = useState(false);
+  const [stampOpen, setStampOpen] = useState(false);
   const [topUp, setTopUp] = useState(() => { try { return Number(localStorage.getItem("dk-topup")) || 150; } catch (e) { return 150; } });
   const stats = useMemo(() => {
     const yearAgo = addDaysC(todayC(), -365), monthAgo = addDaysC(todayC(), -30);
@@ -446,7 +447,7 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
             <button style={{ ...btn, marginBottom: 12 }} onClick={() => setSelId(null)}><Icon name="back" stroke={NAVY} />All customers</button>
 
             {/* hero */}
-            <div style={{ background: "linear-gradient(135deg,#0B1F3F 0%,#13294f 100%)", borderRadius: 14, padding: "20px 22px", color: "#fff", marginBottom: 14, display: "flex", gap: 18, alignItems: "flex-end", flexWrap: "wrap" }}>
+            <div style={{ background: "linear-gradient(135deg,#0B1F3F 0%,#13294f 100%)", borderRadius: 14, padding: "20px 22px", color: "#fff", marginBottom: 14, display: "flex", gap: 18, alignItems: "center", flexWrap: "wrap" }}>
               <div style={{ width: 54, height: 54, borderRadius: 14, background: GOLD, color: NAVY, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, fontWeight: 700, flex: "none" }}>
                 {(sel.name || "?").trim().charAt(0).toUpperCase() || "?"}
               </div>
@@ -461,6 +462,22 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
                     <Icon name="pen" stroke="#cfd6e4" size={13} />
                   </button>
                 </div>
+                {(() => {
+                  // shorthand stamp: where it came from and when; click for the full line
+                  const o = recordOrigin(sel);
+                  const short = (d) => (d ? new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "2-digit" }) : "");
+                  const who = (v) => String(v || "").split("@")[0];
+                  const tag = o.key === "filemaker" ? "FM" : o.key === "website" ? "Web" : "Manual";
+                  const brief = tag + (sel.created ? " " + short(sel.created) : "") + (sel.updatedAt ? " · upd " + short(sel.updatedAt) : "");
+                  const full = originText(sel, prettyDate(sel.created)) +
+                    (sel.updatedAt ? " · Updated " + prettyDateTime(sel.updatedAt) + (sel.modifiedBy ? " by " + who(sel.modifiedBy) : "") : sel.modifiedBy ? " · Last modified by " + who(sel.modifiedBy) : "");
+                  return (
+                    <button type="button" onClick={() => setStampOpen((v) => !v)} title={stampOpen ? "Show less" : full}
+                      style={{ fontFamily: "inherit", border: "none", background: "none", padding: 0, marginTop: 6, cursor: "pointer", color: "#8fa0c0", fontSize: 11.5, fontWeight: 600, textAlign: "left" }}>
+                      {(stampOpen ? "▾ " + full : "▸ " + brief)}
+                    </button>
+                  );
+                })()}
               </div>
               <div style={{ marginLeft: "auto", display: "flex", background: "#ffffff14", border: "1px solid #ffffff22", borderRadius: 12, overflow: "hidden", flexWrap: "wrap" }}>
                 {[[invs.length, "Invoices"], [gbp(lifetime), "Lifetime"], [lastOrder ? prettyDate(lastOrder) : "—", "Last order"]].map(([v, l], i) => (
@@ -533,10 +550,6 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
                     </div>
                   </div>
                 ))}
-                <div style={{ fontSize: 11.5, color: "#8593a8", fontWeight: 600, marginTop: 10 }}>
-                  {originText(sel, prettyDate(sel.created))}
-                  {sel.updatedAt ? " · Updated " + prettyDateTime(sel.updatedAt) + (sel.modifiedBy ? " by " + sel.modifiedBy.split("@")[0] : "") : sel.modifiedBy ? " · Last modified by " + sel.modifiedBy.split("@")[0] : ""}
-                </div>
               </div>
             </div>
 
