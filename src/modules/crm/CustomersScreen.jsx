@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { NAVY, GOLD, RED, prettyDate, prettyDateTime, addDays as addDaysC } from "../../lib/core.js";
 import {
-  originText,
+  originText, recordOrigin,
   blankCustomer, blankSite, nextNumber, SOURCES,
   invoiceTotals, gbp, isPaid, isSaleInvoice, today as todayC, followUpDone, FOLLOWUP_FLAGS, FIELD_FORMATS, CONTACT_METHODS,
   TRADE_COUNTER, TRADE_COUNTER_LABEL, quoteTotals, quoteStatus, quoteInvoice, quoteRef, QUOTE_TONES, sampleRef, sampleStatus, sampleInvoice, SAMPLE_TONES,
@@ -377,7 +377,12 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
                       <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6" }}>{c.town}</td>
                       <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6" }}>{c.postcode}</td>
                       <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6" }}>{c.mobile || c.landline || c.email}</td>
-                      <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6" }}>{c.source && <Chip>{c.source}</Chip>}</td>
+                      <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6" }}>{c.source ? <Chip>{c.source}</Chip> : (() => {
+                        // no source recorded: say where the account came from instead, in a lighter pill
+                        const o = recordOrigin(c);
+                        const t = o.key === "filemaker" ? "FileMaker" : o.key === "website" ? "Website" : "Manual entry";
+                        return <Chip style={{ background: "#fff", borderStyle: "dashed", color: "#8593a8" }}>{t}</Chip>;
+                      })()}</td>
                       <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6" }}>{c.trader && <Chip tone="red">Trade</Chip>}</td>
                       <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", textAlign: "right", fontWeight: 700 }}>{(invByCust[c.id] || []).length}</td>
                     </tr>
