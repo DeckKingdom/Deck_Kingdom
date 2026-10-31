@@ -27,7 +27,8 @@ const SchemaNotice = () => (
 );
 
 const PERIODS = [["30", "Last 30 days"], ["90", "Last 90 days"], ["365", "Last 12 months"], ["all", "All time"]];
-const FILTERS = ["To send", "Follow-up due", "Open", "Converted", "Closed", "All"];
+const FILTERS = ["To send", "Follow-up due", "Converted", "All"];
+const SAMPLE_COST = 3.17; // average cost of one sample sent (product, packaging, postage)
 const itemsSummary = (x) => (x.items || []).map((it) => (Number(it.qty) > 1 ? it.qty + "× " : "") + [it.colour, it.description].filter(Boolean).join(" ")).filter(Boolean).join(", ");
 
 // how an invoice is known: its number, else the website order ref
@@ -77,6 +78,8 @@ export default function SamplesScreen({ crm, updateCrm, askConfirm, selId, setSe
   const [custQuery, setCustQuery] = useState("");
   const [newCust, setNewCust] = useState(null);
   const [stampOpen, setStampOpen] = useState(false);
+  const [periodOpen, setPeriodOpen] = useState(false);
+  const [rowLimit, setRowLimit] = useState(10);
   const [creditOpen, setCreditOpen] = useState(false);
   const [notice, setNotice] = useState("");
   const ready = samplesAvailable();
@@ -134,7 +137,7 @@ export default function SamplesScreen({ crm, updateCrm, askConfirm, selId, setSe
       const st = sampleStatus(x, crm);
       if (counts[st] !== undefined) counts[st]++;
     });
-    const filterNow = statusFilter || (counts["To send"] ? "To send" : counts["Follow-up due"] ? "Follow-up due" : "Open");
+    const filterNow = statusFilter && FILTERS.includes(statusFilter) ? statusFilter : counts["To send"] ? "To send" : counts["Follow-up due"] ? "Follow-up due" : "All";
 
     const since = period === "all" ? "" : addDays(today(), -Number(period));
     const inPeriod = samples.filter((x) => !since || (x.date || "") >= since);
@@ -166,7 +169,10 @@ export default function SamplesScreen({ crm, updateCrm, askConfirm, selId, setSe
         const c = custById[x.customerId];
         return [sampleRef(x), String(x.sampleNo || ""), c && c.name, c && c.postcode, c && c.email, itemsSummary(x)].some((v) => String(v || "").toLowerCase().includes(q));
       });
-    const shown = matches.slice(0, 60);
+    const shown = matches.slice(0, rowLimit);
+    // what the samples in this period cost: every sample item (qty) at the average cost
+    const itemsSent = inPeriod.reduce((t, x) => t + (x.items || []).reduce((a, it) => a + (Number(it.qty) || 1), 0), 0);
+    const spent = itemsSent * SAMPLE_COST;
     const monthLabel = (m) => new Date(m + "-01T00:00:00").toLocaleDateString("en-GB", { month: "short", year: "2-digit" });
 
     const ReportTable = ({ title, rows, label }) => (
@@ -197,20 +203,27 @@ export default function SamplesScreen({ crm, updateCrm, askConfirm, selId, setSe
       <div style={{ maxWidth: 1140, margin: "0 auto", padding: "18px 22px" }}>
         {!ready && <SchemaNotice />}
 
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
-          <p style={{ ...sect, margin: 0 }}>Conversion</p>
-          <select style={{ ...inp, width: "auto", padding: "5px 9px", fontSize: 13, fontWeight: 700 }} value={period} onChange={(e) => setPeriod(e.target.value)}>
-            {PERIODS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-          </select>
-          <span style={{ fontSize: 12, color: "#8593a8", fontWeight: 600 }}>
-            by request date · an order counts if placed within {SAMPLE_WINDOW_DAYS} days of the sample
-          </span>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, flexWrap: "wrap", minHeight: 30 }}>
+          <button type="button" onClick={() => setPeriodOpen((o) => !o)} title="Change the period"
+            style={{ ...sect, margin: 0, background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", gap: 6, alignItems: "center" }}>
+            Conversion · <span style={{ color: NAVY }}>{(PERIODS.find(([v]) => v === period) || [, ""])[1]}</span> {periodOpen ? "▾" : "▸"}
+          </button>
+          {periodOpen && (
+            <>
+              <select style={{ ...inp, width: "auto", padding: "5px 9px", fontSize: 13, fontWeight: 700 }} value={period} onChange={(e) => setPeriod(e.target.value)}>
+                {PERIODS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              </select>
+              <span style={{ fontSize: 12, color: "#8593a8", fontWeight: 600 }}>
+                by request date · an order counts if placed within {SAMPLE_WINDOW_DAYS} days of the sample
+              </span>
+            </>
+          )}
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 12, marginBottom: 14 }}>
           {[
-            ["Sample requests", stats.requests.toLocaleString("en-GB"), stats.open + " still open"],
+            ["Sample requests", <>{stats.requests.toLocaleString("en-GB")} <span style={{ fontSize: 14, color: "#8593a8", fontWeight: 700 }}>· {stats.open.toLocaleString("en-GB")} still open</span></>, itemsSent.toLocaleString("en-GB") + " sample" + (itemsSent === 1 ? "" : "s") + " in them"],
             ["Converted to orders", stats.converted.toLocaleString("en-GB") + " · " + pct(stats.rate), stats.lost ? pct(stats.decidedRate) + " of closed requests" : "of all requests"],
-            ["Sales from samples", gbp(stats.revenue), stats.perSample !== null ? gbp(stats.perSample) + " per sample sent" : "inc VAT"],
+            ["Sales from samples", gbp(stats.revenue), gbp(spent) + " spent on samples" + (spent ? " · " + gbp(stats.revenue / spent) + " back per £1" : "")],
             ["Avg time to order", stats.avgDays === null ? "—" : stats.avgDays + " days", "request → invoice"],
           ].map(([k, v, sub]) => (
             <div key={k} style={{ ...card, marginBottom: 0, padding: "12px 16px" }}>
@@ -224,15 +237,15 @@ export default function SamplesScreen({ crm, updateCrm, askConfirm, selId, setSe
         <div style={{ ...card, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "10px 14px" }}>
           <div style={{ position: "relative", flex: 1, minWidth: 200, maxWidth: 300 }}>
             <span style={{ position: "absolute", left: 11, top: 10 }}><Icon name="search" /></span>
-            <input style={{ ...inp, paddingLeft: 34 }} placeholder="Search S-#, customer, email, colour…" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <input style={{ ...inp, paddingLeft: 34 }} placeholder="Search S-#, customer, email, colour…" value={search} onChange={(e) => { setSearch(e.target.value); setRowLimit(10); }} />
           </div>
           <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
             {FILTERS.map((f) => {
               const on = filterNow === f;
               const n = counts[f];
               return (
-                <button key={f} onClick={() => setStatusFilter(f)}
-                  style={{ fontFamily: "inherit", fontSize: 12.5, fontWeight: 700, padding: "6px 11px", borderRadius: 999, cursor: "pointer", border: "1px solid " + (on ? NAVY : "#d5d9e0"), background: on ? NAVY : "#fff", color: on ? "#fff" : "#5a6a85", display: "inline-flex", gap: 6, alignItems: "center" }}>
+                <button key={f} onClick={() => { setStatusFilter(f); setRowLimit(10); }}
+                  style={{ fontFamily: "inherit", fontSize: 12.5, fontWeight: 700, padding: "6px 11px", minWidth: 128, justifyContent: "center", borderRadius: 999, cursor: "pointer", border: "1px solid " + (on ? NAVY : "#d5d9e0"), background: on ? NAVY : "#fff", color: on ? "#fff" : "#5a6a85", display: "inline-flex", gap: 6, alignItems: "center" }}>
                   {f}
                   {n ? <span style={{ background: f === "To send" ? RED : "#E8912D", color: "#fff", borderRadius: 99, fontSize: 10.5, padding: "0 6px", lineHeight: "16px" }}>{n}</span> : null}
                 </button>
@@ -240,7 +253,7 @@ export default function SamplesScreen({ crm, updateCrm, askConfirm, selId, setSe
             })}
           </div>
           <span style={{ flex: 1 }} />
-          <button style={{ ...goldBtn, opacity: ready ? 1 : 0.5 }} disabled={!ready} onClick={newSample}><Icon name="plus" stroke={NAVY} />Log sample request</button>
+          <button title="Log a sample request" style={{ ...goldBtn, width: 36, height: 36, padding: 0, justifyContent: "center", opacity: ready ? 1 : 0.5 }} disabled={!ready} onClick={newSample}><Icon name="plus" stroke={NAVY} size={16} /></button>
         </div>
 
         <div style={card}>
@@ -277,7 +290,7 @@ export default function SamplesScreen({ crm, updateCrm, askConfirm, selId, setSe
                             {inv ? (
                               <button onClick={(e) => { e.stopPropagation(); openInvoice(inv.id); }}
                                 style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontWeight: 700, color: "#185FA5", fontSize: 13, padding: 0 }}>
-                                {"#" + (inv.invNo || "—") + " · " + gbp(invoiceTotals(inv).total)}
+                                {(inv.invNo ? "#" + inv.invNo : inv.orderRef || "#—") + " · " + gbp(invoiceTotals(inv).total)}
                               </button>
                             ) : <span style={{ color: "#aab3c2" }}>—</span>}
                           </td>
@@ -291,7 +304,10 @@ export default function SamplesScreen({ crm, updateCrm, askConfirm, selId, setSe
                 </table>
               </div>
               {matches.length > shown.length && (
-                <div style={{ fontSize: 12, color: "#8593a8", fontWeight: 600, marginTop: 10 }}>Showing {shown.length} of {matches.length.toLocaleString("en-GB")} — keep typing to narrow it down.</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 12, color: "#8593a8", fontWeight: 600, marginTop: 10 }}>
+                  Showing {shown.length} of {matches.length.toLocaleString("en-GB")}
+                  <button onClick={() => setRowLimit((n) => n + 10)} style={{ ...btn, padding: "4px 10px", fontSize: 12 }}>Show 10 more</button>
+                </div>
               )}
             </>
           )}
