@@ -163,6 +163,13 @@ export default function ImportPlanner() {
   const [purchaseFilter, setPurchaseFilter] = useState(null); // { supplierId }
   const [selSupplierId, setSelSupplierId] = useState(null);
   const [newSupplierSignal, setNewSupplierSignal] = useState(0);
+  // menu and header buttons always land on the list, never on the last record that was open
+  const navTo = (t) => {
+    setSelCustomerId(null); setSelInvoiceId(null); setSelCollectionId(null); setSelQuoteId(null);
+    setSelSampleId(null); setSelPurchaseId(null); setSelSupplierId(null);
+    setQuoteFilter(null); setPurchaseFilter(null); setInvFilter(null);
+    setTab(t);
+  };
   const openPurchase = (id) => {
     setSelPurchaseId(id);
     setTab("purchases");
@@ -949,7 +956,7 @@ export default function ImportPlanner() {
         }`}</style>
 
       <div style={{ display: "flex", alignItems: "stretch" }}>
-      <Sidebar tab={tab} setTab={setTab} open={sideOpen} footer={sideFooter} onNew={sideNew} />
+      <Sidebar tab={tab} setTab={navTo} open={sideOpen} footer={sideFooter} onNew={sideNew} />
       <div style={{ flex: 1, minWidth: 0 }}>
 
       <div ref={headerRef} className="no-print" style={{ background: NAVY, padding: "10px 16px", display: "flex", alignItems: "center", gap: 10, position: "sticky", top: 0, zIndex: 25, boxShadow: "0 2px 8px rgba(11,31,63,0.25)" }}>
@@ -960,7 +967,7 @@ export default function ImportPlanner() {
         <span style={{ flex: 1 }} />
         <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
           {[["home", "Home", "home"], ["overview", "Imports", "ship"], ["customers", "Customers", "users"], ["invoices", "Invoices", "doc"], ["quotes", "Quotes", "tag"], ["samples", "Samples", "leaf"], ["schedule", "Delivery Schedule", "cal"]].map(([t, label, icon]) => (
-            <button key={t} onClick={() => setTab(t)} title={label} style={{ width: 34, height: 34, borderRadius: 8, border: "1px solid " + (tab === t ? GOLD : "#33466b"), background: tab === t ? GOLD : "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flex: "none", padding: 0 }}>
+            <button key={t} onClick={() => navTo(t)} title={label} style={{ width: 34, height: 34, borderRadius: 8, border: "1px solid " + (tab === t ? GOLD : "#33466b"), background: tab === t ? GOLD : "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flex: "none", padding: 0 }}>
               <Icon name={icon} size={16} stroke={tab === t ? NAVY : "#cfd6e4"} />
             </button>
           ))}
