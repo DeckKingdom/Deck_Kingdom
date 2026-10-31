@@ -12,7 +12,30 @@ import { Icon, Chip, Modal, SuggestInput, selectAllProps, sect, lbl, card, abtn,
 
 const navyBtn = { ...btn, background: "transparent", border: "1px solid #3a4f78", color: "#fff" };
 
-const FieldRow = ({ icon, label, value }) => (
+// quick-contact links: WhatsApp (UK numbers → 44…) and email
+export const waNumber = (v) => {
+  let d = String(v || "").replace(/\D/g, "");
+  if (d.startsWith("00")) d = d.slice(2);
+  if (d.startsWith("0")) d = "44" + d.slice(1);
+  return d.length >= 10 ? d : "";
+};
+const isUkMobile = (v) => /^447\d{9}$/.test(waNumber(v));
+const firstName = (v) => String(v || "").trim().split(/\s+/)[0] || "";
+export const waLink = (num, name) => "https://wa.me/" + waNumber(num) + "?text=" + encodeURIComponent((firstName(name) ? "Hi " + firstName(name) + ", " : "Hi, ") + "it's Deck Kingdom. ");
+export const mailLink = (email, name) => "mailto:" + String(email || "").trim() + "?subject=" + encodeURIComponent("Deck Kingdom") + "&body=" + encodeURIComponent((firstName(name) ? "Hi " + firstName(name) : "Hi") + ",\n\n");
+const qbtn = (bg, fg) => ({ width: 30, height: 30, borderRadius: 8, border: "none", background: bg, color: fg, display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0, flex: "none", textDecoration: "none" });
+export const QuickWa = ({ num, name, size = 30 }) => waNumber(num) ? (
+  <a href={waLink(num, name)} target="_blank" rel="noopener noreferrer" title={"WhatsApp " + num} style={{ ...qbtn("#25D36622", "#128C7E"), width: size, height: size }}>
+    <Icon name="wa" stroke="#128C7E" size={size > 26 ? 16 : 14} />
+  </a>
+) : null;
+export const QuickMail = ({ email, name, size = 30 }) => String(email || "").includes("@") ? (
+  <a href={mailLink(email, name)} title={"Email " + email} style={{ ...qbtn("#185FA51a", "#185FA5"), width: size, height: size }}>
+    <Icon name="mail" stroke="#185FA5" size={size > 26 ? 15 : 13} />
+  </a>
+) : null;
+
+const FieldRow = ({ icon, label, value, actions }) => (
   <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 0", borderBottom: "1px solid #f0f2f6" }}>
     <div style={{ width: 30, height: 30, borderRadius: 8, background: "#f0f3f8", display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>
       <Icon name={icon} stroke={NAVY} />
@@ -21,6 +44,7 @@ const FieldRow = ({ icon, label, value }) => (
       <span style={{ ...lbl, marginBottom: 0 }}>{label}</span>
       <b style={{ fontSize: 14, color: value ? NAVY : "#aab3c2", overflowWrap: "anywhere" }}>{value || "—"}</b>
     </div>
+    {actions && <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>{actions}</div>}
   </div>
 );
 
@@ -484,6 +508,9 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
                   <button title="Edit account" onClick={() => openCustDraft({ ...sel })} style={{ width: 28, height: 28, borderRadius: 7, border: "1px solid #33466b", background: "transparent", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0, flex: "none" }}>
                     <Icon name="pen" stroke="#cfd6e4" size={13} />
                   </button>
+                  <button title="Delete this account" onClick={() => removeCustomer(sel)} style={{ width: 28, height: 28, borderRadius: 7, border: "1px dashed #3a4f78", background: "transparent", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0, flex: "none" }}>
+                    <Icon name="bin" stroke="#8fa0c0" size={13} />
+                  </button>
                 </div>
               </div>
               <div style={{ marginLeft: "auto", display: "flex", background: "#ffffff14", border: "1px solid #ffffff22", borderRadius: 12, overflow: "hidden", flexWrap: "wrap" }}>
@@ -504,18 +531,15 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
                   </span>
                 </button>
               </div>
-              <button title="Delete this account" onClick={() => removeCustomer(sel)} style={{ ...{ width: 28, height: 28, borderRadius: 7, border: "1px solid #33466b", background: "transparent", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0, flex: "none" }, border: "1px dashed #3a4f78" }}>
-                <Icon name="bin" stroke="#8fa0c0" size={13} />
-              </button>
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 14 }}>
               <div style={{ ...card, marginBottom: 0 }}>
                 <p style={sect}>Contact &amp; invoice address</p>
                 <FieldRow icon="user" label="Contact" value={sel.contact} />
-                <FieldRow icon="mob" label="Mobile" value={sel.mobile} />
-                <FieldRow icon="phone" label="Landline" value={sel.landline} />
-                <FieldRow icon="mail" label="Email" value={sel.email} />
+                <FieldRow icon="mob" label="Mobile" value={sel.mobile} actions={<QuickWa num={sel.mobile} name={sel.contact || sel.name} />} />
+                <FieldRow icon="phone" label="Landline" value={sel.landline} actions={isUkMobile(sel.landline) ? <QuickWa num={sel.landline} name={sel.contact || sel.name} /> : null} />
+                <FieldRow icon="mail" label="Email" value={sel.email} actions={<QuickMail email={sel.email} name={sel.contact || sel.name} />} />
                 <FieldRow icon="share" label="Preferred contact" value={sel.contactMethod} />
                 <FieldRow icon="pin" label="Invoice address" value={[sel.address, sel.town, sel.postcode].filter(Boolean).join(", ")} />
               </div>
@@ -550,6 +574,8 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
                       {s.notes && <NoteBox>{s.notes}</NoteBox>}
                     </div>
                     <div style={{ display: "flex", gap: 5 }}>
+                      <QuickWa num={isUkMobile(s.landline) && !isUkMobile(s.mobile) ? s.landline : s.mobile} name={s.contact || sel.contact || sel.name} size={28} />
+                      <QuickMail email={s.email} name={s.contact || sel.contact || sel.name} size={28} />
                       {newQuoteFor && <button style={abtn} title="New quote for this site" onClick={() => newQuoteFor(sel.id, s.id)}><Icon name="tag" /></button>}
                       <button style={abtn} title="New invoice for this site" onClick={() => newInvoiceFor(sel.id, s.id)}><Icon name="plus" /></button>
                       <button style={abtn} title="Edit site" onClick={() => openSiteDraft({ ...s })}><Icon name="pen" /></button>
