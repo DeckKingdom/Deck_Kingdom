@@ -17,6 +17,8 @@
       .dk-t > * > tr > *:last-child { padding-right: 8px !important; }
       .dk-bleed { margin-left: -8px !important; margin-right: -8px !important; }
       table.dk-bleed { width: calc(100% + 16px) !important; }
+      /* Home grid: 4 columns on a wide screen, one column on a narrow one */
+      @media (max-width: 980px) { .dk-home-grid { grid-template-columns: 1fr !important; } .dk-home-grid > .dk-home-cell { grid-column: auto !important; } }
     </style>
   </head>
   <body style="margin:0">

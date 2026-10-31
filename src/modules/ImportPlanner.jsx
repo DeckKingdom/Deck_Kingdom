@@ -1011,7 +1011,7 @@ export default function ImportPlanner() {
               </div>
             </div>
           )}
-          <HomeScreen data={data} crm={crm} updateCrm={updateCrm} me={me} askConfirm={setConfirmBox} setTab={setTab} addShipment={addShipment} newInvoice={() => (crm ? newInvoiceFor("", "") : setTab("invoices"))} />
+          <HomeScreen data={data} crm={crm} updateCrm={updateCrm} me={me} askConfirm={setConfirmBox} setTab={setTab} openInvoice={openInvoice} addShipment={addShipment} newInvoice={() => (crm ? newInvoiceFor("", "") : setTab("invoices"))} />
         </>
       )}
 

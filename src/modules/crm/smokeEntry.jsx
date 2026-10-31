@@ -80,7 +80,7 @@ export default function run(React, renderToString) {
   html = renderToString(React.createElement(ScheduleScreen, props));
   assert(html.includes("Bob") && html.includes("1 job"), "schedule shows the job");
   html = renderToString(React.createElement(HomeScreen, { data: { products: [], shipments: [] }, crm, updateCrm: noop, me: "", askConfirm: noop, setTab: noop, addShipment: noop, newInvoice: noop }));
-  assert(html.includes("Today") && html.includes("Reports") && html.includes("Sales this month") && html.includes("Projects"), "home: tasks + reports");
+  assert(html.includes("Today") && html.includes("Financial overview") && html.includes("Sales this month") && html.includes("Deliveries · next 4 days") && html.includes("Projects"), "home: tasks + reports");
   html = renderToString(React.createElement(ActivityScreen, { crm, data: { products: [], shipments: [] }, storageMode: "local" }));
   assert(html.includes("activity log"), "activity preview note");
   html = renderToString(React.createElement(ActivityScreen, { crm, data: { products: [], shipments: [] }, storageMode: "supabase" }));
