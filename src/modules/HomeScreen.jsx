@@ -10,6 +10,8 @@ import {
 } from "../lib/crmCore.js";
 import { tasksAvailable } from "../data/crmStorage.js";
 import { Icon, Chip, card, sect, lbl, inp, btn, goldBtn } from "./crm/ui.jsx";
+import WebsiteCard from "./WebsiteCard.jsx";
+import { analyticsReady } from "../data/analytics.js";
 import { TaskModal, TasksSchemaNotice, PRIORITY_TONES, STATUS_TONES } from "./crm/TasksScreen.jsx";
 
 const Check = ({ on, onClick, title }) => (
@@ -232,6 +234,7 @@ export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTa
 
         {/* ===== reports column ===== */}
         <div>
+          {analyticsReady && <WebsiteCard />}
           <div style={card}>
             <p style={sect}>Reports</p>
             {!crm ? (
