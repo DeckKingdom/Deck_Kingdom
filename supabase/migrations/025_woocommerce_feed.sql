@@ -118,7 +118,7 @@ begin
         insert into public.invoices as t (id, customer_id, site_id, date, order_ref, job_type, payment_type, payment_date,
                                           delivery_charge, job_notes, raised_by, created, created_by)
         values (iid, cid, site, coalesce(o ->> 'date', ''), 'WEB-' || (o ->> 'number'),
-                case when lower(coalesce(o ->> 'shippingMethod', '')) ~ '(collect|pick ?up|pickup)' then 'Collection' else 'Delivery 1' end,
+                case when lower(coalesce(o ->> 'shippingMethod', '')) ~ '(collect|pick ?up|pickup)' then 'Customer Collection' else 'Delivery Run 1' end,
                 case when coalesce(o ->> 'paymentMethod', '') = '' then 'Website' else 'Website · ' || (o ->> 'paymentMethod') end,
                 coalesce(o ->> 'datePaid', ''), nullif(o ->> 'shippingTotal', '')::numeric,
                 trim(coalesce(o ->> 'customerNote', '')), 'Website', coalesce(o ->> 'date', ''), 'Website')

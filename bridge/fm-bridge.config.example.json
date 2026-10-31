@@ -1,5 +1,5 @@
 {
-  "_read_me": "Settings for the FileMaker bridge. Fill in the bridge account password and the start date. The field names below are first guesses - Claude sets them from fm-discover.txt.",
+  "_read_me": "Settings for the FileMaker bridge. Field names are set from your FileMaker file (fm-discover.txt, 31 Oct 2026).",
   "dsn": "DeckKingdomFM",
   "user": "bridge",
   "password": "",
@@ -11,55 +11,92 @@
   "dateLiteral": "DATE '{0}'",
   "timestampLiteral": "TIMESTAMP '{0}'",
   "customers": {
-    "table": "Customers",
-    "id": "Customer ID",
+    "table": "Customer Accounts",
+    "id": "Cust ID/",
+    "idText": true,
     "modified": "",
     "created": "",
+    "allDaily": true,
     "fields": {
-      "accountNo": "Account No",
-      "name": "Name",
-      "address": "Address",
-      "town": "Town",
-      "postcode": "Postcode",
-      "contact": "Contact",
+      "accountNo": "Cust ID/",
+      "name": "Customer Name",
+      "address": "Invoice Address",
+      "town": "Invoice Town",
+      "postcode": "Invoice Post Code",
+      "contact": "Contact Name",
       "landline": "Landline",
       "mobile": "Mobile",
       "email": "Email",
-      "trader": "Trader"
+      "source": "Source",
+      "trader": "Trader",
+      "created": "Date Created"
     }
   },
   "invoices": {
     "table": "Invoices",
-    "id": "Invoice ID",
-    "customerId": "Customer ID",
-    "date": "Date",
-    "modified": "",
-    "where": "",
+    "id": "Invoice No",
+    "customerId": "assign to customer account",
+    "siteId": "Assign to service contract no",
+    "date": "Invoice Date",
+    "modified": "Record Modified",
+    "where": "\"Inv/Credit\" IS NULL OR \"Inv/Credit\" <> 'Credit'",
     "fields": {
       "invNo": "Invoice No",
-      "date": "Date",
-      "orderRef": "Order Ref",
+      "date": "Invoice Date",
+      "orderRef": "Order Ref:",
       "jobType": "Job Type",
-      "deliveryDate": "Delivery Date",
+      "deliveryDate": "Delievry Date",
       "deliveryTime": "Delivery Time",
       "deliveryCompleted": "Delivery Completed",
-      "paymentType": "Payment Type",
+      "paymentType": "Payment Method",
       "paymentDate": "Payment Date",
-      "deliveryCharge": "Delivery Charge",
+      "paid": "Payment Received Conditional Formatting",
+      "deliveryCharge": "Delivery Fee",
       "jobNotes": "Job Notes",
-      "raisedBy": "Raised By"
+      "deliveryNotes": "Delivery Notes",
+      "van": "Van",
+      "raisedBy": "Record Created By",
+      "created": {
+        "field": "Record Created",
+        "as": "date"
+      },
+      "booked": "Booking Confirmed",
+      "courier": "Instructed Courier",
+      "partsOrdered": "Parts Ordered",
+      "partsReady": "Parts Ready",
+      "reviewRequested": "Review Requested",
+      "reviewReceived": "Review Received",
+      "photosRequested": "Photos Requested",
+      "socialPosted": "Social Post Created",
+      "sampleFollowed": "Sample Followed Up"
     }
   },
   "lines": {
-    "table": "Invoice Items",
-    "invoiceId": "Invoice ID",
+    "table": "Invoice items",
+    "invoiceId": "Assign to invoice No",
     "order": "",
     "fields": {
-      "code": "Code",
+      "code": "Product Code",
       "description": "Description",
       "colour": "Colour",
       "qty": "Qty",
       "price": "Price"
+    }
+  },
+  "engine": "ado",
+  "sites": {
+    "table": "Customer Sites",
+    "id": "Service Contract No:",
+    "customerId": "Assign to Account No:",
+    "fields": {
+      "address": "Site Address",
+      "town": "Site Town",
+      "postcode": "Site Postcode",
+      "contact": "Contact Name",
+      "landline": "Landline",
+      "mobile": "Mobile",
+      "email": "Email",
+      "notes": "Notes For Booking This Site In"
     }
   }
 }

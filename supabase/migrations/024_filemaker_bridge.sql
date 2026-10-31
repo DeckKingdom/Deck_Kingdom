@@ -29,8 +29,8 @@ create or replace function public.fm_sync(p_secret text, p_payload jsonb)
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare
   want text := (select value ->> 'secret' from public.crm_settings where key = 'fmBridge');
-  c jsonb; i jsonb; l jsonb;
-  cid text; iid text; n int;
+  c jsonb; i jsonb; l jsonb; st jsonb;
+  cid text; iid text; sid text; n int;
   cust_count int := 0; inv_count int := 0; line_count int := 0;
   skipped jsonb := '[]'::jsonb;
 begin
@@ -45,7 +45,7 @@ begin
     cid := (select ops_id from public.fm_links where kind = 'customer' and fm_id = c ->> 'fmId');
     if cid is null then
       -- an account already keyed in by hand with the same account number is the same customer
-      if nullif(c ->> 'accountNo', '') is not null then
+      if coalesce(c ->> 'accountNo', '') ~ '^\d{1,9}$' then
         select id into cid from public.customers where account_no = (c ->> 'accountNo')::int order by (id like 'fm-c-%') limit 1;
       end if;
       -- or one that came in from the website with the same email address
@@ -56,7 +56,9 @@ begin
       insert into public.fm_links (kind, fm_id, ops_id) values ('customer', c ->> 'fmId', cid) on conflict do nothing;
     end if;
     insert into public.customers as t (id, account_no, name, address, town, postcode, contact, landline, mobile, email, source, trader, created, created_by)
-    values (cid, nullif(c ->> 'accountNo', '')::int, coalesce(c ->> 'name', ''), coalesce(c ->> 'address', ''), coalesce(c ->> 'town', ''),
+    values (cid, case when coalesce(c ->> 'accountNo', '') ~ '^\d{1,9}$' then (c ->> 'accountNo')::int end,
+            -- no company name in FileMaker: the contact's name is the account name
+            coalesce(nullif(trim(c ->> 'name'), ''), trim(coalesce(c ->> 'contact', ''))), coalesce(c ->> 'address', ''), coalesce(c ->> 'town', ''),
             coalesce(c ->> 'postcode', ''), coalesce(c ->> 'contact', ''), coalesce(c ->> 'landline', ''), coalesce(c ->> 'mobile', ''),
             coalesce(c ->> 'email', ''), coalesce(c ->> 'source', ''), coalesce((c ->> 'trader')::boolean, false), coalesce(c ->> 'created', ''), 'FileMaker')
     on conflict (id) do update set
@@ -65,6 +67,22 @@ begin
       email = excluded.email, source = excluded.source, trader = excluded.trader,
       created = case when t.created = '' then excluded.created else t.created end;
     cust_count := cust_count + 1;
+  end loop;
+
+  -- ===== customer sites (delivery addresses) =====
+  for st in select * from jsonb_array_elements(coalesce(p_payload -> 'sites', '[]'::jsonb)) loop
+    cid := (select ops_id from public.fm_links where kind = 'customer' and fm_id = st ->> 'customerFmId');
+    if cid is null then continue; end if;
+    sid := coalesce((select ops_id from public.fm_links where kind = 'site' and fm_id = st ->> 'fmId'), 'fm-st-' || (st ->> 'fmId'));
+    insert into public.fm_links (kind, fm_id, ops_id) values ('site', st ->> 'fmId', sid) on conflict do nothing;
+    insert into public.customer_sites as t (id, customer_id, site_no, name, address, town, postcode, contact, landline, mobile, email, notes)
+    values (sid, cid, case when coalesce(st ->> 'fmId', '') ~ '^\d{1,9}$' then (st ->> 'fmId')::int end,
+            coalesce(nullif(trim(st ->> 'name'), ''), 'Site ' || (st ->> 'fmId')), coalesce(st ->> 'address', ''), coalesce(st ->> 'town', ''),
+            upper(coalesce(st ->> 'postcode', '')), coalesce(st ->> 'contact', ''), coalesce(st ->> 'landline', ''), coalesce(st ->> 'mobile', ''),
+            coalesce(st ->> 'email', ''), coalesce(st ->> 'notes', ''))
+    on conflict (id) do update set
+      customer_id = excluded.customer_id, address = excluded.address, town = excluded.town, postcode = excluded.postcode,
+      contact = excluded.contact, landline = excluded.landline, mobile = excluded.mobile, email = excluded.email, notes = excluded.notes;
   end loop;
 
   -- ===== invoices + their lines =====
@@ -79,30 +97,46 @@ begin
       iid := coalesce(iid, 'fm-i-' || (i ->> 'fmId'));
       insert into public.fm_links (kind, fm_id, ops_id) values ('invoice', i ->> 'fmId', iid) on conflict do nothing;
     end if;
-    -- the invoice's customer: by FileMaker id, else by account number
+    -- the invoice's site, and its customer: by FileMaker id, else the site's customer
+    sid := (select ops_id from public.fm_links where kind = 'site' and fm_id = i ->> 'siteFmId');
     cid := (select ops_id from public.fm_links where kind = 'customer' and fm_id = i ->> 'customerFmId');
-    if cid is null then select id into cid from public.customers where id = 'fm-c-' || (i ->> 'customerFmId'); end if;
-    if cid is null and nullif(i ->> 'accountNo', '') is not null then
+    if cid is null and sid is not null then select customer_id into cid from public.customer_sites where id = sid; end if;
+    if cid is null and coalesce(i ->> 'accountNo', '') ~ '^\d{1,9}$' then
       select id into cid from public.customers where account_no = (i ->> 'accountNo')::int limit 1;
     end if;
     if cid is null then
       skipped := skipped || jsonb_build_object('invoice', i ->> 'invNo', 'reason', 'customer not found');
       continue;
     end if;
-    insert into public.invoices as t (id, inv_no, customer_id, date, order_ref, job_type, delivery_date, delivery_time, delivery_completed,
-                                      payment_type, payment_date, delivery_charge, job_notes, raised_by, created, created_by)
-    values (iid, nullif(i ->> 'invNo', '')::int, cid, coalesce(i ->> 'date', ''), coalesce(i ->> 'orderRef', ''),
-            coalesce(nullif(i ->> 'jobType', ''), 'Delivery 1'), coalesce(i ->> 'deliveryDate', ''), coalesce(i ->> 'deliveryTime', ''),
+    insert into public.invoices as t (id, inv_no, customer_id, site_id, date, order_ref, job_type, van, delivery_date, delivery_time, delivery_completed,
+                                      payment_type, payment_date, delivery_charge, job_notes, raised_by, created, created_by,
+                                      f_booked, f_courier, f_parts_ordered, f_parts_ready, f_review_requested, f_review_received,
+                                      f_photos_requested, f_social_posted, f_sample_followed)
+    values (iid, case when coalesce(i ->> 'invNo', '') ~ '^\d{1,9}$' then (i ->> 'invNo')::int end, cid, coalesce(sid, ''),
+            coalesce(i ->> 'date', ''), coalesce(i ->> 'orderRef', ''),
+            coalesce(nullif(i ->> 'jobType', ''), 'Delivery Run 1'), coalesce(i ->> 'van', ''), coalesce(i ->> 'deliveryDate', ''), coalesce(i ->> 'deliveryTime', ''),
             coalesce((i ->> 'deliveryCompleted')::boolean, false), coalesce(i ->> 'paymentType', ''), coalesce(i ->> 'paymentDate', ''),
-            nullif(i ->> 'deliveryCharge', '')::numeric, coalesce(i ->> 'jobNotes', ''), coalesce(i ->> 'raisedBy', ''),
-            coalesce(i ->> 'created', ''), 'FileMaker')
+            nullif(i ->> 'deliveryCharge', '')::numeric,
+            trim(both E'\n' from coalesce(i ->> 'jobNotes', '') || case when trim(coalesce(i ->> 'deliveryNotes', '')) <> '' then E'\nDelivery: ' || trim(i ->> 'deliveryNotes') else '' end),
+            coalesce(i ->> 'raisedBy', ''), coalesce(i ->> 'created', ''), 'FileMaker',
+            coalesce((i ->> 'booked')::boolean, false), coalesce((i ->> 'courier')::boolean, false), coalesce((i ->> 'partsOrdered')::boolean, false),
+            coalesce((i ->> 'partsReady')::boolean, false), coalesce((i ->> 'reviewRequested')::boolean, false), coalesce((i ->> 'reviewReceived')::boolean, false),
+            coalesce((i ->> 'photosRequested')::boolean, false), coalesce((i ->> 'socialPosted')::boolean, false), coalesce((i ->> 'sampleFollowed')::boolean, false))
     on conflict (id) do update set
       inv_no = excluded.inv_no, customer_id = excluded.customer_id, date = excluded.date, order_ref = excluded.order_ref,
       job_type = excluded.job_type, delivery_date = excluded.delivery_date, delivery_time = excluded.delivery_time,
       -- once ticked as delivered in either system it stays delivered
       delivery_completed = t.delivery_completed or excluded.delivery_completed,
       payment_type = excluded.payment_type, payment_date = excluded.payment_date, delivery_charge = excluded.delivery_charge,
-      job_notes = excluded.job_notes, raised_by = excluded.raised_by;
+      job_notes = excluded.job_notes, raised_by = excluded.raised_by,
+      site_id = case when excluded.site_id <> '' then excluded.site_id else t.site_id end,
+      van = case when excluded.van <> '' then excluded.van else t.van end,
+      -- checklist ticks: ticked in either system stays ticked
+      f_booked = t.f_booked or excluded.f_booked, f_courier = t.f_courier or excluded.f_courier,
+      f_parts_ordered = t.f_parts_ordered or excluded.f_parts_ordered, f_parts_ready = t.f_parts_ready or excluded.f_parts_ready,
+      f_review_requested = t.f_review_requested or excluded.f_review_requested, f_review_received = t.f_review_received or excluded.f_review_received,
+      f_photos_requested = t.f_photos_requested or excluded.f_photos_requested, f_social_posted = t.f_social_posted or excluded.f_social_posted,
+      f_sample_followed = t.f_sample_followed or excluded.f_sample_followed;
     inv_count := inv_count + 1;
 
     -- lines: FileMaker's list replaces the invoice's lines when it sends any

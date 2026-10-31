@@ -138,10 +138,11 @@ function Conv($value, [string]$as) {
   if ($value -is [System.DBNull] -or $null -eq $value) { if ($as -eq "bool") { return $false } else { return "" } }
   switch ($as) {
     "date" {
-      if ($value -is [datetime]) { return $value.ToString("yyyy-MM-dd") }
       $d = [datetime]::MinValue
-      if ([datetime]::TryParse([string]$value, [System.Globalization.CultureInfo]::GetCultureInfo("en-GB"), [System.Globalization.DateTimeStyles]::None, [ref]$d)) { return $d.ToString("yyyy-MM-dd") }
-      return ""
+      if ($value -is [datetime]) { $d = $value }
+      elseif (-not [datetime]::TryParse([string]$value, [System.Globalization.CultureInfo]::GetCultureInfo("en-GB"), [System.Globalization.DateTimeStyles]::None, [ref]$d)) { return "" }
+      if ($d.Year -lt 2005) { return "" }   # FileMaker placeholders like 01/01/2001 mean "not set"
+      return $d.ToString("yyyy-MM-dd")
     }
     "time" {
       if ($value -is [datetime]) { return $value.ToString("HH:mm") }
@@ -171,7 +172,9 @@ function Conv($value, [string]$as) {
 function FieldOf($m) { if ($m -is [string]) { return $m } else { return $m.field } }
 function AsOf($m, [string]$default) { if ($m -is [string] -or -not $m.as) { return $default } else { return $m.as } }
 $defaultAs = @{ accountNo = "int"; invNo = "int"; trader = "bool"; deliveryCompleted = "bool"; date = "date"; deliveryDate = "date";
-                paymentDate = "date"; created = "date"; deliveryTime = "time"; deliveryCharge = "number"; qty = "number"; price = "number" }
+                paymentDate = "date"; created = "date"; deliveryTime = "time"; deliveryCharge = "number"; qty = "number"; price = "number";
+                booked = "bool"; courier = "bool"; partsOrdered = "bool"; partsReady = "bool"; reviewRequested = "bool"; reviewReceived = "bool";
+                photosRequested = "bool"; socialPosted = "bool"; sampleFollowed = "bool" }
 
 function SelectList($section, [string[]]$extra) {
   $cols = @()
@@ -188,9 +191,10 @@ function MapRow($row, $section) {
   return $o
 }
 function IdText($v) { if ($v -is [double] -or $v -is [decimal]) { return ([decimal]$v).ToString("0.##########", [System.Globalization.CultureInfo]::InvariantCulture) } else { return ([string]$v).Trim() } }
-function InList([object[]]$ids) {
+function InList([object[]]$ids, [bool]$asText = $false) {
+  # a text field (like "Cust ID/") must be matched with quoted values, a number field without
   $parts = @()
-  foreach ($i in $ids) { if ($i -match '^-?\d+(\.\d+)?$') { $parts += $i } else { $parts += ("'" + ([string]$i).Replace("'", "''") + "'") } }
+  foreach ($i in $ids) { if (-not $asText -and $i -match '^-?\d+(\.\d+)?$') { $parts += $i } else { $parts += ("'" + ([string]$i).Replace("'", "''") + "'") } }
   return ($parts -join ", ")
 }
 
@@ -290,7 +294,7 @@ try {
     $where = (Q $inv.date) + " >= " + (Lit $cfg.dateLiteral $from.ToString("yyyy-MM-dd"))
   }
   if ($inv.where) { $where = "(" + $where + ") AND (" + $inv.where + ")" }
-  $sql = "SELECT " + (SelectList $inv @($inv.id, $inv.customerId)) + " FROM " + (Q $inv.table) + " WHERE " + $where
+  $sql = "SELECT " + (SelectList $inv @($inv.id, $inv.customerId, $inv.siteId)) + " FROM " + (Q $inv.table) + " WHERE " + $where
   $invRows = Query $conn $sql
   Log ("Invoices to send: " + $invRows.Rows.Count)
 
@@ -300,6 +304,13 @@ try {
     $o = MapRow $r $inv
     $o["fmId"] = IdText $r[$inv.id]
     $o["customerFmId"] = IdText $r[$inv.customerId]
+    $o["siteFmId"] = $(if ($inv.siteId) { IdText $r[$inv.siteId] } else { "" })
+    # paid: FileMaker's paid status with no real payment date -> the invoice date
+    if ($o.Contains("paid")) {
+      $p = ([string]$o["paid"]).Trim()
+      if (-not $o["paymentDate"] -and $p -match '(?i)^paid' ) { $o["paymentDate"] = $o["date"] }
+      $o.Remove("paid")
+    }
     $o["lines"] = @()
     if ($o["customerFmId"]) { [void]$custIds.Add($o["customerFmId"]) }
     $invoices.Add($o)
@@ -312,7 +323,7 @@ try {
     $ids = @($invoices | ForEach-Object { $_["fmId"] })
     for ($k = 0; $k -lt $ids.Count; $k += 50) {
       $chunk = $ids[$k..([math]::Min($k + 49, $ids.Count - 1))]
-      $sql = "SELECT " + (SelectList $lin @($lin.invoiceId, $lin.order)) + " FROM " + (Q $lin.table) + " WHERE " + (Q $lin.invoiceId) + " IN (" + (InList $chunk) + ")"
+      $sql = "SELECT " + (SelectList $lin @($lin.invoiceId, $lin.order)) + " FROM " + (Q $lin.table) + " WHERE " + (Q $lin.invoiceId) + " IN (" + (InList $chunk ([bool]$lin.idText)) + ")"
       $rows = Query $conn $sql
       $sorted = $rows.Rows
       if ($lin.order) { $sorted = $rows.Rows | Sort-Object { $_[$lin.order] } }
@@ -324,6 +335,27 @@ try {
         $byInv[$key]["lines"] = @($byInv[$key]["lines"]) + @($line)
       }
     }
+  }
+
+  # ----- the invoices' sites (delivery addresses), which also say whose account it is -----
+  $sites = New-Object System.Collections.Generic.List[object]
+  $sit = $cfg.sites
+  if ($sit -and $sit.table) {
+    $siteIds = @($invoices | ForEach-Object { $_["siteFmId"] } | Where-Object { $_ } | Select-Object -Unique)
+    $siteCust = @{}
+    for ($k = 0; $k -lt $siteIds.Count; $k += 50) {
+      $chunk = @($siteIds[$k..([math]::Min($k + 49, $siteIds.Count - 1))])
+      $rows = Query $conn ("SELECT " + (SelectList $sit @($sit.id, $sit.customerId)) + " FROM " + (Q $sit.table) + " WHERE " + (Q $sit.id) + " IN (" + (InList $chunk ([bool]$sit.idText)) + ")")
+      foreach ($r in $rows.Rows) {
+        $o = MapRow $r $sit
+        $o["fmId"] = IdText $r[$sit.id]
+        $o["customerFmId"] = IdText $r[$sit.customerId]
+        $siteCust[$o["fmId"]] = $o["customerFmId"]
+        if ($o["customerFmId"]) { [void]$custIds.Add($o["customerFmId"]) }
+        $sites.Add($o)
+      }
+    }
+    foreach ($o in $invoices) { if (-not $o["customerFmId"] -and $o["siteFmId"] -and $siteCust[$o["siteFmId"]]) { $o["customerFmId"] = $siteCust[$o["siteFmId"]] } }
   }
 
   # ----- which customers: everyone on those invoices, plus accounts created/changed recently -----
@@ -349,13 +381,15 @@ try {
   $ids = @($custIds)
   for ($k = 0; $k -lt $ids.Count; $k += 50) {
     $chunk = $ids[$k..([math]::Min($k + 49, $ids.Count - 1))]
-    & $addCust (Query $conn ("SELECT " + (SelectList $cus @($cus.id)) + " FROM " + (Q $cus.table) + " WHERE " + (Q $cus.id) + " IN (" + (InList $chunk) + ")"))
+    & $addCust (Query $conn ("SELECT " + (SelectList $cus @($cus.id)) + " FROM " + (Q $cus.table) + " WHERE " + (Q $cus.id) + " IN (" + (InList $chunk ([bool]$cus.idText)) + ")"))
   }
   if ($custWhere.Count) { & $addCust (Query $conn ("SELECT " + (SelectList $cus @($cus.id)) + " FROM " + (Q $cus.table) + " WHERE " + ($custWhere -join " OR "))) }
+  # once a day every account goes across, so new and edited accounts arrive even without an order
+  if ($daily -and $cus.allDaily) { & $addCust (Query $conn ("SELECT " + (SelectList $cus @($cus.id)) + " FROM " + (Q $cus.table))) }
   Log ("Customers to send: " + $customers.Count)
 
   if ($Test) {
-    $preview = @{ customers = @($customers | Select-Object -First 3); invoices = @($invoices | Select-Object -First 3) } | ConvertTo-Json -Depth 8
+    $preview = @{ customers = @($customers | Select-Object -First 3); sites = @($sites | Select-Object -First 3); invoices = @($invoices | Select-Object -First 3) } | ConvertTo-Json -Depth 8
     $file = Join-Path $here "fm-test.json"
     $preview | Set-Content -Path $file -Encoding UTF8
     Log ("TEST only — nothing sent. First few records written to " + $file)
@@ -369,6 +403,8 @@ try {
     $res = Send @{ customers = @($cs[$k..([math]::Min($k + 199, $cs.Count - 1))]) }
     $total.customers += [int]$res.customers
   }
+  $ss = $sites.ToArray()
+  for ($k = 0; $k -lt $ss.Count; $k += 200) { [void](Send @{ sites = @($ss[$k..([math]::Min($k + 199, $ss.Count - 1))]) }) }
   $is = $invoices.ToArray()
   for ($k = 0; $k -lt $is.Count; $k += 100) {
     $res = Send @{ invoices = @($is[$k..([math]::Min($k + 99, $is.Count - 1))]) }
@@ -376,7 +412,7 @@ try {
     foreach ($s in @($res.skipped)) { if ($s) { $total.skipped++; Log ("Skipped invoice " + $s.invoice + ": " + $s.reason) } }
   }
   @{ lastRun = $started.ToString("o"); lastDaily = $today } | ConvertTo-Json | Set-Content -Path $statePath -Encoding UTF8
-  Log ("Sent " + $total.customers + " customers, " + $total.invoices + " invoices, " + $total.lines + " lines" + $(if ($total.skipped) { ", skipped " + $total.skipped } else { "" }))
+  Log ("Sent " + $total.customers + " customers, " + $ss.Count + " sites, " + $total.invoices + " invoices, " + $total.lines + " lines" + $(if ($total.skipped) { ", skipped " + $total.skipped } else { "" }))
 }
 catch {
   Log ("FAILED: " + $_.Exception.Message + " (line " + $_.InvocationInfo.ScriptLineNumber + ")")
