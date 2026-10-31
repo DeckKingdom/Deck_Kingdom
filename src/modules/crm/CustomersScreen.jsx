@@ -452,7 +452,30 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
                 {(sel.name || "?").trim().charAt(0).toUpperCase() || "?"}
               </div>
               <div style={{ minWidth: 180 }}>
-                <h2 style={{ margin: 0, fontSize: 21 }}>{sel.name || "Unnamed account"}</h2>
+                {(() => {
+                  // hover the name: where the account came from, when, and who last changed it
+                  const o = recordOrigin(sel);
+                  const who = (v) => String(v || "").split("@")[0];
+                  const lines = [
+                    originText(sel, prettyDate(sel.created)),
+                    sel.updatedAt ? "Updated " + prettyDateTime(sel.updatedAt) + (sel.modifiedBy ? " by " + who(sel.modifiedBy) + " (" + userInitials(crm, sel.modifiedBy) + ")" : "")
+                      : sel.modifiedBy ? "Last modified by " + who(sel.modifiedBy) : "",
+                  ].filter(Boolean);
+                  return (
+                    <div style={{ position: "relative", display: "inline-block" }} onMouseEnter={() => setStampOpen(true)} onMouseLeave={() => setStampOpen(false)}>
+                      <h2 style={{ margin: 0, fontSize: 21, cursor: "default" }}>{sel.name || "Unnamed account"}</h2>
+                      {stampOpen && (
+                        <div style={{ position: "absolute", left: 0, top: "calc(100% + 6px)", zIndex: 20, background: "#fff", color: NAVY, borderRadius: 10, padding: "8px 12px", boxShadow: "0 8px 24px rgba(0,0,0,.28)", whiteSpace: "nowrap", fontSize: 12, fontWeight: 600, lineHeight: 1.6 }}>
+                          <span style={{ display: "inline-block", fontSize: 10, fontWeight: 800, letterSpacing: 0.4, padding: "1px 7px", borderRadius: 999, marginBottom: 3,
+                            background: o.key === "filemaker" ? "#eef1f6" : o.key === "website" ? "#fdf3dc" : "#3FA55C22", color: o.key === "filemaker" ? "#5a6a85" : o.key === "website" ? "#8a5a00" : "#28713e" }}>
+                            {o.key === "filemaker" ? "FROM FILEMAKER" : o.key === "website" ? "FROM THE WEBSITE" : "KEYED IN"}
+                          </span>
+                          {lines.map((l) => <div key={l}>{l}</div>)}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
                 <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 7 }}>
                   <Chip tone="navy">Account #{sel.accountNo || "—"}</Chip>
                   {sel.trader && <Chip tone="red" style={{ background: RED, color: "#fff", border: "none" }}>Trade</Chip>}
@@ -462,22 +485,6 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
                     <Icon name="pen" stroke="#cfd6e4" size={13} />
                   </button>
                 </div>
-                {(() => {
-                  // shorthand stamp: where it came from and when; click for the full line
-                  const o = recordOrigin(sel);
-                  const short = (d) => (d ? new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "2-digit" }) : "");
-                  const who = (v) => String(v || "").split("@")[0];
-                  const tag = o.key === "filemaker" ? "FM" : o.key === "website" ? "Web" : "Manual";
-                  const brief = tag + (sel.created ? " " + short(sel.created) : "") + (sel.updatedAt ? " · upd " + short(sel.updatedAt) + (sel.modifiedBy ? " " + userInitials(crm, sel.modifiedBy) : "") : "");
-                  const full = originText(sel, prettyDate(sel.created)) +
-                    (sel.updatedAt ? " · Updated " + prettyDateTime(sel.updatedAt) + (sel.modifiedBy ? " by " + who(sel.modifiedBy) : "") : sel.modifiedBy ? " · Last modified by " + who(sel.modifiedBy) : "");
-                  return (
-                    <button type="button" onClick={() => setStampOpen((v) => !v)} title={stampOpen ? "Show less" : full}
-                      style={{ fontFamily: "inherit", border: "none", background: "none", padding: 0, marginTop: 6, cursor: "pointer", color: "#8fa0c0", fontSize: 11.5, fontWeight: 600, textAlign: "left" }}>
-                      {(stampOpen ? "▾ " + full : "▸ " + brief)}
-                    </button>
-                  );
-                })()}
               </div>
               <div style={{ marginLeft: "auto", display: "flex", background: "#ffffff14", border: "1px solid #ffffff22", borderRadius: 12, overflow: "hidden", flexWrap: "wrap" }}>
                 {[[invs.length, "Invoices"], [gbp(lifetime), "Lifetime"], [lastOrder ? prettyDate(lastOrder) : "—", "Last order"]].map(([v, l], i) => (
