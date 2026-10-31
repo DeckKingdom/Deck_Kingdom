@@ -1,13 +1,14 @@
 // Invoices tab: searchable list -> invoice entry screen per the approved
 // mockup. Prices are entered inc VAT; VAT is backed out of the total.
 import { useState, useMemo } from "react";
-import { NAVY, GOLD, RED, uid, prettyDate, prettyDateTime } from "../../lib/core.js";
+import { NAVY, GOLD, RED, uid, prettyDate, prettyDateTime, addMonths, addDays } from "../../lib/core.js";
 import {
   recordOrigin, blankInvoice, blankLine, nextNumber, invoiceTotals, gbp, isPaid,
   JOB_TYPES, PAYMENT_TYPES, PREP_FLAGS, FOLLOWUP_FLAGS, today, TIME_SLOTS, vanOptions,
   skuIndex, invoiceCost, buildPicks, pickLandedCost, jobCost, blankPick, invoiceLoadKg, applyInvoiceStockDeduction,
-  TRADE_COUNTER, TRADE_COUNTER_LABEL, quoteRef, sampleRef,
+  TRADE_COUNTER, TRADE_COUNTER_LABEL, quoteRef, sampleRef, isSaleInvoice,
 } from "../../lib/crmCore.js";
+import { ListHero, HeroStat, HeroAdd, SearchBox } from "./ui.jsx";
 import { Icon, Chip, Tg, Modal, selectAllProps, SuggestInput, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
 import { printInvoice, printJobSheet, printLoadingBill } from "./printDocs.js";
 import { readableFor } from "./LinesEditor.jsx";
@@ -108,25 +109,49 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
   if (!inv)
     return (
       <div style={{ maxWidth: 1140, margin: "0 auto", padding: "18px 22px" }}>
-        <div style={{ ...card, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "10px 14px" }}>
-          <div style={{ position: "relative", flex: 1, minWidth: 200, maxWidth: 360 }}>
-            <span style={{ position: "absolute", left: 11, top: 10 }}><Icon name="search" /></span>
-            <input style={{ ...inp, paddingLeft: 34 }} placeholder="Search inv #, customer, order ref…" value={search} onChange={(e) => setSearch(e.target.value)} />
-          </div>
-          <span style={{ fontSize: 12, color: "#5a6a85", fontWeight: 700 }}>{crm.invoices.length.toLocaleString("en-GB")} invoices</span>
-          {[["FileMaker feed", crm.fmBridge, 30], ["Website feed", crm.wooBridge, 24 * 60]].filter(([, f]) => f && f.at).map(([label, f, staleAfter]) => {
-            const mins = Math.round((Date.now() - new Date(f.at).getTime()) / 60000);
-            const stale = mins > staleAfter;
-            return (
-              <span key={label} title={"Last " + label.toLowerCase() + " update: " + new Date(f.at).toLocaleString("en-GB") + ". Reload to see the newest."}
-                style={{ fontSize: 11.5, fontWeight: 700, padding: "3px 9px", borderRadius: 999, background: stale ? "#E8912D22" : "#3FA55C18", color: stale ? "#a05f10" : "#28713e", border: "1px solid " + (stale ? "#f0d0a8" : "#bfe3ca") }}>
-                {label + " · " + (mins < 1 ? "just now" : mins < 90 ? mins + " min ago" : mins < 2880 ? Math.round(mins / 60) + " h ago" : Math.round(mins / 1440) + " days ago")}
-              </span>
-            );
-          })}
-          <span style={{ flex: 1 }} />
-          <button style={goldBtn} onClick={newInvoice}><Icon name="plus" stroke={NAVY} />New invoice</button>
-        </div>
+        {(() => {
+          // headline numbers (inc VAT), same sums as the Home reports
+          const tod = today();
+          const monthKey = tod.slice(0, 7);
+          const lastKey = addMonths(tod.slice(0, 8) + "01", -1).slice(0, 7);
+          const dom = Number(tod.slice(8, 10));
+          const inMonth = (key, upto) => crm.invoices.filter((i) => (i.date || "").slice(0, 7) === key && (!upto || Number((i.date || "").slice(8, 10)) <= upto));
+          const sum = (l) => l.reduce((t, i) => t + invoiceTotals(i).total, 0);
+          const thisM = inMonth(monthKey), salesNow = sum(thisM), salesLast = sum(inMonth(lastKey, dom));
+          const awaiting = crm.invoices.filter((i) => !isPaid(i));
+          const owed = sum(awaiting);
+          const weekEnd = addDays(tod, 6);
+          const today_ = crm.invoices.filter((i) => i.deliveryDate === tod && !i.deliveryCompleted).length;
+          const week = crm.invoices.filter((i) => i.deliveryDate >= tod && i.deliveryDate <= weekEnd && !i.deliveryCompleted).length;
+          const toBook = crm.invoices.filter((i) => !i.deliveryDate && !i.deliveryCompleted).length;
+          const sales = thisM.filter(isSaleInvoice);
+          const feeds = [["FileMaker feed", crm.fmBridge, 30], ["Website feed", crm.wooBridge, 24 * 60]].filter(([, fd]) => fd && fd.at);
+          return (
+            <ListHero title="Invoices"
+              sub={<span style={{ display: "inline-flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                {crm.invoices.length.toLocaleString("en-GB")} invoice{crm.invoices.length === 1 ? "" : "s"} · newest first
+                {feeds.map(([label, fd, staleAfter]) => {
+                  const mins = Math.round((Date.now() - new Date(fd.at).getTime()) / 60000);
+                  const stale = mins > staleAfter;
+                  return (
+                    <span key={label} title={"Last " + label.toLowerCase() + " update: " + new Date(fd.at).toLocaleString("en-GB") + ". Reload to see the newest."}
+                      style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 999, background: stale ? "#E8912D33" : "#3FA55C33", color: stale ? "#f6c48a" : "#9fdcb0" }}>
+                      {label + " · " + (mins < 1 ? "just now" : mins < 90 ? mins + " min ago" : mins < 2880 ? Math.round(mins / 60) + " h ago" : Math.round(mins / 1440) + " days ago")}
+                    </span>
+                  );
+                })}
+              </span>}
+              action={<HeroAdd title="New invoice" onClick={newInvoice} />}>
+              <HeroStat label="Sales this month" value={gbp(salesNow)}
+                sub={salesLast ? (salesNow >= salesLast ? "▲ " : "▼ ") + gbp(Math.abs(salesNow - salesLast)) + " vs last month to date" : "inc VAT"} />
+              <HeroStat label="Awaiting payment" value={gbp(owed)} tone={awaiting.length ? "#f6c48a" : undefined}
+                sub={awaiting.length + " invoice" + (awaiting.length === 1 ? "" : "s") + (awaiting.length ? " · click to list" : "")}
+                onClick={awaiting.length ? () => setFilter({ outstanding: true }) : undefined} />
+              <HeroStat label="Deliveries" value={today_ + " today"} tone={toBook ? "#f2a6b1" : undefined} sub={week + " this week · " + toBook + " to book in"} />
+              <HeroStat label="Orders this month" value={sales.length.toLocaleString("en-GB")} sub={sales.length ? gbp(sum(sales) / sales.length) + " average order" : "none yet"} />
+            </ListHero>
+          );
+        })()}
 
         {filter && (
           <div style={{ ...card, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "9px 14px", borderColor: "#ecc4cb", background: "#C8102E08" }}>
@@ -144,6 +169,9 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
         )}
 
         <div style={card}>
+          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 6 }}>
+            <SearchBox value={search} onChange={setSearch} placeholder="Search inv #, customer, order ref…" />
+          </div>
           {crm.invoices.length === 0 ? (
             <div style={{ textAlign: "center", padding: "30px 10px", color: "#5a6a85", fontWeight: 600 }}>No invoices yet.</div>
           ) : (

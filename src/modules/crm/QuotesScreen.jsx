@@ -9,6 +9,7 @@ import {
   TRADE_COUNTER, TRADE_COUNTER_LABEL,
 } from "../../lib/crmCore.js";
 import { quotesAvailable } from "../../data/crmStorage.js";
+import { ListHero, HeroStat, HeroAdd, SearchBox, FilterPills } from "./ui.jsx";
 import { Icon, Chip, selectAllProps, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
 import { printQuote } from "./printDocs.js";
 import LinesEditor from "./LinesEditor.jsx";
@@ -109,37 +110,14 @@ export default function QuotesScreen({ crm, updateCrm, askConfirm, selId, setSel
       <div style={{ maxWidth: 1140, margin: "0 auto", padding: "18px 22px" }}>
         {!ready && <SchemaNotice />}
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 12, marginBottom: 14 }}>
-          {[
-            ["Open quotes", openCount.toLocaleString("en-GB"), "Draft, sent or accepted"],
-            ["Open value", gbp(openValue), "inc VAT"],
-            ["Accepted — not invoiced", acceptedWaiting.toLocaleString("en-GB"), acceptedWaiting ? "ready to convert" : "all converted"],
-            ["Win rate", winRate === null ? "—" : winRate + "%", decided.won + " won · " + decided.lost + " lost"],
-          ].map(([k, v, sub]) => (
-            <div key={k} style={{ ...card, marginBottom: 0, padding: "12px 16px" }}>
-              <span style={lbl}>{k}</span>
-              <b style={{ fontSize: 20, color: NAVY }}>{v}</b>
-              <div style={{ fontSize: 11.5, color: "#8593a8", fontWeight: 600, marginTop: 2 }}>{sub}</div>
-            </div>
-          ))}
-        </div>
-
-        <div style={{ ...card, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "10px 14px" }}>
-          <div style={{ position: "relative", flex: 1, minWidth: 200, maxWidth: 320 }}>
-            <span style={{ position: "absolute", left: 11, top: 10 }}><Icon name="search" /></span>
-            <input style={{ ...inp, paddingLeft: 34 }} placeholder="Search quote #, customer, postcode…" value={search} onChange={(e) => setSearch(e.target.value)} />
-          </div>
-          <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-            {FILTERS.map((f) => (
-              <button key={f} onClick={() => setStatusFilter(f)}
-                style={{ fontFamily: "inherit", fontSize: 12.5, fontWeight: 700, padding: "6px 11px", borderRadius: 999, cursor: "pointer", border: "1px solid " + (statusFilter === f ? NAVY : "#d5d9e0"), background: statusFilter === f ? NAVY : "#fff", color: statusFilter === f ? "#fff" : "#5a6a85" }}>
-                {f}
-              </button>
-            ))}
-          </div>
-          <span style={{ flex: 1 }} />
-          <button style={{ ...goldBtn, opacity: ready ? 1 : 0.5 }} disabled={!ready} onClick={newQuote}><Icon name="plus" stroke={NAVY} />New quote</button>
-        </div>
+        <ListHero title="Quotes" sub={quotes.length.toLocaleString("en-GB") + " quote" + (quotes.length === 1 ? "" : "s") + " · newest first"}
+          action={<HeroAdd title="New quote" onClick={newQuote} disabled={!ready} />}>
+          <HeroStat label="Open quotes" value={openCount.toLocaleString("en-GB")} sub="draft, sent or accepted" />
+          <HeroStat label="Open value" value={gbp(openValue)} sub="inc VAT" />
+          <HeroStat label="Accepted — not invoiced" value={acceptedWaiting.toLocaleString("en-GB")} tone={acceptedWaiting ? "#f6c48a" : undefined}
+            sub={acceptedWaiting ? "ready to convert · click to list" : "all converted"} onClick={acceptedWaiting ? () => setStatusFilter("Accepted") : undefined} />
+          <HeroStat label="Win rate" value={winRate === null ? "—" : winRate + "%"} sub={decided.won + " won · " + decided.lost + " lost"} />
+        </ListHero>
 
         {filterCust && (
           <div style={{ ...card, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "9px 14px", borderColor: "#f4d78f", background: "#fff8e6" }}>
@@ -151,6 +129,10 @@ export default function QuotesScreen({ crm, updateCrm, askConfirm, selId, setSel
         )}
 
         <div style={card}>
+          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 6 }}>
+            <SearchBox value={search} onChange={setSearch} placeholder="Search quote #, customer, postcode…" width={300} />
+            <FilterPills options={FILTERS} value={statusFilter} onPick={setStatusFilter} />
+          </div>
           {matches.length === 0 ? (
             <div style={{ textAlign: "center", padding: "30px 10px", color: "#5a6a85", fontWeight: 600 }}>
               {quotes.length === 0 ? "No quotes yet." : "No " + (statusFilter === "All" ? "" : statusFilter.toLowerCase() + " ") + "quotes match."}

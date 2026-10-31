@@ -10,6 +10,7 @@ import {
 } from "../../lib/crmCore.js";
 import { ComposeEmail, EmailHistory } from "./EmailPanels.jsx";
 import { emailReady } from "../../data/email.js";
+import { ListHero, heroTile, heroLab, heroSub } from "./ui.jsx";
 import { Icon, Chip, Modal, SuggestInput, selectAllProps, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
 
 const navyBtn = { ...btn, background: "transparent", border: "1px solid #3a4f78", color: "#fff" };
@@ -383,13 +384,13 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
       {/* summary */}
       {!sel && crm.customers.length > 0 && (() => {
         const pct = (n, d) => (d ? Math.round((n / d) * 100) + "%" : "—");
-        const box = { flex: "1 1 140px", background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, padding: "12px 14px", minWidth: 135 };
-        const lab = { fontSize: 10.5, fontWeight: 700, color: "#8593a8", letterSpacing: 0.5, textTransform: "uppercase" };
-        const big = { fontSize: 22, fontWeight: 800, color: NAVY, marginTop: 2 };
-        const sub = { fontSize: 11.5, fontWeight: 600, color: "#5a6a85", marginTop: 2 };
+        const box = { ...heroTile, flex: "1 1 140px", minWidth: 135 };
+        const lab = heroLab;
+        const big = { fontSize: 21, fontWeight: 700, color: GOLD, marginTop: 2 };
+        const sub = heroSub;
         const tr = stats.trade, rt = stats.retail;
         return (
-          <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
+          <ListHero title="Customers" sub={stats.total.toLocaleString("en-GB") + " account" + (stats.total === 1 ? "" : "s") + " · newest first"}>
             <div style={box}>
               <div style={lab}>Customer accounts</div>
               <div style={big}>{stats.total.toLocaleString("en-GB")}</div>
@@ -397,7 +398,7 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
             </div>
             <div style={box}>
               <div style={lab}>Trade · Retail</div>
-              <div style={big}>{tr.accounts.toLocaleString("en-GB")} <span style={{ color: "#aab3c2", fontWeight: 600 }}>·</span> {rt.accounts.toLocaleString("en-GB")}</div>
+              <div style={big}>{tr.accounts.toLocaleString("en-GB")} <span style={{ color: "#6f7f9d", fontWeight: 600 }}>·</span> {rt.accounts.toLocaleString("en-GB")}</div>
               <div style={sub}>{pct(tr.accounts, stats.total) + " trade accounts"}</div>
             </div>
             <div style={box}>
@@ -414,12 +415,12 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
                 <span />
                 {[["Trade", tr], ["Retail", rt], ["All", { oneTime: tr.oneTime + rt.oneTime, repeat: tr.repeat + rt.repeat, buyers: tr.buyers + rt.buyers, never: tr.never + rt.never, accounts: tr.accounts + rt.accounts }]].map(([name, g]) => (
                   <React.Fragment key={name}>
-                    <span style={{ fontWeight: 700, color: "#5a6a85" }}>{name}</span>
-                    <span style={{ fontWeight: 800, color: NAVY, fontSize: name === "All" ? 16 : 13.5 }}>{g.oneTime.toLocaleString("en-GB")} <span style={{ fontWeight: 600, color: "#8593a8", fontSize: 11.5 }}>{pct(g.oneTime, g.buyers)}</span></span>
-                    <span style={{ fontWeight: 800, color: NAVY, fontSize: name === "All" ? 16 : 13.5 }}>{g.repeat.toLocaleString("en-GB")} <span style={{ fontWeight: 600, color: "#8593a8", fontSize: 11.5 }}>{pct(g.repeat, g.buyers)}</span></span>
+                    <span style={{ fontWeight: 700, color: "#cfd6e4" }}>{name}</span>
+                    <span style={{ fontWeight: 800, color: "#fff", fontSize: name === "All" ? 16 : 13.5 }}>{g.oneTime.toLocaleString("en-GB")} <span style={{ fontWeight: 600, color: "#aeb9cf", fontSize: 11.5 }}>{pct(g.oneTime, g.buyers)}</span></span>
+                    <span style={{ fontWeight: 800, color: "#fff", fontSize: name === "All" ? 16 : 13.5 }}>{g.repeat.toLocaleString("en-GB")} <span style={{ fontWeight: 600, color: "#aeb9cf", fontSize: 11.5 }}>{pct(g.repeat, g.buyers)}</span></span>
                     {name === "All" ? (
                       <button type="button" onClick={() => setTopUpOpen((o) => !o)} title={"Retail top-ups under £" + topUp + " don't count as a new purchase — click to change"}
-                        style={{ fontFamily: "inherit", border: "none", background: "none", padding: 0, cursor: "pointer", color: "#8593a8", fontSize: 11 }}>
+                        style={{ fontFamily: "inherit", border: "none", background: "none", padding: 0, cursor: "pointer", color: "#aeb9cf", fontSize: 11 }}>
                         {topUpOpen ? "▾" : "▸"}
                       </button>
                     ) : <span />}
@@ -438,10 +439,10 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
             </div>
             <div style={box}>
               <div style={lab}>Never ordered</div>
-              <div style={big}>{stats.never.toLocaleString("en-GB")} <span style={{ fontSize: 14, color: "#5a6a85" }}>{pct(stats.never, stats.total)}</span></div>
+              <div style={big}>{stats.never.toLocaleString("en-GB")} <span style={{ fontSize: 14, color: "#aeb9cf" }}>{pct(stats.never, stats.total)}</span></div>
               <div style={sub}>{tr.never + " trade, " + rt.never + " retail · accounts with no order yet"}</div>
             </div>
-          </div>
+          </ListHero>
         );
       })()}
 

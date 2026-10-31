@@ -315,7 +315,7 @@ export default function run(React, renderToString) {
 
     const sprops = { crm: sc, updateCrm: noop, askConfirm: noop, setSelId: noop, goCustomer: noop, openInvoice: noop, me: "x" };
     html = renderToString(React.createElement(SamplesScreen, { ...sprops, selId: null }));
-    assert(html.includes("Sample requests") && html.includes("Sales from samples") && html.includes("By month requested"), "samples list renders");
+    assert(html.includes("Sample requests") && html.includes("spent on samples") && html.includes("By month requested"), "samples list renders");
     html = renderToString(React.createElement(SamplesScreen, { ...sprops, selId: "s1" }));
     assert(html.includes("S-1") && html.includes("Ordered — invoice #12") && html.includes("Decking board"), "sample entry renders converted");
     html = renderToString(React.createElement(SamplesScreen, { ...sprops, selId: "s4" }));

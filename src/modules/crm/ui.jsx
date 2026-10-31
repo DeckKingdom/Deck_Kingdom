@@ -243,3 +243,64 @@ export const abtn = {
   width: 30, height: 30, borderRadius: 8, border: "1px solid #d5d9e0", background: "#fff",
   display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0, flex: "none",
 };
+
+// ===== list pages: one shared look =====
+// Navy banner like the record pages: title, a line of context, the "+" action, and the key numbers.
+export const HERO_BG = "linear-gradient(135deg,#0B1F3F 0%,#13294f 100%)";
+export const ListHero = ({ title, sub, action, children }) => (
+  <div style={{ background: HERO_BG, borderRadius: 12, padding: "18px 22px", color: "#fff", marginBottom: 14 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: children ? 14 : 0, flexWrap: "wrap" }}>
+      <div style={{ minWidth: 0 }}>
+        <h2 style={{ margin: 0, fontSize: 21 }}>{title}</h2>
+        {sub && <div style={{ fontSize: 12.5, color: "#aeb9cf", fontWeight: 600, marginTop: 3 }}>{sub}</div>}
+      </div>
+      <span style={{ flex: 1 }} />
+      {action}
+    </div>
+    {children && <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>{children}</div>}
+  </div>
+);
+export const heroTile = { flex: "1 1 160px", minWidth: 150, background: "#ffffff0d", border: "1px solid #ffffff1f", borderRadius: 12, padding: "11px 14px" };
+export const heroLab = { fontSize: 10.5, fontWeight: 700, color: "#aeb9cf", letterSpacing: 0.5, textTransform: "uppercase" };
+export const heroSub = { fontSize: 11.5, fontWeight: 600, color: "#aeb9cf", marginTop: 2 };
+export const HeroStat = ({ label, value, sub, tone, onClick, style, children }) => {
+  const Tag = onClick ? "button" : "div";
+  return (
+    <Tag onClick={onClick} style={{ ...heroTile, textAlign: "left", fontFamily: "inherit", color: "#fff", cursor: onClick ? "pointer" : "default", ...style }}>
+      <div style={heroLab}>{label}</div>
+      {value !== undefined && <div style={{ fontSize: 21, fontWeight: 700, color: tone || GOLD, marginTop: 2 }}>{value}</div>}
+      {sub && <div style={heroSub}>{sub}</div>}
+      {children}
+    </Tag>
+  );
+};
+// the gold "+" in a list banner
+export const HeroAdd = ({ title, onClick, disabled }) => (
+  <button title={title} onClick={onClick} disabled={disabled}
+    style={{ width: 38, height: 38, borderRadius: 8, border: "none", background: GOLD, display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: disabled ? "default" : "pointer", opacity: disabled ? 0.5 : 1, padding: 0, flex: "none" }}>
+    <Icon name="plus" stroke={NAVY} size={17} />
+  </button>
+);
+// status filter pills, all the same width
+export const FilterPills = ({ options, value, onPick, counts = {}, labels = {}, badge = () => "#E8912D" }) => (
+  <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+    {options.map((f) => {
+      const on = value === f, n = counts[f];
+      return (
+        <button key={f} onClick={() => onPick(f)}
+          style={{ fontFamily: "inherit", fontSize: 12.5, fontWeight: 700, padding: "6px 11px", minWidth: 112, justifyContent: "center", borderRadius: 999, cursor: "pointer", border: "1px solid " + (on ? NAVY : "#d5d9e0"), background: on ? NAVY : "#fff", color: on ? "#fff" : "#5a6a85", display: "inline-flex", gap: 6, alignItems: "center" }}>
+          {labels[f] || f}
+          {n ? <span style={{ background: badge(f), color: "#fff", borderRadius: 99, fontSize: 10.5, padding: "0 6px", lineHeight: "16px" }}>{n}</span> : null}
+        </button>
+      );
+    })}
+  </div>
+);
+// search box used at the top of every list card
+export const SearchBox = ({ value, onChange, placeholder, width = 340 }) => (
+  <div style={{ position: "relative", flex: 1, minWidth: 200, maxWidth: width }}>
+    <span style={{ position: "absolute", left: 11, top: 10 }}><Icon name="search" /></span>
+    <input style={{ ...inp, paddingLeft: 34, paddingRight: 34 }} placeholder={placeholder} value={value} onChange={(e) => onChange(e.target.value)} />
+    {value && <button title="Clear" onClick={() => onChange("")} style={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", width: 24, height: 24, borderRadius: 999, border: "none", background: "#eef1f6", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0 }}><Icon name="x" size={12} /></button>}
+  </div>
+);

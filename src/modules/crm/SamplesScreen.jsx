@@ -9,6 +9,7 @@ import {
   originText, userInitials, sampleEmailSettings, SAMPLE_EMAIL_DEFAULTS, SAMPLE_FOLLOWUP2_DAYS, SAMPLE_SOURCES, SAMPLE_DISPATCH, SAMPLE_SIZES, SAMPLE_WINDOW_DAYS, SAMPLE_FOLLOWUP_DAYS, SOURCES, FIELD_FORMATS,
 } from "../../lib/crmCore.js";
 import { samplesAvailable } from "../../data/crmStorage.js";
+import { ListHero, HeroStat, HeroAdd, SearchBox, FilterPills } from "./ui.jsx";
 import { Icon, Chip, Modal, SuggestInput, selectAllProps, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
 import { ColourSelect } from "./LinesEditor.jsx";
 import { printSampleSlip } from "./printDocs.js";
@@ -246,61 +247,42 @@ export default function SamplesScreen({ crm, updateCrm, askConfirm, selId, setSe
         )}
         {emailCfg && <FollowUpEmailSettings crm={crm} updateCrm={updateCrm} onClose={() => setEmailCfg(false)} />}
 
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, flexWrap: "wrap", minHeight: 30 }}>
-          <button type="button" onClick={() => setPeriodOpen((o) => !o)} title="Change the period"
-            style={{ ...sect, margin: 0, background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", gap: 6, alignItems: "center" }}>
-            Conversion · <span style={{ color: NAVY }}>{(PERIODS.find(([v]) => v === period) || [, ""])[1]}</span> {periodOpen ? "▾" : "▸"}
-          </button>
-          {periodOpen && (
-            <>
-              <select style={{ ...inp, width: "auto", padding: "5px 9px", fontSize: 13, fontWeight: 700 }} value={period} onChange={(e) => setPeriod(e.target.value)}>
-                {PERIODS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-              </select>
-              <span style={{ fontSize: 12, color: "#8593a8", fontWeight: 600 }}>
-                by request date · an order counts if placed within {SAMPLE_WINDOW_DAYS} days of the sample
-              </span>
-            </>
-          )}
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 12, marginBottom: 14 }}>
-          {[
-            ["Sample requests", <>{stats.requests.toLocaleString("en-GB")} <span style={{ fontSize: 14, color: "#8593a8", fontWeight: 700 }}>· {stats.open.toLocaleString("en-GB")} still open</span></>, itemsSent.toLocaleString("en-GB") + " sample" + (itemsSent === 1 ? "" : "s") + " in them"],
-            ["Converted to orders", stats.converted.toLocaleString("en-GB") + " · " + pct(stats.rate), stats.lost ? pct(stats.decidedRate) + " of closed requests" : "of all requests"],
-            ["Sales · spent on samples", <>{gbp(stats.revenue)} <span style={{ fontSize: 14, color: "#8593a8", fontWeight: 700 }}>· {gbp(spent)}</span></>, spent ? gbp(stats.revenue / spent) + " back per £1 · " + gbp(SAMPLE_COST) + " a sample" : gbp(SAMPLE_COST) + " a sample"],
-            ["Avg time to order", stats.avgDays === null ? "—" : stats.avgDays + " days", "request → invoice"],
-          ].map(([k, v, sub]) => (
-            <div key={k} style={{ ...card, marginBottom: 0, padding: "12px 16px" }}>
-              <span style={lbl}>{k}</span>
-              <b style={{ fontSize: 20, color: NAVY }}>{v}</b>
-              <div style={{ fontSize: 11.5, color: "#8593a8", fontWeight: 600, marginTop: 2 }}>{sub}</div>
-            </div>
-          ))}
-        </div>
-
-        <div style={{ ...card, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "10px 14px" }}>
-          <div style={{ position: "relative", flex: 1, minWidth: 200, maxWidth: 300 }}>
-            <span style={{ position: "absolute", left: 11, top: 10 }}><Icon name="search" /></span>
-            <input style={{ ...inp, paddingLeft: 34 }} placeholder="Search S-#, customer, email, colour…" value={search} onChange={(e) => { setSearch(e.target.value); setRowLimit(10); }} />
-          </div>
-          <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-            {FILTERS.map((f) => {
-              const on = filterNow === f;
-              const n = counts[f];
-              return (
-                <button key={f} onClick={() => { setStatusFilter(f); setRowLimit(10); }}
-                  style={{ fontFamily: "inherit", fontSize: 12.5, fontWeight: 700, padding: "6px 11px", minWidth: 128, justifyContent: "center", borderRadius: 999, cursor: "pointer", border: "1px solid " + (on ? NAVY : "#d5d9e0"), background: on ? NAVY : "#fff", color: on ? "#fff" : "#5a6a85", display: "inline-flex", gap: 6, alignItems: "center" }}>
-                  {FILTER_LABEL[f] || f}
-                  {n ? <span style={{ background: f === "To send" ? RED : "#E8912D", color: "#fff", borderRadius: 99, fontSize: 10.5, padding: "0 6px", lineHeight: "16px" }}>{n}</span> : null}
-                </button>
-              );
-            })}
-          </div>
-          <span style={{ flex: 1 }} />
-          <button title="Follow-up emails — wording and discount code" style={{ ...abtn, width: 36, height: 36 }} onClick={() => setEmailCfg(true)}><Icon name="gear" /></button>
-          <button title="Log a sample request" style={{ ...goldBtn, width: 36, height: 36, padding: 0, justifyContent: "center", opacity: ready ? 1 : 0.5 }} disabled={!ready} onClick={newSample}><Icon name="plus" stroke={NAVY} size={16} /></button>
-        </div>
+        <ListHero title="Samples"
+          sub={<span style={{ display: "inline-flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <button type="button" onClick={() => setPeriodOpen((o) => !o)} title="Change the period"
+              style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit", fontSize: 12.5, fontWeight: 700, color: "#aeb9cf" }}>
+              Conversion · <span style={{ color: "#fff" }}>{(PERIODS.find(([v]) => v === period) || [, ""])[1]}</span> {periodOpen ? "▾" : "▸"}
+            </button>
+            {periodOpen && (
+              <>
+                <select style={{ ...inp, width: "auto", padding: "3px 8px", fontSize: 12.5, fontWeight: 700 }} value={period} onChange={(e) => setPeriod(e.target.value)}>
+                  {PERIODS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                </select>
+                <span>by request date · an order counts if placed within {SAMPLE_WINDOW_DAYS} days of the sample</span>
+              </>
+            )}
+          </span>}
+          action={<span style={{ display: "inline-flex", gap: 8 }}>
+            <button title="Follow-up emails — wording and discount code" onClick={() => setEmailCfg(true)}
+              style={{ width: 38, height: 38, borderRadius: 8, border: "1px solid #3a4f78", background: "transparent", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0 }}>
+              <Icon name="gear" stroke="#cfd6e4" />
+            </button>
+            <HeroAdd title="Log a sample request" onClick={newSample} disabled={!ready} />
+          </span>}>
+          <HeroStat label="Sample requests" value={<>{stats.requests.toLocaleString("en-GB")} <span style={{ fontSize: 14, color: "#aeb9cf", fontWeight: 700 }}>· {stats.open.toLocaleString("en-GB")} still open</span></>}
+            sub={itemsSent.toLocaleString("en-GB") + " sample" + (itemsSent === 1 ? "" : "s") + " in them"} />
+          <HeroStat label="Converted to orders" value={stats.converted.toLocaleString("en-GB") + " · " + pct(stats.rate)} sub={stats.lost ? pct(stats.decidedRate) + " of closed requests" : "of all requests"} />
+          <HeroStat label="Sales · spent on samples" value={<>{gbp(stats.revenue)} <span style={{ fontSize: 14, color: "#aeb9cf", fontWeight: 700 }}>· {gbp(spent)}</span></>}
+            sub={spent ? gbp(stats.revenue / spent) + " back per £1 · " + gbp(SAMPLE_COST) + " a sample" : gbp(SAMPLE_COST) + " a sample"} />
+          <HeroStat label="Avg time to order" value={stats.avgDays === null ? "—" : stats.avgDays + " days"} sub="request → invoice" />
+        </ListHero>
 
         <div style={card}>
+          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 6 }}>
+            <SearchBox value={search} onChange={(v) => { setSearch(v); setRowLimit(10); }} placeholder="Search S-#, customer, email, colour…" width={300} />
+            <FilterPills options={FILTERS} value={filterNow} onPick={(f) => { setStatusFilter(f); setRowLimit(10); }} counts={counts} labels={FILTER_LABEL}
+              badge={(f) => (f === "To send" ? RED : "#E8912D")} />
+          </div>
           {matches.length === 0 ? (
             <div style={{ textAlign: "center", padding: "30px 10px", color: "#5a6a85", fontWeight: 600 }}>
               {samples.length === 0 ? "No sample requests yet." : filterNow === "To send" ? "Nothing waiting to go out." : filterNow === "Follow-up due" ? "No follow-ups due." : "No sample requests match."}
