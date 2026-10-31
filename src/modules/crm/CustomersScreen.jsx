@@ -8,6 +8,8 @@ import {
   invoiceTotals, gbp, isPaid, isSaleInvoice, today as todayC, followUpDone, FOLLOWUP_FLAGS, FIELD_FORMATS, CONTACT_METHODS,
   TRADE_COUNTER, TRADE_COUNTER_LABEL, quoteTotals, quoteStatus, quoteInvoice, quoteRef, QUOTE_TONES, sampleRef, sampleStatus, sampleInvoice, SAMPLE_TONES,
 } from "../../lib/crmCore.js";
+import { ComposeEmail, EmailHistory } from "./EmailPanels.jsx";
+import { emailReady } from "../../data/email.js";
 import { Icon, Chip, Modal, SuggestInput, selectAllProps, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
 
 const navyBtn = { ...btn, background: "transparent", border: "1px solid #3a4f78", color: "#fff" };
@@ -32,11 +34,15 @@ export const QuickWa = ({ num, name, size = 30, mode = getWaMode() }) => waNumbe
     <Icon name="wa" stroke="#128C7E" size={size > 26 ? 16 : 14} />
   </a>
 ) : null;
-export const QuickMail = ({ email, name, size = 30 }) => String(email || "").includes("@") ? (
+export const QuickMail = ({ email, name, size = 30, onCompose }) => !String(email || "").includes("@") ? null : onCompose ? (
+  <button onClick={onCompose} title={"Email " + email} style={{ ...qbtn("#185FA51a", "#185FA5"), width: size, height: size }}>
+    <Icon name="mail" stroke="#185FA5" size={size > 26 ? 15 : 13} />
+  </button>
+) : (
   <a href={mailLink(email, name)} target="dk-gmail" title={"Email " + email} style={{ ...qbtn("#185FA51a", "#185FA5"), width: size, height: size }}>
     <Icon name="mail" stroke="#185FA5" size={size > 26 ? 15 : 13} />
   </a>
-) : null;
+);
 
 const FieldRow = ({ icon, label, value, actions }) => (
   <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 0", borderBottom: "1px solid #f0f2f6" }}>
@@ -58,7 +64,7 @@ const NoteBox = ({ children }) => (
   </div>
 );
 
-export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, setSelId, openInvoice, newInvoiceFor, openQuote, newQuoteFor, openSample, newSampleFor, onOutstanding, me, newSignal, onNewHandled }) {
+export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, setSelId, openInvoice, newInvoiceFor, openQuote, newQuoteFor, openSample, newSampleFor, onOutstanding, me, newSignal, onNewHandled, onEmailSetup }) {
   const [search, setSearch] = useState("");
   const [custDraft, setCustDraft] = useState(null);
   const [siteDraft, setSiteDraft] = useState(null);
@@ -253,6 +259,9 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
   // retail top-ups (an extra board, trim and clips) under this value don't make a repeat customer
   const [topUpOpen, setTopUpOpen] = useState(false);
   const [stampOpen, setStampOpen] = useState(false);
+  const [compose, setCompose] = useState(null); // { to, name, customerId, siteId }
+  const [emailTick, setEmailTick] = useState(0);
+  const composeFor = (to, name, customerId, siteId) => emailReady ? () => setCompose({ to, name, customerId, siteId }) : undefined;
   const [waMode, setWaModeState] = useState(getWaMode);
   const setWaMode = (m) => { setWaModeState(m); try { localStorage.setItem("dk-wa-mode", m); } catch {} };
   const [topUp, setTopUp] = useState(() => { try { return Number(localStorage.getItem("dk-topup")) || 150; } catch (e) { return 150; } });
@@ -553,7 +562,7 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
                 <FieldRow icon="user" label="Contact" value={sel.contact} />
                 <FieldRow icon="mob" label="Mobile" value={sel.mobile} actions={<QuickWa mode={waMode} num={sel.mobile} name={sel.contact || sel.name} />} />
                 <FieldRow icon="phone" label="Landline" value={sel.landline} actions={isUkMobile(sel.landline) ? <QuickWa mode={waMode} num={sel.landline} name={sel.contact || sel.name} /> : null} />
-                <FieldRow icon="mail" label="Email" value={sel.email} actions={<QuickMail email={sel.email} name={sel.contact || sel.name} />} />
+                <FieldRow icon="mail" label="Email" value={sel.email} actions={<QuickMail email={sel.email} name={sel.contact || sel.name} onCompose={composeFor(sel.email, sel.contact || sel.name, sel.id, "")} />} />
                 <FieldRow icon="share" label="Preferred contact" value={sel.contactMethod} />
                 <FieldRow icon="pin" label="Invoice address" value={[sel.address, sel.town, sel.postcode].filter(Boolean).join(", ")} />
               </div>
@@ -589,7 +598,7 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
                     </div>
                     <div style={{ display: "flex", gap: 5 }}>
                       <QuickWa mode={waMode} num={isUkMobile(s.landline) && !isUkMobile(s.mobile) ? s.landline : s.mobile} name={s.contact || sel.contact || sel.name} size={28} />
-                      <QuickMail email={s.email} name={s.contact || sel.contact || sel.name} size={28} />
+                      <QuickMail email={s.email} name={s.contact || sel.contact || sel.name} size={28} onCompose={composeFor(s.email, s.contact || sel.contact || sel.name, sel.id, s.id)} />
                       {newQuoteFor && <button style={abtn} title="New quote for this site" onClick={() => newQuoteFor(sel.id, s.id)}><Icon name="tag" /></button>}
                       <button style={abtn} title="New invoice for this site" onClick={() => newInvoiceFor(sel.id, s.id)}><Icon name="plus" /></button>
                       <button style={abtn} title="Edit site" onClick={() => openSiteDraft({ ...s })}><Icon name="pen" /></button>
@@ -749,9 +758,15 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
                 </div>
               )}
             </div>
+            {emailReady && <EmailHistory crm={crm} customerId={sel.id} refresh={emailTick}
+              onCompose={composeFor(sel.email || "", sel.contact || sel.name, sel.id, "")} />}
           </>
         );
       })()}
+
+      {compose && (
+        <ComposeEmail {...compose} me={me} onClose={() => setCompose(null)} onSent={() => setEmailTick((t) => t + 1)} onSetup={onEmailSetup} />
+      )}
 
       {/* ===== customer modal ===== */}
       {custDraft && (

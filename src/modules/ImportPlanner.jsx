@@ -42,6 +42,7 @@ import StockScreen from "./crm/StockScreen.jsx";
 import CollectionsScreen from "./crm/CollectionsScreen.jsx";
 import VansScreen from "./crm/VansScreen.jsx";
 import { Icon } from "./crm/ui.jsx";
+import { EmailSettings } from "./crm/EmailPanels.jsx";
 
 const CRM_TABS = ["customers", "samples", "quotes", "invoices", "schedule"];
 
@@ -61,6 +62,7 @@ export default function ImportPlanner() {
   const [pinEntry, setPinEntry] = useState("");
   const [pinError, setPinError] = useState("");
   const [pinPanel, setPinPanel] = useState(false);
+  const [emailSettings, setEmailSettings] = useState(false);
   const [pinCurrent, setPinCurrent] = useState("");
   const [pinNew, setPinNew] = useState("");
   const [pinConfirm, setPinConfirm] = useState("");
@@ -881,6 +883,12 @@ export default function ImportPlanner() {
         <Icon name="note" size={15} stroke="#8fa0c0" />
         {open && "Restore"}
       </button>
+      {storageMode === "supabase" && (
+        <button onClick={() => setEmailSettings(true)} title="Which mailbox each login sends email from" style={footBtnStyle(open)}>
+          <Icon name="mail" size={15} stroke="#8fa0c0" />
+          {open && "Email settings"}
+        </button>
+      )}
       {storageMode === "supabase" ? (
         <button onClick={() => signOut()} title="Sign out" style={footBtnStyle(open)}>
           <Icon name="logout" size={15} stroke="#8fa0c0" />
@@ -1020,6 +1028,7 @@ export default function ImportPlanner() {
           <TasksScreen crm={crm} updateCrm={updateCrm} askConfirm={setConfirmBox} me={me} goHome={() => setTab("home")} />
         ))}
 
+      {emailSettings && <EmailSettings me={me} onClose={() => setEmailSettings(false)} />}
       {tab === "activity" && <ActivityScreen crm={crm} data={data} storageMode={storageMode} />}
 
       {tab === "vans" &&
@@ -1040,6 +1049,7 @@ export default function ImportPlanner() {
           <div style={{ padding: 40, textAlign: "center", color: "#5a6a85", fontWeight: 600 }}>Loading customers…</div>
         ) : tab === "customers" ? (
           <CustomersScreen
+            onEmailSetup={() => setEmailSettings(true)}
             crm={crm}
             updateCrm={updateCrm}
             askConfirm={setConfirmBox}
