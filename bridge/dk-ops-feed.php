@@ -31,7 +31,25 @@ if ( ! defined( 'DK_OPS_START' ) ) {
 }
 
 /* ---------- which order lines are free samples ---------- */
-function dk_ops_is_sample( $product, $name ) {
+function dk_ops_is_sample( $product, $name, $item = null ) {
+	// a sample option picked on the product (e.g. Length: "Free Sample") shows in the line's details
+	if ( $item ) {
+		foreach ( $item->get_formatted_meta_data( '' ) as $m ) {
+			if ( preg_match( '/\bsamples?\b/i', wp_strip_all_tags( (string) $m->display_value ) . ' ' . (string) $m->value ) ) {
+				return true;
+			}
+		}
+	}
+	if ( $product && $product->get_sku() && preg_match( '/sample/i', $product->get_sku() ) ) {
+		return true;
+	}
+	if ( $product && $product->is_type( 'variation' ) ) {
+		foreach ( $product->get_variation_attributes() as $v ) {
+			if ( preg_match( '/sample/i', (string) $v ) ) {
+				return true;
+			}
+		}
+	}
 	if ( $product ) {
 		$pid = $product->get_parent_id() ? $product->get_parent_id() : $product->get_id();
 		$cats = wp_get_post_terms( $pid, 'product_cat', array( 'fields' => 'slugs' ) );
@@ -100,7 +118,7 @@ function dk_ops_order_payload( $order ) {
 			'colour'   => dk_ops_colour( $item, $product ),
 			'qty'      => $qty,
 			'price'    => $qty ? round( $total / $qty, 2 ) : 0, // per piece, inc VAT, after any discount
-			'isSample' => dk_ops_is_sample( $product, $item->get_name() ),
+			'isSample' => dk_ops_is_sample( $product, $item->get_name(), $item ),
 		);
 	}
 	$created = $order->get_date_created();
