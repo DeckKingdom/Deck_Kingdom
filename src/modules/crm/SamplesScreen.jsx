@@ -40,6 +40,7 @@ export default function SamplesScreen({ crm, updateCrm, askConfirm, selId, setSe
   const [custQuery, setCustQuery] = useState("");
   const [newCust, setNewCust] = useState(null);
   const [stampOpen, setStampOpen] = useState(false);
+  const [creditOpen, setCreditOpen] = useState(false);
   const [notice, setNotice] = useState("");
   const ready = samplesAvailable();
   const samples = crm.samples || [];
@@ -473,8 +474,13 @@ export default function SamplesScreen({ crm, updateCrm, askConfirm, selId, setSe
           )}
           {cust && custInvoices.length > 0 && smp.outcome !== "lost" && (
             <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid #eef0f4" }}>
-              <span style={lbl}>Which order did this sample lead to?</span>
-              <select style={{ ...inp, fontSize: 13 }} value={smp.linkManual ? smp.convertedInvoiceId || "__none__" : ""}
+              <button type="button" onClick={() => setCreditOpen((o) => !o)}
+                style={{ ...lbl, marginBottom: creditOpen || smp.linkManual ? 6 : 0, background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6, width: "100%" }}>
+                Which order did this sample lead to?
+                {!creditOpen && <span style={{ textTransform: "none", letterSpacing: 0, color: "#5a6a85" }}>{smp.linkManual ? (smp.convertedInvoiceId ? "· set by hand" : "· none") : "· worked out automatically"}</span>}
+                <span style={{ marginLeft: "auto" }}>{creditOpen ? "▾" : "▸"}</span>
+              </button>
+              {creditOpen && <select style={{ ...inp, fontSize: 13 }} value={smp.linkManual ? smp.convertedInvoiceId || "__none__" : ""}
                 onChange={(e) => setSample((x) => {
                   const v = e.target.value;
                   if (!v) { x.linkManual = false; return; } // back to automatic; the sync re-matches
@@ -488,7 +494,7 @@ export default function SamplesScreen({ crm, updateCrm, askConfirm, selId, setSe
                 {custInvoices.map((i) => (
                   <option key={i.id} value={i.id}>{"This one: " + invRef(i) + " · " + prettyDate(i.date) + " · " + gbp(invoiceTotals(i).total)}</option>
                 ))}
-              </select>
+              </select>}
             </div>
           )}
         </div>
