@@ -605,10 +605,6 @@ export default function SamplesScreen({ crm, updateCrm, askConfirm, selId, setSe
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 14, alignItems: "start" }}>
           <div>
-            <span style={lbl}>Requested</span>
-            <StepDate value={smp.date} plain onDate={(d) => setSample((x) => (x.date = d))} />
-          </div>
-          <div>
             <span style={lbl}>Came from</span>
             {smp.source && (smp.raisedBy === "Website" || smp.raisedBy === "FileMaker") ? (
               <div style={plainVal}>{smp.source}</div>
