@@ -260,7 +260,7 @@ export const ListHero = ({ title, sub, action, children }) => (
     {children && <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>{children}</div>}
   </div>
 );
-export const heroTile = { flex: "1 1 160px", minWidth: 150, background: "#ffffff0d", border: "1px solid #ffffff1f", borderRadius: 12, padding: "11px 14px" };
+export const heroTile = { flex: "1 1 160px", minWidth: 150, background: "#ffffff1c", border: "1px solid #ffffff30", borderRadius: 12, padding: "11px 14px" };
 export const heroLab = { fontSize: 10.5, fontWeight: 700, color: "#aeb9cf", letterSpacing: 0.5, textTransform: "uppercase" };
 export const heroSub = { fontSize: 11.5, fontWeight: 600, color: "#aeb9cf", marginTop: 2 };
 export const HeroStat = ({ label, value, sub, tone, onClick, style, children }) => {
