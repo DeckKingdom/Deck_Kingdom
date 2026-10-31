@@ -362,7 +362,7 @@ export default function SamplesScreen({ crm, updateCrm, askConfirm, selId, setSe
                 </span>
               )}
             </span>
-            {st !== "Converted" && <Chip tone={SAMPLE_TONES[st]} style={statusChipStyle}>{st}</Chip>}
+            <Chip tone={SAMPLE_TONES[st]} style={statusChipStyle}>{st}</Chip>
           </div>
         </div>
         <span style={{ flex: 1 }} />
@@ -386,10 +386,15 @@ export default function SamplesScreen({ crm, updateCrm, askConfirm, selId, setSe
               <div style={{ width: 40, height: 40, borderRadius: 12, background: GOLD, color: NAVY, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17, fontWeight: 700, flex: "none" }}>
                 {(cust.name || "?").trim().charAt(0).toUpperCase() || "?"}
               </div>
-              <button onClick={() => goCustomer(cust.id)} title="Open the customer's account"
-                style={{ flex: 1, minWidth: 0, background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit", textAlign: "left", fontSize: 15, fontWeight: 700, color: "#185FA5", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {cust.name || "Unnamed account"}
-              </button>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <button className="dk-title-link" onClick={() => goCustomer(cust.id)} title="Open the customer's account"
+                  style={{ fontSize: 15, fontWeight: 700, color: NAVY, maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>
+                  {cust.name || "Unnamed account"}
+                </button>
+                <div style={{ fontSize: 12, color: "#5a6a85", fontWeight: 600, marginTop: 2 }}>
+                  {[[cust.address, cust.town, cust.postcode].filter(Boolean).join(", "), cust.mobile || cust.landline, cust.email].filter(Boolean).join(" · ")}
+                </div>
+              </div>
             </div>
           ) : newCust ? (
             <div>
@@ -443,8 +448,8 @@ export default function SamplesScreen({ crm, updateCrm, askConfirm, selId, setSe
                 <Icon name="pound" size={18} stroke="#fff" />
               </div>
               <div style={{ flex: 1, minWidth: 160 }}>
-                <button onClick={() => openInvoice(inv.id)} title="Open the order"
-                  style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit", textAlign: "left", fontSize: 15, fontWeight: 700, color: "#28713e", textDecoration: "underline", textDecorationColor: "#28713e55", textUnderlineOffset: 3 }}>
+                <button className="dk-title-link" onClick={() => openInvoice(inv.id)} title="Open the order"
+                  style={{ fontSize: 15, fontWeight: 700, color: "#28713e" }}>
                   {"Ordered — " + invRef(inv) + " · " + gbp(invoiceTotals(inv).total)}
                 </button>
                 <div style={{ fontSize: 12, color: "#5a6a85", fontWeight: 600, marginTop: 2 }}>
