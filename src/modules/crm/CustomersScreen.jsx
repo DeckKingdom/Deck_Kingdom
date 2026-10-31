@@ -508,9 +508,6 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
                   <button title="Edit account" onClick={() => openCustDraft({ ...sel })} style={{ width: 28, height: 28, borderRadius: 7, border: "1px solid #33466b", background: "transparent", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0, flex: "none" }}>
                     <Icon name="pen" stroke="#cfd6e4" size={13} />
                   </button>
-                  <button title="Delete this account" onClick={() => removeCustomer(sel)} style={{ width: 28, height: 28, borderRadius: 7, border: "1px dashed #3a4f78", background: "transparent", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0, flex: "none" }}>
-                    <Icon name="bin" stroke="#8fa0c0" size={13} />
-                  </button>
                 </div>
               </div>
               <div style={{ marginLeft: "auto", display: "flex", background: "#ffffff14", border: "1px solid #ffffff22", borderRadius: 12, overflow: "hidden", flexWrap: "wrap" }}>
@@ -531,6 +528,9 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
                   </span>
                 </button>
               </div>
+              <button title="Delete this account" onClick={() => removeCustomer(sel)} style={{ width: 28, height: 28, borderRadius: 7, border: "1px dashed #3a4f78", background: "transparent", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0, flex: "none" }}>
+                <Icon name="bin" stroke="#8fa0c0" size={13} />
+              </button>
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 14 }}>
