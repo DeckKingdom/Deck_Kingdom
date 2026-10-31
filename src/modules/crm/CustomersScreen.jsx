@@ -628,13 +628,13 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
               <div style={{ ...card, marginBottom: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
                   <p style={{ ...sect, margin: 0 }}>Sites ({sites.length})</p>
-                  <span style={{ flex: 1 }} />
                   <button style={abtn} title="Add site" onClick={startNewSite}>
                     <Icon name="pinPlus" size={16} stroke={NAVY} />
                   </button>
-                  <button style={{ ...abtn, background: GOLD, borderColor: GOLD }} title="Trade counter invoice — collected from the trade counter, no delivery site"
+                  <span style={{ flex: 1 }} />
+                  <button style={{ ...goldBtn, padding: "7px 12px", fontSize: 13 }} title="Raise an invoice collected from the trade counter — no delivery site"
                     onClick={() => newInvoiceFor(sel.id, TRADE_COUNTER)}>
-                    <Icon name="docPlus" size={16} stroke={NAVY} />
+                    <Icon name="plus" stroke={NAVY} />Trade counter invoice
                   </button>
                 </div>
                 {sites.length === 0 && <div style={{ fontSize: 13, color: "#8593a8", fontWeight: 600 }}>No sites yet — add one for deliveries to a different address.</div>}
