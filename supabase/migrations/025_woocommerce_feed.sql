@@ -21,17 +21,19 @@ returns text language plpgsql security definer set search_path = public as $$
 declare
   v_email text := lower(trim(coalesce(c ->> 'email', '')));
   cid text;
-  nm text := trim(coalesce(nullif(trim(c ->> 'company'), ''), trim(coalesce(c ->> 'first', '') || ' ' || coalesce(c ->> 'last', ''))));
-  v_phone text := trim(coalesce(c ->> 'phone', ''));
-  addr text := trim(both ', ' from coalesce(c ->> 'address1', '') || ', ' || coalesce(c ->> 'address2', ''));
+  nm text := public.dk_title(coalesce(nullif(trim(c ->> 'company'), ''), trim(coalesce(c ->> 'first', '') || ' ' || coalesce(c ->> 'last', ''))));
+  v_phone text := public.dk_phone(c ->> 'phone');
+  addr text := public.dk_title(trim(both ', ' from coalesce(c ->> 'address1', '') || ', ' || coalesce(c ->> 'address2', '')));
+  v_town text := public.dk_title(c ->> 'city');
+  pc text := public.dk_postcode(c ->> 'postcode');
 begin
   if v_email = '' then return null; end if;
   select id into cid from public.customers where lower(customers.email) = v_email order by (account_no is not null) desc, updated_at desc limit 1;
   if cid is null then
     cid := 'web-c-' || md5(v_email);
     insert into public.customers (id, name, address, town, postcode, contact, landline, mobile, email, source, created, created_by)
-    values (cid, nm, addr, coalesce(c ->> 'city', ''), upper(coalesce(c ->> 'postcode', '')),
-            case when nullif(trim(c ->> 'company'), '') is not null then trim(coalesce(c ->> 'first', '') || ' ' || coalesce(c ->> 'last', '')) else '' end,
+    values (cid, nm, addr, v_town, pc,
+            case when nullif(trim(c ->> 'company'), '') is not null then public.dk_title(trim(coalesce(c ->> 'first', '') || ' ' || coalesce(c ->> 'last', ''))) else '' end,
             case when v_phone ~ '^\s*(\+44\s*7|07)' then '' else v_phone end,
             case when v_phone ~ '^\s*(\+44\s*7|07)' then v_phone else '' end,
             v_email, 'Website', to_char(now(), 'YYYY-MM-DD'), 'Website')
@@ -41,8 +43,8 @@ begin
     update public.customers set
       name = case when name = '' then nm else name end,
       address = case when address = '' then addr else address end,
-      town = case when town = '' then coalesce(c ->> 'city', '') else town end,
-      postcode = case when postcode = '' then upper(coalesce(c ->> 'postcode', '')) else postcode end,
+      town = case when town = '' then v_town else town end,
+      postcode = case when postcode = '' then pc else postcode end,
       mobile = case when mobile = '' and landline = '' and v_phone ~ '^\s*(\+44\s*7|07)' then v_phone else mobile end,
       landline = case when landline = '' and mobile = '' and v_phone !~ '^\s*(\+44\s*7|07)' then v_phone else landline end
     where id = cid and (name = '' or address = '' or town = '' or postcode = '' or (mobile = '' and landline = ''));
@@ -109,10 +111,10 @@ begin
                 or lower(coalesce(o #>> '{shipping,address1}', '')) <> lower(coalesce(o #>> '{billing,address1}', ''))) then
           site := 'web-st-' || md5(cid || upper(replace(o #>> '{shipping,postcode}', ' ', '')) || lower(coalesce(o #>> '{shipping,address1}', '')));
           insert into public.customer_sites (id, customer_id, name, address, town, postcode, contact)
-          values (site, cid, coalesce(nullif(trim(o #>> '{shipping,company}'), ''), 'Delivery address'),
-                  trim(both ', ' from coalesce(o #>> '{shipping,address1}', '') || ', ' || coalesce(o #>> '{shipping,address2}', '')),
-                  coalesce(o #>> '{shipping,city}', ''), upper(o #>> '{shipping,postcode}'),
-                  trim(coalesce(o #>> '{shipping,first}', '') || ' ' || coalesce(o #>> '{shipping,last}', '')))
+          values (site, cid, coalesce(nullif(public.dk_title(o #>> '{shipping,company}'), ''), 'Delivery address'),
+                  public.dk_title(trim(both ', ' from coalesce(o #>> '{shipping,address1}', '') || ', ' || coalesce(o #>> '{shipping,address2}', ''))),
+                  public.dk_title(o #>> '{shipping,city}'), public.dk_postcode(o #>> '{shipping,postcode}'),
+                  public.dk_title(trim(coalesce(o #>> '{shipping,first}', '') || ' ' || coalesce(o #>> '{shipping,last}', ''))))
           on conflict (id) do nothing;
         end if;
         insert into public.invoices as t (id, customer_id, site_id, date, order_ref, job_type, payment_type, payment_date,

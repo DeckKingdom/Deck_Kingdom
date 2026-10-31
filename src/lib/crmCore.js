@@ -465,7 +465,8 @@ export const titleCase = (s) =>
 
 // 11-digit UK numbers: mobiles 07951-728-742 (5-3-3), landlines 0161-320-9664 (4-3-4)
 export const formatPhone = (s) => {
-  const d = String(s || "").replace(/\D/g, "");
+  let d = String(s || "").replace(/\D/g, "");
+  if (/^44\d{10}$/.test(d)) d = "0" + d.slice(2); // +44 7700 … -> 07700 …
   if (d.length === 11)
     return d.startsWith("07")
       ? d.slice(0, 5) + "-" + d.slice(5, 8) + "-" + d.slice(8)

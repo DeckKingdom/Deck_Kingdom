@@ -14,6 +14,37 @@
 --   on conflict (key) do update set value = excluded.value;
 -- Safe to re-run.
 
+-- ===== field formatting, the same rules as typing into ops (FileMaker style) =====
+-- Title Case for names and addresses (words already capitalised are left alone, single spaces),
+-- phones 07951-728-742 / 0161-320-9664 (+44 becomes 0), postcodes OL6-6UG, emails lower case.
+create or replace function public.dk_title(s text) returns text language plpgsql immutable as $$
+declare w text; out text := '';
+begin
+  if s is null then return ''; end if;
+  foreach w in array regexp_split_to_array(trim(s), '\s+') loop
+    if w = '' then continue; end if;
+    if w ~ '^[a-z]' then w := upper(left(w, 1)) || substr(w, 2); end if;
+    out := out || case when out = '' then '' else ' ' end || w;
+  end loop;
+  return out;
+end; $$;
+create or replace function public.dk_phone(s text) returns text language plpgsql immutable as $$
+declare d text := regexp_replace(coalesce(s, ''), '\D', '', 'g');
+begin
+  if d ~ '^44\d{10}$' then d := '0' || substr(d, 3); end if;
+  if length(d) = 11 then
+    if d like '07%' then return substr(d, 1, 5) || '-' || substr(d, 6, 3) || '-' || substr(d, 9); end if;
+    return substr(d, 1, 4) || '-' || substr(d, 5, 3) || '-' || substr(d, 8);
+  end if;
+  return trim(coalesce(s, ''));
+end; $$;
+create or replace function public.dk_postcode(s text) returns text language plpgsql immutable as $$
+declare c text := upper(regexp_replace(coalesce(s, ''), '[^A-Za-z0-9]', '', 'g'));
+begin
+  if length(c) between 5 and 7 then return left(c, length(c) - 3) || '-' || right(c, 3); end if;
+  return upper(trim(coalesce(s, '')));
+end; $$;
+
 -- which ops record each FileMaker record became (a customer may be matched to one keyed in by hand)
 create table if not exists public.fm_links (
   kind text not null,
@@ -58,9 +89,9 @@ begin
     insert into public.customers as t (id, account_no, name, address, town, postcode, contact, landline, mobile, email, source, trader, created, created_by)
     values (cid, case when coalesce(c ->> 'accountNo', '') ~ '^\d{1,9}$' then (c ->> 'accountNo')::int end,
             -- no company name in FileMaker: the contact's name is the account name
-            coalesce(nullif(trim(c ->> 'name'), ''), trim(coalesce(c ->> 'contact', ''))), coalesce(c ->> 'address', ''), coalesce(c ->> 'town', ''),
-            coalesce(c ->> 'postcode', ''), coalesce(c ->> 'contact', ''), coalesce(c ->> 'landline', ''), coalesce(c ->> 'mobile', ''),
-            coalesce(c ->> 'email', ''), coalesce(c ->> 'source', ''), coalesce((c ->> 'trader')::boolean, false), coalesce(c ->> 'created', ''), 'FileMaker')
+            public.dk_title(coalesce(nullif(trim(c ->> 'name'), ''), c ->> 'contact')), public.dk_title(c ->> 'address'), public.dk_title(c ->> 'town'),
+            public.dk_postcode(c ->> 'postcode'), public.dk_title(c ->> 'contact'), public.dk_phone(c ->> 'landline'), public.dk_phone(c ->> 'mobile'),
+            lower(trim(coalesce(c ->> 'email', ''))), public.dk_title(c ->> 'source'), coalesce((c ->> 'trader')::boolean, false), coalesce(c ->> 'created', ''), 'FileMaker')
     on conflict (id) do update set
       account_no = excluded.account_no, name = excluded.name, address = excluded.address, town = excluded.town,
       postcode = excluded.postcode, contact = excluded.contact, landline = excluded.landline, mobile = excluded.mobile,
@@ -77,9 +108,10 @@ begin
     insert into public.fm_links (kind, fm_id, ops_id) values ('site', st ->> 'fmId', sid) on conflict do nothing;
     insert into public.customer_sites as t (id, customer_id, site_no, name, address, town, postcode, contact, landline, mobile, email, notes)
     values (sid, cid, case when coalesce(st ->> 'fmId', '') ~ '^\d{1,9}$' then (st ->> 'fmId')::int end,
-            coalesce(nullif(trim(st ->> 'name'), ''), 'Site ' || (st ->> 'fmId')), coalesce(st ->> 'address', ''), coalesce(st ->> 'town', ''),
-            upper(coalesce(st ->> 'postcode', '')), coalesce(st ->> 'contact', ''), coalesce(st ->> 'landline', ''), coalesce(st ->> 'mobile', ''),
-            coalesce(st ->> 'email', ''), coalesce(st ->> 'notes', ''))
+            coalesce(nullif(public.dk_title(st ->> 'name'), ''), nullif(public.dk_title(st ->> 'address'), ''), 'Site ' || (st ->> 'fmId')),
+            public.dk_title(st ->> 'address'), public.dk_title(st ->> 'town'),
+            public.dk_postcode(st ->> 'postcode'), public.dk_title(st ->> 'contact'), public.dk_phone(st ->> 'landline'), public.dk_phone(st ->> 'mobile'),
+            lower(trim(coalesce(st ->> 'email', ''))), trim(coalesce(st ->> 'notes', '')))
     on conflict (id) do update set
       customer_id = excluded.customer_id, address = excluded.address, town = excluded.town, postcode = excluded.postcode,
       contact = excluded.contact, landline = excluded.landline, mobile = excluded.mobile, email = excluded.email, notes = excluded.notes;
