@@ -969,10 +969,15 @@ export default function ImportPlanner() {
       <div style={{ flex: 1, minWidth: 0 }}>
 
       <div ref={headerRef} className="no-print" style={{ background: NAVY, padding: "10px 16px", display: "flex", alignItems: "center", gap: 10, position: "sticky", top: 0, zIndex: 25, boxShadow: "0 2px 8px rgba(11,31,63,0.25)" }}>
-        <button onClick={() => setSideOpen((o) => !o)} title={sideOpen ? "Collapse the menu" : "Expand the menu"} style={{ background: "transparent", border: "1px solid #33466b", borderRadius: 8, width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flex: "none", padding: 0 }}>
-          <Icon name={sideOpen ? "chevleft" : "menu"} size={17} stroke="#cfd6e4" />
+        {/* the menu button and the page name are one target */}
+        <button onClick={() => setSideOpen((o) => !o)} title={sideOpen ? "Collapse the menu" : "Expand the menu"}
+          onMouseEnter={(e) => (e.currentTarget.style.background = "#ffffff12")} onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+          style={{ background: "transparent", border: "none", borderRadius: 8, height: 34, display: "flex", alignItems: "center", gap: 10, cursor: "pointer", flex: "none", padding: "0 10px 0 0", fontFamily: "inherit" }}>
+          <span style={{ border: "1px solid #33466b", borderRadius: 8, width: 34, height: 34, boxSizing: "border-box", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Icon name={sideOpen ? "chevleft" : "menu"} size={17} stroke="#cfd6e4" />
+          </span>
+          <span style={{ color: "#fff", fontWeight: 700, fontSize: 15.5, whiteSpace: "nowrap" }}>{TAB_LABELS[tab] || "Home"}</span>
         </button>
-        <span style={{ color: "#fff", fontWeight: 700, fontSize: 15.5, whiteSpace: "nowrap" }}>{TAB_LABELS[tab] || "Home"}</span>
         <span style={{ flex: 1 }} />
         <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
           {[["home", "Home", "home"], ["overview", "Imports", "ship"], ["customers", "Customers", "users"], ["invoices", "Invoices", "doc"], ["quotes", "Quotes", "tag"], ["samples", "Samples", "leaf"], ["schedule", "Delivery Schedule", "cal"]].map(([t, label, icon]) => (
