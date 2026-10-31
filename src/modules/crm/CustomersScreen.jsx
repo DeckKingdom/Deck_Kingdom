@@ -39,7 +39,7 @@ export const QuickMail = ({ email, name, size = 30, onCompose }) => !String(emai
     <Icon name="mail" stroke="#185FA5" size={size > 26 ? 15 : 13} />
   </button>
 ) : (
-  <a href={mailLink(email, name)} target="dk-gmail" title={"Email " + email} style={{ ...qbtn("#185FA51a", "#185FA5"), width: size, height: size }}>
+  <a href={mailLink(email, name)} target="_blank" rel="noopener noreferrer" title={"Email " + email} style={{ ...qbtn("#185FA51a", "#185FA5"), width: size, height: size }}>
     <Icon name="mail" stroke="#185FA5" size={size > 26 ? 15 : 13} />
   </a>
 );

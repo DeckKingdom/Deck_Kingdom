@@ -43,6 +43,7 @@ import CollectionsScreen from "./crm/CollectionsScreen.jsx";
 import VansScreen from "./crm/VansScreen.jsx";
 import { Icon } from "./crm/ui.jsx";
 import { EmailSettings } from "./crm/EmailPanels.jsx";
+import { emailReady } from "../data/email.js";
 
 const CRM_TABS = ["customers", "samples", "quotes", "invoices", "schedule"];
 
@@ -883,7 +884,7 @@ export default function ImportPlanner() {
         <Icon name="note" size={15} stroke="#8fa0c0" />
         {open && "Restore"}
       </button>
-      {storageMode === "supabase" && (
+      {emailReady && (
         <button onClick={() => setEmailSettings(true)} title="Which mailbox each login sends email from" style={footBtnStyle(open)}>
           <Icon name="mail" size={15} stroke="#8fa0c0" />
           {open && "Email settings"}

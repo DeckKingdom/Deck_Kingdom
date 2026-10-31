@@ -3,7 +3,10 @@
 import { getSupabase } from "./supabaseClient.js";
 import { storageMode } from "./storage.js";
 
-export const emailReady = storageMode === "supabase";
+// Sending from ops is parked for now: email buttons open Gmail compose instead.
+// Flip to true (after running 026_email.sql and deploying send-email) to switch it on.
+export const EMAIL_FROM_OPS = false;
+export const emailReady = EMAIL_FROM_OPS && storageMode === "supabase";
 
 export async function listMailAccounts() {
   const sb = await getSupabase();
