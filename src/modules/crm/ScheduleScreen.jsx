@@ -193,6 +193,24 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
   const peekCancel = () => { clearTimeout(peekT.current.open); clearTimeout(peekT.current.close); };
   const peekOpen = (p) => { peekCancel(); peekT.current.open = setTimeout(() => setPop((cur) => (cur && !cur.peek ? cur : { ...p, peek: true })), 220); };
   const peekClose = () => { clearTimeout(peekT.current.open); clearTimeout(peekT.current.close); peekT.current.close = setTimeout(() => setPop((cur) => (cur && cur.peek ? null : cur)), 250); };
+  // Picking a driver fills in the run and the next drop: a driver's first pick of the day is run 1;
+  // picking them again straight away keeps that run; picking them again after someone else was picked starts their next run.
+  const lastPick = useRef({}); // date -> driver last picked
+  const pickDriver = (kind, obj, v) => {
+    const date = kind === "col" ? obj.collectDate : obj.deliveryDate;
+    const set = (fn) => (kind === "col" ? setColl(obj.id, fn) : setInv(obj.id, fn));
+    if (!v || !date || (kind === "inv" && isCollectionJob(obj))) return set((t) => (t.driver = v));
+    const others = [
+      ...crm.invoices.filter((x) => x.id !== obj.id && !isVoidInvoice(x) && !isCollectionJob(x) && x.deliveryDate === date),
+      ...(crm.collections || []).filter((x) => x.id !== obj.id && x.collectDate === date),
+    ].filter((x) => x.driver === v);
+    const maxRun = others.reduce((m, x) => Math.max(m, Number(x.runNo) || 0), 0);
+    const last = lastPick.current[date];
+    const run = !maxRun ? 1 : last === undefined || last === v ? maxRun : maxRun + 1;
+    lastPick.current[date] = v;
+    const drop = others.filter((x) => Number(x.runNo) === run).reduce((m, x) => Math.max(m, Number(x.dropNo) || 0), 0) + 1;
+    set((t) => { t.driver = v; t.runNo = String(run); t.dropNo = String(drop); });
+  };
   const [resetAsk, setResetAsk] = useState(null); // date whose runs are about to be cleared
   // Reset day: open jobs and pick-ups lose driver / run / drop / van, then get numbered in postcode order
   const resetDay = (date) => updateCrm((c) => {
@@ -206,9 +224,6 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
       ...(c.collections || []).filter((x) => x.collectDate === date && !x.collected).map((o) => ({ o, p: pc(o, "col") })),
     ];
     list.forEach(({ o }) => { o.driver = ""; o.runNo = ""; o.van = ""; o.dropNo = ""; });
-    list
-      .sort((a, b) => (!a.p) - (!b.p) || a.p.toUpperCase().replace(/[^A-Z0-9]/g, "").localeCompare(b.p.toUpperCase().replace(/[^A-Z0-9]/g, ""), "en", { numeric: true }))
-      .forEach(({ o }, n) => (o.dropNo = String(n + 1)));
     return c;
   });
   const [notify, setNotify] = useState(null); // { date } a day's confirm sheet, or { ids } re-notify one job
@@ -396,10 +411,16 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
   // a supplier collection with a run or driver sits inside that run; without one it waits under "Supplier collections"
   // customers collecting from the warehouse go last, in their own group
   const runKey = (e) => (e.kind === "inv" && isCollectionJob(e.obj) ? "3|customer" : e.kind === "col" && !e.obj.runNo && !e.obj.driver ? "2|collections" : "0|" + String(numOr(e.obj.runNo, 99)).padStart(2, "0") + "|" + (e.obj.driver ? "0" + e.obj.driver : "1"));
+  // postcode order for jobs without a drop number (e.g. after Reset day); no postcode goes last
+  const pcKey = (e) => {
+    const p = e.kind === "col" ? e.obj.postcode : ((siteById[e.obj.siteId] || {}).postcode || (custById[e.obj.customerId] || {}).postcode);
+    return p ? String(p).toUpperCase().replace(/[^A-Z0-9]/g, "") : "~";
+  };
   groups.forEach((g) =>
     g.rows.sort((a, b) =>
       runKey(a).localeCompare(runKey(b)) ||
       numOr(a.obj.dropNo, 999) - numOr(b.obj.dropNo, 999) ||
+      pcKey(a).localeCompare(pcKey(b), "en", { numeric: true }) ||
       (a.time || "").localeCompare(b.time || "")));
 
   const setInv = (invId, fn) =>
@@ -462,7 +483,7 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
         <span style={{ fontSize: 12.5, color: "#5a6a85", fontWeight: 700, whiteSpace: "nowrap" }}>{(s && s.postcode) || (c && c.postcode) || "—"}</span>
         <span style={{ minWidth: 0, overflow: "hidden" }}>{c && c.source ? <Chip style={{ fontSize: 10.5, padding: "1px 8px", whiteSpace: "nowrap", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis" }}>{c.source}</Chip> : <span style={{ color: "#aab3c2" }}>—</span>}</span>
         <PillSelect value={i.jobType || ""} options={JOB_TYPES} placeholder="Job type" tone={isCollectionJob(i) ? "#9a7408" : NAVY} onChange={(v) => setInv(i.id, (t) => (t.jobType = v))} />
-        <PillSelect value={i.driver || ""} options={DRIVERS} placeholder="Driver" onChange={(v) => setInv(i.id, (t) => (t.driver = v))} />
+        <PillSelect value={i.driver || ""} options={DRIVERS} placeholder="Driver" onChange={(v) => pickDriver("inv", i, v)} />
         <PillSelect value={i.runNo || ""} options={RUN_NOS} placeholder="Run" labelOf={(o) => "Run " + o} onChange={(v) => setInv(i.id, (t) => (t.runNo = v))} />
         <PillSelect value={i.dropNo || ""} options={DROP_NOS} placeholder="#" onChange={(v) => setInv(i.id, (t) => (t.dropNo = v))} />
         <PillSelect value={i.van || ""} options={vanOptions(crm)} placeholder="Van" onChange={(v) => setInv(i.id, (t) => (t.van = v))} />
@@ -544,7 +565,7 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
         <span style={{ fontSize: 12.5, color: "#5a6a85", fontWeight: 700, whiteSpace: "nowrap" }}>{c.postcode || "—"}</span>
         <span style={{ fontSize: 11.5, fontWeight: 700, color: COLLECTION_BLUE }}>COL-{c.collectionNo || "—"}</span>
         <span style={{ fontSize: 12, fontWeight: 700, color: COLLECTION_BLUE, paddingLeft: 8 }}>Supplier pick-up</span>
-        <PillSelect value={c.driver || ""} options={DRIVERS} placeholder="Driver" onChange={(v) => setColl(c.id, (t) => (t.driver = v))} />
+        <PillSelect value={c.driver || ""} options={DRIVERS} placeholder="Driver" onChange={(v) => pickDriver("col", c, v)} />
         <PillSelect value={c.runNo || ""} options={RUN_NOS} placeholder="Run" labelOf={(o) => "Run " + o} onChange={(v) => setColl(c.id, (t) => (t.runNo = v))} />
         <PillSelect value={c.dropNo || ""} options={DROP_NOS} placeholder="#" onChange={(v) => setColl(c.id, (t) => (t.dropNo = v))} />
         <PillSelect value={c.van || ""} options={vanOptions(crm)} placeholder="Van" onChange={(v) => setColl(c.id, (t) => (t.van = v))} />
@@ -815,7 +836,7 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
           <div style={{ background: "#fff", borderRadius: 12, padding: "18px 20px", width: 460, maxWidth: "100%", boxShadow: "0 20px 50px rgba(11,31,63,.35)" }}>
             <b style={{ fontSize: 16, color: NAVY }}>Reset {dayLabel(resetAsk)}?</b>
             <p style={{ fontSize: 13.5, color: "#3c4a62", fontWeight: 600, lineHeight: 1.5, margin: "8px 0 14px" }}>
-              Every open job and pick-up on this day loses its driver, run, drop number and van, and the jobs are lined up in postcode order so you can plan the runs from scratch.
+              Every open job and pick-up on this day loses its driver, run, drop number and van, and the jobs line up in postcode order so you can plan the runs from scratch.
               Completed jobs aren't touched, and dates and times stay as they are.
             </p>
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
