@@ -1,7 +1,7 @@
 // Schedule tab: the daily delivery board — invoices grouped by delivery date,
 // workflow toggles inline, pending (undated) jobs at the bottom.
-import { useState, useMemo, useEffect, useRef } from "react";
-import { NAVY, GOLD, RED, prettyDate, prettyDateTime } from "../../lib/core.js";
+import React, { useState, useMemo, useEffect, useRef } from "react";
+import { NAVY, GOLD, RED, prettyDate, prettyDateTime, addDays } from "../../lib/core.js";
 import {
   RUN_NOS, TIME_SLOTS, DRIVERS, vanOptions,
   invoiceTotals, gbp, isPaid, scheduleStatus, STRIPE_COLOURS, daysSinceRaised, isCollectionJob, invoiceLoadKg, collectionProgress,
@@ -80,6 +80,18 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
   const [hideDone, setHideDone] = useState(false);
   const todayRef = useRef(null);
   const [pop, setPop] = useState(null); // { id, rect }: the job whose details are open
+  const [dragId, setDragId] = useState(null); // pending job being dragged onto a day
+  const [overDate, setOverDate] = useState(null);
+  const dropOn = (d) => {
+    const id = dragId;
+    setDragId(null); setOverDate(null);
+    if (!id) return;
+    updateCrm((c) => {
+      const t = c.invoices.find((x) => x.id === id);
+      if (t) { t.deliveryDate = d; if (!t.jobType || t.jobType === "Pending") t.jobType = "Delivery"; }
+      return c;
+    });
+  };
   // open on today (or the next day with work booked)
   useEffect(() => {
     const el = todayRef.current;
@@ -158,6 +170,23 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
     if (g && g.date === e.date) g.rows.push(e);
     else groups.push({ date: e.date, rows: [e] });
   });
+  // the next 7 days always show, even when empty, so pending jobs can be dropped onto them
+  if (range !== "today" && !q) {
+    for (let n = 0; n < 7; n++) {
+      const d = addDays(tod, n);
+      if (!groups.some((g) => g.date === d)) groups.push({ date: d, rows: [] });
+    }
+    groups.sort((a, b) => a.date.localeCompare(b.date));
+  }
+  // within a day: driver → run → drop → time; collections after
+  const numOr = (v, big) => (v === "" || v === undefined || v === null || isNaN(Number(v)) ? big : Number(v));
+  // sort key: named drivers A–Z, then jobs with no driver yet, then supplier collections
+  const runKey = (e) => (e.kind === "inv" ? (e.obj.driver ? "0|" + e.obj.driver : "1|") + "|" + String(numOr(e.obj.runNo, 99)).padStart(2, "0") : "2|collections");
+  groups.forEach((g) =>
+    g.rows.sort((a, b) =>
+      runKey(a).localeCompare(runKey(b)) ||
+      (a.kind === "inv" && b.kind === "inv" ? numOr(a.obj.dropNo, 999) - numOr(b.obj.dropNo, 999) : 0) ||
+      (a.time || "").localeCompare(b.time || "")));
 
   const setInv = (invId, fn) =>
     updateCrm((c) => {
@@ -303,7 +332,10 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
     ].filter(Boolean);
     return (
       <div style={{ position: "relative" }} onMouseEnter={(ev) => setHover(ev.currentTarget.getBoundingClientRect())} onMouseLeave={() => setHover(false)}>
-        <button className="dk-title-link" onClick={() => openInvoice(i.id)}
+        <button className="dk-title-link" draggable title="Drag onto a day to book it, or click to set a date"
+          onDragStart={(ev) => { ev.dataTransfer.setData("text/plain", i.id); ev.dataTransfer.effectAllowed = "move"; setDragId(i.id); setHover(false); }}
+          onDragEnd={() => { setDragId(null); setOverDate(null); }}
+          onClick={(ev) => { setHover(false); setPop({ id: i.id, rect: ev.currentTarget.getBoundingClientRect(), side: "left" }); }}
           style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "2px 8px", width: "100%", padding: "8px 0", borderBottom: "1px solid #f0f2f6", textAlign: "left", alignItems: "center" }}>
           <span style={{ display: "flex", gap: 6, alignItems: "center", minWidth: 0 }}>
             <b style={{ fontSize: 13, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c ? c.name || "Unnamed" : "No customer"}</b>
@@ -384,14 +416,42 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
       )}
 
       {groups.map((g, gi) => (
-        <div key={g.date} ref={g.date >= tod && (gi === 0 || groups[gi - 1].date < tod) ? todayRef : undefined} style={{ scrollMarginTop: 70 }}>
-          <GroupHead label={dayLabel(g.date)} meta={groupMeta(g.rows)} />
-          <div style={{ overflowX: "auto" }}>
-            <div style={{ minWidth: 1270 }}>
-              <ColHeads />
-              {g.rows.map((e) => (e.kind === "col" ? <CollRow key={e.obj.id} c={e.obj} /> : <Row key={e.obj.id} i={e.obj} />))}
+        <div key={g.date} ref={g.date >= tod && (gi === 0 || groups[gi - 1].date < tod) ? todayRef : undefined}
+          onDragOver={(ev) => { if (dragId) { ev.preventDefault(); if (overDate !== g.date) setOverDate(g.date); } }}
+          onDragLeave={(ev) => { if (!ev.currentTarget.contains(ev.relatedTarget)) setOverDate((d) => (d === g.date ? null : d)); }}
+          onDrop={(ev) => { ev.preventDefault(); dropOn(g.date); }}
+          style={{ scrollMarginTop: 70, borderRadius: 14, outline: overDate === g.date ? "2px dashed " + GOLD : "none", outlineOffset: 4, background: overDate === g.date ? "#fff8e6" : "transparent" }}>
+          <GroupHead label={dayLabel(g.date)} meta={g.rows.length ? groupMeta(g.rows) : "nothing booked"} />
+          {g.rows.length === 0 ? (
+            <div style={{ border: "1.5px dashed #d5d9e0", borderRadius: 12, padding: "10px 14px", fontSize: 12.5, fontWeight: 600, color: "#8593a8" }}>
+              {dragId ? "Drop here to book it for " + dayLabel(g.date) : "Nothing booked — drag a pending job here"}
             </div>
-          </div>
+          ) : (
+            <div style={{ overflowX: "auto" }}>
+              <div style={{ minWidth: 1270 }}>
+                <ColHeads />
+                {g.rows.map((e, k) => {
+                  const key = runKey(e), prevKey = k ? runKey(g.rows[k - 1]) : null;
+                  const sameRun = g.rows.filter((x) => runKey(x) === key);
+                  const head = key !== prevKey && g.rows.some((x) => runKey(x) !== key) ? (
+                    <div style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 11.5, fontWeight: 800, color: NAVY, margin: k ? "10px 0 4px" : "2px 0 4px", paddingLeft: 4 }}>
+                      {e.kind === "col" ? "Supplier collections" : (e.obj.driver || "No driver yet") + " · " + (e.obj.runNo ? "Run " + e.obj.runNo : "no run")}
+                      <span style={{ fontWeight: 600, color: "#8593a8" }}>
+                        {sameRun.length} {e.kind === "col" ? "pick-up" + (sameRun.length === 1 ? "" : "s") : "drop" + (sameRun.length === 1 ? "" : "s")}
+                        {e.kind === "inv" ? (() => { const kg = sameRun.reduce((t, x) => t + (invoiceLoadKg(x.obj, crm) || 0), 0); return kg ? " · " + Math.round(kg).toLocaleString("en-GB") + " kg" : ""; })() : ""}
+                      </span>
+                    </div>
+                  ) : null;
+                  return (
+                    <React.Fragment key={e.kind + e.obj.id}>
+                      {head}
+                      {e.kind === "col" ? <CollRow c={e.obj} /> : <Row i={e.obj} />}
+                    </React.Fragment>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       ))}
 
@@ -423,13 +483,20 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
         return (
           <>
             <div onMouseDown={() => setPop(null)} style={{ position: "fixed", inset: 0, zIndex: 70 }} />
-            <div style={{ position: "fixed", left: Math.min(pop.rect.left, window.innerWidth - 440), top: Math.max(10, top), zIndex: 71, width: 420, maxHeight: 420, overflowY: "auto",
+            <div style={{ position: "fixed", left: pop.side === "left" ? Math.max(10, pop.rect.left - 430) : Math.min(pop.rect.left, window.innerWidth - 440), top: Math.max(10, pop.side === "left" ? Math.min(pop.rect.top, window.innerHeight - 440) : top), zIndex: 71, width: 420, maxHeight: 440, overflowY: "auto",
               background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, boxShadow: "0 14px 40px rgba(11,31,63,.28)", padding: "12px 14px" }}>
               <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 6 }}>
                 <b style={{ fontSize: 15, color: NAVY }}>{c ? c.name || "Unnamed" : "No customer"}</b>
                 <span style={{ fontSize: 12, fontWeight: 700, color: "#185FA5" }}>#{i.invNo || "—"}</span>
                 <span style={{ flex: 1 }} />
                 <button style={{ ...abtn, border: "none" }} title="Close" onClick={() => setPop(null)}><Icon name="x" /></button>
+              </div>
+              <div style={{ display: "flex", gap: 8, alignItems: "center", background: i.deliveryDate ? "#f7f9fc" : "#fff8e6", border: "1px solid " + (i.deliveryDate ? "#e6e9ef" : "#f4d78f"), borderRadius: 10, padding: "6px 10px", marginBottom: 10 }}>
+                <span style={{ ...lbl, marginBottom: 0 }}>{isCollectionJob(i) ? "Collection date" : "Delivery date"}</span>
+                <input type="date" value={i.deliveryDate || ""} style={{ ...pill, width: 130, padding: "3px 8px" }}
+                  onChange={(e) => { const v = e.target.value; setInv(i.id, (t) => { t.deliveryDate = v; if (v && (!t.jobType || t.jobType === "Pending")) t.jobType = "Delivery"; }); }} />
+                <span style={{ flex: 1 }} />
+                {!i.deliveryDate && <span style={{ fontSize: 11.5, fontWeight: 700, color: "#a05f10" }}>not booked</span>}
               </div>
               <span style={lbl}>{s ? "Deliver to (site)" : isCollectionJob(i) ? "Customer collects" : "Deliver to (invoice address)"}</span>
               <div style={{ fontSize: 13, fontWeight: 600, color: NAVY, lineHeight: 1.5, marginBottom: 4 }}>
