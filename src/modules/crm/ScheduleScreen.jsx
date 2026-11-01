@@ -1,6 +1,6 @@
 // Schedule tab: the daily delivery board — invoices grouped by delivery date,
 // workflow toggles inline, pending (undated) jobs at the bottom.
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { NAVY, GOLD, RED, prettyDate } from "../../lib/core.js";
 import {
   invoiceTotals, gbp, isPaid, scheduleStatus, STRIPE_COLOURS, daysSinceRaised, isCollectionJob, invoiceLoadKg, collectionProgress,
@@ -29,6 +29,12 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
   const [range, setRange] = useState("upcoming");
   const [van, setVan] = useState("");
   const [hideDone, setHideDone] = useState(false);
+  const todayRef = useRef(null);
+  // open on today (or the next day with work booked)
+  useEffect(() => {
+    const el = todayRef.current;
+    if (el) el.scrollIntoView({ block: "start" });
+  }, []);
 
   const custById = useMemo(() => {
     const m = {};
@@ -207,6 +213,59 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
     );
   };
 
+  // compact pending row: just what's needed to book it in; the rest on hover
+  const PendingRow = ({ e }) => {
+    const [hover, setHover] = useState(false);
+    if (e.kind === "col") {
+      const c = e.obj;
+      return (
+        <button className="dk-title-link" onClick={() => openCollection && openCollection(c.id)}
+          style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "2px 8px", width: "100%", padding: "8px 0", borderBottom: "1px solid #f0f2f6", textAlign: "left" }}>
+          <b style={{ fontSize: 13, color: COLLECTION_BLUE, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.supplier || "Supplier"} · collection</b>
+          <span />
+          <span style={{ fontSize: 11.5, color: "#5a6a85", fontWeight: 600 }}>{c.postcode || "—"} · COL-{c.collectionNo || "—"}</span>
+        </button>
+      );
+    }
+    const i = e.obj;
+    const c = custById[i.customerId];
+    const st = siteById[i.siteId];
+    const days = daysSinceRaised(i);
+    const late = days !== null && days > 10;
+    const kg = invoiceLoadKg(i, crm);
+    const extra = [
+      "Invoice #" + (i.invNo || "—") + " · " + gbp(invoiceTotals(i).total) + (isPaid(i) ? " · paid" : i.paymentType === "COD" ? " · COD" : " · awaiting payment"),
+      st && st.name ? "Site: " + [st.name, st.town].filter(Boolean).join(", ") : c ? "Invoice address" + (c.town ? ", " + c.town : "") : "",
+      i.van ? "Van: " + i.van : "",
+      kg !== null ? "Load ≈ " + kg.toLocaleString("en-GB", { maximumFractionDigits: 0 }) + " kg" : "",
+      "Prep " + PREP_FLAGS.filter(([k]) => i.flags[k]).length + "/" + PREP_FLAGS.length,
+      c && c.source ? "Source: " + c.source : "",
+      i.raisedBy ? "Raised by " + i.raisedBy.split("@")[0] + (i.date ? " on " + prettyDate(i.date) : "") : i.date ? "Ordered " + prettyDate(i.date) : "",
+      i.jobNotes ? "Notes: " + String(i.jobNotes).slice(0, 80) : "",
+    ].filter(Boolean);
+    return (
+      <div style={{ position: "relative" }} onMouseEnter={(ev) => setHover(ev.currentTarget.getBoundingClientRect())} onMouseLeave={() => setHover(false)}>
+        <button className="dk-title-link" onClick={() => openInvoice(i.id)}
+          style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "2px 8px", width: "100%", padding: "8px 0", borderBottom: "1px solid #f0f2f6", textAlign: "left", alignItems: "center" }}>
+          <span style={{ display: "flex", gap: 6, alignItems: "center", minWidth: 0 }}>
+            <b style={{ fontSize: 13, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c ? c.name || "Unnamed" : "No customer"}</b>
+            <RiskChip inv={i} /><WebStatusChip inv={i} />
+          </span>
+          <span title="Days since the order came in" style={{ fontSize: 11.5, fontWeight: 800, padding: "1px 8px", borderRadius: 999, background: late ? RED : "#eef1f6", color: late ? "#fff" : "#5a6a85" }}>{days === null ? "—" : days + "d"}</span>
+          <span style={{ fontSize: 11.5, color: "#5a6a85", fontWeight: 600 }}>
+            {(st && st.postcode) || (c && c.postcode) || "—"} · <span style={{ color: isCollectionJob(i) ? "#9a7408" : "#5a6a85" }}>{i.jobType || "—"}</span>
+          </span>
+          <span />
+        </button>
+        {hover && (
+          <div style={{ position: "fixed", left: Math.max(8, hover.left - 290), top: Math.min(hover.top, window.innerHeight - 200), zIndex: 60, width: 270, pointerEvents: "none", background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, padding: "8px 12px", boxShadow: "0 8px 24px rgba(11,31,63,.2)", fontSize: 12, fontWeight: 600, lineHeight: 1.6, color: NAVY }}>
+            {extra.map((l, k) => <div key={k}>{l}</div>)}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const GroupHead = ({ label, meta, red }) => (
     <div style={{ display: "flex", alignItems: "center", gap: 12, background: red ? RED : NAVY, color: "#fff", borderRadius: 12, padding: "10px 16px", margin: "18px 0 8px", flexWrap: "wrap" }}>
       <b style={{ color: red ? "#fff" : GOLD, fontSize: 15 }}>{label}</b>
@@ -228,7 +287,7 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
   };
 
   return (
-    <div style={{ maxWidth: 1320, margin: "0 auto", padding: "16px 20px" }}>
+    <div style={{ padding: "16px 20px" }}>
       {/* filters */}
       <div style={{ ...card, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "10px 14px", marginBottom: 10 }}>
         <div style={{ position: "relative", flex: 1, minWidth: 180, maxWidth: 300 }}>
@@ -245,8 +304,6 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
         <label style={{ fontSize: 12.5, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}>
           <input type="checkbox" checked={hideDone} onChange={(e) => setHideDone(e.target.checked)} /> Hide completed
         </label>
-        <span style={{ flex: 1 }} />
-        {pending.length > 0 && <Chip tone="red">{pending.length} pending — no date</Chip>}
       </div>
 
       {/* legend */}
@@ -260,25 +317,36 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
         <span>Follow-up: review asked · review in · photos · social · sample</span>
       </div>
 
-      {groups.length === 0 && pending.length === 0 && (
+      <div className="dk-sched-grid" style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 330px", gap: 16, alignItems: "start" }}>
+      <div style={{ minWidth: 0 }}>
+      {groups.length === 0 && (
         <div style={{ ...card, textAlign: "center", padding: "36px 10px", color: "#5a6a85", fontWeight: 600, marginTop: 14 }}>
-          Nothing scheduled{q || van || hideDone ? " for these filters" : " yet"} — book a delivery date on an invoice and it appears here.
+          Nothing booked{q || van || hideDone ? " for these filters" : " yet"} — set a delivery date on a job and it appears here.
         </div>
       )}
 
-      {groups.map((g) => (
-        <div key={g.date}>
+      {groups.map((g, gi) => (
+        <div key={g.date} ref={g.date >= tod && (gi === 0 || groups[gi - 1].date < tod) ? todayRef : undefined} style={{ scrollMarginTop: 70 }}>
           <GroupHead label={dayLabel(g.date)} meta={groupMeta(g.rows)} />
           {g.rows.map((e) => (e.kind === "col" ? <CollRow key={e.obj.id} c={e.obj} /> : <Row key={e.obj.id} i={e.obj} />))}
         </div>
       ))}
 
-      {pending.length > 0 && (
-        <>
-          <GroupHead red label="Pending — no date booked" meta={pending.length + " waiting to be booked in"} />
-          {pending.map((e) => (e.kind === "col" ? <CollRow key={e.obj.id} c={e.obj} /> : <Row key={e.obj.id} i={e.obj} />))}
-        </>
-      )}
+      </div>
+
+      {/* pending: always in view on the right */}
+      <div style={{ ...card, marginBottom: 0, position: "sticky", top: 70, maxHeight: "calc(100vh - 90px)", overflowY: "auto", padding: "12px 16px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+          <p style={{ ...sect, margin: 0, color: pending.length ? RED : "#8593a8" }}>Pending — no date</p>
+          <span style={{ flex: 1 }} />
+          <b style={{ fontSize: 15, color: pending.length ? RED : "#aab3c2" }}>{pending.length}</b>
+        </div>
+        <div style={{ fontSize: 11.5, color: "#8593a8", fontWeight: 600, marginBottom: 4 }}>Oldest first · days since the order came in</div>
+        {pending.length === 0 ? (
+          <div style={{ fontSize: 13, color: "#8593a8", fontWeight: 600, padding: "6px 0" }}>Everything's booked in.</div>
+        ) : pending.map((e) => <PendingRow key={e.kind + e.obj.id} e={e} />)}
+      </div>
+      </div>
       <div style={{ height: 30 }} />
     </div>
   );
