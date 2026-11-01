@@ -130,6 +130,12 @@ const DayPill = ({ value, onChange }) => {
   );
 };
 
+// raised / updated line under a pop-over title
+const Stamp = ({ lines }) => {
+  const l = lines.filter(Boolean);
+  return l.length ? <div style={{ fontSize: 11.5, fontWeight: 600, color: "#8593a8", margin: "-2px 0 10px" }}>{l.join(" · ")}</div> : null;
+};
+
 // an editable pill: a small rounded drop-down; the list shows 10 at a time and scrolls
 const PillSelect = ({ value, options, placeholder, onChange, tone, labelOf = (o) => o }) => {
   const [box, setBox] = useState(null);
@@ -466,19 +472,15 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
             {done && <span style={{ width: 8, height: 8, borderRadius: 999, background: "#3FA55C", flex: "none" }} />}
           </button>
         </div>
-        <div style={{ minWidth: 0, position: "relative" }} onMouseEnter={(ev) => setHover(ev.currentTarget.getBoundingClientRect())} onMouseLeave={() => setHover(false)}>
+        <div style={{ minWidth: 0, position: "relative" }}
+          onMouseEnter={(ev) => peekOpen({ id: i.id, rect: ev.currentTarget.getBoundingClientRect() })} onMouseLeave={peekClose}>
           <div style={{ display: "flex", gap: 7, alignItems: "center", minWidth: 0 }}>
-            <button className="dk-title-link" onClick={(e) => { setHover(false); setPop({ id: i.id, rect: e.currentTarget.getBoundingClientRect() }); }}
+            <button className="dk-title-link" onClick={(e) => { peekCancel(); setPop({ id: i.id, rect: e.currentTarget.parentNode.parentNode.getBoundingClientRect() }); }}
               title={c ? c.name : ""} style={{ fontWeight: 700, fontSize: 13.5, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
               {short16(c ? c.name || "Unnamed" : "No customer")}
             </button>
             <RiskChip inv={i} /><WebStatusChip inv={i} />
           </div>
-          {hover && stamp.length > 0 && pop?.id !== i.id && (
-            <div style={{ position: "fixed", left: hover.left, top: hover.bottom + 4, zIndex: 60, background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, padding: "6px 10px", boxShadow: "0 8px 24px rgba(11,31,63,.2)", whiteSpace: "nowrap", fontSize: 11.5, fontWeight: 600, color: NAVY, lineHeight: 1.6, pointerEvents: "none" }}>
-              {stamp.map((l) => <div key={l}>{l}</div>)}
-            </div>
-          )}
         </div>
         <span style={{ fontSize: 12.5, color: "#5a6a85", fontWeight: 700, whiteSpace: "nowrap" }}>{(s && s.postcode) || (c && c.postcode) || "—"}</span>
         <span style={{ minWidth: 0, overflow: "hidden" }}>{c && c.source ? <Chip style={{ fontSize: 10.5, padding: "1px 8px", whiteSpace: "nowrap", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis" }}>{c.source}</Chip> : <span style={{ color: "#aab3c2" }}>—</span>}</span>
@@ -551,16 +553,12 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
             {c.collected && <span style={{ width: 8, height: 8, borderRadius: 999, background: "#3FA55C", flex: "none" }} />}
           </button>
         </div>
-        <div style={{ minWidth: 0, position: "relative" }} onMouseEnter={(ev) => setHover(ev.currentTarget.getBoundingClientRect())} onMouseLeave={() => setHover(false)}>
-          <button className="dk-title-link" onClick={(e) => { setHover(false); setPop({ id: c.id, kind: "col", rect: e.currentTarget.getBoundingClientRect() }); }}
+        <div style={{ minWidth: 0, position: "relative" }}
+          onMouseEnter={(ev) => peekOpen({ id: c.id, kind: "col", rect: ev.currentTarget.getBoundingClientRect() })} onMouseLeave={peekClose}>
+          <button className="dk-title-link" onClick={(e) => { peekCancel(); setPop({ id: c.id, kind: "col", rect: e.currentTarget.parentNode.getBoundingClientRect() }); }}
             title={c.supplier || ""} style={{ fontWeight: 700, fontSize: 13.5, color: COLLECTION_BLUE, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "100%" }}>
             {short16(c.supplier || "Supplier")}
           </button>
-          {hover && stamp.length > 0 && pop?.id !== c.id && (
-            <div style={{ position: "fixed", left: hover.left, top: hover.bottom + 4, zIndex: 60, background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, padding: "6px 10px", boxShadow: "0 8px 24px rgba(11,31,63,.2)", whiteSpace: "nowrap", fontSize: 11.5, fontWeight: 600, color: NAVY, lineHeight: 1.6, pointerEvents: "none" }}>
-              {stamp.map((l) => <div key={l}>{l}</div>)}
-            </div>
-          )}
         </div>
         <span style={{ fontSize: 12.5, color: "#5a6a85", fontWeight: 700, whiteSpace: "nowrap" }}>{c.postcode || "—"}</span>
         <span style={{ fontSize: 11.5, fontWeight: 700, color: COLLECTION_BLUE }}>COL-{c.collectionNo || "—"}</span>
@@ -960,6 +958,7 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
                 <span style={{ flex: 1 }} />
                 <button style={{ ...abtn, border: "none" }} title="Close" onClick={() => setPop(null)}><Icon name="x" /></button>
               </div>
+              <Stamp lines={[col.date ? "Raised " + prettyDate(col.date) + (col.raisedBy ? " by " + String(col.raisedBy).split("@")[0] : "") : ""]} />
               <div style={{ display: "flex", gap: 8, alignItems: "center", background: col.collectDate ? "#f7f9fc" : "#fff8e6", border: "1px solid " + (col.collectDate ? "#e6e9ef" : "#f4d78f"), borderRadius: 10, padding: "6px 10px", marginBottom: 10 }}>
                 <span style={{ ...lbl, marginBottom: 0 }}>Collection date</span>
                 <input type="date" value={col.collectDate || ""} style={{ ...pill, width: 130, padding: "3px 8px" }} onChange={(e) => { const v = e.target.value; setColl(col.id, (t) => (t.collectDate = v)); }} />
@@ -1026,6 +1025,10 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
                 <span style={{ flex: 1 }} />
                 <button style={{ ...abtn, border: "none" }} title="Close" onClick={() => setPop(null)}><Icon name="x" /></button>
               </div>
+              <Stamp lines={[
+                i.created || i.date ? "Raised " + prettyDate(i.created || i.date) + (i.raisedBy ? " by " + i.raisedBy.split("@")[0] : "") : "",
+                i.updatedAt ? "Updated " + prettyDateTime(i.updatedAt) + (i.modifiedBy ? " by " + i.modifiedBy.split("@")[0] : "") : "",
+              ]} />
               <div style={{ display: "flex", gap: 8, alignItems: "center", background: i.deliveryDate ? "#f7f9fc" : "#fff8e6", border: "1px solid " + (i.deliveryDate ? "#e6e9ef" : "#f4d78f"), borderRadius: 10, padding: "6px 10px", marginBottom: 10 }}>
                 <span style={{ ...lbl, marginBottom: 0 }}>{isCollectionJob(i) ? "Collection date" : "Delivery date"}</span>
                 <input type="date" value={i.deliveryDate || ""} style={{ ...pill, width: 130, padding: "3px 8px" }}
