@@ -25,7 +25,8 @@ const dayLabel = (d) => {
 
 const COLLECTION_BLUE = "#185FA5";
 // the board's columns: stripe · customer · driver · run · drop · van · weight · date+time · prep · follow-up · days
-const dsCols = (prep) => "4px 46px minmax(220px, 1fr) 82px 120px 88px 84px 60px 104px 58px 196px " + (prep ? "162px 162px " : "") + "66px 42px";
+const short16 = (t) => (String(t).length > 16 ? String(t).slice(0, 15).trimEnd() + "…" : String(t));
+const dsCols = (prep) => "4px 46px 170px 82px 120px 88px 84px 60px 104px 58px minmax(196px, 1fr) " + (prep ? "162px 162px " : "") + "66px 42px";
 const DROP_NOS = Array.from({ length: 20 }, (_, n) => String(n + 1));
 const rowBox = { display: "grid", gap: 10, alignItems: "center", background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, padding: "8px 12px 8px 0", marginBottom: 6, overflow: "hidden" };
 const pill = { fontFamily: "inherit", fontSize: 12, fontWeight: 700, color: NAVY, border: "1px solid #c9d0db", borderRadius: 999, background: "#fff", padding: "3px 16px 3px 8px", height: 28, boxSizing: "border-box", cursor: "pointer", maxWidth: "100%" };
@@ -289,15 +290,15 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
             onDragEnd={endDrag}
             style={{ cursor: "grab", color: "#aab3c2", fontSize: 14, lineHeight: 1, padding: "4px 1px", userSelect: "none" }}>⋮⋮</span>
           <button type="button" title={done ? "Completed — click to undo" : "Mark the delivery complete"} onClick={() => complete(i.id, !done)}
-            style={{ width: 18, height: 18, borderRadius: 999, border: "2px solid " + (done ? "#3FA55C" : "#b8c0cc"), background: "#fff", padding: 0, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", flex: "none" }}>
-            {done && <span style={{ width: 9, height: 9, borderRadius: 999, background: "#3FA55C" }} />}
+            style={{ width: 18, height: 18, borderRadius: 999, border: "2px solid " + (done ? "#3FA55C" : "#b8c0cc"), background: "#fff", padding: 0, boxSizing: "border-box", lineHeight: 0, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", flex: "none" }}>
+            {done && <span style={{ width: 8, height: 8, borderRadius: 999, background: "#3FA55C", flex: "none" }} />}
           </button>
         </div>
         <div style={{ minWidth: 0, position: "relative" }} onMouseEnter={(ev) => setHover(ev.currentTarget.getBoundingClientRect())} onMouseLeave={() => setHover(false)}>
           <div style={{ display: "flex", gap: 7, alignItems: "center", minWidth: 0 }}>
             <button className="dk-title-link" onClick={(e) => { setHover(false); setPop({ id: i.id, rect: e.currentTarget.getBoundingClientRect() }); }}
-              style={{ fontWeight: 700, fontSize: 13.5, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
-              {c ? c.name || "Unnamed" : "No customer"}
+              title={c ? c.name : ""} style={{ fontWeight: 700, fontSize: 13.5, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
+              {short16(c ? c.name || "Unnamed" : "No customer")}
             </button>
             <RiskChip inv={i} /><WebStatusChip inv={i} />
           </div>
@@ -314,7 +315,7 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
         <PillSelect value={i.dropNo || ""} options={DROP_NOS} placeholder="#" onChange={(v) => setInv(i.id, (t) => (t.dropNo = v))} />
         <PillSelect value={i.van || ""} options={vanOptions(crm)} placeholder="Van" onChange={(v) => setInv(i.id, (t) => (t.van = v))} />
         <div style={{ textAlign: "right", fontSize: 12.5, fontWeight: 700 }}>{kg === null ? "—" : kg.toLocaleString("en-GB", { maximumFractionDigits: 0 }) + " kg"}</div>
-        <div style={{ display: "flex", gap: 4 }}>
+        <div style={{ display: "flex", gap: 4, width: 196 }}>
           <input type="date" value={i.deliveryDate || ""} onChange={(e) => setInv(i.id, (t) => (t.deliveryDate = e.target.value))} style={{ ...pill, width: 116, flex: "none", padding: "3px 8px" }} />
           <PillSelect value={i.deliveryTime || ""} options={TIME_SLOTS} placeholder="Time" onChange={(v) => setInv(i.id, (t) => (t.deliveryTime = v))} />
         </div>
@@ -347,8 +348,8 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
         <div style={{ width: 4, alignSelf: "stretch", borderRadius: "12px 0 0 12px", margin: "-8px 0", background: c.collected ? "#3FA55C" : COLLECTION_BLUE }} />
         <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
           <button type="button" title={c.collected ? "Collected — click to undo" : "Mark as collected"} onClick={() => setColl(c.id, (t) => (t.collected = !t.collected))}
-            style={{ width: 18, height: 18, borderRadius: 999, border: "2px solid " + (c.collected ? "#3FA55C" : "#b8c0cc"), background: "#fff", padding: 0, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
-            {c.collected && <span style={{ width: 9, height: 9, borderRadius: 999, background: "#3FA55C" }} />}
+            style={{ width: 18, height: 18, borderRadius: 999, border: "2px solid " + (c.collected ? "#3FA55C" : "#b8c0cc"), background: "#fff", padding: 0, boxSizing: "border-box", lineHeight: 0, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+            {c.collected && <span style={{ width: 8, height: 8, borderRadius: 999, background: "#3FA55C", flex: "none" }} />}
           </button>
         </div>
         <div style={{ display: "flex", gap: 7, alignItems: "center", minWidth: 0 }}>
@@ -364,7 +365,7 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
         <span />
         <PillSelect value={c.van || ""} options={vanOptions(crm)} placeholder="Van" onChange={(v) => setColl(c.id, (t) => (t.van = v))} />
         <div style={{ textAlign: "right", fontSize: 12.5, fontWeight: 700 }}>{items ? items + " pcs" : "—"}</div>
-        <div style={{ display: "flex", gap: 4 }}>
+        <div style={{ display: "flex", gap: 4, width: 196 }}>
           <input type="date" value={c.collectDate || ""} onChange={(e) => setColl(c.id, (t) => (t.collectDate = e.target.value))} style={{ ...pill, width: 118, padding: "3px 8px" }} />
           <PillSelect value={c.collectTime || ""} options={TIME_SLOTS} placeholder="Time" onChange={(v) => setColl(c.id, (t) => (t.collectTime = v))} />
         </div>
@@ -515,7 +516,7 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
             </div>
           ) : (
             <div style={{ overflowX: "auto" }}>
-              <div style={{ minWidth: showPrep ? 1560 : 1240 }}>
+              <div style={{ minWidth: showPrep ? 1510 : 1190 }}>
                 <ColHeads />
                 {g.rows.map((e, k) => {
                   const key = runKey(e), prevKey = k ? runKey(g.rows[k - 1]) : null;
