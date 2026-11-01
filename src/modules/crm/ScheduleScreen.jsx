@@ -123,6 +123,11 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
   const [hideDone, setHideDone] = useState(false);
   const todayRef = useRef(null);
   const [pop, setPop] = useState(null); // { id, rect }: the job whose details are open
+  // hovering a pending job opens its details ("peek"); moving into the pop-over keeps it open; clicking pins it
+  const peekT = useRef({});
+  const peekCancel = () => { clearTimeout(peekT.current.open); clearTimeout(peekT.current.close); };
+  const peekOpen = (p) => { peekCancel(); peekT.current.open = setTimeout(() => setPop((cur) => (cur && !cur.peek ? cur : { ...p, peek: true })), 220); };
+  const peekClose = () => { clearTimeout(peekT.current.open); clearTimeout(peekT.current.close); peekT.current.close = setTimeout(() => setPop((cur) => (cur && cur.peek ? null : cur)), 250); };
   const [notify, setNotify] = useState(null); // { date } a day's confirm sheet, or { ids } re-notify one job
   const [ask, setAsk] = useState(null); // { id, n, apply }: change a job the customer's already been told about?
   const meName = String(me || "").split("@")[0] || "someone";
@@ -447,7 +452,6 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
   );
 
   const PendingRow = ({ e }) => {
-    const [hover, setHover] = useState(false);
     if (e.kind === "col") {
       const c = e.obj;
       return (
@@ -464,23 +468,15 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
     const st = siteById[i.siteId];
     const days = daysSinceRaised(i);
 
-    const kg = invoiceLoadKg(i, crm);
-    const extra = [
-      "Invoice #" + (i.invNo || "—") + " · " + gbp(invoiceTotals(i).total) + (isPaid(i) ? " · paid" : i.paymentType === "COD" ? " · COD" : " · awaiting payment"),
-      st && st.name ? "Site: " + [st.name, st.town].filter(Boolean).join(", ") : c ? "Invoice address" + (c.town ? ", " + c.town : "") : "",
-      i.van ? "Van: " + i.van : "",
-      kg !== null ? "Load ≈ " + kg.toLocaleString("en-GB", { maximumFractionDigits: 0 }) + " kg" : "",
-      "Prep " + PREP_FLAGS.filter(([k]) => i.flags[k]).length + "/" + PREP_FLAGS.length,
-      c && c.source ? "Source: " + c.source : "",
-      i.raisedBy ? "Raised by " + i.raisedBy.split("@")[0] + (i.date ? " on " + prettyDate(i.date) : "") : i.date ? "Ordered " + prettyDate(i.date) : "",
-      i.jobNotes ? "Notes: " + String(i.jobNotes).slice(0, 80) : "",
-    ].filter(Boolean);
+
     return (
-      <div style={{ position: "relative" }} onMouseEnter={(ev) => setHover(ev.currentTarget.getBoundingClientRect())} onMouseLeave={() => setHover(false)}>
-        <button className="dk-title-link" draggable title="Drag onto a day to book it, or click to set a date"
-          onDragStart={(ev) => { ev.dataTransfer.setData("text/plain", i.id); ev.dataTransfer.effectAllowed = "move"; setDragId(i.id); setHover(false); }}
+      <div style={{ position: "relative" }}
+        onMouseEnter={(ev) => peekOpen({ id: i.id, rect: ev.currentTarget.getBoundingClientRect(), side: "left" })}
+        onMouseLeave={peekClose}>
+        <button className="dk-title-link" draggable title="Drag onto a day to book it, or click to keep the details open"
+          onDragStart={(ev) => { ev.dataTransfer.setData("text/plain", i.id); ev.dataTransfer.effectAllowed = "move"; setDragId(i.id); peekCancel(); setPop(null); }}
           onDragEnd={() => { setDragId(null); setOverDate(null); }}
-          onClick={(ev) => { setHover(false); setPop({ id: i.id, rect: ev.currentTarget.getBoundingClientRect(), side: "left" }); }}
+          onClick={(ev) => { peekCancel(); setPop({ id: i.id, rect: ev.currentTarget.parentNode.getBoundingClientRect(), side: "left" }); }}
           style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "2px 8px", width: "100%", padding: "8px 0", borderBottom: "1px solid #f0f2f6", textAlign: "left", alignItems: "center" }}>
           <span style={{ display: "flex", gap: 6, alignItems: "center", minWidth: 0 }}>
             <b style={{ fontSize: 13, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c ? c.name || "Unnamed" : "No customer"}</b>
@@ -492,11 +488,6 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
           </span>
           <span />
         </button>
-        {hover && (
-          <div style={{ position: "fixed", left: Math.max(8, hover.left - 290), top: Math.min(hover.top, window.innerHeight - 200), zIndex: 60, width: 270, pointerEvents: "none", background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, padding: "8px 12px", boxShadow: "0 8px 24px rgba(11,31,63,.2)", fontSize: 12, fontWeight: 600, lineHeight: 1.6, color: NAVY }}>
-            {extra.map((l, k) => <div key={k}>{l}</div>)}
-          </div>
-        )}
       </div>
     );
   };
@@ -769,9 +760,11 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
         const kgAll = invoiceLoadKg(i, crm);
         return (
           <>
-            <div onMouseDown={() => setPop(null)} style={{ position: "fixed", inset: 0, zIndex: 70 }} />
-            <div style={{ position: "fixed", left: pop.side === "left" ? Math.max(10, pop.rect.left - PW - 10) : Math.min(pop.rect.left, window.innerWidth - PW - 20), top: Math.max(10, pop.side === "left" ? Math.min(pop.rect.top - 60, window.innerHeight - PH - 10) : top), zIndex: 71, width: PW, maxHeight: PH, overflowY: "auto",
-              background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, boxShadow: "0 14px 40px rgba(11,31,63,.28)", padding: "14px 18px" }}>
+            {!pop.peek && <div onMouseDown={() => setPop(null)} style={{ position: "fixed", inset: 0, zIndex: 70 }} />}
+            <div onMouseEnter={() => pop.peek && clearTimeout(peekT.current.close)} onMouseLeave={() => pop.peek && peekClose()}
+              onMouseDown={() => { if (pop.peek) { peekCancel(); setPop({ ...pop, peek: false }); } }}
+              style={{ position: "fixed", left: pop.side === "left" ? Math.max(10, pop.rect.left - PW - 24) : Math.min(pop.rect.left, window.innerWidth - PW - 20), top: Math.max(10, pop.side === "left" ? Math.min(pop.rect.top - 60, window.innerHeight - PH - 10) : top), zIndex: 71, width: PW, maxHeight: PH, overflowY: "auto",
+              background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, boxShadow: "0 14px 40px rgba(11,31,63,.28)", padding: "14px 18px", boxSizing: "border-box" }}>
               <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 6 }}>
                 <b style={{ fontSize: 15, color: NAVY }}>{c ? c.name || "Unnamed" : "No customer"}</b>
                 <span style={{ fontSize: 12, fontWeight: 700, color: "#185FA5" }}>#{i.invNo || "—"}</span>
@@ -782,6 +775,8 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
                 <span style={{ ...lbl, marginBottom: 0 }}>{isCollectionJob(i) ? "Collection date" : "Delivery date"}</span>
                 <input type="date" value={i.deliveryDate || ""} style={{ ...pill, width: 130, padding: "3px 8px" }}
                   onChange={(e) => { const v = e.target.value; guard(i.id, () => setInv(i.id, (t) => { t.deliveryDate = v; if (v && (!t.jobType || t.jobType === "Pending")) t.jobType = "Delivery"; })); }} />
+                <span style={{ ...lbl, marginBottom: 0, marginLeft: 10 }}>Weight</span>
+                <b style={{ fontSize: 13, color: NAVY }}>{kgAll === null ? "—" : Math.round(kgAll).toLocaleString("en-GB") + " kg"}</b>
                 <span style={{ flex: 1 }} />
                 {!i.deliveryDate && <span style={{ fontSize: 11.5, fontWeight: 700, color: "#a05f10" }}>not booked</span>}
               </div>
