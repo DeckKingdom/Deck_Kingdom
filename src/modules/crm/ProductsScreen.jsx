@@ -731,7 +731,7 @@ function KitEditor({ p, products, rowsByProduct, lists, setP }) {
   return (
     <div style={{ marginTop: 10, borderTop: "1px dashed #d5d9e0", paddingTop: 10 }}>
       <div style={{ fontSize: 10.5, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 6 }}>
-        Kit parts — what goes on the loading bill for one kit
+        Kit parts — what goes on the packing slip for one kit
       </div>
       {lines.length === 0 && <div style={{ fontSize: 12.5, color: "#a05f10", fontWeight: 600, marginBottom: 6 }}>No parts yet — add what's in one kit.</div>}
       {lines.map((l, i) => {

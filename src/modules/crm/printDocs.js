@@ -201,7 +201,7 @@ export function printLoadingBill(inv, cust, site, crm, planner) {
   }).join("");
 
   const dest = site || cust || {};
-  const body = head("Loading bill", inv.invNo, pretty(inv.deliveryDate || inv.date)) + riskBanner(inv) + `
+  const body = head("Packing slip", inv.invNo, pretty(inv.deliveryDate || inv.date)) + riskBanner(inv) + `
 <div class="grid">
   ${addrBlock("Job", [cust && cust.name, inv.jobType, "Delivery: " + pretty(inv.deliveryDate) + (inv.deliveryTime ? " " + inv.deliveryTime : ""), inv.van ? "Van: " + inv.van : ""])}
   ${addrBlock("Deliver to", [dest.name, dest.address !== dest.name ? dest.address : "", [dest.town, dest.postcode].filter(Boolean).join(" ")])}
@@ -217,7 +217,7 @@ ${inv.jobNotes ? `<div class="note">📝 ${esc(inv.jobNotes)}</div>` : ""}
 </div>
 <div class="foot">${esc(COMPANY.name)} · ${esc(COMPANY.phone)}</div>`;
 
-  return openDoc(shell("Loading bill " + (inv.invNo || ""), body));
+  return openDoc(shell("Packing slip " + (inv.invNo || ""), body));
 }
 
 // Driver's collection note for picking goods up from a UK supplier.

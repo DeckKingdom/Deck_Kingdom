@@ -437,11 +437,42 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
         </div>
       </div>
 
+      {/* prep & follow-up ticks */}
+      <div style={{ ...card, padding: "10px 18px" }}>
+        <button type="button" onClick={() => setFollowOpen((o) => !o)}
+          style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}>
+          <span style={{ ...sect, margin: 0 }}>Prep &amp; follow-up</span>
+          <span style={{ fontSize: 12, fontWeight: 700, color: "#5a6a85" }}>
+            prep {PREP_FLAGS.filter(([k]) => inv.flags[k]).length}/{PREP_FLAGS.length} · follow-up {FOLLOWUP_FLAGS.filter(([k]) => inv.flags[k]).length}/{FOLLOWUP_FLAGS.length}
+          </span>
+          <span style={{ flex: 1 }} />
+          <span style={{ color: "#8593a8", fontSize: 12 }}>{followOpen ? "▾" : "▸"}</span>
+        </button>
+        {followOpen && (
+          <div style={{ display: "flex", gap: 5, alignItems: "center", flexWrap: "wrap", marginTop: 10 }}>
+            <span style={{ ...lbl, marginBottom: 0, marginRight: 4 }}>Prep</span>
+            {PREP_FLAGS.map(([k, label, icon]) => (
+              <Tg key={k} on={inv.flags[k]} title={label} icon={icon} onClick={() => setInv((x) => (x.flags[k] = !x.flags[k]))} />
+            ))}
+            <span style={{ ...lbl, marginBottom: 0, margin: "0 4px 0 18px" }}>Follow-up</span>
+            {FOLLOWUP_FLAGS.map(([k, label, icon]) => (
+              <Tg key={k} on={inv.flags[k]} title={label} icon={icon} onClick={() => setInv((x) => (x.flags[k] = !x.flags[k]))} />
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* job & delivery */}
       <div style={card}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
           <p style={{ ...sect, margin: 0 }}>Job &amp; delivery</p>
           <span style={{ flex: 1 }} />
+          {!inv.riskFlag && (
+            <button style={{ ...docBtn, color: "#9b1c2e", borderColor: "#f3c2cb", marginRight: 6 }} title="Flag this job as high risk — it gets a red warning until someone checks it"
+              onClick={() => setInv((t) => { t.riskFlag = "manual"; t.riskNote = ""; t.riskChecked = ""; })}>
+              <Icon name="warn" stroke="#9b1c2e" size={13} />Flag risk
+            </button>
+          )}
           <label style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>
             <input type="checkbox" checked={inv.deliveryCompleted}
               onChange={(e) => setInv((x, c) => { x.deliveryCompleted = e.target.checked; applyInvoiceStockDeduction(x, c, e.target.checked, me); })} />
@@ -449,7 +480,7 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
             {inv.stockDeducted && <Chip tone="green" style={{ marginLeft: 4, fontSize: 10, padding: "1px 7px" }}>stock out</Chip>}
           </label>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(118px, 1fr))", gap: 12, marginBottom: 12 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(118px, 1fr))", gap: 12 }}>
           <div style={{ gridColumn: "span 2" }}>
             <span style={lbl}>Job type</span>
             <select style={inp} value={inv.jobType} onChange={(e) => setInv((x) => (x.jobType = e.target.value))}>
@@ -481,40 +512,19 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
             <input style={inp} list="dk-paytypes" value={inv.paymentType} onChange={(e) => setInv((x) => (x.paymentType = e.target.value))} />
           </div>
         </div>
-        <div style={{ display: "flex", gap: 5, alignItems: "center", flexWrap: "wrap" }}>
-          <span style={{ ...lbl, marginBottom: 0, marginRight: 4 }}>Prep</span>
-          {PREP_FLAGS.map(([k, label, icon]) => (
-            <Tg key={k} on={inv.flags[k]} title={label} icon={icon} onClick={() => setInv((x) => (x.flags[k] = !x.flags[k]))} />
-          ))}
-          <button type="button" onClick={() => setFollowOpen((o) => !o)} title="After-sale follow-up ticks"
-            style={{ ...lbl, marginBottom: 0, margin: "0 4px 0 14px", background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", gap: 5, alignItems: "center" }}>
-            Follow-up <span style={{ color: NAVY }}>{FOLLOWUP_FLAGS.filter(([k]) => inv.flags[k]).length}/{FOLLOWUP_FLAGS.length}</span> {followOpen ? "▾" : "▸"}
-          </button>
-          {followOpen && FOLLOWUP_FLAGS.map(([k, label, icon]) => (
-            <Tg key={k} on={inv.flags[k]} title={label} icon={icon} onClick={() => setInv((x) => (x.flags[k] = !x.flags[k]))} />
-          ))}
-        </div>
       </div>
 
       {/* lines + totals */}
       <div style={card}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
           <p style={{ ...sect, margin: 0 }}>Lines</p>
-          <span style={{ flex: 1 }} />
+        </div>
+        <LinesEditor doc={inv} edit={setInv} crm={crm} toolbar={<>
           <button style={docBtn} onClick={() => tryPrint("invoice")}><Icon name="doc" stroke={NAVY} size={13} />Invoice PDF</button>
           <button style={docBtn} onClick={() => tryPrint("job")}><Icon name="truck" stroke={NAVY} size={13} />Job sheet</button>
-          <button style={docBtn} onClick={() => tryPrint("loading")}><Icon name="box" stroke={NAVY} size={13} />Loading bill</button>
-          {!inv.riskFlag && (
-            <button style={{ ...docBtn, color: "#9b1c2e", borderColor: "#f3c2cb" }} title="Flag this job as high risk — it gets a red warning until someone checks it"
-              onClick={() => setInv((t) => { t.riskFlag = "manual"; t.riskNote = ""; t.riskChecked = ""; })}>
-              <Icon name="warn" stroke="#9b1c2e" size={13} />Flag risk
-            </button>
-          )}
-        </div>
-        <LinesEditor doc={inv} edit={setInv} crm={crm} />
+          <button style={docBtn} onClick={() => tryPrint("loading")}><Icon name="box" stroke={NAVY} size={13} />Packing slip</button>
+        </>} />
 
-        <StockCheck inv={inv} crm={crm} planner={planner} updatePlanner={updatePlanner} updateCrm={updateCrm} me={me} openCollection={openCollection}
-          onRaised={(names) => setNotice((names.length > 1 ? "Collection notes raised with " : "Collection note raised with ") + names.join(" and ") + " — linked to this job and added to its pick list below. It's on the Collections screen ready to book a van.")} />
 
         {(() => {
           const shipments = (planner && planner.shipments) || [];
@@ -698,6 +708,8 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
           </div>
           </div>
         </div>
+        <StockCheck inv={inv} crm={crm} planner={planner} updatePlanner={updatePlanner} updateCrm={updateCrm} me={me} openCollection={openCollection}
+          onRaised={(names) => setNotice((names.length > 1 ? "Collection notes raised with " : "Collection note raised with ") + names.join(" and ") + " — linked to this job and added to its pick list. It's on the Collections screen ready to book a van.")} />
       </div>
     </div>
   );

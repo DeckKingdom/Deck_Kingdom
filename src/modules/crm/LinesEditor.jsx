@@ -21,7 +21,7 @@ export const skuOption = (p, crm) => {
   const readable = p.family && p.family.includes("/") && p.family !== p.sku ? p.family : "";
   return {
     value: p.sku,
-    label: skuOptionLabel(p) + (gradeOf(p) ? " · " + gradeOf(p).label : "") + (price ? " · " + price : ""),
+    label: (readable ? readable + " · " : "") + skuOptionLabel(p) + (gradeOf(p) ? " · " + gradeOf(p).label : "") + (price ? " · " + price : ""),
     src,
     cells: [
       { text: readable || p.sku, style: { fontWeight: 800 } },
@@ -35,7 +35,8 @@ export const skuOption = (p, crm) => {
 };
 const td = { padding: "6px 6px", borderBottom: "1px solid #f0f2f6" };
 
-export default function LinesEditor({ doc, edit, crm, readOnly }) {
+export default function LinesEditor({ doc, edit, crm, readOnly, toolbar }) {
+  const [codeDraft, setCodeDraft] = useState({}); // what's being typed in a code box (shown instead of the readable code)
   const [freeQty, setFreeQty] = useState(new Set()); // lines typing a qty directly (double-clicked)
   const [src, setSrc] = useState(""); // offer only one source's codes (DK, TG …)
 
@@ -74,15 +75,16 @@ export default function LinesEditor({ doc, edit, crm, readOnly }) {
 
   return (
     <>
-      {!readOnly && sources.length > 1 && (
+      {!readOnly && (sources.length > 1 || toolbar) && (
         <div style={{ display: "flex", gap: 4, alignItems: "center", flexWrap: "wrap", marginBottom: 6 }}>
-          <span style={{ fontSize: 11, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", marginRight: 4 }}>Stock from</span>
-          {["", ...sources].map((k) => (
+          {sources.length > 1 && <span style={{ fontSize: 11, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", marginRight: 4 }}>Stock from</span>}
+          {(sources.length > 1 ? ["", ...sources] : []).map((k) => (
             <button key={k || "all"} onClick={() => setSrc(k)} title={k ? PRODUCT_SOURCES[k] || k : "Any source"}
               style={{ fontFamily: "inherit", fontSize: 12, fontWeight: 700, padding: "3px 10px", borderRadius: 999, cursor: "pointer", border: "1px solid " + (src === k ? NAVY : "#d5d9e0"), background: src === k ? NAVY : "#fff", color: src === k ? "#fff" : "#5a6a85" }}>
               {k || "All"}
             </button>
           ))}
+          {toolbar && <><span style={{ flex: 1 }} /><span style={{ display: "inline-flex", gap: 8, flexWrap: "wrap" }}>{toolbar}</span></>}
         </div>
       )}
       <div className="dk-bleed" style={{ overflowX: "auto" }}>
@@ -98,7 +100,7 @@ export default function LinesEditor({ doc, edit, crm, readOnly }) {
             {readOnly
               ? doc.lines.map((l) => (
                   <tr key={l.id}>
-                    <td style={{ ...td, fontWeight: 700, padding: "9px 6px" }}>{l.code || "—"}{readableFor(bySku, l.code) && <div style={{ fontSize: 11, color: "#5a6a85" }}>{readableFor(bySku, l.code)}</div>}</td>
+                    <td style={{ ...td, fontWeight: 700, padding: "9px 6px" }}>{readableFor(bySku, l.code) || l.code || "—"}</td>
                     <td style={td}>{l.qty}</td>
                     <td style={td}>{l.description}</td>
                     <td style={td}>{l.colour}</td>
@@ -109,11 +111,22 @@ export default function LinesEditor({ doc, edit, crm, readOnly }) {
                 ))
               : doc.lines.map((l) => (
                   <tr key={l.id}>
-                    <td style={{ ...td, width: 130 }}>
-                      <SuggestInput value={l.code} options={skuOpts} listWidth={SKU_LIST_W} cols={SKU_COLS}
+                    <td style={{ ...td, width: 190 }}>
+                      <SuggestInput options={skuOpts} listWidth={SKU_LIST_W} cols={SKU_COLS}
+                        value={codeDraft[l.id] !== undefined ? codeDraft[l.id] : readableFor(bySku, l.code) || l.code}
                         title={l.code && !bySku[String(l.code).trim().toLowerCase()] ? "Not a product code — pick it from the list so stock, cost and suppliers can be found" : undefined}
-                        inputStyle={{ fontWeight: 700, fontSize: 12.5, ...(l.code && !bySku[String(l.code).trim().toLowerCase()] ? { borderColor: "#E8912D", background: "#fff8e6" } : {}) }} onChange={(v) => setLine(l.id, "code", v)} />
-                      {readableFor(bySku, l.code) && <div style={{ fontSize: 11, fontWeight: 700, color: "#5a6a85", marginTop: 3, letterSpacing: 0.2 }}>{readableFor(bySku, l.code)}</div>}
+                        inputStyle={{ fontWeight: 700, fontSize: 12.5, ...(l.code && !bySku[String(l.code).trim().toLowerCase()] ? { borderColor: "#E8912D", background: "#fff8e6" } : {}) }} onChange={(v) => {
+                          // a pick from the list (or a typed readable code) stores the SKU; anything else is kept as typed
+                          const t = String(v || "").trim().toLowerCase();
+                          const hit = bySku[t] ? bySku[t] : t ? Object.values(bySku).find((p) => p && p.family && p.family.toLowerCase() === t) : null;
+                          if (hit) {
+                            setCodeDraft((d) => { const n = { ...d }; delete n[l.id]; return n; });
+                            setLine(l.id, "code", hit.sku);
+                          } else {
+                            setCodeDraft((d) => ({ ...d, [l.id]: v }));
+                            setLine(l.id, "code", v);
+                          }
+                        }} />
                       {l.code && !bySku[String(l.code).trim().toLowerCase()] && <div style={{ fontSize: 10.5, fontWeight: 700, color: "#a05f10", marginTop: 3 }}>not a product code</div>}
                     </td>
                     <td style={{ ...td, width: 74 }}>
