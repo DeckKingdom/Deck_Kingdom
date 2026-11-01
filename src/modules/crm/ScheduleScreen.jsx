@@ -600,26 +600,22 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
           ) : (
             <div style={{ overflowX: "auto" }}>
               <div style={{ minWidth: showPrep ? 1510 : 1190 }}>
-                <ColHeads />
                 {g.rows.map((e, k) => {
                   const key = runKey(e), prevKey = k ? runKey(g.rows[k - 1]) : null;
                   const sameRun = g.rows.filter((x) => runKey(x) === key);
                   const runKg = e.kind === "inv" ? sameRun.reduce((t, x) => t + (invoiceLoadKg(x.obj, crm) || 0), 0) : 0;
-                  const head = key !== prevKey && g.rows.some((x) => runKey(x) !== key) ? (
-                    <div style={{ display: "grid", gridTemplateColumns: dsCols(showPrep), gap: 10, alignItems: "center", padding: "0 12px 0 0", margin: k ? "12px 0 4px" : "2px 0 4px",
-                      background: "#eef1f6", borderRadius: 8, minHeight: 28 }}>
+                  const head = key !== prevKey ? (
+                    <div style={{ display: "grid", gridTemplateColumns: dsCols(showPrep), gap: 10, alignItems: "center", padding: "0 12px 0 0", margin: k ? "12px 0 6px" : "4px 0 6px",
+                      minHeight: 26 }}>
                       <span />
-                      <span style={{ gridColumn: "span 12", fontSize: 12, fontWeight: 800, color: NAVY, paddingLeft: 2, display: "flex", alignItems: "center", gap: 8, whiteSpace: "nowrap" }}>
-                        {e.kind === "col" ? "Supplier collections" : (e.obj.runNo ? "Run " + e.obj.runNo : "No run yet") + " · " + (e.obj.driver || "no driver yet")}
-                        <span style={{ fontWeight: 600, color: "#5a6a85" }}>
-                          {sameRun.length} {e.kind === "col" ? "pick-up" + (sameRun.length === 1 ? "" : "s") : "drop" + (sameRun.length === 1 ? "" : "s")}
-                        </span>
-                        {e.kind === "inv" && (
-                          <span title="Total weight on this run" style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "#fff", border: "1px solid #d5d9e0", borderRadius: 999, padding: "1px 9px", fontSize: 11.5 }}>
-                            <span style={{ color: "#5a6a85", fontWeight: 700 }}>Run weight</span>
-                            <b>{runKg ? Math.round(runKg).toLocaleString("en-GB") + " kg" : "—"}</b>
+                      <span style={{ gridColumn: "span 12", display: "flex", alignItems: "center" }}>
+                        <span title={e.kind === "inv" ? "Total weight on this run" : ""} style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "#fff", border: "1px solid #d5d9e0", borderRadius: 999, padding: "2px 12px", fontSize: 12, color: NAVY, whiteSpace: "nowrap" }}>
+                          <b>{e.kind === "col" ? "Supplier collections" : (e.obj.runNo ? "Run " + e.obj.runNo : "No run yet") + " · " + (e.obj.driver || "no driver yet")}</b>
+                          <span style={{ fontWeight: 600, color: "#5a6a85" }}>
+                            {sameRun.length} {e.kind === "col" ? "pick-up" + (sameRun.length === 1 ? "" : "s") : "drop" + (sameRun.length === 1 ? "" : "s")}
                           </span>
-                        )}
+                          {e.kind === "inv" && <><span style={{ width: 1, height: 12, background: "#d5d9e0" }} /><span style={{ fontWeight: 700, color: "#5a6a85" }}>Run weight</span><b>{runKg ? Math.round(runKg).toLocaleString("en-GB") + " kg" : "—"}</b></>}
+                        </span>
                       </span>
                     </div>
                   ) : null;
