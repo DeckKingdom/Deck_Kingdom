@@ -37,11 +37,13 @@ const productToRow = (p, i) => ({
   ...(productSegsReady ? { seg_sup: str(p.segSup), seg_len: str(p.segLen), seg_cat: str(p.segCat), seg_sub: str(p.segSub), seg_prod: str(p.segProd) } : {}),
 });
 
+let etaReady = false; // shipments.eta_date (migration 031)
 const shipToRow = (s, i) => {
   const row = { id: s.id, position: i };
   for (const [key, col] of Object.entries(SHIP_FIELDS)) {
     row[col] = NUM_SHIP.has(key) ? num(s[key]) : BOOL_SHIP.has(key) ? s[key] !== false : str(s[key]);
   }
+  if (etaReady) row.eta_date = str(s.etaDate);
   return row;
 };
 
@@ -94,9 +96,10 @@ async function loadAll() {
       qty: Number(r.qty), cost: Number(r.cost), weight: Number(r.weight),
     });
   });
+  etaReady = s.data.length ? Object.prototype.hasOwnProperty.call(s.data[0], "eta_date") : etaReady;
   const shipments = s.data.map((r) => ({
     id: r.id, name: r.name, status: r.status, supplier: r.supplier, created: r.created,
-    orderDate: r.order_date, depositDate: r.deposit_date, arrivedDate: r.arrived_date,
+    orderDate: r.order_date, depositDate: r.deposit_date, arrivedDate: r.arrived_date, etaDate: nv(r.eta_date),
     balancePaidDate: r.balance_paid_date, invoiceNo: r.invoice_no,
     surchargeOn: r.surcharge_on, dutyOn: r.duty_on, postedToStock: nv(r.posted_to_stock),
     dutyGbp: nv(r.duty_gbp), shippingGbp: nv(r.shipping_gbp),

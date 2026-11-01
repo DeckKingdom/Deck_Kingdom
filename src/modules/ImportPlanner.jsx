@@ -121,6 +121,7 @@ export default function ImportPlanner() {
         if (s.balancePaidDate === undefined) s.balancePaidDate = "";
         if (s.surchargeOn === undefined) s.surchargeOn = true;
         if (s.arrivedDate === undefined) s.arrivedDate = "";
+        if (s.etaDate === undefined) s.etaDate = "";
         if (s.valueUsd === undefined) s.valueUsd = "";
         if (s.fxRate === undefined) s.fxRate = "";
         if (s.shippingGbp === undefined) s.shippingGbp = "";
@@ -513,6 +514,7 @@ export default function ImportPlanner() {
     copy.depositDate = "";
     copy.balancePaidDate = "";
     copy.arrivedDate = "";
+    copy.etaDate = "";
     copy.valueUsd = "";
     copy.fxRate = "";
     copy.shippingGbp = "";
@@ -1011,7 +1013,7 @@ export default function ImportPlanner() {
               </div>
             </div>
           )}
-          <HomeScreen data={data} crm={crm} updateCrm={updateCrm} me={me} askConfirm={setConfirmBox} setTab={setTab} openInvoice={openInvoice} addShipment={addShipment} newInvoice={() => (crm ? newInvoiceFor("", "") : setTab("invoices"))} />
+          <HomeScreen data={data} crm={crm} updateCrm={updateCrm} me={me} askConfirm={setConfirmBox} setTab={setTab} openInvoice={openInvoice} openCollection={openCollection} addShipment={addShipment} newInvoice={() => (crm ? newInvoiceFor("", "") : setTab("invoices"))} />
         </>
       )}
 
@@ -1639,12 +1641,13 @@ export default function ImportPlanner() {
                     {[
                       ["1", "Order date", "orderDate", null],
                       ["2", "Deposit paid", "depositDate", ["depositUsd", "depositFx", 0.3]],
-                      ["3", "Arrived", "arrivedDate", null],
-                      ["4", "Balance paid", "balancePaidDate", ["balanceUsd", "balanceFx", 0.7]],
+                      ["3", "Expected in", "etaDate", null],
+                      ["4", "Arrived", "arrivedDate", null],
+                      ["5", "Balance paid", "balancePaidDate", ["balanceUsd", "balanceFx", 0.7]],
                     ].map(([n, label, field, pay], idx) => {
                       const set = !!active[field];
                       return (
-                        <div key={field} style={{ display: "flex", alignItems: "flex-start", gap: 16, flexWrap: "wrap", padding: "10px 0", borderBottom: idx < 3 ? "1px solid #eef0f4" : "none" }}>
+                        <div key={field} style={{ display: "flex", alignItems: "flex-start", gap: 16, flexWrap: "wrap", padding: "10px 0", borderBottom: idx < 4 ? "1px solid #eef0f4" : "none" }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 7, width: 130, paddingTop: 23 }}>
                             <span
                               style={{

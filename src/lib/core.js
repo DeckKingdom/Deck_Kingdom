@@ -20,6 +20,7 @@ export const newShipment = (name) => ({
   depositDate: "",
   balancePaidDate: "",
   surchargeOn: true,
+  etaDate: "",      // expected arrival at the warehouse
   arrivedDate: "",
   valueUsd: "",
   fxRate: "",

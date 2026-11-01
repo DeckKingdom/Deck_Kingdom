@@ -36,7 +36,7 @@ const Report = ({ label, value, sub, tone, onClick }) => (
 
 const rowStyle = { display: "flex", gap: 11, alignItems: "flex-start", padding: "9px 0", borderBottom: "1px solid #f0f2f6" };
 
-export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTab, addShipment, newInvoice, openInvoice }) {
+export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTab, addShipment, newInvoice, openInvoice, openCollection }) {
   const tod = today();
   const [viewAs, setViewAs] = useState(me || "");
   const [draft, setDraft] = useState(null);
@@ -73,7 +73,7 @@ export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTa
   const live = data.shipments.filter((s) => s.status !== "Paid");
   const inbound = data.shipments
     .filter((s) => ["Confirmed", "In production", "Shipped"].includes(s.status) && s.orderDate)
-    .map((s) => ({ s, eta: addMonths(s.orderDate, 3) }))
+    .map((s) => ({ s, eta: s.etaDate || addMonths(s.orderDate, 3) }))
     .sort((a, b) => a.eta.localeCompare(b.eta));
 
   // ===== tasks =====
@@ -222,7 +222,7 @@ export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTa
               );
             })()}
           </div>
-          <div className="dk-home-cell" style={{ gridColumn: "span 1", minWidth: 0 }}>
+          <div className="dk-home-cell" style={{ gridColumn: "span 1", gridRow: "span 2", minWidth: 0 }}>
             {crm && (() => {
               const rows = [
                 ["To send", samplesIn(crm, SAMPLE_GROUPS.send).length, "Print all", "doc", () => printAllToSend(crm, updateCrm, askConfirm, setHomeNotice)],
@@ -245,6 +245,48 @@ export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTa
                         <button onClick={run} style={{ ...goldBtn, padding: "5px 10px", fontSize: 12 }}><Icon name={icon} stroke={NAVY} size={13} />{act}</button>
                       )}
                     </div>
+                  ))}
+                </div>
+              );
+            })()}
+          </div>
+          <div className="dk-home-cell" style={{ gridColumn: "span 3", minWidth: 0 }}>
+            {crm && (() => {
+              // stock coming in over the next 7 days: import containers (expected date, or an estimate) and supplier collections
+              const end = addDays(tod, 6);
+              const dayLabel = (d) => d === tod ? "Today" : d === addDays(tod, 1) ? "Tomorrow" : new Date(d + "T00:00:00").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+              const ships = data.shipments
+                .filter((x) => !x.arrivedDate && x.status !== "Planning" && x.status !== "Paid")
+                .map((x) => ({ kind: "ship", id: x.id, date: x.etaDate || (x.orderDate ? addMonths(x.orderDate, 3) : ""), est: !x.etaDate, title: x.name || "Shipment", sub: [x.supplier, x.status].filter(Boolean).join(" · ") }))
+                .filter((x) => x.date && x.date <= end);
+              const colls = (crm.collections || [])
+                .filter((c) => !c.collected && c.collectDate && c.collectDate <= end)
+                .map((c) => ({ kind: "coll", id: c.id, date: c.collectDate, est: false, title: c.supplier || "Supplier collection",
+                  sub: ["COL-" + (c.collectionNo || "—"), (c.items || []).length ? (c.items || []).length + " item" + ((c.items || []).length === 1 ? "" : "s") : "", c.van].filter(Boolean).join(" · ") }));
+              const rows = [...ships, ...colls].sort((a, b) => a.date.localeCompare(b.date));
+              const late = rows.filter((r) => r.date < tod).length;
+              return (
+                <div style={{ ...card, marginBottom: 0, height: "100%", boxSizing: "border-box" }}>
+                  <div style={{ display: "flex", alignItems: "center", marginBottom: 8, gap: 10 }}>
+                    <p style={{ ...sect, margin: 0 }}>Coming in · next 7 days</p>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: "#5a6a85" }}>{ships.length} container{ships.length === 1 ? "" : "s"} · {colls.length} collection{colls.length === 1 ? "" : "s"}</span>
+                    {late > 0 && <span style={{ fontSize: 12, fontWeight: 700, color: RED }}>{late} overdue</span>}
+                    <span style={{ flex: 1 }} />
+                    <button onClick={() => setTab("overview")} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 700, color: "#185FA5", padding: 0 }}>Imports ▸</button>
+                    <button onClick={() => setTab("collections")} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 700, color: "#185FA5", padding: 0 }}>Collections ▸</button>
+                  </div>
+                  {rows.length === 0 ? (
+                    <div style={{ color: "#8593a8", fontWeight: 600, fontSize: 13, padding: "4px 0" }}>Nothing due in this week.</div>
+                  ) : rows.map((r) => (
+                    <button key={r.kind + r.id} className="dk-title-link"
+                      onClick={() => (r.kind === "coll" && openCollection ? openCollection(r.id) : setTab(r.kind === "coll" ? "collections" : "overview"))}
+                      style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "7px 0", borderBottom: "1px solid #f0f2f6", fontSize: 13, fontWeight: 700, color: NAVY }}>
+                      <span style={{ width: 92, flex: "none", fontSize: 12.5, color: r.date < tod ? RED : r.date === tod ? "#a05f10" : "#5a6a85" }}>{r.date < tod ? "Late · " + prettyDate(r.date).slice(0, 6) : dayLabel(r.date)}</span>
+                      <Icon name={r.kind === "ship" ? "ship" : "box"} size={14} stroke="#5a6a85" />
+                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{r.title}</span>
+                      <span style={{ flex: 1, color: "#8593a8", fontWeight: 600, fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{r.sub}</span>
+                      {r.est && <span title="No expected date on this shipment yet — estimated at 3 months from the order date. Add it under Imports → the shipment → Expected in." style={{ fontSize: 10.5, fontWeight: 800, color: "#8a5a00", background: "#fdf3dc", borderRadius: 999, padding: "1px 7px" }}>est.</span>}
+                    </button>
                   ))}
                 </div>
               );
