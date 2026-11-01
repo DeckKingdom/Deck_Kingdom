@@ -577,6 +577,16 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
         <span>Follow-up: review asked · review in · photos · social · sample</span>
       </div>
 
+      {(crm.schemaMissing || []).length > 0 && (
+        <div style={{ background: "#fff8e6", border: "1px solid #f4d78f", borderRadius: 12, padding: "10px 14px", marginTop: 12, fontSize: 13, fontWeight: 600, color: "#6b5305", display: "flex", gap: 8, alignItems: "center" }}>
+          <Icon name="warn" stroke="#a05f10" size={15} />
+          <span>
+            {crm.schemaMissing.includes("run_no") && crm.schemaMissing.includes("drop_no") ? "Driver, run and drop numbers" : crm.schemaMissing.includes("run_no") ? "Run numbers" : "Driver and drop numbers"} aren't being saved yet — the database is missing a column.
+            Run <b>{[crm.schemaMissing.includes("drop_no") && "delivery-runs.sql", crm.schemaMissing.includes("run_no") && "job-type-runs.sql"].filter(Boolean).join(" then ")}</b> in Supabase (SQL Editor → New query → paste → Run), then refresh.
+          </span>
+        </div>
+      )}
+
       <div className="dk-sched-grid" style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 300px", gap: 14, alignItems: "start" }}>
       <div style={{ minWidth: 0 }}>
       {groups.length === 0 && (
@@ -608,14 +618,17 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
                     <div style={{ display: "grid", gridTemplateColumns: dsCols(showPrep), gap: 10, alignItems: "center", padding: "0 12px 0 0", margin: k ? "12px 0 4px" : "2px 0 4px",
                       background: "#eef1f6", borderRadius: 8, minHeight: 28 }}>
                       <span />
-                      <span style={{ gridColumn: "span 8", fontSize: 12, fontWeight: 800, color: NAVY, paddingLeft: 2 }}>
+                      <span style={{ gridColumn: "span 12", fontSize: 12, fontWeight: 800, color: NAVY, paddingLeft: 2, display: "flex", alignItems: "center", gap: 8, whiteSpace: "nowrap" }}>
                         {e.kind === "col" ? "Supplier collections" : (e.obj.runNo ? "Run " + e.obj.runNo : "No run yet") + " · " + (e.obj.driver || "no driver yet")}
-                        <span style={{ fontWeight: 600, color: "#5a6a85", marginLeft: 8 }}>
+                        <span style={{ fontWeight: 600, color: "#5a6a85" }}>
                           {sameRun.length} {e.kind === "col" ? "pick-up" + (sameRun.length === 1 ? "" : "s") : "drop" + (sameRun.length === 1 ? "" : "s")}
                         </span>
-                      </span>
-                      <span style={{ textAlign: "right", fontSize: 12.5, fontWeight: 800, color: NAVY, whiteSpace: "nowrap" }} title="Total weight on this run">
-                        {e.kind === "inv" ? (runKg ? Math.round(runKg).toLocaleString("en-GB") + " kg" : "—") : ""}
+                        {e.kind === "inv" && (
+                          <span title="Total weight on this run" style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "#fff", border: "1px solid #d5d9e0", borderRadius: 999, padding: "1px 9px", fontSize: 11.5 }}>
+                            <span style={{ color: "#5a6a85", fontWeight: 700 }}>Run weight</span>
+                            <b>{runKg ? Math.round(runKg).toLocaleString("en-GB") + " kg" : "—"}</b>
+                          </span>
+                        )}
                       </span>
                     </div>
                   ) : null;

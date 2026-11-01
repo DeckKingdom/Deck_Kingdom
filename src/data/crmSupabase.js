@@ -430,6 +430,11 @@ async function loadAll() {
       qty: nv(r.qty) === "" ? "" : Number(r.qty), price: nv(r.price) === "" ? "" : Number(r.price),
     });
   });
+  // which optional invoice columns exist — decided before reading rows so the mapping below can use them
+  riskReady = is_.length ? Object.prototype.hasOwnProperty.call(is_[0], "risk_flag") : riskReady;
+  webStatusReady = is_.length ? Object.prototype.hasOwnProperty.call(is_[0], "web_status") : webStatusReady;
+  runReady = is_.length ? Object.prototype.hasOwnProperty.call(is_[0], "drop_no") : runReady;
+  runNoReady = is_.length ? Object.prototype.hasOwnProperty.call(is_[0], "run_no") : runNoReady;
   const invoices = is_.map((r) => {
     const inv = {
       id: r.id,
@@ -464,10 +469,6 @@ async function loadAll() {
     (compsByKit[r.kit_id] = compsByKit[r.kit_id] || []).push({ id: r.id, componentId: r.component_id, qty: Number(r.qty) });
   });
   gradeReady = mps_.length ? Object.prototype.hasOwnProperty.call(mps_[0], "grade") : gradeReady;
-  riskReady = is_.length ? Object.prototype.hasOwnProperty.call(is_[0], "risk_flag") : riskReady;
-  webStatusReady = is_.length ? Object.prototype.hasOwnProperty.call(is_[0], "web_status") : webStatusReady;
-  runReady = is_.length ? Object.prototype.hasOwnProperty.call(is_[0], "drop_no") : runReady;
-  runNoReady = is_.length ? Object.prototype.hasOwnProperty.call(is_[0], "run_no") : runNoReady;
   const masterProducts = mps_.map((r) => {
     const p = {
       id: r.id, isKit: r.is_kit === true, active: r.active !== false,
@@ -577,6 +578,8 @@ async function loadAll() {
   if (skuListsRow && skuListsRow.value) data.skuLists = skuListsRow.value;
   if (sampleEmailsRow && sampleEmailsRow.value) data.sampleEmails = sampleEmailsRow.value;
   if (dsNotifyRow && dsNotifyRow.value) data.dsNotify = dsNotifyRow.value;
+  // columns the screens need that the database doesn't have yet (an SQL file still to run)
+  data.schemaMissing = [...(is_.length && !runNoReady ? ["run_no"] : []), ...(is_.length && !runReady ? ["drop_no"] : [])];
   const fmRow = settingRow("fmBridgeLast"); // FileMaker feed status (written by fm_sync, read-only here)
   if (fmRow && fmRow.value) data.fmBridge = fmRow.value;
   const wooRow = settingRow("wooBridgeLast"); // website feed status (written by woo_sync)
