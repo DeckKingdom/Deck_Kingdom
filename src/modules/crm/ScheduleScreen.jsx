@@ -29,9 +29,9 @@ const COLLECTION_BLUE = "#185FA5";
 // the board's columns: stripe · customer · driver · run · drop · van · weight · date+time · prep · follow-up · days
 const short16 = (t) => (String(t).length > 16 ? String(t).slice(0, 15).trimEnd() + "…" : String(t));
 // stripe · done · customer · postcode · source · job type · driver · run · drop · van · weight · date+time · [prep · follow-up] · update · days
-const dsCols = (prep) => "4px 46px 160px 82px 110px 128px 88px 70px 52px 90px 58px minmax(150px, 1fr) " + (prep ? "162px 162px " : "") + "98px 42px";
+const dsCols = (prep) => "4px 50px 150px 70px 100px 116px 80px 72px 46px 80px 50px minmax(134px, 1fr) " + (prep ? "162px 162px " : "") + "98px 42px";
 const DROP_NOS = Array.from({ length: 20 }, (_, n) => String(n + 1));
-const rowBox = { display: "grid", gap: 10, alignItems: "center", background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, padding: "8px 12px 8px 0", marginBottom: 6, overflow: "hidden" };
+const rowBox = { display: "grid", gap: 7, alignItems: "center", background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, padding: "8px 12px 8px 0", marginBottom: 6, overflow: "hidden" };
 const pill = { fontFamily: "inherit", fontSize: 12, fontWeight: 700, color: NAVY, border: "1px solid #c9d0db", borderRadius: 999, background: "#fff", padding: "3px 16px 3px 8px", height: 28, boxSizing: "border-box", cursor: "pointer", maxWidth: "100%" };
 // WhatsApp / email the customer a delivery update
 const UK_PHONE = (v) => { let d = String(v || "").replace(/\D/g, ""); if (d.startsWith("00")) d = d.slice(2); if (d.startsWith("0")) d = "44" + d.slice(1); return d.length >= 10 ? d : ""; };
@@ -121,7 +121,7 @@ const DayPill = ({ value, onChange }) => {
     <span style={{ position: "relative", flex: "none" }}>
       <button type="button" title={ok ? d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" }) + " — click to change" : "Set a date"}
         onClick={() => { const el = ref.current; if (!el) return; try { el.showPicker(); } catch { el.focus(); el.click(); } }}
-        style={{ ...pill, width: 58, padding: "3px 8px", textAlign: "center", color: ok ? NAVY : "#5a6a85", background: ok ? "#fff" : "#f3f5f9" }}>
+        style={{ ...pill, width: 50, padding: "3px 6px", textAlign: "center", color: ok ? NAVY : "#5a6a85", background: ok ? "#fff" : "#f3f5f9" }}>
         {ok ? ordinal(d.getDate()) : "Date"}
       </button>
       <input ref={ref} type="date" value={value || ""} onChange={(e) => onChange(e.target.value)} tabIndex={-1}
@@ -440,7 +440,7 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
         <PillSelect value={i.dropNo || ""} options={DROP_NOS} placeholder="#" onChange={(v) => setInv(i.id, (t) => (t.dropNo = v))} />
         <PillSelect value={i.van || ""} options={vanOptions(crm)} placeholder="Van" onChange={(v) => setInv(i.id, (t) => (t.van = v))} />
         <div style={{ textAlign: "right", fontSize: 12.5, fontWeight: 700 }}>{kg === null ? "—" : kg.toLocaleString("en-GB", { maximumFractionDigits: 0 }) + " kg"}</div>
-        <div style={{ display: "flex", gap: 4, width: 150 }}>
+        <div style={{ display: "flex", gap: 4, width: 134 }}>
           <DayPill value={i.deliveryDate} onChange={(v) => guard(i.id, () => setInv(i.id, (t) => (t.deliveryDate = v)))} />
           <PillSelect value={i.deliveryTime || ""} options={TIME_SLOTS} placeholder="Time" onChange={(v) => guard(i.id, () => setInv(i.id, (t) => (t.deliveryTime = v)))} />
         </div>
@@ -509,7 +509,7 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
         <span />
         <PillSelect value={c.van || ""} options={vanOptions(crm)} placeholder="Van" onChange={(v) => setColl(c.id, (t) => (t.van = v))} />
         <div style={{ textAlign: "right", fontSize: 12.5, fontWeight: 700 }}>{items ? items + " pcs" : "—"}</div>
-        <div style={{ display: "flex", gap: 4, width: 150 }}>
+        <div style={{ display: "flex", gap: 4, width: 134 }}>
           <DayPill value={c.collectDate} onChange={(v) => setColl(c.id, (t) => (t.collectDate = v))} />
           <PillSelect value={c.collectTime || ""} options={TIME_SLOTS} placeholder="Time" onChange={(v) => setColl(c.id, (t) => (t.collectTime = v))} />
         </div>
@@ -686,28 +686,22 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
             </div>
           ) : (
             <div style={{ overflowX: "auto" }}>
-              <div style={{ minWidth: showPrep ? 1660 : 1325 }}>
+              <div style={{ minWidth: showPrep ? 1535 : 1195 }}>
                 {g.rows.map((e, k) => {
                   const key = runKey(e), prevKey = k ? runKey(g.rows[k - 1]) : null;
                   const sameRun = g.rows.filter((x) => runKey(x) === key);
                   const runKg = e.kind === "inv" ? sameRun.reduce((t, x) => t + (invoiceLoadKg(x.obj, crm) || 0), 0) : 0;
                   const head = key !== prevKey ? (
-                    <div style={{ display: "flex", justifyContent: "flex-end", gap: 6, alignItems: "center", padding: "0 4px 0 0", margin: k ? "12px 0 6px" : "4px 0 6px",
-                      minHeight: 26 }}>
-                      <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <span title={e.kind === "inv" ? "Total weight on this run" : ""} style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "#fff", border: "1px solid #d5d9e0", borderRadius: 999, padding: "2px 12px", fontSize: 12, color: NAVY, whiteSpace: "nowrap" }}>
-                          <b>{e.kind === "col" ? "Supplier collections" : (e.obj.runNo ? "Run " + e.obj.runNo : "No run yet") + " · " + (e.obj.driver || "no driver yet")}</b>
-                          <span style={{ fontWeight: 600, color: "#5a6a85" }}>
-                            {sameRun.length} {e.kind === "col" ? "pick-up" + (sameRun.length === 1 ? "" : "s") : "drop" + (sameRun.length === 1 ? "" : "s")}
-                          </span>
-                          {e.kind === "inv" && <><span style={{ width: 1, height: 12, background: "#d5d9e0" }} /><span style={{ fontWeight: 700, color: "#5a6a85" }}>Run weight</span><b>{runKg ? Math.round(runKg).toLocaleString("en-GB") + " kg" : "—"}</b></>}
-                        </span>
-                        {e.kind === "inv" && (
-                          <span style={{ marginLeft: 6 }}>
-                            <PrintMenu title="Print or save this run's paperwork" onPick={(kk) => printJobs(sameRun.map((x) => x.obj), kk, dayLabel(g.date) + " · " + (e.obj.runNo ? "Run " + e.obj.runNo : "No run") + (e.obj.driver ? " · " + e.obj.driver : ""))} />
-                          </span>
-                        )}
+                    <div title={e.kind === "inv" ? "Total weight on this run" : ""}
+                      style={{ display: "flex", alignItems: "center", gap: 8, margin: k ? "12px 0 6px" : "4px 0 6px", background: "#fff", border: "1px solid #d5d9e0", borderRadius: 999,
+                        padding: "3px 6px 3px 14px", minHeight: 30, boxSizing: "border-box", fontSize: 12, color: NAVY, whiteSpace: "nowrap" }}>
+                      <b>{e.kind === "col" ? "Supplier collections" : (e.obj.runNo ? "Run " + e.obj.runNo : "No run yet") + " · " + (e.obj.driver || "no driver yet")}</b>
+                      <span style={{ fontWeight: 600, color: "#5a6a85" }}>
+                        {sameRun.length} {e.kind === "col" ? "pick-up" + (sameRun.length === 1 ? "" : "s") : "drop" + (sameRun.length === 1 ? "" : "s")}
                       </span>
+                      <span style={{ flex: 1 }} />
+                      {e.kind === "inv" && <><span style={{ fontWeight: 700, color: "#5a6a85" }}>Run weight</span><b style={{ marginRight: 4 }}>{runKg ? Math.round(runKg).toLocaleString("en-GB") + " kg" : "—"}</b>
+                        <PrintMenu title="Print or save this run's paperwork" onPick={(kk) => printJobs(sameRun.map((x) => x.obj), kk, dayLabel(g.date) + " · " + (e.obj.runNo ? "Run " + e.obj.runNo : "No run") + (e.obj.driver ? " · " + e.obj.driver : ""))} /></>}
                     </div>
                   ) : null;
                   return (
