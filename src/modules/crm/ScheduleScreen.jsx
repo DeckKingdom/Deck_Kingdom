@@ -25,7 +25,7 @@ const dayLabel = (d) => {
 
 const COLLECTION_BLUE = "#185FA5";
 // the board's columns: stripe · customer · driver · run · drop · van · weight · date+time · prep · follow-up · days
-const dsCols = (prep) => "4px 46px minmax(190px, 1fr) 88px 84px 60px 104px 58px 196px " + (prep ? "162px 162px " : "") + "66px 42px";
+const dsCols = (prep) => "4px 46px minmax(220px, 1fr) 82px 120px 88px 84px 60px 104px 58px 196px " + (prep ? "162px 162px " : "") + "66px 42px";
 const DROP_NOS = Array.from({ length: 20 }, (_, n) => String(n + 1));
 const rowBox = { display: "grid", gap: 10, alignItems: "center", background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, padding: "8px 12px 8px 0", marginBottom: 6, overflow: "hidden" };
 const pill = { fontFamily: "inherit", fontSize: 12, fontWeight: 700, color: NAVY, border: "1px solid #c9d0db", borderRadius: 999, background: "#fff", padding: "3px 16px 3px 8px", height: 28, boxSizing: "border-box", cursor: "pointer", maxWidth: "100%" };
@@ -242,7 +242,8 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
   // within a day: driver → run → drop → time; collections after
   const numOr = (v, big) => (v === "" || v === undefined || v === null || isNaN(Number(v)) ? big : Number(v));
   // sort key: named drivers A–Z, then jobs with no driver yet, then supplier collections
-  const runKey = (e) => (e.kind === "inv" ? (e.obj.driver ? "0|" + e.obj.driver : "1|") + "|" + String(numOr(e.obj.runNo, 99)).padStart(2, "0") : "2|collections");
+  // run number first (every driver's run 1, then run 2 …), then driver, then drop
+  const runKey = (e) => (e.kind === "inv" ? "0|" + String(numOr(e.obj.runNo, 99)).padStart(2, "0") + "|" + (e.obj.driver ? "0" + e.obj.driver : "1") : "2|collections");
   groups.forEach((g) =>
     g.rows.sort((a, b) =>
       runKey(a).localeCompare(runKey(b)) ||
@@ -295,11 +296,9 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
         <div style={{ minWidth: 0, position: "relative" }} onMouseEnter={(ev) => setHover(ev.currentTarget.getBoundingClientRect())} onMouseLeave={() => setHover(false)}>
           <div style={{ display: "flex", gap: 7, alignItems: "center", minWidth: 0 }}>
             <button className="dk-title-link" onClick={(e) => { setHover(false); setPop({ id: i.id, rect: e.currentTarget.getBoundingClientRect() }); }}
-              style={{ fontWeight: 700, fontSize: 13.5, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "60%" }}>
+              style={{ fontWeight: 700, fontSize: 13.5, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
               {c ? c.name || "Unnamed" : "No customer"}
             </button>
-            <span style={{ fontSize: 12, color: "#5a6a85", fontWeight: 700, whiteSpace: "nowrap" }}>{(s && s.postcode) || (c && c.postcode) || "—"}</span>
-            {c && c.source && <Chip style={{ fontSize: 10.5, padding: "1px 8px", whiteSpace: "nowrap" }}>{c.source}</Chip>}
             <RiskChip inv={i} /><WebStatusChip inv={i} />
           </div>
           {hover && stamp.length > 0 && pop?.id !== i.id && (
@@ -308,6 +307,8 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
             </div>
           )}
         </div>
+        <span style={{ fontSize: 12.5, color: "#5a6a85", fontWeight: 700, whiteSpace: "nowrap" }}>{(s && s.postcode) || (c && c.postcode) || "—"}</span>
+        <span style={{ minWidth: 0, overflow: "hidden" }}>{c && c.source ? <Chip style={{ fontSize: 10.5, padding: "1px 8px", whiteSpace: "nowrap", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis" }}>{c.source}</Chip> : <span style={{ color: "#aab3c2" }}>—</span>}</span>
         <PillSelect value={i.driver || ""} options={DRIVERS} placeholder="Driver" onChange={(v) => setInv(i.id, (t) => (t.driver = v))} />
         <PillSelect value={i.runNo || ""} options={RUN_NOS} placeholder="Run" labelOf={(o) => "Run " + o} onChange={(v) => setInv(i.id, (t) => (t.runNo = v))} />
         <PillSelect value={i.dropNo || ""} options={DROP_NOS} placeholder="#" onChange={(v) => setInv(i.id, (t) => (t.dropNo = v))} />
@@ -355,9 +356,9 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
             style={{ fontWeight: 700, fontSize: 13.5, color: COLLECTION_BLUE, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             Collection — {c.supplier || "supplier"}
           </button>
-          <span style={{ fontSize: 12, color: "#5a6a85", fontWeight: 700, whiteSpace: "nowrap" }}>{c.postcode || "—"}</span>
-          <span style={{ fontSize: 11.5, fontWeight: 700, color: COLLECTION_BLUE }}>COL-{c.collectionNo || "—"}</span>
         </div>
+        <span style={{ fontSize: 12.5, color: "#5a6a85", fontWeight: 700, whiteSpace: "nowrap" }}>{c.postcode || "—"}</span>
+        <span style={{ fontSize: 11.5, fontWeight: 700, color: COLLECTION_BLUE }}>COL-{c.collectionNo || "—"}</span>
         <span />
         <span style={{ fontSize: 12, fontWeight: 700, color: COLLECTION_BLUE }}>Pick up</span>
         <span />
@@ -378,7 +379,7 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
   // column titles under each day
   const ColHeads = () => (
     <div style={{ display: "grid", gridTemplateColumns: dsCols(showPrep), gap: 10, alignItems: "center", padding: "0 12px 4px 0" }}>
-      {["", "Done", "Customer · postcode · source", "Driver", "Run", "Drop", "Van", "Weight", "Date · time", ...(showPrep ? ["Prep", "Follow-up"] : []), "Update", "Days"].map((h, k, all) => (
+      {["", "Done", "Customer", "Postcode", "Source", "Driver", "Run", "Drop", "Van", "Weight", "Date · time", ...(showPrep ? ["Prep", "Follow-up"] : []), "Update", "Days"].map((h, k, all) => (
         <span key={k} style={{ fontSize: 10.5, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", whiteSpace: "nowrap", textAlign: h === "Weight" || h === "Days" ? "right" : "left" }}>{h}</span>
       ))}
     </div>
@@ -514,17 +515,24 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
             </div>
           ) : (
             <div style={{ overflowX: "auto" }}>
-              <div style={{ minWidth: showPrep ? 1380 : 1060 }}>
+              <div style={{ minWidth: showPrep ? 1560 : 1240 }}>
                 <ColHeads />
                 {g.rows.map((e, k) => {
                   const key = runKey(e), prevKey = k ? runKey(g.rows[k - 1]) : null;
                   const sameRun = g.rows.filter((x) => runKey(x) === key);
+                  const runKg = e.kind === "inv" ? sameRun.reduce((t, x) => t + (invoiceLoadKg(x.obj, crm) || 0), 0) : 0;
                   const head = key !== prevKey && g.rows.some((x) => runKey(x) !== key) ? (
-                    <div style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 11.5, fontWeight: 800, color: NAVY, margin: k ? "10px 0 4px" : "2px 0 4px", paddingLeft: 4 }}>
-                      {e.kind === "col" ? "Supplier collections" : (e.obj.driver || "No driver yet") + " · " + (e.obj.runNo ? "Run " + e.obj.runNo : "no run")}
-                      <span style={{ fontWeight: 600, color: "#8593a8" }}>
-                        {sameRun.length} {e.kind === "col" ? "pick-up" + (sameRun.length === 1 ? "" : "s") : "drop" + (sameRun.length === 1 ? "" : "s")}
-                        {e.kind === "inv" ? (() => { const kg = sameRun.reduce((t, x) => t + (invoiceLoadKg(x.obj, crm) || 0), 0); return kg ? " · " + Math.round(kg).toLocaleString("en-GB") + " kg" : ""; })() : ""}
+                    <div style={{ display: "grid", gridTemplateColumns: dsCols(showPrep), gap: 10, alignItems: "center", padding: "0 12px 0 0", margin: k ? "12px 0 4px" : "2px 0 4px",
+                      background: "#eef1f6", borderRadius: 8, minHeight: 28 }}>
+                      <span />
+                      <span style={{ gridColumn: "span 8", fontSize: 12, fontWeight: 800, color: NAVY, paddingLeft: 2 }}>
+                        {e.kind === "col" ? "Supplier collections" : (e.obj.runNo ? "Run " + e.obj.runNo : "No run yet") + " · " + (e.obj.driver || "no driver yet")}
+                        <span style={{ fontWeight: 600, color: "#5a6a85", marginLeft: 8 }}>
+                          {sameRun.length} {e.kind === "col" ? "pick-up" + (sameRun.length === 1 ? "" : "s") : "drop" + (sameRun.length === 1 ? "" : "s")}
+                        </span>
+                      </span>
+                      <span style={{ textAlign: "right", fontSize: 12.5, fontWeight: 800, color: NAVY, whiteSpace: "nowrap" }} title="Total weight on this run">
+                        {e.kind === "inv" ? (runKg ? Math.round(runKg).toLocaleString("en-GB") + " kg" : "—") : ""}
                       </span>
                     </div>
                   ) : null;
