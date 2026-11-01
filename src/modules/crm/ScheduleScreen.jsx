@@ -485,10 +485,15 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
         <span style={{ fontSize: 12.5, color: "#5a6a85", fontWeight: 700, whiteSpace: "nowrap" }}>{(s && s.postcode) || (c && c.postcode) || "—"}</span>
         <span style={{ minWidth: 0, overflow: "hidden" }}>{c && c.source ? <Chip style={{ fontSize: 10.5, padding: "1px 8px", whiteSpace: "nowrap", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis" }}>{c.source}</Chip> : <span style={{ color: "#aab3c2" }}>—</span>}</span>
         <PillSelect value={i.jobType || ""} options={JOB_TYPES} placeholder="Job type" tone={isCollectionJob(i) ? "#9a7408" : NAVY} onChange={(v) => setInv(i.id, (t) => (t.jobType = v))} />
-        <PillSelect value={i.driver || ""} options={DRIVERS} placeholder="Driver" onChange={(v) => pickDriver("inv", i, v)} />
-        <PillSelect value={i.runNo || ""} options={RUN_NOS} placeholder="Run" labelOf={(o) => "Run " + o} onChange={(v) => setInv(i.id, (t) => (t.runNo = v))} />
-        <PillSelect value={i.dropNo || ""} options={DROP_NOS} placeholder="#" onChange={(v) => setInv(i.id, (t) => (t.dropNo = v))} />
-        <PillSelect value={i.van || ""} options={vanOptions(crm)} placeholder="Van" onChange={(v) => setInv(i.id, (t) => (t.van = v))} />
+        {isCollectionJob(i) ? (
+          // customer collects from the warehouse: no driver, run, drop or van
+          <span style={{ gridColumn: "span 4", fontSize: 12, fontWeight: 700, color: "#9a7408", paddingLeft: 8 }}>Collecting from the warehouse</span>
+        ) : <>
+          <PillSelect value={i.driver || ""} options={DRIVERS} placeholder="Driver" onChange={(v) => pickDriver("inv", i, v)} />
+          <PillSelect value={i.runNo || ""} options={RUN_NOS} placeholder="Run" labelOf={(o) => "Run " + o} onChange={(v) => setInv(i.id, (t) => (t.runNo = v))} />
+          <PillSelect value={i.dropNo || ""} options={DROP_NOS} placeholder="#" onChange={(v) => setInv(i.id, (t) => (t.dropNo = v))} />
+          <PillSelect value={i.van || ""} options={vanOptions(crm)} placeholder="Van" onChange={(v) => setInv(i.id, (t) => (t.van = v))} />
+        </>}
         <div style={{ textAlign: "center", fontSize: 12.5, fontWeight: 700, whiteSpace: "nowrap" }}>{kg === null ? "—" : kg.toLocaleString("en-GB", { maximumFractionDigits: 0 }) + " kg"}</div>
         <div style={{ display: "flex", gap: 4, width: 134 }}>
           <DayPill value={i.deliveryDate} onChange={(v) => guard(i.id, () => setInv(i.id, (t) => (t.deliveryDate = v)))} />
