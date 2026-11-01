@@ -9,7 +9,7 @@ import {
   isVoidInvoice, applyInvoiceStockDeduction,
 } from "../../lib/crmCore.js";
 import { printJobDocs, DOC_KINDS } from "./printDocs.js";
-import { JOB_TYPES } from "../../lib/crmCore.js";
+import { JOB_TYPES, skuIndex } from "../../lib/crmCore.js";
 import { Icon, Chip, Tg, sect, lbl, card, abtn, inp, btn, goldBtn, RiskChip, WebStatusChip, Soon } from "./ui.jsx";
 
 const RANGE_OPTS = [
@@ -227,6 +227,9 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
   const [overRow, setOverRow] = useState(null);
   const [overPending, setOverPending] = useState(false);
   const [showPrep, setShowPrep] = useState(() => { try { return localStorage.getItem("dk-ds-prep") === "1"; } catch { return false; } });
+  const isColDrag = (id) => String(id || "").startsWith("col:");
+  const moveColl = (id, date) => setColl(id.slice(4), (t) => { t.collectDate = date; if (!date) t.dropNo = ""; });
+  const collKg = (col) => { const by = skuIndex(crm); let kg = 0, any = false; (col.items || []).forEach((it) => { const mp = by[String(it.sku || "").trim().toLowerCase()]; const w = mp && Number(mp.weightKg); if (w) { kg += w * (Number(it.qty) || 0); any = true; } }); return any ? kg : null; };
   const endDrag = () => { setDragId(null); setOverDate(null); setOverRow(null); setOverPending(false); };
   const complete = (id, on) => updateCrm((c) => {
     const t = c.invoices.find((x) => x.id === id);
@@ -234,28 +237,32 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
     return c;
   });
   // dropped onto another job: same day, driver and run, slotted in just before it; drops renumbered
-  const isColDrag = (id) => String(id || "").startsWith("col:");
-  const moveColl = (id, date) => setColl(id.slice(4), (t) => { t.collectDate = date; });
-  const dropBefore = (target) => {
+  // dropped onto another row (job or collection): same day, driver and run, slotted in just before it; stops renumbered
+  const dropBefore = (target, targetKind = "inv") => {
     const id = dragId;
     endDrag();
-    if (!id || id === target.id) return;
-    if (isColDrag(id)) return moveColl(id, target.deliveryDate || "");
-    const was = crm.invoices.find((x) => x.id === id);
+    const tKey = (targetKind === "col" ? "col:" : "") + target.id;
+    if (!id || id === tKey) return;
+    const date = targetKind === "col" ? target.collectDate : target.deliveryDate;
     const go = () => updateCrm((c) => {
-      const d = c.invoices.find((x) => x.id === id);
-      if (!d) return c;
-      d.deliveryDate = target.deliveryDate; d.driver = target.driver || ""; d.runNo = target.runNo || "";
-      if (!d.jobType || d.jobType === "Pending") d.jobType = "Delivery";
-      const same = c.invoices
-        .filter((x) => x.id !== d.id && !isVoidInvoice(x) && x.deliveryDate === target.deliveryDate && (x.driver || "") === (target.driver || "") && (x.runNo || "") === (target.runNo || ""))
-        .sort((a, b) => (Number(a.dropNo) || 999) - (Number(b.dropNo) || 999));
-      const at = same.findIndex((x) => x.id === target.id);
-      same.splice(at < 0 ? same.length : at, 0, d);
-      same.forEach((x, k) => (x.dropNo = String(k + 1)));
+      const moving = isColDrag(id) ? (c.collections || []).find((x) => x.id === id.slice(4)) : c.invoices.find((x) => x.id === id);
+      if (!moving) return c;
+      if (isColDrag(id)) moving.collectDate = date || "";
+      else { moving.deliveryDate = date || ""; if (!moving.jobType || moving.jobType === "Pending") moving.jobType = "Delivery"; }
+      moving.driver = target.driver || ""; moving.runNo = target.runNo || "";
+      const sameRun = (x) => (x.driver || "") === (target.driver || "") && (x.runNo || "") === (target.runNo || "");
+      const stops = [
+        ...c.invoices.filter((x) => !isVoidInvoice(x) && x.deliveryDate === date && sameRun(x)).map((x) => ({ k: x.id, o: x })),
+        ...(c.collections || []).filter((x) => x.collectDate === date && sameRun(x) && (x.runNo || x.driver)).map((x) => ({ k: "col:" + x.id, o: x })),
+      ].filter((x) => x.k !== id).sort((p, q) => (Number(p.o.dropNo) || 999) - (Number(q.o.dropNo) || 999));
+      const at = stops.findIndex((x) => x.k === tKey);
+      stops.splice(at < 0 ? stops.length : at, 0, { k: id, o: moving });
+      stops.forEach((x, n) => (x.o.dropNo = String(n + 1)));
       return c;
     });
-    if (was && was.deliveryDate === target.deliveryDate) go(); else guard(id, go);
+    if (isColDrag(id)) return go();
+    const was = crm.invoices.find((x) => x.id === id);
+    if (was && was.deliveryDate === date) go(); else guard(id, go);
   };
   // dropped on the Pending card: no date again
   const unschedule = () => {
@@ -368,11 +375,12 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
   const numOr = (v, big) => (v === "" || v === undefined || v === null || isNaN(Number(v)) ? big : Number(v));
   // sort key: named drivers A–Z, then jobs with no driver yet, then supplier collections
   // run number first (every driver's run 1, then run 2 …), then driver, then drop
-  const runKey = (e) => (e.kind === "inv" ? "0|" + String(numOr(e.obj.runNo, 99)).padStart(2, "0") + "|" + (e.obj.driver ? "0" + e.obj.driver : "1") : "2|collections");
+  // a supplier collection with a run or driver sits inside that run; without one it waits under "Supplier collections"
+  const runKey = (e) => (e.kind === "col" && !e.obj.runNo && !e.obj.driver ? "2|collections" : "0|" + String(numOr(e.obj.runNo, 99)).padStart(2, "0") + "|" + (e.obj.driver ? "0" + e.obj.driver : "1"));
   groups.forEach((g) =>
     g.rows.sort((a, b) =>
       runKey(a).localeCompare(runKey(b)) ||
-      (a.kind === "inv" && b.kind === "inv" ? numOr(a.obj.dropNo, 999) - numOr(b.obj.dropNo, 999) : 0) ||
+      numOr(a.obj.dropNo, 999) - numOr(b.obj.dropNo, 999) ||
       (a.time || "").localeCompare(b.time || "")));
 
   const setInv = (invId, fn) =>
@@ -406,7 +414,7 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
           boxShadow: overRow === i.id ? "0 -3px 0 " + GOLD : "none", opacity: dragId === i.id ? 0.45 : 1 }}
         onDragOver={(ev) => { if (dragId && dragId !== i.id) { ev.preventDefault(); ev.stopPropagation(); if (overRow !== i.id) setOverRow(i.id); } }}
         onDragLeave={(ev) => { if (!ev.currentTarget.contains(ev.relatedTarget)) setOverRow((r) => (r === i.id ? null : r)); }}
-        onDrop={(ev) => { ev.preventDefault(); ev.stopPropagation(); dropBefore(i); }}>
+        onDrop={(ev) => { ev.preventDefault(); ev.stopPropagation(); dropBefore(i, "inv"); }}>
         <div style={{ width: 4, alignSelf: "stretch", borderRadius: "12px 0 0 12px", margin: "-8px 0", background: done ? "#3FA55C" : STRIPE_COLOURS[status] }} />
         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
           <span draggable title="Drag to move — onto another job, another day, or back to Pending"
@@ -479,15 +487,23 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
   };
 
   const CollRow = ({ c }) => {
+    const [hover, setHover] = useState(false);
     const pr = collectionProgress(c);
     const done = pr.total > 0 && pr.pending === 0;
     const items = (c.items || []).reduce((t, it) => t + (Number(it.qty) || 0), 0);
+    const kg = collKg(c);
+    const me_ = "col:" + c.id;
+    const stamp = [c.date ? "Raised " + prettyDate(c.date) + (c.raisedBy ? " by " + String(c.raisedBy).split("@")[0] : "") : "", items ? items + " item" + (items === 1 ? "" : "s") + " to collect" : ""].filter(Boolean);
     return (
-      <div style={{ ...rowBox, gridTemplateColumns: dsCols(showPrep), background: c.collected ? "#e9f6ee" : "#fff", borderColor: c.collected ? "#bfe3ca" : "#e6e9ef" }}>
+      <div style={{ ...rowBox, gridTemplateColumns: dsCols(showPrep), background: c.collected ? "#e9f6ee" : "#fff", borderColor: c.collected ? "#bfe3ca" : overRow === me_ ? GOLD : "#e6e9ef",
+          boxShadow: overRow === me_ ? "0 -3px 0 " + GOLD : "none", opacity: dragId === me_ ? 0.45 : 1 }}
+        onDragOver={(ev) => { if (dragId && dragId !== me_) { ev.preventDefault(); ev.stopPropagation(); if (overRow !== me_) setOverRow(me_); } }}
+        onDragLeave={(ev) => { if (!ev.currentTarget.contains(ev.relatedTarget)) setOverRow((r) => (r === me_ ? null : r)); }}
+        onDrop={(ev) => { ev.preventDefault(); ev.stopPropagation(); if (c.runNo || c.driver) dropBefore(c, "col"); else dropOn(c.collectDate); }}>
         <div style={{ width: 4, alignSelf: "stretch", borderRadius: "12px 0 0 12px", margin: "-8px 0", background: c.collected ? "#3FA55C" : COLLECTION_BLUE }} />
         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-          <span draggable title="Drag to move — onto another day, or back to Pending"
-            onDragStart={(ev) => { ev.dataTransfer.setData("text/plain", "col:" + c.id); ev.dataTransfer.effectAllowed = "move"; setDragId("col:" + c.id); }}
+          <span draggable title="Drag to move — onto a job in a run, another day, or back to Pending"
+            onDragStart={(ev) => { ev.dataTransfer.setData("text/plain", me_); ev.dataTransfer.effectAllowed = "move"; setDragId(me_); }}
             onDragEnd={endDrag}
             style={{ cursor: "grab", color: "#aab3c2", fontSize: 14, lineHeight: 1, padding: "4px 1px", userSelect: "none" }}>⋮⋮</span>
           <button type="button" title={c.collected ? "Collected — click to undo" : "Mark as collected"} onClick={() => setColl(c.id, (t) => (t.collected = !t.collected))}
@@ -495,20 +511,25 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
             {c.collected && <span style={{ width: 8, height: 8, borderRadius: 999, background: "#3FA55C", flex: "none" }} />}
           </button>
         </div>
-        <div style={{ display: "flex", gap: 7, alignItems: "center", minWidth: 0 }}>
-          <button className="dk-title-link" onClick={() => openCollection && openCollection(c.id)}
-            style={{ fontWeight: 700, fontSize: 13.5, color: COLLECTION_BLUE, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            Collection — {c.supplier || "supplier"}
+        <div style={{ minWidth: 0, position: "relative" }} onMouseEnter={(ev) => setHover(ev.currentTarget.getBoundingClientRect())} onMouseLeave={() => setHover(false)}>
+          <button className="dk-title-link" onClick={(e) => { setHover(false); setPop({ id: c.id, kind: "col", rect: e.currentTarget.getBoundingClientRect() }); }}
+            title={c.supplier || ""} style={{ fontWeight: 700, fontSize: 13.5, color: COLLECTION_BLUE, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "100%" }}>
+            {short16(c.supplier || "Supplier")}
           </button>
+          {hover && stamp.length > 0 && pop?.id !== c.id && (
+            <div style={{ position: "fixed", left: hover.left, top: hover.bottom + 4, zIndex: 60, background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, padding: "6px 10px", boxShadow: "0 8px 24px rgba(11,31,63,.2)", whiteSpace: "nowrap", fontSize: 11.5, fontWeight: 600, color: NAVY, lineHeight: 1.6, pointerEvents: "none" }}>
+              {stamp.map((l) => <div key={l}>{l}</div>)}
+            </div>
+          )}
         </div>
         <span style={{ fontSize: 12.5, color: "#5a6a85", fontWeight: 700, whiteSpace: "nowrap" }}>{c.postcode || "—"}</span>
         <span style={{ fontSize: 11.5, fontWeight: 700, color: COLLECTION_BLUE }}>COL-{c.collectionNo || "—"}</span>
         <span style={{ fontSize: 12, fontWeight: 700, color: COLLECTION_BLUE, paddingLeft: 8 }}>Supplier pick-up</span>
-        <span />
-        <span />
-        <span />
+        <PillSelect value={c.driver || ""} options={DRIVERS} placeholder="Driver" onChange={(v) => setColl(c.id, (t) => (t.driver = v))} />
+        <PillSelect value={c.runNo || ""} options={RUN_NOS} placeholder="Run" labelOf={(o) => "Run " + o} onChange={(v) => setColl(c.id, (t) => (t.runNo = v))} />
+        <PillSelect value={c.dropNo || ""} options={DROP_NOS} placeholder="#" onChange={(v) => setColl(c.id, (t) => (t.dropNo = v))} />
         <PillSelect value={c.van || ""} options={vanOptions(crm)} placeholder="Van" onChange={(v) => setColl(c.id, (t) => (t.van = v))} />
-        <div style={{ textAlign: "right", fontSize: 12.5, fontWeight: 700 }}>{items ? items + " pcs" : "—"}</div>
+        <div style={{ textAlign: "right", fontSize: 12.5, fontWeight: 700 }} title={items + " pcs"}>{kg !== null ? Math.round(kg).toLocaleString("en-GB") + " kg" : items ? items + " pcs" : "—"}</div>
         <div style={{ display: "flex", gap: 4, width: 134 }}>
           <DayPill value={c.collectDate} onChange={(v) => setColl(c.id, (t) => (t.collectDate = v))} />
           <PillSelect value={c.collectTime || ""} options={TIME_SLOTS} placeholder="Time" onChange={(v) => setColl(c.id, (t) => (t.collectTime = v))} />
@@ -534,14 +555,19 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
     if (e.kind === "col") {
       const c = e.obj;
       return (
-        <button className="dk-title-link" onClick={() => openCollection && openCollection(c.id)} draggable title="Drag onto a day to book the pick-up, or click to open it"
-          onDragStart={(ev) => { ev.dataTransfer.setData("text/plain", "col:" + c.id); ev.dataTransfer.effectAllowed = "move"; setDragId("col:" + c.id); }}
-          onDragEnd={endDrag}
-          style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "2px 8px", width: "100%", padding: "8px 0", borderBottom: "1px solid #f0f2f6", textAlign: "left", cursor: "grab" }}>
-          <b style={{ fontSize: 13, color: COLLECTION_BLUE, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.supplier || "Supplier"} · collection</b>
-          <span />
-          <span style={{ fontSize: 11.5, color: "#5a6a85", fontWeight: 600 }}>{c.postcode || "—"} · COL-{c.collectionNo || "—"}</span>
-        </button>
+        <div style={{ position: "relative" }}
+          onMouseEnter={(ev) => peekOpen({ id: c.id, kind: "col", rect: ev.currentTarget.getBoundingClientRect(), side: "left" })}
+          onMouseLeave={peekClose}>
+          <button className="dk-title-link" draggable title="Drag onto a day or into a run, or click to keep the details open"
+            onClick={(ev) => { peekCancel(); setPop({ id: c.id, kind: "col", rect: ev.currentTarget.parentNode.getBoundingClientRect(), side: "left" }); }}
+            onDragStart={(ev) => { ev.dataTransfer.setData("text/plain", "col:" + c.id); ev.dataTransfer.effectAllowed = "move"; setDragId("col:" + c.id); peekCancel(); setPop(null); }}
+            onDragEnd={endDrag}
+            style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "2px 8px", width: "100%", padding: "8px 0", borderBottom: "1px solid #f0f2f6", textAlign: "left" }}>
+            <b style={{ fontSize: 13, color: COLLECTION_BLUE, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.supplier || "Supplier"} · collection</b>
+            <span />
+            <span style={{ fontSize: 11.5, color: "#5a6a85", fontWeight: 600 }}>{c.postcode || "—"} · COL-{c.collectionNo || "—"}</span>
+          </button>
+        </div>
       );
     }
     const i = e.obj;
@@ -657,8 +683,8 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
         <div style={{ background: "#fff8e6", border: "1px solid #f4d78f", borderRadius: 12, padding: "10px 14px", marginTop: 12, fontSize: 13, fontWeight: 600, color: "#6b5305", display: "flex", gap: 8, alignItems: "center" }}>
           <Icon name="warn" stroke="#a05f10" size={15} />
           <span>
-            {crm.schemaMissing.includes("run_no") && crm.schemaMissing.includes("drop_no") ? "Driver, run and drop numbers" : crm.schemaMissing.includes("run_no") ? "Run numbers" : "Driver and drop numbers"} aren't being saved yet — the database is missing a column.
-            Run <b>{[crm.schemaMissing.includes("drop_no") && "delivery-runs.sql", crm.schemaMissing.includes("run_no") && "job-type-runs.sql"].filter(Boolean).join(" then ")}</b> in Supabase (SQL Editor → New query → paste → Run), then refresh.
+            {crm.schemaMissing.includes("run_no") && crm.schemaMissing.includes("drop_no") ? "Driver, run and drop numbers" : crm.schemaMissing.includes("run_no") ? "Run numbers" : crm.schemaMissing.includes("drop_no") ? "Driver and drop numbers" : "Collections' driver, run and stop numbers"} aren't being saved yet — the database is missing a column.
+            Run <b>{[crm.schemaMissing.includes("drop_no") && "delivery-runs.sql", crm.schemaMissing.includes("run_no") && "job-type-runs.sql", crm.schemaMissing.includes("coll_run") && "collection-runs.sql"].filter(Boolean).join(" then ")}</b> in Supabase (SQL Editor → New query → paste → Run), then refresh.
           </span>
         </div>
       )}
@@ -690,22 +716,24 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
                 {g.rows.map((e, k) => {
                   const key = runKey(e), prevKey = k ? runKey(g.rows[k - 1]) : null;
                   const sameRun = g.rows.filter((x) => runKey(x) === key);
-                  const runKg = e.kind === "inv" ? sameRun.reduce((t, x) => t + (invoiceLoadKg(x.obj, crm) || 0), 0) : 0;
+                  const loose = key === "2|collections"; // collections not in a run yet
+                  const nDrops = sameRun.filter((x) => x.kind === "inv").length, nPicks = sameRun.length - nDrops;
+                  const runKg = sameRun.reduce((t, x) => t + ((x.kind === "inv" ? invoiceLoadKg(x.obj, crm) : collKg(x.obj)) || 0), 0);
                   const head = key !== prevKey ? (
-                    <div title={e.kind === "inv" ? "Total weight on this run" : ""}
-                      style={{ display: "flex", alignItems: "center", gap: 8, margin: k ? "12px 0 6px" : "4px 0 6px", background: "#eef1f6", border: "1px solid #dde2ea", borderRadius: 12,
+                    <div title={!loose ? "Total weight on this run (deliveries going out + pick-ups coming back)" : "Supplier pick-ups not in a run yet — give them a driver and run, or drag one onto a job"}
+                      style={{ display: "flex", gap: 8, margin: k ? "12px 0 6px" : "4px 0 6px", background: "#eef1f6", border: "1px solid #dde2ea", borderRadius: 12,
                         padding: 0, minHeight: 36, boxSizing: "border-box", overflow: "hidden", alignItems: "stretch", fontSize: 12, color: NAVY, whiteSpace: "nowrap" }}>
                       <span style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "#dce2ec", padding: "0 14px" }}>
-                        <b>{e.kind === "col" ? "Supplier collections" : (e.obj.runNo ? "Run " + e.obj.runNo : "No run yet") + " · " + (e.obj.driver || "no driver yet")}</b>
+                        <b>{loose ? "Supplier collections" : (e.obj.runNo ? "Run " + e.obj.runNo : "No run yet") + " · " + (e.obj.driver || "no driver yet")}</b>
                         <span style={{ fontWeight: 600, color: "#5a6a85" }}>
-                          {sameRun.length} {e.kind === "col" ? "pick-up" + (sameRun.length === 1 ? "" : "s") : "drop" + (sameRun.length === 1 ? "" : "s")}
+                          {[nDrops ? nDrops + " drop" + (nDrops === 1 ? "" : "s") : "", nPicks ? nPicks + " pick-up" + (nPicks === 1 ? "" : "s") : ""].filter(Boolean).join(" · ")}
                         </span>
                       </span>
                       <span style={{ flex: 1 }} />
-                      {e.kind === "inv" && (
+                      {!loose && (
                         <span style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "#dce2ec", padding: "0 5px 0 14px" }}>
                           <span style={{ fontWeight: 700, color: "#5a6a85" }}>Run weight</span><b style={{ marginRight: 2 }}>{runKg ? Math.round(runKg).toLocaleString("en-GB") + " kg" : "—"}</b>
-                          <PrintMenu title="Print or save this run's paperwork" onPick={(kk) => printJobs(sameRun.map((x) => x.obj), kk, dayLabel(g.date) + " · " + (e.obj.runNo ? "Run " + e.obj.runNo : "No run") + (e.obj.driver ? " · " + e.obj.driver : ""))} />
+                          <PrintMenu title="Print or save this run's paperwork" onPick={(kk) => printJobs(sameRun.filter((x) => x.kind === "inv").map((x) => x.obj), kk, dayLabel(g.date) + " · " + (e.obj.runNo ? "Run " + e.obj.runNo : "No run") + (e.obj.driver ? " · " + e.obj.driver : ""))} />
                         </span>
                       )}
                     </div>
@@ -836,7 +864,71 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
         );
       })()}
 
-      {pop && (() => {
+      {pop && pop.kind === "col" && (() => {
+        const col = (crm.collections || []).find((x) => x.id === pop.id);
+        if (!col) return null;
+        const PW = 580, PH = Math.min(window.innerHeight - 20, 640);
+        const top = Math.min(pop.rect.bottom + 6, window.innerHeight - PH - 10);
+        const by = skuIndex(crm);
+        const kgAll = collKg(col);
+        const items = (col.items || []).reduce((t, it) => t + (Number(it.qty) || 0), 0);
+        return (
+          <>
+            {!pop.peek && <div onMouseDown={() => setPop(null)} style={{ position: "fixed", inset: 0, zIndex: 70 }} />}
+            <div onMouseEnter={() => pop.peek && clearTimeout(peekT.current.close)} onMouseLeave={() => pop.peek && peekClose()}
+              onMouseDown={() => { if (pop.peek) { peekCancel(); setPop({ ...pop, peek: false }); } }}
+              style={{ position: "fixed", left: pop.side === "left" ? Math.max(10, pop.rect.left - PW - 24) : Math.min(pop.rect.left, window.innerWidth - PW - 20), top: Math.max(10, pop.side === "left" ? Math.min(pop.rect.top - 60, window.innerHeight - PH - 10) : top), zIndex: 71, width: PW, maxHeight: PH, overflowY: "auto",
+              background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, boxShadow: "0 14px 40px rgba(11,31,63,.28)", padding: "14px 18px", boxSizing: "border-box" }}>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 6 }}>
+                <b style={{ fontSize: 15, color: COLLECTION_BLUE }}>{col.supplier || "Supplier"}</b>
+                <span style={{ fontSize: 12, fontWeight: 700, color: "#185FA5" }}>COL-{col.collectionNo || "—"}</span>
+                <span style={{ fontSize: 11.5, fontWeight: 700, color: "#8593a8" }}>supplier pick-up</span>
+                <span style={{ flex: 1 }} />
+                <button style={{ ...abtn, border: "none" }} title="Close" onClick={() => setPop(null)}><Icon name="x" /></button>
+              </div>
+              <div style={{ display: "flex", gap: 8, alignItems: "center", background: col.collectDate ? "#f7f9fc" : "#fff8e6", border: "1px solid " + (col.collectDate ? "#e6e9ef" : "#f4d78f"), borderRadius: 10, padding: "6px 10px", marginBottom: 10 }}>
+                <span style={{ ...lbl, marginBottom: 0 }}>Collection date</span>
+                <input type="date" value={col.collectDate || ""} style={{ ...pill, width: 130, padding: "3px 8px" }} onChange={(e) => { const v = e.target.value; setColl(col.id, (t) => (t.collectDate = v)); }} />
+                <span style={{ ...lbl, marginBottom: 0, marginLeft: 10 }}>Weight</span>
+                <b style={{ fontSize: 13, color: NAVY }}>{kgAll === null ? "—" : Math.round(kgAll).toLocaleString("en-GB") + " kg"}</b>
+                <span style={{ flex: 1 }} />
+                {!col.collectDate && <span style={{ fontSize: 11.5, fontWeight: 700, color: "#a05f10" }}>not booked</span>}
+              </div>
+              <span style={lbl}>Collect from</span>
+              <div style={{ fontSize: 13, fontWeight: 600, color: NAVY, lineHeight: 1.5, marginBottom: 4 }}>
+                {[col.address, col.town, col.postcode].filter(Boolean).map((l, k) => <div key={k}>{l}</div>)}
+                {(col.contact || col.phone) && <div style={{ color: "#5a6a85" }}>{[col.contact, col.phone].filter(Boolean).join(" · ")}</div>}
+                {(col.driver || col.runNo || col.van) && <div style={{ color: "#5a6a85" }}>{[col.runNo ? "Run " + col.runNo : "", col.driver, col.dropNo ? "stop " + col.dropNo : "", col.van].filter(Boolean).join(" · ")}</div>}
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "44px 1fr 70px", gap: "0 10px", marginTop: 12, paddingBottom: 4, borderBottom: "1px solid #e6e9ef" }}>
+                {["Qty", "Item", "Weight"].map((h, k) => <span key={h} style={{ ...lbl, marginBottom: 0, textAlign: k === 1 ? "left" : "right" }}>{h}</span>)}
+              </div>
+              {(col.items || []).length === 0 ? <div style={{ fontSize: 12.5, color: "#8593a8", padding: "6px 0" }}>No items listed</div> : (col.items || []).map((it) => {
+                const mp = by[String(it.sku || "").trim().toLowerCase()];
+                const w = mp && Number(mp.weightKg) ? Number(mp.weightKg) * (Number(it.qty) || 0) : null;
+                return (
+                  <div key={it.id} style={{ display: "grid", gridTemplateColumns: "44px 1fr 70px", gap: "0 10px", fontSize: 12.5, fontWeight: 600, padding: "5px 0", color: NAVY, borderBottom: "1px solid #f3f5f9", alignItems: "baseline" }}>
+                    <b style={{ textAlign: "right" }}>{it.qty}×</b>
+                    <span style={{ minWidth: 0 }}>{it.description || it.sku || "—"}{it.colour ? <span style={{ color: "#5a6a85" }}>{" · " + it.colour}</span> : null}{it.sku && it.description ? <span style={{ color: "#8593a8" }}>{" · " + it.sku}</span> : null}</span>
+                    <span style={{ textAlign: "right", color: "#5a6a85" }}>{w === null ? "—" : Math.round(w).toLocaleString("en-GB") + " kg"}</span>
+                  </div>
+                );
+              })}
+              <div style={{ marginTop: 8, fontSize: 12.5, fontWeight: 700, color: NAVY, display: "grid", gridTemplateColumns: "1fr auto", gap: "3px 10px" }}>
+                <span style={{ color: "#5a6a85" }}>Total weight</span><span>{kgAll === null ? "—" : Math.round(kgAll).toLocaleString("en-GB") + " kg"}</span>
+                <span>Items</span><span>{items} pcs</span>
+                <span style={{ color: col.collected ? "#28713e" : "#a05f10" }}>{col.collected ? "Collected" : "Not collected yet"}</span><span />
+              </div>
+              {col.notes && <div style={{ marginTop: 8, fontSize: 12.5, fontWeight: 600, color: "#6b5305", background: "#fff8e6", border: "1px solid #f4d78f", borderRadius: 8, padding: "6px 10px" }}>{col.notes}</div>}
+              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10 }}>
+                <button style={goldBtn} onClick={() => { setPop(null); openCollection && openCollection(col.id); }}><Icon name="box" stroke={NAVY} />Open collection</button>
+              </div>
+            </div>
+          </>
+        );
+      })()}
+
+      {pop && pop.kind !== "col" && (() => {
         const i = crm.invoices.find((x) => x.id === pop.id);
         if (!i) return null;
         const c = custById[i.customerId];

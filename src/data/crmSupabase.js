@@ -163,6 +163,7 @@ let riskReady = false;  // invoices.risk_flag / risk_note / risk_checked (migrat
 let webStatusReady = false; // invoices.web_status (migration 032)
 let runReady = false; // invoices.driver / drop_no (migration 033)
 let runNoReady = false; // invoices.run_no (migration 034)
+let collRunReady = false; // collections.driver / run_no / drop_no (migration 035)
 const mpToRow = (p, i) => {
   const row = { id: p.id, is_kit: p.isKit === true, active: p.active !== false, position: i };
   if (gradeReady) row.grade = str(p.grade);
@@ -206,6 +207,7 @@ const collToRow = (c, i) => {
   const row = { id: c.id, collection_no: intOrNull(c.collectionNo), collected: c.collected === true, position: i };
   COLL_TEXT.forEach((k) => (row[snake(k)] = str(c[k])));
   if (purchasesReady) row.supplier_id = str(c.supplierId);
+  if (collRunReady) { row.driver = str(c.driver); row.run_no = str(c.runNo); row.drop_no = str(c.dropNo); }
   return row;
 };
 
@@ -490,10 +492,12 @@ async function loadAll() {
       assignedInvoiceId: nv(r.assigned_invoice_id), postedAt: nv(r.posted_at),
     });
   });
+  collRunReady = colls_.length ? Object.prototype.hasOwnProperty.call(colls_[0], "run_no") : collRunReady;
   const collections = colls_.map((r) => {
     const c = { id: r.id, collectionNo: r.collection_no, collected: r.collected === true, items: itemsByColl[r.id] || [] };
     COLL_TEXT.forEach((k) => (c[k] = nv(r[snake(k)])));
     c.supplierId = nv(r.supplier_id);
+    c.driver = nv(r.driver); c.runNo = nv(r.run_no); c.dropNo = nv(r.drop_no);
     return c;
   });
   const movements = moves_.map((r) => ({
@@ -579,7 +583,7 @@ async function loadAll() {
   if (sampleEmailsRow && sampleEmailsRow.value) data.sampleEmails = sampleEmailsRow.value;
   if (dsNotifyRow && dsNotifyRow.value) data.dsNotify = dsNotifyRow.value;
   // columns the screens need that the database doesn't have yet (an SQL file still to run)
-  data.schemaMissing = [...(is_.length && !runNoReady ? ["run_no"] : []), ...(is_.length && !runReady ? ["drop_no"] : [])];
+  data.schemaMissing = [...(is_.length && !runNoReady ? ["run_no"] : []), ...(is_.length && !runReady ? ["drop_no"] : []), ...(colls_.length && !collRunReady ? ["coll_run"] : [])];
   const fmRow = settingRow("fmBridgeLast"); // FileMaker feed status (written by fm_sync, read-only here)
   if (fmRow && fmRow.value) data.fmBridge = fmRow.value;
   const wooRow = settingRow("wooBridgeLast"); // website feed status (written by woo_sync)
