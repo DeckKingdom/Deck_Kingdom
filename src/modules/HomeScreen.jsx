@@ -115,11 +115,6 @@ export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTa
             {crm && totalToday ? " · " + (totalToday - doneToday) + " of " + totalToday + " to do today" : ""}
           </div>
         </div>
-        <span style={{ flex: 1 }} />
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button onClick={newInvoice} style={{ ...goldBtn }}><Icon name="plus" stroke={NAVY} />New invoice</button>
-          <button onClick={addShipment} style={{ ...btn, background: "transparent", border: "1px solid #3a4f78", color: "#fff" }}><Icon name="plus" stroke="#fff" />New shipment</button>
-        </div>
       </div>
 
       {crm && !ready && <TasksSchemaNotice />}
