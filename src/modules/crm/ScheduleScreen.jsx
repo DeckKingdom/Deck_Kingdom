@@ -23,6 +23,15 @@ const dayLabel = (d) => {
 };
 
 const COLLECTION_BLUE = "#185FA5";
+// days since the order came in: grey under 3, amber from 3, red from 5 (finished jobs stay grey)
+const SLA_STYLES = { ok: { background: "#eef1f6", color: "#5a6a85" }, warn: { background: "#E8912D", color: "#fff" }, late: { background: RED, color: "#fff" } };
+const slaLevel = (days, done) => (done || days === null ? "ok" : days >= 5 ? "late" : days >= 3 ? "warn" : "ok");
+const SlaChip = ({ days, done }) => (
+  <span title={days === null ? "" : days + " day" + (days === 1 ? "" : "s") + " since the order came in" + (done ? "" : " — amber from 3 days, red from 5")}
+    style={{ display: "inline-block", fontSize: 11.5, fontWeight: 800, padding: "1px 8px", borderRadius: 999, whiteSpace: "nowrap", ...SLA_STYLES[slaLevel(days, done)] }}>
+    {days === null ? "—" : days + "d"}
+  </span>
+);
 
 export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollection }) {
   const [search, setSearch] = useState("");
@@ -156,7 +165,7 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
           <div style={{ fontSize: 11, color: "#8593a8", fontWeight: 600, marginTop: 1 }}>{i.paymentDate ? prettyDate(i.paymentDate) : "—"}</div>
         </div>
         <div style={{ flex: "none" }}>
-          <Chip tone={days !== null && days > 10 && !i.deliveryCompleted ? "red" : "grey"}>{days === null ? "—" : days + "d"}</Chip>
+          <SlaChip days={days} done={i.deliveryCompleted} />
         </div>
         <div style={{ flex: "none", display: "flex", gap: 4, marginRight: 10 }}>
           <button style={abtn} title="Open invoice" onClick={() => openInvoice(i.id)}><Icon name="pen" /></button>
@@ -231,7 +240,7 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
     const c = custById[i.customerId];
     const st = siteById[i.siteId];
     const days = daysSinceRaised(i);
-    const late = days !== null && days > 10;
+
     const kg = invoiceLoadKg(i, crm);
     const extra = [
       "Invoice #" + (i.invNo || "—") + " · " + gbp(invoiceTotals(i).total) + (isPaid(i) ? " · paid" : i.paymentType === "COD" ? " · COD" : " · awaiting payment"),
@@ -251,7 +260,7 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
             <b style={{ fontSize: 13, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c ? c.name || "Unnamed" : "No customer"}</b>
             <RiskChip inv={i} /><WebStatusChip inv={i} />
           </span>
-          <span title="Days since the order came in" style={{ fontSize: 11.5, fontWeight: 800, padding: "1px 8px", borderRadius: 999, background: late ? RED : "#eef1f6", color: late ? "#fff" : "#5a6a85" }}>{days === null ? "—" : days + "d"}</span>
+          <SlaChip days={days} />
           <span style={{ fontSize: 11.5, color: "#5a6a85", fontWeight: 600 }}>
             {(st && st.postcode) || (c && c.postcode) || "—"} · <span style={{ color: isCollectionJob(i) ? "#9a7408" : "#5a6a85" }}>{i.jobType || "—"}</span>
           </span>
