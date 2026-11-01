@@ -694,8 +694,8 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
                   const head = key !== prevKey ? (
                     <div title={e.kind === "inv" ? "Total weight on this run" : ""}
                       style={{ display: "flex", alignItems: "center", gap: 8, margin: k ? "12px 0 6px" : "4px 0 6px", background: "#eef1f6", border: "1px solid #dde2ea", borderRadius: 12,
-                        padding: 4, minHeight: 36, boxSizing: "border-box", fontSize: 12, color: NAVY, whiteSpace: "nowrap" }}>
-                      <span style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "#dce2ec", borderRadius: 8, padding: "5px 12px" }}>
+                        padding: 0, minHeight: 36, boxSizing: "border-box", overflow: "hidden", alignItems: "stretch", fontSize: 12, color: NAVY, whiteSpace: "nowrap" }}>
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "#dce2ec", padding: "0 14px" }}>
                         <b>{e.kind === "col" ? "Supplier collections" : (e.obj.runNo ? "Run " + e.obj.runNo : "No run yet") + " · " + (e.obj.driver || "no driver yet")}</b>
                         <span style={{ fontWeight: 600, color: "#5a6a85" }}>
                           {sameRun.length} {e.kind === "col" ? "pick-up" + (sameRun.length === 1 ? "" : "s") : "drop" + (sameRun.length === 1 ? "" : "s")}
@@ -703,7 +703,7 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
                       </span>
                       <span style={{ flex: 1 }} />
                       {e.kind === "inv" && (
-                        <span style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "#dce2ec", borderRadius: 8, padding: "2px 3px 2px 12px" }}>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "#dce2ec", padding: "0 5px 0 14px" }}>
                           <span style={{ fontWeight: 700, color: "#5a6a85" }}>Run weight</span><b style={{ marginRight: 2 }}>{runKg ? Math.round(runKg).toLocaleString("en-GB") + " kg" : "—"}</b>
                           <PrintMenu title="Print or save this run's paperwork" onPick={(kk) => printJobs(sameRun.map((x) => x.obj), kk, dayLabel(g.date) + " · " + (e.obj.runNo ? "Run " + e.obj.runNo : "No run") + (e.obj.driver ? " · " + e.obj.driver : ""))} />
                         </span>
