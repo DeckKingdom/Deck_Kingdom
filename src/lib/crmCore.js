@@ -13,6 +13,7 @@ export const TRADE_COUNTER_LABEL = "Trade counter collection";
 
 export const CONTACT_METHODS = ["Text", "WhatsApp", "WhatsApp Business", "Messenger", "Email", "Phone"];
 export const VANS = ["Vauxhall", "Renault", "Sprinter"];
+export const DRIVERS = ["Brian", "Ian", "Martin", "Mark", "Jon"];
 
 // delivery time slots, FileMaker order: AM / PM / TBC then quarter hours
 export const TIME_SLOTS = (() => {

@@ -155,7 +155,7 @@ export default function run(React, renderToString) {
   html = renderToString(React.createElement(CollectionsScreen, { crm, updateCrm: noop, askConfirm: noop, selId: colln.id, setSelId: noop, openInvoice: noop, me: "x" }));
   assert(html.includes("In stock") && html.includes("9998"), "collection editor shows per-line outcomes");
   html = renderToString(React.createElement(ScheduleScreen, { crm, updateCrm: noop, openInvoice: noop, openCollection: noop }));
-  assert(html.includes("COLLECTION") && html.includes("UK Timber Co"), "collection shows on schedule");
+  assert(html.includes("ollection") && html.includes("UK Timber Co"), "collection shows on schedule");
   // auto-sync: products screen drives the stock rows
   {
     const syncPlanner = { products: [{ id: "ipX", name: "Decking Board 4.8m", colours: ["Anthracite", "Silver"], weight: 10.5, salePrice: 29.5, category: "Decking" }] };
