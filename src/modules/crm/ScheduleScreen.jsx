@@ -40,21 +40,37 @@ const deliveryText = (i, c) => {
     (isCollectionJob(i) ? "Your order is ready to collect" + (when ? " from " + when : "") + " at Whitelands Road, Ashton-under-Lyne, OL6 6UG — please call before you come." : when ? "Your delivery is booked for " + when + slot + "." : "We're arranging your delivery date and will be in touch shortly.") +
     " Any questions, just reply or call 0161 399 1837.";
 };
-const NotifyButtons = ({ i, c }) => {
-  const phone = c && (UK_PHONE(c.mobile) || (/^447/.test(UK_PHONE(c.landline)) ? UK_PHONE(c.landline) : ""));
-  const email = c && String(c.email || "").includes("@") ? c.email.trim() : "";
+const NotifyButtons = ({ i, c, onSent = () => {} }) => {
+  const phone = phoneOf(c);
+  const email = emailOf(c);
   const text = deliveryText(i, c);
   const b = (bg) => ({ width: 26, height: 26, borderRadius: 8, border: "none", background: bg, display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0, textDecoration: "none" });
   return (
     <div style={{ display: "flex", gap: 5 }}>
-      {phone ? <a href={"whatsapp://send?phone=" + phone + "&text=" + encodeURIComponent(text)} title={"WhatsApp the delivery update to " + c.mobile} style={b("#25D36622")}><Icon name="wa" stroke="#128C7E" size={14} /></a>
+      {phone ? <a href={"whatsapp://send?phone=" + phone + "&text=" + encodeURIComponent(text)} onClick={() => onSent("wa")} title={"WhatsApp the delivery update to " + c.mobile} style={b("#25D36622")}><Icon name="wa" stroke="#128C7E" size={14} /></a>
         : <span title="No mobile number" style={{ ...b("#f0f2f6"), cursor: "default", opacity: 0.5 }}><Icon name="wa" stroke="#aab3c2" size={14} /></span>}
-      {email ? <a href={"https://mail.google.com/mail/?view=cm&fs=1&to=" + encodeURIComponent(email) + "&su=" + encodeURIComponent(isCollectionJob(i) ? "Your Deck Kingdom order is ready" : "Your Deck Kingdom delivery") + "&body=" + encodeURIComponent(text.replace(", it's Deck Kingdom. ", ",\n\n") + "\n\nKind regards,\nDeck Kingdom")}
+      {email ? <a href={gmailLink(i, c, email)} onClick={() => onSent("email")}
           target="_blank" rel="noopener noreferrer" title={"Email the delivery update to " + email} style={b("#185FA51a")}><Icon name="mail" stroke="#185FA5" size={13} /></a>
         : <span title="No email address" style={{ ...b("#f0f2f6"), cursor: "default", opacity: 0.5 }}><Icon name="mail" stroke="#aab3c2" size={13} /></span>}
     </div>
   );
 };
+
+const gmailLink = (i, c, email) => "https://mail.google.com/mail/?view=cm&fs=1&to=" + encodeURIComponent(email) +
+  "&su=" + encodeURIComponent(isCollectionJob(i) ? "Your Deck Kingdom order is ready" : "Your Deck Kingdom delivery") +
+  "&body=" + encodeURIComponent(deliveryText(i, c).replace(", it's Deck Kingdom. ", ",\n\n") + "\n\nKind regards,\nDeck Kingdom");
+const phoneOf = (c) => c && (UK_PHONE(c.mobile) || (/^447/.test(UK_PHONE(c.landline)) ? UK_PHONE(c.landline) : ""));
+const emailOf = (c) => (c && String(c.email || "").includes("@") ? c.email.trim() : "");
+// who's been told what: { jobs: { invId: { date, time, at, by, via[] } }, days: { date: { at, by } } }
+const notifyBook = (crm) => ({ jobs: {}, days: {}, ...((crm && crm.dsNotify) || {}) });
+// told about the date/time it has now?
+const notifyState = (i, crm) => {
+  const n = notifyBook(crm).jobs[i.id];
+  if (!n) return { state: "none" };
+  return { state: n.date === (i.deliveryDate || "") && n.time === (i.deliveryTime || "") ? "ok" : "changed", n };
+};
+const shortStamp = (iso) => { const d = new Date(iso); return isNaN(d) ? "" : d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }) + " " + d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }); };
+const linesKg = (l, i, crm) => invoiceLoadKg({ ...i, lines: [l], weightKg: "" }, crm);
 
 // an editable pill: a small rounded drop-down; the list shows 10 at a time and scrolls
 const PillSelect = ({ value, options, placeholder, onChange, tone, labelOf = (o) => o }) => {
@@ -107,6 +123,35 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
   const [hideDone, setHideDone] = useState(false);
   const todayRef = useRef(null);
   const [pop, setPop] = useState(null); // { id, rect }: the job whose details are open
+  const [notify, setNotify] = useState(null); // { date } a day's confirm sheet, or { ids } re-notify one job
+  const [ask, setAsk] = useState(null); // { id, n, apply }: change a job the customer's already been told about?
+  const meName = String(me || "").split("@")[0] || "someone";
+  // record that a customer was told about the date/time their job has right now
+  const markSent = (ids, via) => updateCrm((c) => {
+    const book = notifyBook(c);
+    const cut = new Date(Date.now() - 60 * 86400000).toISOString().slice(0, 10);
+    const jobs = {};
+    Object.entries(book.jobs).forEach(([k, v]) => { if (v && (v.date || "") >= cut) jobs[k] = v; });
+    ids.forEach((id) => {
+      const t = c.invoices.find((x) => x.id === id);
+      if (!t) return;
+      const was = jobs[id];
+      const same = was && was.date === (t.deliveryDate || "") && was.time === (t.deliveryTime || "");
+      jobs[id] = { date: t.deliveryDate || "", time: t.deliveryTime || "", at: new Date().toISOString(), by: meName, via: [...new Set([...(same ? was.via || [] : []), ...via])] };
+    });
+    const days = {};
+    Object.entries(book.days).forEach(([k, v]) => { if (k >= cut) days[k] = v; });
+    c.dsNotify = { jobs, days };
+    return c;
+  });
+  const confirmDay = (date) => updateCrm((c) => { const book = notifyBook(c); c.dsNotify = { ...book, days: { ...book.days, [date]: { at: new Date().toISOString(), by: meName } } }; return c; });
+  // changing the date or time of a job the customer has already been told about asks first, then offers a fresh message
+  const guard = (id, apply) => {
+    const i = crm.invoices.find((x) => x.id === id);
+    const ns = i ? notifyState(i, crm) : { state: "none" };
+    if (ns.state !== "ok") return apply();
+    setAsk({ id, n: ns.n, apply });
+  };
   const [dragId, setDragId] = useState(null); // pending job being dragged onto a day
   const [overDate, setOverDate] = useState(null);
   const [overRow, setOverRow] = useState(null);
@@ -123,7 +168,8 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
     const id = dragId;
     endDrag();
     if (!id || id === target.id) return;
-    updateCrm((c) => {
+    const was = crm.invoices.find((x) => x.id === id);
+    const go = () => updateCrm((c) => {
       const d = c.invoices.find((x) => x.id === id);
       if (!d) return c;
       d.deliveryDate = target.deliveryDate; d.driver = target.driver || ""; d.runNo = target.runNo || "";
@@ -136,23 +182,26 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
       same.forEach((x, k) => (x.dropNo = String(k + 1)));
       return c;
     });
+    if (was && was.deliveryDate === target.deliveryDate) go(); else guard(id, go);
   };
   // dropped on the Pending card: no date again
   const unschedule = () => {
     const id = dragId;
     endDrag();
     if (!id) return;
-    updateCrm((c) => { const t = c.invoices.find((x) => x.id === id); if (t) { t.deliveryDate = ""; t.dropNo = ""; } return c; });
+    guard(id, () => updateCrm((c) => { const t = c.invoices.find((x) => x.id === id); if (t) { t.deliveryDate = ""; t.dropNo = ""; } return c; }));
   };
   const dropOn = (d) => {
     const id = dragId;
     endDrag();
     if (!id) return;
-    updateCrm((c) => {
+    const was = crm.invoices.find((x) => x.id === id);
+    if (was && was.deliveryDate === d) return;
+    guard(id, () => updateCrm((c) => {
       const t = c.invoices.find((x) => x.id === id);
       if (t) { t.deliveryDate = d; if (!t.jobType || t.jobType === "Pending") t.jobType = "Delivery"; }
       return c;
-    });
+    }));
   };
   // open on today (or the next day with work booked)
   useEffect(() => {
@@ -316,8 +365,8 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
         <PillSelect value={i.van || ""} options={vanOptions(crm)} placeholder="Van" onChange={(v) => setInv(i.id, (t) => (t.van = v))} />
         <div style={{ textAlign: "right", fontSize: 12.5, fontWeight: 700 }}>{kg === null ? "—" : kg.toLocaleString("en-GB", { maximumFractionDigits: 0 }) + " kg"}</div>
         <div style={{ display: "flex", gap: 4, width: 196 }}>
-          <input type="date" value={i.deliveryDate || ""} onChange={(e) => setInv(i.id, (t) => (t.deliveryDate = e.target.value))} style={{ ...pill, width: 116, flex: "none", padding: "3px 8px" }} />
-          <PillSelect value={i.deliveryTime || ""} options={TIME_SLOTS} placeholder="Time" onChange={(v) => setInv(i.id, (t) => (t.deliveryTime = v))} />
+          <input type="date" value={i.deliveryDate || ""} onChange={(e) => { const v = e.target.value; guard(i.id, () => setInv(i.id, (t) => (t.deliveryDate = v))); }} style={{ ...pill, width: 116, flex: "none", padding: "3px 8px" }} />
+          <PillSelect value={i.deliveryTime || ""} options={TIME_SLOTS} placeholder="Time" onChange={(v) => guard(i.id, () => setInv(i.id, (t) => (t.deliveryTime = v)))} />
         </div>
         {showPrep && (
           <div style={{ display: "flex", gap: 3 }}>
@@ -333,7 +382,18 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
             ))}
           </div>
         )}
-        <NotifyButtons i={i} c={c} />
+        {(() => {
+          const ns = notifyState(i, crm);
+          return (
+            <div style={{ position: "relative", display: "inline-flex" }}>
+              <NotifyButtons i={i} c={c} onSent={(via) => markSent([i.id], [via])} />
+              {ns.state !== "none" && (
+                <span title={ns.state === "ok" ? "Customer told " + shortStamp(ns.n.at) + " by " + ns.n.by + " (" + (ns.n.via || []).map((v) => (v === "wa" ? "WhatsApp" : "email")).join(" + ") + ")" : "Changed since the customer was told — send them a new update"}
+                  style={{ position: "absolute", right: -4, top: -4, width: 9, height: 9, borderRadius: 999, border: "1.5px solid #fff", background: ns.state === "ok" ? "#3FA55C" : "#E8912D" }} />
+              )}
+            </div>
+          );
+        })()}
         <div style={{ textAlign: "right" }}><SlaChip days={days} done={i.deliveryCompleted} /></div>
       </div>
     );
@@ -441,8 +501,27 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
     );
   };
 
-  const GroupHead = ({ label, meta, red }) => (
-    <div style={{ display: "flex", alignItems: "center", gap: 12, background: red ? RED : NAVY, color: "#fff", borderRadius: 12, padding: "10px 16px", margin: "18px 0 8px", flexWrap: "wrap" }}>
+  // day bar button: Confirm schedule → Confirmed ✓ → "n to update" when something moved after confirming
+  const ConfirmBtn = ({ date, rows }) => {
+    const jobs = rows.filter((e) => e.kind === "inv" && !e.obj.deliveryCompleted).map((e) => e.obj);
+    if (!jobs.length || date < tod) return null;
+    const day = notifyBook(crm).days[date];
+    const todo = jobs.filter((i) => notifyState(i, crm).state !== "ok").length;
+    const look = !day ? { bg: GOLD, fg: NAVY, t: "Confirm schedule" }
+      : todo ? { bg: "#E8912D", fg: "#fff", t: todo + " to update" }
+      : { bg: "#3FA55C", fg: "#fff", t: "✓ Confirmed" };
+    return (
+      <button type="button" onClick={() => setNotify({ date })}
+        title={day ? "Confirmed " + shortStamp(day.at) + " by " + day.by + (todo ? " — " + todo + " customer" + (todo === 1 ? "" : "s") + " not told about the current date/time" : " — everyone's been told") : "Tell every customer on this day their delivery date and time"}
+        style={{ border: "none", borderRadius: 8, background: look.bg, color: look.fg, fontFamily: "inherit", fontWeight: 800, fontSize: 12, padding: "6px 12px", cursor: "pointer", whiteSpace: "nowrap" }}>
+        {look.t}
+      </button>
+    );
+  };
+
+  const GroupHead = ({ label, meta, red, action }) => (
+    <div style={{ display: "flex", alignItems: "center", gap: 12, background: red ? RED : NAVY, color: "#fff", borderRadius: 12, padding: action ? "0 16px 0 8px" : "0 16px", minHeight: 42, margin: "18px 0 8px", flexWrap: "wrap" }}>
+      {action}
       <b style={{ color: red ? "#fff" : GOLD, fontSize: 15 }}>{label}</b>
       <span style={{ fontSize: 12.5, color: red ? "#ffd8dd" : "#cfd6e4", fontWeight: 600 }}>{meta}</span>
     </div>
@@ -509,7 +588,7 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
           onDragLeave={(ev) => { if (!ev.currentTarget.contains(ev.relatedTarget)) setOverDate((d) => (d === g.date ? null : d)); }}
           onDrop={(ev) => { ev.preventDefault(); dropOn(g.date); }}
           style={{ scrollMarginTop: 70, borderRadius: 14, outline: overDate === g.date ? "2px dashed " + GOLD : "none", outlineOffset: 4, background: overDate === g.date ? "#fff8e6" : "transparent" }}>
-          <GroupHead label={dayLabel(g.date)} meta={g.rows.length ? groupMeta(g.rows) : "nothing booked"} />
+          <GroupHead label={dayLabel(g.date)} meta={g.rows.length ? groupMeta(g.rows) : "nothing booked"} action={<ConfirmBtn date={g.date} rows={g.rows} />} />
           {g.rows.length === 0 ? (
             <div style={{ border: "1.5px dashed #d5d9e0", borderRadius: 12, padding: "10px 14px", fontSize: 12.5, fontWeight: 600, color: "#8593a8" }}>
               {dragId ? "Drop here to book it for " + dayLabel(g.date) : "Nothing booked — drag a pending job here"}
@@ -570,6 +649,93 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
       </div>
       </div>
       <div style={{ height: 30 }} />
+      {ask && (
+        <div onMouseDown={(e) => { if (e.target === e.currentTarget) setAsk(null); }} style={{ position: "fixed", inset: 0, zIndex: 90, background: "rgba(11,31,63,.35)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+          <div style={{ background: "#fff", borderRadius: 12, padding: "18px 20px", width: 440, maxWidth: "100%", boxShadow: "0 20px 50px rgba(11,31,63,.35)" }}>
+            <b style={{ fontSize: 16, color: NAVY }}>Customer already notified</b>
+            <p style={{ fontSize: 13.5, color: "#3c4a62", fontWeight: 600, lineHeight: 1.5, margin: "8px 0 14px" }}>
+              {(() => { const i = crm.invoices.find((x) => x.id === ask.id); const c = i && custById[i.customerId]; return (c ? c.name : "This customer"); })()} was told{" "}
+              {ask.n.date ? new Date(ask.n.date + "T00:00:00").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" }) : "no date"}{ask.n.time ? " (" + ask.n.time + ")" : ""}{" "}
+              by {(ask.n.via || []).map((v) => (v === "wa" ? "WhatsApp" : "email")).join(" + ") || "message"} on {shortStamp(ask.n.at)}{ask.n.by && ask.n.by !== "someone" ? " (" + ask.n.by + ")" : ""}.
+              Do you want to change it? You'll then send them a new message.
+            </p>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button style={btn} onClick={() => setAsk(null)}>Keep it</button>
+              <button style={goldBtn} onClick={() => { const { id, apply } = ask; setAsk(null); apply(); setNotify({ ids: [id] }); }}>Change &amp; re-notify</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {notify && (() => {
+        const ids = notify.ids || groups.filter((g) => g.date === notify.date).flatMap((g) => g.rows).filter((e) => e.kind === "inv" && !e.obj.deliveryCompleted).map((e) => e.obj.id);
+        const jobs = ids.map((id) => crm.invoices.find((x) => x.id === id)).filter(Boolean);
+        const day = notify.date ? notifyBook(crm).days[notify.date] : null;
+        const states = jobs.map((i) => notifyState(i, crm));
+        const left = states.filter((x) => x.state !== "ok").length;
+        const close = () => setNotify(null);
+        // one click: WhatsApp desktop app + a Gmail compose tab
+        const both = (i, c) => {
+          const ph = phoneOf(c), em = emailOf(c), via = [];
+          if (em) { window.open(gmailLink(i, c, em), "_blank", "noopener"); via.push("email"); }
+          if (ph) { const a = document.createElement("a"); a.href = "whatsapp://send?phone=" + ph + "&text=" + encodeURIComponent(deliveryText(i, c)); a.click(); via.push("wa"); }
+          if (via.length) markSent([i.id], via);
+        };
+        return (
+          <div onMouseDown={(e) => { if (e.target === e.currentTarget) close(); }} style={{ position: "fixed", inset: 0, zIndex: 90, background: "rgba(11,31,63,.35)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+            <div style={{ background: "#fff", borderRadius: 12, width: 760, maxWidth: "100%", maxHeight: "calc(100vh - 40px)", display: "flex", flexDirection: "column", boxShadow: "0 20px 50px rgba(11,31,63,.35)" }}>
+              <div style={{ background: NAVY, borderRadius: "12px 12px 0 0", padding: "12px 18px", display: "flex", alignItems: "center", gap: 10 }}>
+                <b style={{ color: GOLD, fontSize: 15 }}>{notify.date ? "Confirm schedule · " + dayLabel(notify.date) : "Send a new delivery update"}</b>
+                <span style={{ flex: 1 }} />
+                <button style={{ ...abtn, border: "none", background: "transparent" }} title="Close" onClick={close}><Icon name="x" stroke="#fff" /></button>
+              </div>
+              <div style={{ padding: "12px 18px", fontSize: 12.5, fontWeight: 600, color: "#5a6a85", lineHeight: 1.5 }}>
+                {notify.date
+                  ? (day ? "Confirmed " + shortStamp(day.at) + " by " + day.by + ". " : "") + "Send each customer their delivery date and time — Send both opens WhatsApp and a Gmail draft. Green = told about what's booked now; amber = changed since."
+                  : "The date or time changed — send the customer their new booking."}
+              </div>
+              <div style={{ overflowY: "auto", padding: "0 18px" }}>
+                {jobs.length === 0 && <div style={{ padding: "16px 0", color: "#8593a8", fontWeight: 600 }}>No open jobs on this day.</div>}
+                {jobs.map((i, k) => {
+                  const c = custById[i.customerId], ns = states[k];
+                  const ph = phoneOf(c), em = emailOf(c);
+                  return (
+                    <div key={i.id} style={{ display: "grid", gridTemplateColumns: "12px minmax(0,1fr) 150px 160px auto", gap: 12, alignItems: "center", padding: "9px 0", borderBottom: "1px solid #f0f2f6" }}>
+                      <span style={{ width: 10, height: 10, borderRadius: 999, background: ns.state === "ok" ? "#3FA55C" : ns.state === "changed" ? "#E8912D" : "#d5d9e0" }} />
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontWeight: 700, color: NAVY, fontSize: 13.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c ? c.name : "No customer"}</div>
+                        <div style={{ fontSize: 11.5, fontWeight: 600, color: "#8593a8" }}>
+                          {(i.runNo ? "Run " + i.runNo : "No run") + (i.driver ? " · " + i.driver : "") + (i.dropNo ? " · drop " + i.dropNo : "")}
+                        </div>
+                      </div>
+                      <div style={{ fontSize: 12.5, fontWeight: 700, color: NAVY }}>
+                        {i.deliveryDate ? new Date(i.deliveryDate + "T00:00:00").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }) : "No date"}
+                        <span style={{ color: i.deliveryTime ? NAVY : "#a05f10", marginLeft: 6 }}>{i.deliveryTime || "no time"}</span>
+                      </div>
+                      <div style={{ fontSize: 11.5, fontWeight: 700, color: ns.state === "ok" ? "#28713e" : ns.state === "changed" ? "#a05f10" : "#8593a8" }}>
+                        {ns.state === "none" ? "Not told yet" : (ns.state === "ok" ? "Told " : "Changed · told ") + shortStamp(ns.n.at) + " · " + (ns.n.via || []).map((v) => (v === "wa" ? "WA" : "email")).join("+")}
+                      </div>
+                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                        <NotifyButtons i={i} c={c} onSent={(via) => markSent([i.id], [via])} />
+                        <button type="button" disabled={!ph && !em} onClick={() => both(i, c)}
+                          style={{ ...btn, padding: "5px 10px", fontSize: 12, opacity: !ph && !em ? 0.5 : 1, whiteSpace: "nowrap" }}>{ns.state === "ok" ? "Send again" : "Send both"}</button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 18px", borderTop: "1px solid #e6e9ef" }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: left ? "#a05f10" : "#28713e" }}>{left ? left + " still to tell" : "Everyone's been told"}</span>
+                <span style={{ flex: 1 }} />
+                {notify.date && jobs.some((i) => !i.deliveryTime) && <span style={{ fontSize: 11.5, fontWeight: 600, color: "#a05f10" }}>Some jobs have no time slot yet</span>}
+                <button style={btn} onClick={close}>Close</button>
+                {notify.date && <button style={goldBtn} onClick={() => { confirmDay(notify.date); close(); }}>{day ? "Confirm again" : "Confirm schedule"}</button>}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {pop && (() => {
         const i = crm.invoices.find((x) => x.id === pop.id);
         if (!i) return null;
@@ -578,12 +744,14 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
         const t = invoiceTotals(i);
         const addr = s ? [s.name !== s.address ? s.name : "", s.address, s.town, s.postcode] : c ? [c.address, c.town, c.postcode] : [];
         const contact = [(s && s.contact) || (c && c.contact), (s && (s.mobile || s.landline)) || (c && (c.mobile || c.landline))].filter(Boolean).join(" · ");
-        const top = Math.min(pop.rect.bottom + 6, window.innerHeight - 420);
+        const PW = 580, PH = Math.min(window.innerHeight - 20, 680);
+        const top = Math.min(pop.rect.bottom + 6, window.innerHeight - PH - 10);
+        const kgAll = invoiceLoadKg(i, crm);
         return (
           <>
             <div onMouseDown={() => setPop(null)} style={{ position: "fixed", inset: 0, zIndex: 70 }} />
-            <div style={{ position: "fixed", left: pop.side === "left" ? Math.max(10, pop.rect.left - 430) : Math.min(pop.rect.left, window.innerWidth - 440), top: Math.max(10, pop.side === "left" ? Math.min(pop.rect.top, window.innerHeight - 440) : top), zIndex: 71, width: 420, maxHeight: 440, overflowY: "auto",
-              background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, boxShadow: "0 14px 40px rgba(11,31,63,.28)", padding: "12px 14px" }}>
+            <div style={{ position: "fixed", left: pop.side === "left" ? Math.max(10, pop.rect.left - PW - 10) : Math.min(pop.rect.left, window.innerWidth - PW - 20), top: Math.max(10, pop.side === "left" ? Math.min(pop.rect.top - 60, window.innerHeight - PH - 10) : top), zIndex: 71, width: PW, maxHeight: PH, overflowY: "auto",
+              background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, boxShadow: "0 14px 40px rgba(11,31,63,.28)", padding: "14px 18px" }}>
               <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 6 }}>
                 <b style={{ fontSize: 15, color: NAVY }}>{c ? c.name || "Unnamed" : "No customer"}</b>
                 <span style={{ fontSize: 12, fontWeight: 700, color: "#185FA5" }}>#{i.invNo || "—"}</span>
@@ -593,7 +761,7 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
               <div style={{ display: "flex", gap: 8, alignItems: "center", background: i.deliveryDate ? "#f7f9fc" : "#fff8e6", border: "1px solid " + (i.deliveryDate ? "#e6e9ef" : "#f4d78f"), borderRadius: 10, padding: "6px 10px", marginBottom: 10 }}>
                 <span style={{ ...lbl, marginBottom: 0 }}>{isCollectionJob(i) ? "Collection date" : "Delivery date"}</span>
                 <input type="date" value={i.deliveryDate || ""} style={{ ...pill, width: 130, padding: "3px 8px" }}
-                  onChange={(e) => { const v = e.target.value; setInv(i.id, (t) => { t.deliveryDate = v; if (v && (!t.jobType || t.jobType === "Pending")) t.jobType = "Delivery"; }); }} />
+                  onChange={(e) => { const v = e.target.value; guard(i.id, () => setInv(i.id, (t) => { t.deliveryDate = v; if (v && (!t.jobType || t.jobType === "Pending")) t.jobType = "Delivery"; })); }} />
                 <span style={{ flex: 1 }} />
                 {!i.deliveryDate && <span style={{ fontSize: 11.5, fontWeight: 700, color: "#a05f10" }}>not booked</span>}
               </div>
@@ -602,15 +770,22 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
                 {addr.filter(Boolean).map((l, k) => <div key={k}>{l}</div>)}
                 {contact && <div style={{ color: "#5a6a85" }}>{contact}</div>}
               </div>
-              <span style={{ ...lbl, marginTop: 8 }}>Lines</span>
-              {(i.lines || []).length === 0 ? <div style={{ fontSize: 12.5, color: "#8593a8" }}>No lines</div> : (i.lines || []).map((l) => (
-                <div key={l.id} style={{ display: "flex", gap: 8, fontSize: 12.5, fontWeight: 600, padding: "2px 0", color: NAVY }}>
-                  <b style={{ width: 34, textAlign: "right", flex: "none" }}>{l.qty}×</b>
-                  <span style={{ flex: 1 }}>{l.description}{l.colour ? " · " + l.colour : ""}</span>
-                  <span style={{ color: "#5a6a85" }}>{gbp((Number(l.qty) || 0) * (Number(l.price) || 0))}</span>
-                </div>
-              ))}
-              <div style={{ borderTop: "1px solid #f0f2f6", marginTop: 6, paddingTop: 6, fontSize: 12.5, fontWeight: 700, color: NAVY, display: "grid", gridTemplateColumns: "1fr auto", gap: "2px 10px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "44px 1fr 70px 76px", gap: "0 10px", marginTop: 12, paddingBottom: 4, borderBottom: "1px solid #e6e9ef" }}>
+                {["Qty", "Product", "Weight", "Price"].map((h, k) => <span key={h} style={{ ...lbl, marginBottom: 0, textAlign: k === 1 ? "left" : "right" }}>{h}</span>)}
+              </div>
+              {(i.lines || []).length === 0 ? <div style={{ fontSize: 12.5, color: "#8593a8", padding: "6px 0" }}>No lines</div> : (i.lines || []).map((l) => {
+                const lk = linesKg(l, i, crm);
+                return (
+                  <div key={l.id} style={{ display: "grid", gridTemplateColumns: "44px 1fr 70px 76px", gap: "0 10px", fontSize: 12.5, fontWeight: 600, padding: "5px 0", color: NAVY, borderBottom: "1px solid #f3f5f9", alignItems: "baseline" }}>
+                    <b style={{ textAlign: "right" }}>{l.qty}×</b>
+                    <span style={{ minWidth: 0 }}>{l.description || l.sku || "—"}{l.colour ? <span style={{ color: "#5a6a85" }}>{" · " + l.colour}</span> : null}</span>
+                    <span style={{ textAlign: "right", color: "#5a6a85" }}>{lk === null ? "—" : Math.round(lk).toLocaleString("en-GB") + " kg"}</span>
+                    <span style={{ textAlign: "right", color: "#5a6a85" }}>{gbp((Number(l.qty) || 0) * (Number(l.price) || 0))}</span>
+                  </div>
+                );
+              })}
+              <div style={{ marginTop: 8, fontSize: 12.5, fontWeight: 700, color: NAVY, display: "grid", gridTemplateColumns: "1fr auto", gap: "3px 10px" }}>
+                <span style={{ color: "#5a6a85" }}>Total weight</span><span>{kgAll === null ? "—" : Math.round(kgAll).toLocaleString("en-GB") + " kg"}</span>
                 {Number(i.deliveryCharge) ? <><span style={{ color: "#5a6a85" }}>Delivery</span><span>{gbp(Number(i.deliveryCharge))}</span></> : null}
                 <span>Total</span><span>{gbp(t.total)}</span>
                 <span style={{ color: isPaid(i) ? "#28713e" : "#a05f10" }}>{isPaid(i) ? "Paid" + (i.paymentType ? " · " + i.paymentType : "") : i.paymentType === "COD" ? "Cash on delivery" : "Awaiting payment"}</span><span />

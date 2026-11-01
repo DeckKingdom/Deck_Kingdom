@@ -399,6 +399,7 @@ async function loadAll() {
   const reminders = (settingRow("reminders") || {}).value || {};
   const skuListsRow = settingRow("skuLists");
   const sampleEmailsRow = settingRow("sampleEmails");
+  const dsNotifyRow = settingRow("dsNotify");
   sample2Ready = !!(sampleData && sampleData.sm && sampleData.sm.length && Object.prototype.hasOwnProperty.call(sampleData.sm[0], "followed_up2_date"));
 
   const customers = cs.map((r) => {
@@ -575,12 +576,13 @@ async function loadAll() {
   const data = { customers, sites, invoices, masterProducts, collections, movements, vans, numbering, reminders, quotes, samples, tasks, taskLog, staff, suppliers, purchases };
   if (skuListsRow && skuListsRow.value) data.skuLists = skuListsRow.value;
   if (sampleEmailsRow && sampleEmailsRow.value) data.sampleEmails = sampleEmailsRow.value;
+  if (dsNotifyRow && dsNotifyRow.value) data.dsNotify = dsNotifyRow.value;
   const fmRow = settingRow("fmBridgeLast"); // FileMaker feed status (written by fm_sync, read-only here)
   if (fmRow && fmRow.value) data.fmBridge = fmRow.value;
   const wooRow = settingRow("wooBridgeLast"); // website feed status (written by woo_sync)
   if (wooRow && wooRow.value) data.wooBridge = wooRow.value;
   snapshot = rowsFromData(data);
-  settingsSnapshot = { numbering: JSON.stringify(numbering), reminders: JSON.stringify(reminders), skuLists: skuListsRow ? JSON.stringify(skuListsRow.value) : undefined, sampleEmails: sampleEmailsRow ? JSON.stringify(sampleEmailsRow.value) : undefined };
+  settingsSnapshot = { numbering: JSON.stringify(numbering), reminders: JSON.stringify(reminders), skuLists: skuListsRow ? JSON.stringify(skuListsRow.value) : undefined, sampleEmails: sampleEmailsRow ? JSON.stringify(sampleEmailsRow.value) : undefined, dsNotify: dsNotifyRow ? JSON.stringify(dsNotifyRow.value) : undefined };
 
   if (!customers.length && !sites.length && !invoices.length && !masterProducts.length && !collections.length && !vans.length && !quotes.length && !samples.length && !tasks.length && !suppliers.length && !purchases.length && !settings.length) return null;
   return data;
@@ -683,6 +685,7 @@ async function saveAll(d) {
   };
   if (d.skuLists) settingsToSave.skuLists = d.skuLists; // only once someone has edited the SKU lists
   if (d.sampleEmails) settingsToSave.sampleEmails = d.sampleEmails;
+  if (d.dsNotify) settingsToSave.dsNotify = d.dsNotify; // who's been told their delivery date (Delivery Schedule)
   for (const [key, value] of Object.entries(settingsToSave)) {
     const j = JSON.stringify(value);
     if (j !== settingsSnapshot[key]) {
