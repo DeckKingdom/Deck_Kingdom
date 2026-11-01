@@ -78,7 +78,7 @@ const openDoc = (html) => {
 const addrBlock = (title, lines) => `
 <div class="blk"><h3>${esc(title)}</h3>${lines.filter(Boolean).map((l) => `<div>${esc(l)}</div>`).join("")}</div>`;
 
-export function printInvoice(inv, cust, site) {
+const invoiceBody = (inv, cust, site) => {
   const t = invoiceTotals(inv);
   const lines = (inv.lines || []).map((l) => `
     <tr><td><b>${esc(l.code)}</b></td><td>${esc(l.description)}</td><td>${esc(l.colour)}</td>
@@ -101,8 +101,10 @@ export function printInvoice(inv, cust, site) {
   <tr class="final"><td>TOTAL</td><td class="r">${gb(t.total)}</td></tr>
 </table>
 <div class="foot">Thank you for your order · ${esc(COMPANY.web)} · ${esc(COMPANY.phone)}</div>`;
-
-  return openDoc(shell("Invoice " + (inv.invNo || ""), body));
+  return body;
+};
+export function printInvoice(inv, cust, site) {
+  return openDoc(shell("Invoice " + (inv.invNo || ""), invoiceBody(inv, cust, site)));
 }
 
 // Customer quotation: same layout as the invoice, with validity and notes.
@@ -164,7 +166,7 @@ export function printSampleSlips(list, custOf) {
 // Warehouse picking list: kit lines pull their component SKUs through.
 // Once the pick list has been built on the invoice (with batch refs), the
 // bill prints from it, including the batch each SKU was loaded from.
-export function printLoadingBill(inv, cust, site, crm, planner) {
+const loadingBody = (inv, cust, site, crm, planner) => {
   const bySku = skuIndex(crm);
   const shipName = (id) => {
     const s = planner && (planner.shipments || []).find((x) => x.id === id);
@@ -216,8 +218,10 @@ ${inv.jobNotes ? `<div class="note">📝 ${esc(inv.jobNotes)}</div>` : ""}
   <div class="blk"><h3>Date / time</h3><div style="border-bottom:1px solid #0B1F3F;height:34px"></div></div>
 </div>
 <div class="foot">${esc(COMPANY.name)} · ${esc(COMPANY.phone)}</div>`;
-
-  return openDoc(shell("Packing slip " + (inv.invNo || ""), body));
+  return body;
+};
+export function printLoadingBill(inv, cust, site, crm, planner) {
+  return openDoc(shell("Packing slip " + (inv.invNo || ""), loadingBody(inv, cust, site, crm, planner)));
 }
 
 // Driver's collection note for picking goods up from a UK supplier.
@@ -246,7 +250,7 @@ ${coll.notes ? `<div class="note">📝 ${esc(coll.notes)}</div>` : ""}
   return openDoc(shell("Collection note COL-" + (coll.collectionNo || ""), body));
 }
 
-export function printJobSheet(inv, cust, site) {
+const jobSheetBody = (inv, cust, site) => {
   const t = invoiceTotals(inv);
   const lines = (inv.lines || []).map((l) => `
     <tr><td style="width:26px"><div style="width:16px;height:16px;border:2px solid #0B1F3F;border-radius:4px"></div></td>
@@ -270,6 +274,22 @@ ${inv.jobNotes ? `<div class="note">📝 ${esc(inv.jobNotes)}</div>` : ""}
   <div class="blk"><h3>Date / time</h3><div style="border-bottom:1px solid #0B1F3F;height:34px"></div></div>
 </div>
 <div class="foot">${esc(COMPANY.name)} · ${esc(COMPANY.phone)}</div>`;
+  return body;
+};
+export function printJobSheet(inv, cust, site) {
+  return openDoc(shell("Job sheet " + (inv.invNo || ""), jobSheetBody(inv, cust, site)));
+}
 
-  return openDoc(shell("Job sheet " + (inv.invNo || ""), body));
+// Several jobs' paperwork in one print window, one document per page.
+// kinds: any of "loading" (packing slip), "delivery" (job sheet), "invoice" — per job, in that order.
+export const DOC_KINDS = [["loading", "Loading ticket"], ["delivery", "Delivery ticket"], ["invoice", "Invoice"]];
+export function printJobDocs(jobs, kinds, { custOf, siteOf, crm, planner, title }) {
+  const pages = [];
+  jobs.forEach((inv) => {
+    const c = custOf(inv), st = siteOf(inv);
+    kinds.forEach((k) => pages.push(k === "invoice" ? invoiceBody(inv, c, st) : k === "loading" ? loadingBody(inv, c, st, crm, planner) : jobSheetBody(inv, c, st)));
+  });
+  if (!pages.length) return true;
+  const body = pages.map((p, i) => `<div style="${i < pages.length - 1 ? "page-break-after:always;break-after:page;" : ""}">${p}</div>`).join("");
+  return openDoc(shell(title || "Paperwork", body));
 }

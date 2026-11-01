@@ -8,6 +8,7 @@ import {
   PREP_FLAGS, FOLLOWUP_FLAGS, today,
   isVoidInvoice, applyInvoiceStockDeduction,
 } from "../../lib/crmCore.js";
+import { printJobDocs, DOC_KINDS } from "./printDocs.js";
 import { Icon, Chip, Tg, sect, lbl, card, abtn, inp, btn, goldBtn, RiskChip, WebStatusChip, Soon } from "./ui.jsx";
 
 const RANGE_OPTS = [
@@ -26,7 +27,7 @@ const dayLabel = (d) => {
 const COLLECTION_BLUE = "#185FA5";
 // the board's columns: stripe · customer · driver · run · drop · van · weight · date+time · prep · follow-up · days
 const short16 = (t) => (String(t).length > 16 ? String(t).slice(0, 15).trimEnd() + "…" : String(t));
-const dsCols = (prep) => "4px 46px 170px 82px 120px 88px 84px 60px 104px 58px minmax(196px, 1fr) " + (prep ? "162px 162px " : "") + "66px 42px";
+const dsCols = (prep) => "4px 46px 170px 82px 120px 88px 84px 60px 104px 58px minmax(196px, 1fr) " + (prep ? "162px 162px " : "") + "98px 42px";
 const DROP_NOS = Array.from({ length: 20 }, (_, n) => String(n + 1));
 const rowBox = { display: "grid", gap: 10, alignItems: "center", background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, padding: "8px 12px 8px 0", marginBottom: 6, overflow: "hidden" };
 const pill = { fontFamily: "inherit", fontSize: 12, fontWeight: 700, color: NAVY, border: "1px solid #c9d0db", borderRadius: 999, background: "#fff", padding: "3px 16px 3px 8px", height: 28, boxSizing: "border-box", cursor: "pointer", maxWidth: "100%" };
@@ -72,6 +73,42 @@ const notifyState = (i, crm) => {
 const shortStamp = (iso) => { const d = new Date(iso); return isNaN(d) ? "" : d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }) + " " + d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }); };
 const linesKg = (l, i, crm) => invoiceLoadKg({ ...i, lines: [l], weightKg: "" }, crm);
 
+// print / save as PDF: pick loading ticket, delivery ticket, invoice — or all three
+const PrintMenu = ({ onPick, label, dark, title = "Print or save as PDF" }) => {
+  const [box, setBox] = useState(null);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!box) return;
+    const shut = (e) => { if (!(e.target.closest && e.target.closest("[data-print-menu]")) && !(ref.current && ref.current.contains(e.target))) setBox(null); };
+    const gone = () => setBox(null);
+    document.addEventListener("mousedown", shut);
+    window.addEventListener("scroll", gone, true);
+    return () => { document.removeEventListener("mousedown", shut); window.removeEventListener("scroll", gone, true); };
+  }, [box]);
+  const pick = (kinds) => { setBox(null); onPick(kinds); };
+  return (
+    <>
+      <button ref={ref} type="button" title={title}
+        onClick={(e) => { e.stopPropagation(); if (box) return setBox(null); const r = ref.current.getBoundingClientRect(); setBox({ left: r.right - 210, top: r.bottom + 4, up: r.bottom > window.innerHeight - 190 ? r.top : 0 }); }}
+        style={label
+          ? { display: "inline-flex", alignItems: "center", gap: 6, border: dark ? "1px solid #3a4d6e" : "1px solid #d5d9e0", background: dark ? "transparent" : "#fff", color: dark ? "#fff" : NAVY, borderRadius: 8, padding: "5px 10px", fontFamily: "inherit", fontWeight: 700, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap" }
+          : { width: 26, height: 26, borderRadius: 8, border: "none", background: "#eef1f6", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0, flex: "none" }}>
+        <Icon name="print" stroke={dark ? "#fff" : NAVY} size={label ? 13 : 14} />{label}{label && <span style={{ fontSize: 9, opacity: 0.8 }}>▾</span>}
+      </button>
+      {box && (
+        <div data-print-menu style={{ position: "fixed", left: Math.max(8, box.left), ...(box.up ? { bottom: window.innerHeight - box.up + 4 } : { top: box.top }), width: 210, zIndex: 85,
+          background: "#fff", border: "1px solid #d5d9e0", borderRadius: 12, boxShadow: "0 10px 30px rgba(11,31,63,.2)", padding: 4 }}>
+          {[...DOC_KINDS.map(([k, l]) => [[k], l]), [DOC_KINDS.map(([k]) => k), "All three"]].map(([kinds, l], n) => (
+            <button key={l} type="button" onClick={() => pick(kinds)}
+              style={{ display: "block", width: "100%", height: 32, textAlign: "left", padding: "0 10px", border: "none", borderTop: n === 3 ? "1px solid #eef1f6" : "none", borderRadius: 8, cursor: "pointer", fontFamily: "inherit", fontSize: 12.5, fontWeight: n === 3 ? 800 : 600, background: "transparent", color: NAVY }}>{l}</button>
+          ))}
+          <div style={{ fontSize: 10.5, color: "#8593a8", fontWeight: 600, padding: "4px 10px 6px" }}>Opens the print window — choose "Save as PDF" there for a file.</div>
+        </div>
+      )}
+    </>
+  );
+};
+
 // an editable pill: a small rounded drop-down; the list shows 10 at a time and scrolls
 const PillSelect = ({ value, options, placeholder, onChange, tone, labelOf = (o) => o }) => {
   const [box, setBox] = useState(null);
@@ -116,7 +153,14 @@ const SlaChip = ({ days, done }) => (
   </span>
 );
 
-export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollection, me }) {
+export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollection, me, planner }) {
+  const [printMsg, setPrintMsg] = useState("");
+  const printJobs = (jobs, kinds, title) => {
+    const list = jobs.filter((x) => x && !isVoidInvoice(x));
+    if (!list.length) return;
+    const ok = printJobDocs(list, kinds, { custOf: (x) => custById[x.customerId], siteOf: (x) => siteById[x.siteId], crm, planner, title });
+    setPrintMsg(ok ? "" : "Printing is blocked here — allow pop-ups for ops.deckkingdom.co.uk and try again.");
+  };
   const [search, setSearch] = useState("");
   const [range, setRange] = useState("upcoming");
   const [van, setVan] = useState("");
@@ -391,10 +435,13 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
           const ns = notifyState(i, crm);
           return (
             <div style={{ position: "relative", display: "inline-flex" }}>
-              <NotifyButtons i={i} c={c} onSent={(via) => markSent([i.id], [via])} />
+              <span style={{ display: "inline-flex", gap: 5 }}>
+                <NotifyButtons i={i} c={c} onSent={(via) => markSent([i.id], [via])} />
+                <PrintMenu onPick={(k) => printJobs([i], k, "#" + (i.invNo || "") + " paperwork")} />
+              </span>
               {ns.state !== "none" && (
                 <span title={ns.state === "ok" ? "Customer told " + shortStamp(ns.n.at) + " by " + ns.n.by + " (" + (ns.n.via || []).map((v) => (v === "wa" ? "WhatsApp" : "email")).join(" + ") + ")" : "Changed since the customer was told — send them a new update"}
-                  style={{ position: "absolute", right: -4, top: -4, width: 9, height: 9, borderRadius: 999, border: "1.5px solid #fff", background: ns.state === "ok" ? "#3FA55C" : "#E8912D" }} />
+                  style={{ position: "absolute", right: 27, top: -4, width: 9, height: 9, borderRadius: 999, border: "1.5px solid #fff", background: ns.state === "ok" ? "#3FA55C" : "#E8912D" }} />
               )}
             </div>
           );
@@ -513,11 +560,12 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
     );
   };
 
-  const GroupHead = ({ label, meta, red, action }) => (
+  const GroupHead = ({ label, meta, red, action, right }) => (
     <div style={{ display: "flex", alignItems: "center", gap: 12, background: red ? RED : NAVY, color: "#fff", borderRadius: 12, padding: action ? "0 16px 0 8px" : "0 16px", minHeight: 42, margin: "18px 0 8px", flexWrap: "wrap" }}>
       {action}
       <b style={{ color: red ? "#fff" : GOLD, fontSize: 15 }}>{label}</b>
       <span style={{ fontSize: 12.5, color: red ? "#ffd8dd" : "#cfd6e4", fontWeight: 600 }}>{meta}</span>
+      {right && <span style={{ marginLeft: "auto" }}>{right}</span>}
     </div>
   );
 
@@ -568,6 +616,9 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
         <span>Follow-up: review asked · review in · photos · social · sample</span>
       </div>
 
+      {printMsg && (
+        <div onClick={() => setPrintMsg("")} style={{ background: "#fdecef", border: "1px solid #ecc4cb", borderRadius: 12, padding: "10px 14px", marginTop: 12, fontSize: 13, fontWeight: 700, color: RED, cursor: "pointer" }}>{printMsg}</div>
+      )}
       {(crm.schemaMissing || []).length > 0 && (
         <div style={{ background: "#fff8e6", border: "1px solid #f4d78f", borderRadius: 12, padding: "10px 14px", marginTop: 12, fontSize: 13, fontWeight: 600, color: "#6b5305", display: "flex", gap: 8, alignItems: "center" }}>
           <Icon name="warn" stroke="#a05f10" size={15} />
@@ -592,14 +643,16 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
           onDragLeave={(ev) => { if (!ev.currentTarget.contains(ev.relatedTarget)) setOverDate((d) => (d === g.date ? null : d)); }}
           onDrop={(ev) => { ev.preventDefault(); dropOn(g.date); }}
           style={{ scrollMarginTop: 70, borderRadius: 14, outline: overDate === g.date ? "2px dashed " + GOLD : "none", outlineOffset: 4, background: overDate === g.date ? "#fff8e6" : "transparent" }}>
-          <GroupHead label={dayLabel(g.date)} meta={g.rows.length ? groupMeta(g.rows) : "nothing booked"} action={<ConfirmBtn date={g.date} rows={g.rows} />} />
+          <GroupHead label={dayLabel(g.date)} meta={g.rows.length ? groupMeta(g.rows) : "nothing booked"} action={<ConfirmBtn date={g.date} rows={g.rows} />}
+            right={g.rows.some((x) => x.kind === "inv") ? <PrintMenu dark label="Print day" title="Print or save every run's paperwork for this day"
+              onPick={(kk) => printJobs(g.rows.filter((x) => x.kind === "inv").map((x) => x.obj), kk, dayLabel(g.date))} /> : null} />
           {g.rows.length === 0 ? (
             <div style={{ border: "1.5px dashed #d5d9e0", borderRadius: 12, padding: "10px 14px", fontSize: 12.5, fontWeight: 600, color: "#8593a8" }}>
               {dragId ? "Drop here to book it for " + dayLabel(g.date) : "Nothing booked — drag a pending job here"}
             </div>
           ) : (
             <div style={{ overflowX: "auto" }}>
-              <div style={{ minWidth: showPrep ? 1510 : 1190 }}>
+              <div style={{ minWidth: showPrep ? 1545 : 1225 }}>
                 {g.rows.map((e, k) => {
                   const key = runKey(e), prevKey = k ? runKey(g.rows[k - 1]) : null;
                   const sameRun = g.rows.filter((x) => runKey(x) === key);
@@ -616,6 +669,11 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
                           </span>
                           {e.kind === "inv" && <><span style={{ width: 1, height: 12, background: "#d5d9e0" }} /><span style={{ fontWeight: 700, color: "#5a6a85" }}>Run weight</span><b>{runKg ? Math.round(runKg).toLocaleString("en-GB") + " kg" : "—"}</b></>}
                         </span>
+                        {e.kind === "inv" && (
+                          <span style={{ marginLeft: 6 }}>
+                            <PrintMenu title="Print or save this run's paperwork" onPick={(kk) => printJobs(sameRun.map((x) => x.obj), kk, dayLabel(g.date) + " · " + (e.obj.runNo ? "Run " + e.obj.runNo : "No run") + (e.obj.driver ? " · " + e.obj.driver : ""))} />
+                          </span>
+                        )}
                       </span>
                     </div>
                   ) : null;

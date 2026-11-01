@@ -11,6 +11,7 @@ const PATHS = {
   pin: <><path d="M12 21s-7-6.2-7-11a7 7 0 0114 0c0 4.8-7 11-7 11z" /><circle cx="12" cy="10" r="2.5" /></>,
   note: <path d="M6 2h9l4 4v16H6zM15 2v4h4M9 12h7M9 16h5" />,
   doc: <path d="M6 2h9l4 4v16H6zM15 2v4h4M9 12h7M9 16h7" />,
+  print: <><path d="M7 9V3h10v6" /><rect x="3" y="9" width="18" height="8" rx="2" /><path d="M7 14h10v7H7z" /></>,
   pen: <path d="M4 20l1-4L17 4l3 3L8 19zM14 7l3 3" />,
   plus: <path d="M12 5v14M5 12h14" />,
   back: <path d="M15 5l-7 7 7 7" />,

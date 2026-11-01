@@ -1116,7 +1116,7 @@ export default function ImportPlanner() {
             setFilter={setInvFilter}
           />
         ) : (
-          <ScheduleScreen crm={crm} updateCrm={updateCrm} openInvoice={openInvoice} openCollection={openCollection} me={me} />
+          <ScheduleScreen crm={crm} updateCrm={updateCrm} openInvoice={openInvoice} openCollection={openCollection} me={me} planner={data} />
         ))}
 
       {(tab === "stock" || tab === "collections") &&
