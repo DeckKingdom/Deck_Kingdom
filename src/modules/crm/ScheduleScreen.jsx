@@ -29,7 +29,7 @@ const COLLECTION_BLUE = "#185FA5";
 // the board's columns: stripe · customer · driver · run · drop · van · weight · date+time · prep · follow-up · days
 const short16 = (t) => (String(t).length > 16 ? String(t).slice(0, 15).trimEnd() + "…" : String(t));
 // stripe · done · customer · postcode · source · job type · driver · run · drop · van · weight · date+time · [prep · follow-up] · update · days
-const dsCols = (prep) => "4px 50px 150px 70px 100px 116px 80px 72px 46px 80px 50px minmax(134px, 1fr) " + (prep ? "162px 162px " : "") + "98px 42px";
+const dsCols = (prep) => "4px 50px 150px 70px 100px 116px 80px 72px 46px 80px 60px minmax(134px, 1fr) " + (prep ? "162px 162px " : "") + "98px 42px";
 const DROP_NOS = Array.from({ length: 20 }, (_, n) => String(n + 1));
 const rowBox = { display: "grid", gap: 7, alignItems: "center", background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, padding: "8px 12px 8px 0", marginBottom: 6, overflow: "hidden" };
 const pill = { fontFamily: "inherit", fontSize: 12, fontWeight: 700, color: NAVY, border: "1px solid #c9d0db", borderRadius: 999, background: "#fff", padding: "3px 16px 3px 8px", height: 28, boxSizing: "border-box", cursor: "pointer", maxWidth: "100%" };
@@ -193,6 +193,24 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
   const peekCancel = () => { clearTimeout(peekT.current.open); clearTimeout(peekT.current.close); };
   const peekOpen = (p) => { peekCancel(); peekT.current.open = setTimeout(() => setPop((cur) => (cur && !cur.peek ? cur : { ...p, peek: true })), 220); };
   const peekClose = () => { clearTimeout(peekT.current.open); clearTimeout(peekT.current.close); peekT.current.close = setTimeout(() => setPop((cur) => (cur && cur.peek ? null : cur)), 250); };
+  const [resetAsk, setResetAsk] = useState(null); // date whose runs are about to be cleared
+  // Reset day: open jobs and pick-ups lose driver / run / drop / van, then get numbered in postcode order
+  const resetDay = (date) => updateCrm((c) => {
+    const pc = (x, kind) => {
+      if (kind === "col") return String(x.postcode || "");
+      const st = (c.sites || []).find((y) => y.id === x.siteId), cu = (c.customers || []).find((y) => y.id === x.customerId);
+      return String((st && st.postcode) || (cu && cu.postcode) || "");
+    };
+    const list = [
+      ...c.invoices.filter((x) => !isVoidInvoice(x) && x.deliveryDate === date && !x.deliveryCompleted).map((o) => ({ o, p: pc(o, "inv") })),
+      ...(c.collections || []).filter((x) => x.collectDate === date && !x.collected).map((o) => ({ o, p: pc(o, "col") })),
+    ];
+    list.forEach(({ o }) => { o.driver = ""; o.runNo = ""; o.van = ""; o.dropNo = ""; });
+    list
+      .sort((a, b) => (!a.p) - (!b.p) || a.p.toUpperCase().replace(/[^A-Z0-9]/g, "").localeCompare(b.p.toUpperCase().replace(/[^A-Z0-9]/g, ""), "en", { numeric: true }))
+      .forEach(({ o }, n) => (o.dropNo = String(n + 1)));
+    return c;
+  });
   const [notify, setNotify] = useState(null); // { date } a day's confirm sheet, or { ids } re-notify one job
   const [ask, setAsk] = useState(null); // { id, n, apply }: change a job the customer's already been told about?
   const meName = String(me || "").split("@")[0] || "someone";
@@ -447,7 +465,7 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
         <PillSelect value={i.runNo || ""} options={RUN_NOS} placeholder="Run" labelOf={(o) => "Run " + o} onChange={(v) => setInv(i.id, (t) => (t.runNo = v))} />
         <PillSelect value={i.dropNo || ""} options={DROP_NOS} placeholder="#" onChange={(v) => setInv(i.id, (t) => (t.dropNo = v))} />
         <PillSelect value={i.van || ""} options={vanOptions(crm)} placeholder="Van" onChange={(v) => setInv(i.id, (t) => (t.van = v))} />
-        <div style={{ textAlign: "right", fontSize: 12.5, fontWeight: 700 }}>{kg === null ? "—" : kg.toLocaleString("en-GB", { maximumFractionDigits: 0 }) + " kg"}</div>
+        <div style={{ textAlign: "center", fontSize: 12.5, fontWeight: 700, whiteSpace: "nowrap" }}>{kg === null ? "—" : kg.toLocaleString("en-GB", { maximumFractionDigits: 0 }) + " kg"}</div>
         <div style={{ display: "flex", gap: 4, width: 134 }}>
           <DayPill value={i.deliveryDate} onChange={(v) => guard(i.id, () => setInv(i.id, (t) => (t.deliveryDate = v)))} />
           <PillSelect value={i.deliveryTime || ""} options={TIME_SLOTS} placeholder="Time" onChange={(v) => guard(i.id, () => setInv(i.id, (t) => (t.deliveryTime = v)))} />
@@ -529,7 +547,7 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
         <PillSelect value={c.runNo || ""} options={RUN_NOS} placeholder="Run" labelOf={(o) => "Run " + o} onChange={(v) => setColl(c.id, (t) => (t.runNo = v))} />
         <PillSelect value={c.dropNo || ""} options={DROP_NOS} placeholder="#" onChange={(v) => setColl(c.id, (t) => (t.dropNo = v))} />
         <PillSelect value={c.van || ""} options={vanOptions(crm)} placeholder="Van" onChange={(v) => setColl(c.id, (t) => (t.van = v))} />
-        <div style={{ textAlign: "right", fontSize: 12.5, fontWeight: 700 }} title={items + " pcs"}>{kg !== null ? Math.round(kg).toLocaleString("en-GB") + " kg" : items ? items + " pcs" : "—"}</div>
+        <div style={{ textAlign: "center", fontSize: 12.5, fontWeight: 700, whiteSpace: "nowrap" }} title={items + " pcs"}>{kg !== null ? Math.round(kg).toLocaleString("en-GB") + " kg" : items ? items + " pcs" : "—"}</div>
         <div style={{ display: "flex", gap: 4, width: 134 }}>
           <DayPill value={c.collectDate} onChange={(v) => setColl(c.id, (t) => (t.collectDate = v))} />
           <PillSelect value={c.collectTime || ""} options={TIME_SLOTS} placeholder="Time" onChange={(v) => setColl(c.id, (t) => (t.collectTime = v))} />
@@ -703,16 +721,27 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
           onDragLeave={(ev) => { if (!ev.currentTarget.contains(ev.relatedTarget)) setOverDate((d) => (d === g.date ? null : d)); }}
           onDrop={(ev) => { ev.preventDefault(); dropOn(g.date); }}
           style={{ scrollMarginTop: 70, borderRadius: 14, outline: overDate === g.date ? "2px dashed " + GOLD : "none", outlineOffset: 4, background: overDate === g.date ? "#fff8e6" : "transparent" }}>
-          <GroupHead label={dayLabel(g.date)} meta={g.rows.length ? groupMeta(g.rows) : "nothing booked"} action={<ConfirmBtn date={g.date} rows={g.rows} />}
-            right={g.rows.some((x) => x.kind === "inv") ? <PrintMenu dark label="Print day" title="Print or save every run's paperwork for this day"
-              onPick={(kk) => printJobs(g.rows.filter((x) => x.kind === "inv").map((x) => x.obj), kk, dayLabel(g.date))} /> : null} />
+          <GroupHead label={dayLabel(g.date)} meta={g.rows.length ? groupMeta(g.rows) : "nothing booked"}
+            right={g.rows.length ? (
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                {g.date >= tod && g.rows.some((x) => !(x.kind === "inv" ? x.obj.deliveryCompleted : x.obj.collected)) && (
+                  <button type="button" onClick={() => setResetAsk(g.date)} title="Clear driver, run, drop and van on this day's open jobs and line them up by postcode"
+                    style={{ display: "inline-flex", alignItems: "center", gap: 6, border: "1px solid #3a4d6e", background: "transparent", color: "#fff", borderRadius: 8, padding: "5px 10px", fontFamily: "inherit", fontWeight: 700, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap" }}>
+                    <Icon name="refresh" stroke="#fff" size={13} />Reset day
+                  </button>
+                )}
+                {g.rows.some((x) => x.kind === "inv") && <PrintMenu dark label="Print day" title="Print or save every run's paperwork for this day"
+                  onPick={(kk) => printJobs(g.rows.filter((x) => x.kind === "inv").map((x) => x.obj), kk, dayLabel(g.date))} />}
+                <ConfirmBtn date={g.date} rows={g.rows} />
+              </span>
+            ) : null} />
           {g.rows.length === 0 ? (
             <div style={{ border: "1.5px dashed #d5d9e0", borderRadius: 12, padding: "10px 14px", fontSize: 12.5, fontWeight: 600, color: "#8593a8" }}>
               {dragId ? "Drop here to book it for " + dayLabel(g.date) : "Nothing booked — drag a pending job here"}
             </div>
           ) : (
             <div style={{ overflowX: "auto" }}>
-              <div style={{ minWidth: showPrep ? 1535 : 1195 }}>
+              <div style={{ minWidth: showPrep ? 1545 : 1205 }}>
                 {g.rows.map((e, k) => {
                   const key = runKey(e), prevKey = k ? runKey(g.rows[k - 1]) : null;
                   const sameRun = g.rows.filter((x) => runKey(x) === key);
@@ -720,22 +749,26 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
                   const nDrops = sameRun.filter((x) => x.kind === "inv").length, nPicks = sameRun.length - nDrops;
                   const runKg = sameRun.reduce((t, x) => t + ((x.kind === "inv" ? invoiceLoadKg(x.obj, crm) : collKg(x.obj)) || 0), 0);
                   const head = key !== prevKey ? (
-                    <div title={!loose ? "Total weight on this run (deliveries going out + pick-ups coming back)" : "Supplier pick-ups not in a run yet — give them a driver and run, or drag one onto a job"}
-                      style={{ display: "flex", gap: 8, margin: k ? "12px 0 6px" : "4px 0 6px", background: "#eef1f6", border: "1px solid #dde2ea", borderRadius: 12,
-                        padding: 0, minHeight: 36, boxSizing: "border-box", overflow: "hidden", alignItems: "stretch", fontSize: 12, color: NAVY, whiteSpace: "nowrap" }}>
-                      <span style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "#dce2ec", padding: "0 14px" }}>
-                        <b>{loose ? "Supplier collections" : (e.obj.runNo ? "Run " + e.obj.runNo : "No run yet") + " · " + (e.obj.driver || "no driver yet")}</b>
-                        <span style={{ fontWeight: 600, color: "#5a6a85" }}>
-                          {[nDrops ? nDrops + " drop" + (nDrops === 1 ? "" : "s") : "", nPicks ? nPicks + " pick-up" + (nPicks === 1 ? "" : "s") : ""].filter(Boolean).join(" · ")}
+                    <div title={!loose ? "" : "Supplier pick-ups not in a run yet — give them a driver and run, or drag one onto a job"}
+                      style={{ display: "grid", gridTemplateColumns: dsCols(showPrep), gap: 7, margin: k ? "12px 0 6px" : "4px 0 6px", background: "#eef1f6", border: "1px solid #dde2ea", borderRadius: 12,
+                        padding: "0 12px 0 0", minHeight: 36, boxSizing: "border-box", overflow: "hidden", alignItems: "stretch", fontSize: 12, color: NAVY, whiteSpace: "nowrap" }}>
+                      <span style={{ gridColumn: "1 / span 10", display: "flex", alignItems: "stretch" }}>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "#dce2ec", padding: "0 14px" }}>
+                          <b>{loose ? "Supplier collections" : (e.obj.runNo ? "Run " + e.obj.runNo : "No run yet") + " · " + (e.obj.driver || "no driver yet")}</b>
+                          <span style={{ fontWeight: 600, color: "#5a6a85" }}>
+                            {[nDrops ? nDrops + " drop" + (nDrops === 1 ? "" : "s") : "", nPicks ? nPicks + " pick-up" + (nPicks === 1 ? "" : "s") : ""].filter(Boolean).join(" · ")}
+                          </span>
                         </span>
                       </span>
-                      <span style={{ flex: 1 }} />
-                      {!loose && (
-                        <span style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "#dce2ec", padding: "0 5px 0 14px" }}>
-                          <span style={{ fontWeight: 700, color: "#5a6a85" }}>Run weight</span><b style={{ marginRight: 2 }}>{runKg ? Math.round(runKg).toLocaleString("en-GB") + " kg" : "—"}</b>
+                      {loose ? <span style={{ gridColumn: "11 / -1" }} /> : <>
+                        <span title="Run weight — deliveries going out plus pick-ups coming back"
+                          style={{ display: "flex", alignItems: "center", justifyContent: "center", background: "#dce2ec", margin: "0 -3px", fontWeight: 800 }}>
+                          {runKg ? Math.round(runKg).toLocaleString("en-GB") + " kg" : "—"}
+                        </span>
+                        <span style={{ gridColumn: "12 / -1", display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
                           <PrintMenu title="Print or save this run's paperwork" onPick={(kk) => printJobs(sameRun.filter((x) => x.kind === "inv").map((x) => x.obj), kk, dayLabel(g.date) + " · " + (e.obj.runNo ? "Run " + e.obj.runNo : "No run") + (e.obj.driver ? " · " + e.obj.driver : ""))} />
                         </span>
-                      )}
+                      </>}
                     </div>
                   ) : null;
                   return (
@@ -773,6 +806,22 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
       </div>
       </div>
       <div style={{ height: 30 }} />
+      {resetAsk && (
+        <div onMouseDown={(e) => { if (e.target === e.currentTarget) setResetAsk(null); }} style={{ position: "fixed", inset: 0, zIndex: 90, background: "rgba(11,31,63,.35)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+          <div style={{ background: "#fff", borderRadius: 12, padding: "18px 20px", width: 460, maxWidth: "100%", boxShadow: "0 20px 50px rgba(11,31,63,.35)" }}>
+            <b style={{ fontSize: 16, color: NAVY }}>Reset {dayLabel(resetAsk)}?</b>
+            <p style={{ fontSize: 13.5, color: "#3c4a62", fontWeight: 600, lineHeight: 1.5, margin: "8px 0 14px" }}>
+              Every open job and pick-up on this day loses its driver, run, drop number and van, and the jobs are lined up in postcode order so you can plan the runs from scratch.
+              Completed jobs aren't touched, and dates and times stay as they are.
+            </p>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button style={btn} onClick={() => setResetAsk(null)}>Cancel</button>
+              <button style={goldBtn} onClick={() => { const d = resetAsk; setResetAsk(null); resetDay(d); }}>Reset day</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {ask && (
         <div onMouseDown={(e) => { if (e.target === e.currentTarget) setAsk(null); }} style={{ position: "fixed", inset: 0, zIndex: 90, background: "rgba(11,31,63,.35)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
           <div style={{ background: "#fff", borderRadius: 12, padding: "18px 20px", width: 440, maxWidth: "100%", boxShadow: "0 20px 50px rgba(11,31,63,.35)" }}>
