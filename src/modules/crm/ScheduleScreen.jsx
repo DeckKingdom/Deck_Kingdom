@@ -9,6 +9,7 @@ import {
   isVoidInvoice, applyInvoiceStockDeduction,
 } from "../../lib/crmCore.js";
 import { printJobDocs, DOC_KINDS } from "./printDocs.js";
+import { JOB_TYPES } from "../../lib/crmCore.js";
 import { Icon, Chip, Tg, sect, lbl, card, abtn, inp, btn, goldBtn, RiskChip, WebStatusChip, Soon } from "./ui.jsx";
 
 const RANGE_OPTS = [
@@ -27,7 +28,8 @@ const dayLabel = (d) => {
 const COLLECTION_BLUE = "#185FA5";
 // the board's columns: stripe · customer · driver · run · drop · van · weight · date+time · prep · follow-up · days
 const short16 = (t) => (String(t).length > 16 ? String(t).slice(0, 15).trimEnd() + "…" : String(t));
-const dsCols = (prep) => "4px 46px 170px 82px 120px 88px 84px 60px 104px 58px minmax(196px, 1fr) " + (prep ? "162px 162px " : "") + "98px 42px";
+// stripe · done · customer · postcode · source · job type · driver · run · drop · van · weight · date+time · [prep · follow-up] · update · days
+const dsCols = (prep) => "4px 46px 160px 82px 110px 128px 88px 70px 52px 90px 58px minmax(150px, 1fr) " + (prep ? "162px 162px " : "") + "98px 42px";
 const DROP_NOS = Array.from({ length: 20 }, (_, n) => String(n + 1));
 const rowBox = { display: "grid", gap: 10, alignItems: "center", background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, padding: "8px 12px 8px 0", marginBottom: 6, overflow: "hidden" };
 const pill = { fontFamily: "inherit", fontSize: 12, fontWeight: 700, color: NAVY, border: "1px solid #c9d0db", borderRadius: 999, background: "#fff", padding: "3px 16px 3px 8px", height: 28, boxSizing: "border-box", cursor: "pointer", maxWidth: "100%" };
@@ -106,6 +108,25 @@ const PrintMenu = ({ onPick, label, dark, title = "Print or save as PDF" }) => {
         </div>
       )}
     </>
+  );
+};
+
+// date pill showing just the day ("21st"); click opens the calendar
+const ordinal = (n) => n + (n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] || "th");
+const DayPill = ({ value, onChange }) => {
+  const ref = useRef(null);
+  const d = value ? new Date(value + "T00:00:00") : null;
+  const ok = d && !isNaN(d.getTime());
+  return (
+    <span style={{ position: "relative", flex: "none" }}>
+      <button type="button" title={ok ? d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" }) + " — click to change" : "Set a date"}
+        onClick={() => { const el = ref.current; if (!el) return; try { el.showPicker(); } catch { el.focus(); el.click(); } }}
+        style={{ ...pill, width: 58, padding: "3px 8px", textAlign: "center", color: ok ? NAVY : "#5a6a85", background: ok ? "#fff" : "#f3f5f9" }}>
+        {ok ? ordinal(d.getDate()) : "Date"}
+      </button>
+      <input ref={ref} type="date" value={value || ""} onChange={(e) => onChange(e.target.value)} tabIndex={-1}
+        style={{ position: "absolute", left: 0, bottom: 0, width: 1, height: 1, opacity: 0, pointerEvents: "none", border: 0, padding: 0 }} />
+    </span>
   );
 };
 
@@ -213,10 +234,13 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
     return c;
   });
   // dropped onto another job: same day, driver and run, slotted in just before it; drops renumbered
+  const isColDrag = (id) => String(id || "").startsWith("col:");
+  const moveColl = (id, date) => setColl(id.slice(4), (t) => { t.collectDate = date; });
   const dropBefore = (target) => {
     const id = dragId;
     endDrag();
     if (!id || id === target.id) return;
+    if (isColDrag(id)) return moveColl(id, target.deliveryDate || "");
     const was = crm.invoices.find((x) => x.id === id);
     const go = () => updateCrm((c) => {
       const d = c.invoices.find((x) => x.id === id);
@@ -238,12 +262,14 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
     const id = dragId;
     endDrag();
     if (!id) return;
+    if (isColDrag(id)) return moveColl(id, "");
     guard(id, () => updateCrm((c) => { const t = c.invoices.find((x) => x.id === id); if (t) { t.deliveryDate = ""; t.dropNo = ""; } return c; }));
   };
   const dropOn = (d) => {
     const id = dragId;
     endDrag();
     if (!id) return;
+    if (isColDrag(id)) return moveColl(id, d);
     const was = crm.invoices.find((x) => x.id === id);
     if (was && was.deliveryDate === d) return;
     guard(id, () => updateCrm((c) => {
@@ -408,13 +434,14 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
         </div>
         <span style={{ fontSize: 12.5, color: "#5a6a85", fontWeight: 700, whiteSpace: "nowrap" }}>{(s && s.postcode) || (c && c.postcode) || "—"}</span>
         <span style={{ minWidth: 0, overflow: "hidden" }}>{c && c.source ? <Chip style={{ fontSize: 10.5, padding: "1px 8px", whiteSpace: "nowrap", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis" }}>{c.source}</Chip> : <span style={{ color: "#aab3c2" }}>—</span>}</span>
+        <PillSelect value={i.jobType || ""} options={JOB_TYPES} placeholder="Job type" tone={isCollectionJob(i) ? "#9a7408" : NAVY} onChange={(v) => setInv(i.id, (t) => (t.jobType = v))} />
         <PillSelect value={i.driver || ""} options={DRIVERS} placeholder="Driver" onChange={(v) => setInv(i.id, (t) => (t.driver = v))} />
         <PillSelect value={i.runNo || ""} options={RUN_NOS} placeholder="Run" labelOf={(o) => "Run " + o} onChange={(v) => setInv(i.id, (t) => (t.runNo = v))} />
         <PillSelect value={i.dropNo || ""} options={DROP_NOS} placeholder="#" onChange={(v) => setInv(i.id, (t) => (t.dropNo = v))} />
         <PillSelect value={i.van || ""} options={vanOptions(crm)} placeholder="Van" onChange={(v) => setInv(i.id, (t) => (t.van = v))} />
         <div style={{ textAlign: "right", fontSize: 12.5, fontWeight: 700 }}>{kg === null ? "—" : kg.toLocaleString("en-GB", { maximumFractionDigits: 0 }) + " kg"}</div>
-        <div style={{ display: "flex", gap: 4, width: 196 }}>
-          <input type="date" value={i.deliveryDate || ""} onChange={(e) => { const v = e.target.value; guard(i.id, () => setInv(i.id, (t) => (t.deliveryDate = v))); }} style={{ ...pill, width: 116, flex: "none", padding: "3px 8px" }} />
+        <div style={{ display: "flex", gap: 4, width: 150 }}>
+          <DayPill value={i.deliveryDate} onChange={(v) => guard(i.id, () => setInv(i.id, (t) => (t.deliveryDate = v)))} />
           <PillSelect value={i.deliveryTime || ""} options={TIME_SLOTS} placeholder="Time" onChange={(v) => guard(i.id, () => setInv(i.id, (t) => (t.deliveryTime = v)))} />
         </div>
         {showPrep && (
@@ -458,9 +485,13 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
     return (
       <div style={{ ...rowBox, gridTemplateColumns: dsCols(showPrep), background: c.collected ? "#e9f6ee" : "#fff", borderColor: c.collected ? "#bfe3ca" : "#e6e9ef" }}>
         <div style={{ width: 4, alignSelf: "stretch", borderRadius: "12px 0 0 12px", margin: "-8px 0", background: c.collected ? "#3FA55C" : COLLECTION_BLUE }} />
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <span draggable title="Drag to move — onto another day, or back to Pending"
+            onDragStart={(ev) => { ev.dataTransfer.setData("text/plain", "col:" + c.id); ev.dataTransfer.effectAllowed = "move"; setDragId("col:" + c.id); }}
+            onDragEnd={endDrag}
+            style={{ cursor: "grab", color: "#aab3c2", fontSize: 14, lineHeight: 1, padding: "4px 1px", userSelect: "none" }}>⋮⋮</span>
           <button type="button" title={c.collected ? "Collected — click to undo" : "Mark as collected"} onClick={() => setColl(c.id, (t) => (t.collected = !t.collected))}
-            style={{ width: 18, height: 18, borderRadius: 999, border: "2px solid " + (c.collected ? "#3FA55C" : "#b8c0cc"), background: "#fff", padding: 0, boxSizing: "border-box", lineHeight: 0, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+            style={{ width: 18, height: 18, borderRadius: 999, border: "2px solid " + (c.collected ? "#3FA55C" : "#b8c0cc"), background: "#fff", padding: 0, boxSizing: "border-box", lineHeight: 0, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", flex: "none" }}>
             {c.collected && <span style={{ width: 8, height: 8, borderRadius: 999, background: "#3FA55C", flex: "none" }} />}
           </button>
         </div>
@@ -472,13 +503,14 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
         </div>
         <span style={{ fontSize: 12.5, color: "#5a6a85", fontWeight: 700, whiteSpace: "nowrap" }}>{c.postcode || "—"}</span>
         <span style={{ fontSize: 11.5, fontWeight: 700, color: COLLECTION_BLUE }}>COL-{c.collectionNo || "—"}</span>
+        <span style={{ fontSize: 12, fontWeight: 700, color: COLLECTION_BLUE, paddingLeft: 8 }}>Supplier pick-up</span>
         <span />
-        <span style={{ fontSize: 12, fontWeight: 700, color: COLLECTION_BLUE }}>Pick up</span>
+        <span />
         <span />
         <PillSelect value={c.van || ""} options={vanOptions(crm)} placeholder="Van" onChange={(v) => setColl(c.id, (t) => (t.van = v))} />
         <div style={{ textAlign: "right", fontSize: 12.5, fontWeight: 700 }}>{items ? items + " pcs" : "—"}</div>
-        <div style={{ display: "flex", gap: 4, width: 196 }}>
-          <input type="date" value={c.collectDate || ""} onChange={(e) => setColl(c.id, (t) => (t.collectDate = e.target.value))} style={{ ...pill, width: 118, padding: "3px 8px" }} />
+        <div style={{ display: "flex", gap: 4, width: 150 }}>
+          <DayPill value={c.collectDate} onChange={(v) => setColl(c.id, (t) => (t.collectDate = v))} />
           <PillSelect value={c.collectTime || ""} options={TIME_SLOTS} placeholder="Time" onChange={(v) => setColl(c.id, (t) => (t.collectTime = v))} />
         </div>
         <div style={{ gridColumn: showPrep ? "span 3" : "span 1", fontSize: 12, fontWeight: 700 }}>
@@ -502,8 +534,10 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
     if (e.kind === "col") {
       const c = e.obj;
       return (
-        <button className="dk-title-link" onClick={() => openCollection && openCollection(c.id)}
-          style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "2px 8px", width: "100%", padding: "8px 0", borderBottom: "1px solid #f0f2f6", textAlign: "left" }}>
+        <button className="dk-title-link" onClick={() => openCollection && openCollection(c.id)} draggable title="Drag onto a day to book the pick-up, or click to open it"
+          onDragStart={(ev) => { ev.dataTransfer.setData("text/plain", "col:" + c.id); ev.dataTransfer.effectAllowed = "move"; setDragId("col:" + c.id); }}
+          onDragEnd={endDrag}
+          style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "2px 8px", width: "100%", padding: "8px 0", borderBottom: "1px solid #f0f2f6", textAlign: "left", cursor: "grab" }}>
           <b style={{ fontSize: 13, color: COLLECTION_BLUE, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.supplier || "Supplier"} · collection</b>
           <span />
           <span style={{ fontSize: 11.5, color: "#5a6a85", fontWeight: 600 }}>{c.postcode || "—"} · COL-{c.collectionNo || "—"}</span>
@@ -652,16 +686,15 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
             </div>
           ) : (
             <div style={{ overflowX: "auto" }}>
-              <div style={{ minWidth: showPrep ? 1545 : 1225 }}>
+              <div style={{ minWidth: showPrep ? 1660 : 1325 }}>
                 {g.rows.map((e, k) => {
                   const key = runKey(e), prevKey = k ? runKey(g.rows[k - 1]) : null;
                   const sameRun = g.rows.filter((x) => runKey(x) === key);
                   const runKg = e.kind === "inv" ? sameRun.reduce((t, x) => t + (invoiceLoadKg(x.obj, crm) || 0), 0) : 0;
                   const head = key !== prevKey ? (
-                    <div style={{ display: "grid", gridTemplateColumns: dsCols(showPrep), gap: 10, alignItems: "center", padding: "0 12px 0 0", margin: k ? "12px 0 6px" : "4px 0 6px",
+                    <div style={{ display: "flex", justifyContent: "flex-end", gap: 6, alignItems: "center", padding: "0 4px 0 0", margin: k ? "12px 0 6px" : "4px 0 6px",
                       minHeight: 26 }}>
-                      <span />
-                      <span style={{ gridColumn: "span 12", display: "flex", alignItems: "center" }}>
+                      <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
                         <span title={e.kind === "inv" ? "Total weight on this run" : ""} style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "#fff", border: "1px solid #d5d9e0", borderRadius: 999, padding: "2px 12px", fontSize: 12, color: NAVY, whiteSpace: "nowrap" }}>
                           <b>{e.kind === "col" ? "Supplier collections" : (e.obj.runNo ? "Run " + e.obj.runNo : "No run yet") + " · " + (e.obj.driver || "no driver yet")}</b>
                           <span style={{ fontWeight: 600, color: "#5a6a85" }}>
@@ -695,7 +728,9 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
       {/* pending: always in view on the right */}
       <div style={{ ...card, marginBottom: 0, position: "sticky", top: 70, maxHeight: "calc(100vh - 90px)", overflowY: "auto", padding: "12px 16px",
           outline: overPending ? "2px dashed " + GOLD : "none", outlineOffset: 3, background: overPending ? "#fff8e6" : "#fff" }}
-        onDragOver={(ev) => { const it = dragId && crm.invoices.find((x) => x.id === dragId); if (it && it.deliveryDate) { ev.preventDefault(); setOverPending(true); } }}
+        onDragOver={(ev) => {
+          const it = dragId && (isColDrag(dragId) ? (crm.collections || []).find((x) => "col:" + x.id === dragId) : crm.invoices.find((x) => x.id === dragId));
+          if (it && (it.deliveryDate || it.collectDate)) { ev.preventDefault(); setOverPending(true); } }}
         onDragLeave={(ev) => { if (!ev.currentTarget.contains(ev.relatedTarget)) setOverPending(false); }}
         onDrop={(ev) => { ev.preventDefault(); unschedule(); }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
