@@ -332,3 +332,23 @@ export const WebStatusChip = ({ inv, style }) => {
     </span>
   );
 };
+
+// Placeholder for a feature that's planned but not built yet: a dashed "Soon" pill
+// whose hover note says what it will do and what it needs — so it isn't forgotten.
+export const Soon = ({ label = "Soon", icon, note, style }) => {
+  const [at, setAt] = useState(null);
+  return (
+    <span onMouseEnter={(e) => setAt(e.currentTarget.getBoundingClientRect())} onMouseLeave={() => setAt(null)}
+      style={{ display: "inline-flex", alignItems: "center", gap: 5, border: "1.5px dashed #b8c0cc", borderRadius: 999, padding: "3px 10px", fontSize: 11.5, fontWeight: 700, color: "#8593a8", background: "#f7f9fc", cursor: "help", whiteSpace: "nowrap", ...style }}>
+      {icon && <Icon name={icon} stroke="#8593a8" size={12} />}
+      {label}
+      {label && label !== "Soon" && <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: ".04em", color: "#9a7408", background: "#F4B73E33", borderRadius: 999, padding: "0 6px" }}>SOON</span>}
+      {at && (
+        <span style={{ position: "fixed", left: Math.max(8, Math.min(at.left, window.innerWidth - 330)), top: at.top > 160 ? undefined : at.bottom + 6, bottom: at.top > 160 ? window.innerHeight - at.top + 6 : undefined,
+          zIndex: 120, width: 310, whiteSpace: "normal", background: NAVY, color: "#fff", borderRadius: 12, padding: "9px 12px", fontSize: 12, fontWeight: 600, lineHeight: 1.45, boxShadow: "0 10px 30px rgba(11,31,63,.3)", pointerEvents: "none", textAlign: "left" }}>
+          <b style={{ color: "#F4B73E", display: "block", marginBottom: 2 }}>Planned — not built yet</b>{note}
+        </span>
+      )}
+    </span>
+  );
+};

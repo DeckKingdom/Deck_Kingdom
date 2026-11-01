@@ -8,7 +8,7 @@ import {
   skuIndex, invoiceCost, buildPicks, pickLandedCost, jobCost, blankPick, invoiceLoadKg, applyInvoiceStockDeduction,
   TRADE_COUNTER, TRADE_COUNTER_LABEL, quoteRef, sampleRef, isSaleInvoice, riskOf, staffName, isVoidInvoice, userInitials,
 } from "../../lib/crmCore.js";
-import { ListHero, HeroStat, HeroAdd, SearchBox, RiskChip, WebStatusChip } from "./ui.jsx";
+import { ListHero, HeroStat, HeroAdd, SearchBox, RiskChip, WebStatusChip, Soon } from "./ui.jsx";
 import { Icon, Chip, Tg, Modal, selectAllProps, SuggestInput, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
 import { printInvoice, printJobSheet, printLoadingBill } from "./printDocs.js";
 import { readableFor } from "./LinesEditor.jsx";
@@ -508,7 +508,10 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
               {JOB_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
             </select>
           </div>
-          {field("Delivery date", "deliveryDate", { type: "date" })}
+          <div>
+            <span style={{ ...lbl, display: "flex", alignItems: "center", gap: 6 }}>Delivery date <Soon label="" icon="warn" note={"Changing the delivery date or time here doesn't yet warn that the customer was already told. Planned: the same 'Customer already notified — change and re-notify?' check the Delivery Schedule has. Until then the schedule shows the job amber so it gets re-sent."} style={{ padding: "0 5px", borderWidth: 1 }} /></span>
+            <input style={inp} type="date" value={inv.deliveryDate || ""} {...selectAllProps} onChange={(e) => setInv((x) => (x.deliveryDate = e.target.value))} />
+          </div>
           <div>
             <span style={lbl}>Time</span>
             <select style={inp} value={inv.deliveryTime} onChange={(e) => setInv((x) => (x.deliveryTime = e.target.value))}>

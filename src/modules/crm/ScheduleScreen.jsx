@@ -8,7 +8,7 @@ import {
   PREP_FLAGS, FOLLOWUP_FLAGS, today,
   isVoidInvoice, applyInvoiceStockDeduction,
 } from "../../lib/crmCore.js";
-import { Icon, Chip, Tg, sect, lbl, card, abtn, inp, btn, goldBtn, RiskChip, WebStatusChip } from "./ui.jsx";
+import { Icon, Chip, Tg, sect, lbl, card, abtn, inp, btn, goldBtn, RiskChip, WebStatusChip, Soon } from "./ui.jsx";
 
 const RANGE_OPTS = [
   ["upcoming", "Upcoming + last 7 days"],
@@ -511,11 +511,14 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
       : todo ? { bg: "#E8912D", fg: "#fff", t: todo + " to update" }
       : { bg: "#3FA55C", fg: "#fff", t: "✓ Confirmed" };
     return (
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
       <button type="button" onClick={() => setNotify({ date })}
         title={day ? "Confirmed " + shortStamp(day.at) + " by " + day.by + (todo ? " — " + todo + " customer" + (todo === 1 ? "" : "s") + " not told about the current date/time" : " — everyone's been told") : "Tell every customer on this day their delivery date and time"}
         style={{ border: "none", borderRadius: 8, background: look.bg, color: look.fg, fontFamily: "inherit", fontWeight: 800, fontSize: 12, padding: "6px 12px", cursor: "pointer", whiteSpace: "nowrap" }}>
         {look.t}
       </button>
+      {day && <Soon label="" icon="lock" note={'Once a day is confirmed, lock its jobs so only managers can change date, time, driver, run or drop. Everyone else sees them read-only. Needs staff roles (manager / staff) adding to logins first.'} style={{ padding: "3px 6px", background: "transparent", borderColor: "#5a6a85" }} />}
+      </span>
     );
   };
 
@@ -724,7 +727,11 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
                   );
                 })}
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 18px", borderTop: "1px solid #e6e9ef" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 18px 0", borderTop: "1px solid #e6e9ef", flexWrap: "wrap" }}>
+                <Soon label="Send all automatically" icon="refresh" note={'Send every customer on the day their WhatsApp and email in one click, in the background — no tabs or chats to press send in. Needs a WhatsApp Business API provider (e.g. Twilio or 360dialog, approved message templates) and an email sending service (e.g. Resend or your Krystal SMTP), wired in through a Supabase function.'} />
+                {notify.date && <Soon label="Lock day" icon="lock" note={'Once a day is confirmed, lock its jobs so only managers can change date, time, driver, run or drop. Everyone else sees them read-only. Needs staff roles (manager / staff) adding to logins first.'} />}
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 18px 12px", whiteSpace: "nowrap" }}>
                 <span style={{ fontSize: 12, fontWeight: 700, color: left ? "#a05f10" : "#28713e" }}>{left ? left + " still to tell" : "Everyone's been told"}</span>
                 <span style={{ flex: 1 }} />
                 {notify.date && jobs.some((i) => !i.deliveryTime) && <span style={{ fontSize: 11.5, fontWeight: 600, color: "#a05f10" }}>Some jobs have no time slot yet</span>}
