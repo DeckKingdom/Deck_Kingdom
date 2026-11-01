@@ -1,7 +1,9 @@
 // CRM domain helpers: customers, sites, invoices, delivery schedule.
 import { uid, daysBetween, landedPerPiece, addDays } from "./core.js";
 
-export const JOB_TYPES = ["Delivery Run 1", "Delivery Run 2", "Delivery Run 3", "Customer Collection", "Evri", "Post Office", "Courier TG", "Returns"];
+export const JOB_TYPES = ["Pending", "Delivery", "Customer Collection", "Evri", "Post Office", "Courier TG", "Returns"];
+// run number on the delivery schedule (was part of the job type: "Delivery Run 2")
+export const RUN_NOS = ["1", "2", "3", "4", "5", "6"];
 // "collection" anywhere in the job type means the customer picks up — no van run
 export const isCollectionJob = (inv) => /collection/i.test(inv && inv.jobType ? inv.jobType : "");
 export const PAYMENT_TYPES = ["COD", "Stripe", "Transfer", "Card", "Cash", "Post"];
@@ -172,7 +174,7 @@ export const blankInvoice = (customerId, siteId) => ({
   siteId: siteId || "",
   date: today(),
   orderRef: "",
-  jobType: "Delivery Run 1",
+  jobType: "Pending",
   van: "",
   weightKg: "",
   deliveryDate: "",

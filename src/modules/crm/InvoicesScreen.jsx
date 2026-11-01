@@ -258,7 +258,26 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
     <div style={{ maxWidth: 1140, margin: "0 auto", padding: "18px 22px" }}>
       <datalist id="dk-paytypes">{PAYMENT_TYPES.map((s) => <option key={s} value={s} />)}</datalist>
 
-      <button style={{ ...btn, marginBottom: 12 }} onClick={() => setSelId(null)}><Icon name="back" stroke={NAVY} />All invoices</button>
+      {(() => {
+        // step through the list in its order (newest first; the current search / filter applied)
+        const order = matches.some((x) => x.id === inv.id) ? matches : sorted;
+        const at = order.findIndex((x) => x.id === inv.id);
+        const prev = at > 0 ? order[at - 1] : null, next = at >= 0 && at < order.length - 1 ? order[at + 1] : null;
+        const arrow = (x, up) => (
+          <button style={{ ...abtn, width: 36, height: 36, opacity: x ? 1 : 0.4, cursor: x ? "pointer" : "default" }} disabled={!x} onClick={() => x && setSelId(x.id)}
+            title={x ? (up ? "Previous: #" : "Next: #") + (x.invNo || "—") : up ? "First invoice" : "Last invoice"}>
+            <span style={{ display: "inline-flex", transform: up ? "rotate(90deg)" : "rotate(-90deg)" }}><Icon name="back" stroke={NAVY} /></span>
+          </button>
+        );
+        return (
+          <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12 }}>
+            <button style={btn} onClick={() => setSelId(null)}><Icon name="back" stroke={NAVY} />All invoices</button>
+            {arrow(prev, true)}
+            {arrow(next, false)}
+            {at >= 0 && <span style={{ fontSize: 12, fontWeight: 700, color: "#8593a8" }}>{(at + 1).toLocaleString("en-GB")} of {order.length.toLocaleString("en-GB")}</span>}
+          </div>
+        );
+      })()}
 
       {notice && (
         <div style={{ ...card, borderColor: GOLD, background: "#fff8e6", display: "flex", gap: 10, alignItems: "center", fontWeight: 600, fontSize: 13 }}>

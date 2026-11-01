@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { NAVY, GOLD, RED, prettyDate, prettyDateTime } from "../../lib/core.js";
 import {
-  JOB_TYPES, TIME_SLOTS, DRIVERS, vanOptions,
+  RUN_NOS, TIME_SLOTS, DRIVERS, vanOptions,
   invoiceTotals, gbp, isPaid, scheduleStatus, STRIPE_COLOURS, daysSinceRaised, isCollectionJob, invoiceLoadKg, collectionProgress,
   PREP_FLAGS, FOLLOWUP_FLAGS, today,
   isVoidInvoice,
@@ -25,19 +25,44 @@ const dayLabel = (d) => {
 
 const COLLECTION_BLUE = "#185FA5";
 // the board's columns: stripe · customer · driver · run · drop · van · weight · date+time · prep · follow-up · days
-const DS_COLS = "4px minmax(190px, 1fr) 88px 128px 56px 96px 58px 196px 162px 162px 42px";
+const DS_COLS = "4px minmax(190px, 1fr) 88px 84px 60px 104px 58px 196px 162px 162px 42px";
 const DROP_NOS = Array.from({ length: 20 }, (_, n) => String(n + 1));
 const rowBox = { display: "grid", gap: 10, alignItems: "center", background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, padding: "8px 12px 8px 0", marginBottom: 6, overflow: "hidden" };
-const pill = { fontFamily: "inherit", fontSize: 12, fontWeight: 700, color: NAVY, border: "1px solid #d5d9e0", borderRadius: 999, background: "#fff", padding: "3px 16px 3px 8px", height: 28, boxSizing: "border-box", cursor: "pointer", maxWidth: "100%" };
-// an editable pill: a small rounded drop-down
-const PillSelect = ({ value, options, placeholder, onChange, tone }) => (
-  <select value={value} onChange={(e) => onChange(e.target.value)} title={placeholder}
-    style={{ ...pill, width: "100%", color: value ? tone || NAVY : "#aab3c2", background: value ? "#fff" : "#f7f8fb" }}>
-    <option value="">{placeholder}</option>
-    {value && !options.includes(value) && <option value={value}>{value}</option>}
-    {options.map((o) => <option key={o} value={o}>{o}</option>)}
-  </select>
-);
+const pill = { fontFamily: "inherit", fontSize: 12, fontWeight: 700, color: NAVY, border: "1px solid #c9d0db", borderRadius: 999, background: "#fff", padding: "3px 16px 3px 8px", height: 28, boxSizing: "border-box", cursor: "pointer", maxWidth: "100%" };
+// an editable pill: a small rounded drop-down; the list shows 10 at a time and scrolls
+const PillSelect = ({ value, options, placeholder, onChange, tone, labelOf = (o) => o }) => {
+  const [box, setBox] = useState(null);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!box) return;
+    const shut = (e) => { if (!(e.target.closest && e.target.closest("[data-pill-list]")) && !(ref.current && ref.current.contains(e.target))) setBox(null); };
+    const gone = () => setBox(null);
+    document.addEventListener("mousedown", shut);
+    window.addEventListener("scroll", gone, true);
+    return () => { document.removeEventListener("mousedown", shut); window.removeEventListener("scroll", gone, true); };
+  }, [box]);
+  const all = value && !options.includes(value) ? [value, ...options] : options;
+  return (
+    <>
+      <button ref={ref} type="button" title={placeholder}
+        onClick={() => { if (box) return setBox(null); const r = ref.current.getBoundingClientRect(); setBox({ left: r.left, top: r.bottom + 4, width: Math.max(r.width, 120) }); }}
+        style={{ ...pill, width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4, color: value ? tone || NAVY : "#5a6a85", background: value ? "#fff" : "#f3f5f9", borderColor: box ? NAVY : "#c9d0db" }}>
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{value ? labelOf(value) : placeholder}</span>
+        <span style={{ fontSize: 9, color: "#5a6a85" }}>▾</span>
+      </button>
+      {box && (
+        <div data-pill-list style={{ position: "fixed", left: Math.min(box.left, window.innerWidth - box.width - 8), top: Math.min(box.top, window.innerHeight - 10 * 30 - 20), width: box.width, zIndex: 80,
+          maxHeight: 10 * 30 + 8, overflowY: "auto", background: "#fff", border: "1px solid #d5d9e0", borderRadius: 12, boxShadow: "0 10px 30px rgba(11,31,63,.2)", padding: 4 }}>
+          {[["", "—"], ...all.map((o) => [o, labelOf(o)])].map(([v, l]) => (
+            <button key={v || "none"} type="button" onClick={() => { onChange(v); setBox(null); }}
+              style={{ display: "block", width: "100%", height: 30, textAlign: "left", padding: "0 10px", border: "none", borderRadius: 8, cursor: "pointer", fontFamily: "inherit", fontSize: 12.5, fontWeight: v === value ? 800 : 600,
+                background: v === value ? "#eef1f6" : "transparent", color: v ? NAVY : "#8593a8" }}>{l}</button>
+          ))}
+        </div>
+      )}
+    </>
+  );
+};
 // days since the order came in: grey under 3, amber from 3, red from 5 (finished jobs stay grey)
 const SLA_STYLES = { ok: { background: "#eef1f6", color: "#5a6a85" }, warn: { background: "#E8912D", color: "#fff" }, late: { background: RED, color: "#fff" } };
 const slaLevel = (days, done) => (done || days === null ? "ok" : days >= 5 ? "late" : days >= 3 ? "warn" : "ok");
@@ -162,7 +187,7 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
     return (
       <div style={{ ...rowBox, gridTemplateColumns: DS_COLS }}>
         <div style={{ width: 4, alignSelf: "stretch", borderRadius: "12px 0 0 12px", margin: "-8px 0", background: STRIPE_COLOURS[status] }} />
-        <div style={{ minWidth: 0, position: "relative" }} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
+        <div style={{ minWidth: 0, position: "relative" }} onMouseEnter={(ev) => setHover(ev.currentTarget.getBoundingClientRect())} onMouseLeave={() => setHover(false)}>
           <div style={{ display: "flex", gap: 7, alignItems: "center", minWidth: 0 }}>
             <button className="dk-title-link" onClick={(e) => { setHover(false); setPop({ id: i.id, rect: e.currentTarget.getBoundingClientRect() }); }}
               style={{ fontWeight: 700, fontSize: 13.5, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "60%" }}>
@@ -173,13 +198,13 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
             <RiskChip inv={i} /><WebStatusChip inv={i} />
           </div>
           {hover && stamp.length > 0 && pop?.id !== i.id && (
-            <div style={{ position: "absolute", left: 0, top: "calc(100% + 4px)", zIndex: 30, background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, padding: "6px 10px", boxShadow: "0 8px 24px rgba(11,31,63,.2)", whiteSpace: "nowrap", fontSize: 11.5, fontWeight: 600, color: NAVY, lineHeight: 1.6, pointerEvents: "none" }}>
+            <div style={{ position: "fixed", left: hover.left, top: hover.bottom + 4, zIndex: 60, background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, padding: "6px 10px", boxShadow: "0 8px 24px rgba(11,31,63,.2)", whiteSpace: "nowrap", fontSize: 11.5, fontWeight: 600, color: NAVY, lineHeight: 1.6, pointerEvents: "none" }}>
               {stamp.map((l) => <div key={l}>{l}</div>)}
             </div>
           )}
         </div>
         <PillSelect value={i.driver || ""} options={DRIVERS} placeholder="Driver" onChange={(v) => setInv(i.id, (t) => (t.driver = v))} />
-        <PillSelect value={i.jobType || ""} options={JOB_TYPES} placeholder="Run" tone={isCollectionJob(i) ? "#9a7408" : undefined} onChange={(v) => setInv(i.id, (t) => (t.jobType = v))} />
+        <PillSelect value={i.runNo || ""} options={RUN_NOS} placeholder="Run" labelOf={(o) => "Run " + o} onChange={(v) => setInv(i.id, (t) => (t.runNo = v))} />
         <PillSelect value={i.dropNo || ""} options={DROP_NOS} placeholder="#" onChange={(v) => setInv(i.id, (t) => (t.dropNo = v))} />
         <PillSelect value={i.van || ""} options={vanOptions(crm)} placeholder="Van" onChange={(v) => setInv(i.id, (t) => (t.van = v))} />
         <div style={{ textAlign: "right", fontSize: 12.5, fontWeight: 700 }}>{kg === null ? "—" : kg.toLocaleString("en-GB", { maximumFractionDigits: 0 }) + " kg"}</div>
