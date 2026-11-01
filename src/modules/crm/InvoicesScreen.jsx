@@ -6,7 +6,7 @@ import {
   recordOrigin, blankInvoice, blankLine, nextNumber, invoiceTotals, gbp, isPaid,
   JOB_TYPES, PAYMENT_TYPES, PREP_FLAGS, FOLLOWUP_FLAGS, today, TIME_SLOTS, vanOptions,
   skuIndex, invoiceCost, buildPicks, pickLandedCost, jobCost, blankPick, invoiceLoadKg, applyInvoiceStockDeduction,
-  TRADE_COUNTER, TRADE_COUNTER_LABEL, quoteRef, sampleRef, isSaleInvoice, riskOf, staffName, isVoidInvoice,
+  TRADE_COUNTER, TRADE_COUNTER_LABEL, quoteRef, sampleRef, isSaleInvoice, riskOf, staffName, isVoidInvoice, userInitials,
 } from "../../lib/crmCore.js";
 import { ListHero, HeroStat, HeroAdd, SearchBox, RiskChip, WebStatusChip } from "./ui.jsx";
 import { Icon, Chip, Tg, Modal, selectAllProps, SuggestInput, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
@@ -15,6 +15,7 @@ import { readableFor } from "./LinesEditor.jsx";
 import LinesEditor from "./LinesEditor.jsx";
 import StockCheck from "./StockCheck.jsx";
 
+const docBtn = { ...btn, padding: "6px 11px", fontSize: 12.5 };
 const navyBtn = { ...btn, background: "transparent", border: "1px solid #3a4f78", color: "#fff" };
 const numInp = { ...inp, textAlign: "right" };
 
@@ -44,6 +45,8 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
   const inv = crm.invoices.find((i) => i.id === selId) || null;
   const bySkuAll = useMemo(() => skuIndex(crm), [crm.masterProducts]);
 
+  const [stampOpen, setStampOpen] = useState(false);
+  const [followOpen, setFollowOpen] = useState(false);
   const setInv = (fn) =>
     updateCrm((c) => {
       const t = c.invoices.find((i) => i.id === inv.id);
@@ -268,10 +271,19 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
       <div style={{ background: "linear-gradient(135deg,#0B1F3F 0%,#13294f 100%)", borderRadius: 12, padding: "16px 22px", color: "#fff", marginBottom: 14, display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
         <div>
           <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-            <h2 style={{ margin: 0, fontSize: 19 }}>
-              Invoice #{inv.invNo || "—"}
-              <span style={{ color: "#aeb9cf", fontWeight: 600, fontSize: 14, marginLeft: 12 }}>{prettyDate(inv.date)}</span>
-            </h2>
+            <span style={{ position: "relative", display: "inline-block" }} onMouseEnter={() => setStampOpen(true)} onMouseLeave={() => setStampOpen(false)}>
+              <h2 style={{ margin: 0, fontSize: 19, cursor: "default" }}>
+                Invoice #{inv.invNo || "—"}
+                <span style={{ color: "#aeb9cf", fontWeight: 600, fontSize: 14, marginLeft: 12 }}>{prettyDate(inv.date)}</span>
+              </h2>
+              {stampOpen && (
+                <span style={{ position: "absolute", left: 0, top: "calc(100% + 6px)", zIndex: 20, background: "#fff", color: NAVY, border: "1px solid #e6e9ef", borderRadius: 12, padding: "8px 12px", boxShadow: "0 8px 24px rgba(0,0,0,.28)", whiteSpace: "nowrap", fontSize: 12, fontWeight: 600, lineHeight: 1.6 }}>
+                  <span style={{ display: "block" }}>Raised {prettyDate(inv.created)}{inv.raisedBy ? " by " + inv.raisedBy.split("@")[0] : ""}
+                    {recordOrigin(inv).key === "filemaker" ? " · came across from FileMaker" : recordOrigin(inv).key === "website" ? " · came in from the website" : ""}</span>
+                  {inv.updatedAt && <span style={{ display: "block" }}>{"Updated " + prettyDateTime(inv.updatedAt) + (inv.modifiedBy ? " by " + inv.modifiedBy.split("@")[0] + " (" + userInitials(crm, inv.modifiedBy) + ")" : "")}</span>}
+                </span>
+              )}
+            </span>
             {(() => {
               const fromQuote = inv.quoteId ? (crm.quotes || []).find((q) => q.id === inv.quoteId) : null;
               return fromQuote ? (
@@ -288,25 +300,12 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
               </button>
             ))}
           </div>
-          <div style={{ fontSize: 12.5, color: "#aeb9cf", fontWeight: 600, marginTop: 5 }}>
-            Raised {prettyDate(inv.created)}{inv.raisedBy ? " by " + inv.raisedBy.split("@")[0] : ""}
-            {recordOrigin(inv).key === "filemaker" ? " · came across from FileMaker" : recordOrigin(inv).key === "website" ? " · came in from the website" : ""}
-            {inv.updatedAt ? " · Updated " + prettyDateTime(inv.updatedAt) + (inv.modifiedBy ? " by " + inv.modifiedBy.split("@")[0] : "") : ""}
-          </div>
         </div>
         <span style={{ flex: 1 }} />
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button style={navyBtn} onClick={() => tryPrint("invoice")}><Icon name="doc" stroke="#fff" />Invoice PDF</button>
-          <button style={navyBtn} onClick={() => tryPrint("job")}><Icon name="truck" stroke="#fff" />Job sheet</button>
-          <button style={navyBtn} onClick={() => tryPrint("loading")}><Icon name="box" stroke="#fff" />Loading bill</button>
-          {!inv.riskFlag && (
-            <button style={{ ...navyBtn, border: "1px solid #7a2a3a", color: "#f2a6b1" }} title="Flag this job as high risk — it gets a red warning until someone checks it"
-              onClick={() => setInv((t) => { t.riskFlag = "manual"; t.riskNote = ""; t.riskChecked = ""; })}>
-              <Icon name="warn" stroke="#f2a6b1" />Flag risk
-            </button>
-          )}
-          <button style={{ ...navyBtn, border: "1px dashed #3a4f78", color: "#8fa0c0" }} onClick={() => removeInvoice(inv)}><Icon name="bin" stroke="#8fa0c0" />Delete</button>
-        </div>
+        <button title="Delete this invoice" onClick={() => removeInvoice(inv)}
+          style={{ width: 28, height: 28, borderRadius: 8, border: "1px dashed #3a4f78", background: "transparent", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0, flex: "none" }}>
+          <Icon name="bin" stroke="#8fa0c0" size={13} />
+        </button>
       </div>
 
       {/* refunded / cancelled on the website */}
@@ -440,7 +439,16 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
 
       {/* job & delivery */}
       <div style={card}>
-        <p style={sect}>Job &amp; delivery</p>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+          <p style={{ ...sect, margin: 0 }}>Job &amp; delivery</p>
+          <span style={{ flex: 1 }} />
+          <label style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>
+            <input type="checkbox" checked={inv.deliveryCompleted}
+              onChange={(e) => setInv((x, c) => { x.deliveryCompleted = e.target.checked; applyInvoiceStockDeduction(x, c, e.target.checked, me); })} />
+            Delivery completed
+            {inv.stockDeducted && <Chip tone="green" style={{ marginLeft: 4, fontSize: 10, padding: "1px 7px" }}>stock out</Chip>}
+          </label>
+        </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(118px, 1fr))", gap: 12, marginBottom: 12 }}>
           <div style={{ gridColumn: "span 2" }}>
             <span style={lbl}>Job type</span>
@@ -478,23 +486,31 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
           {PREP_FLAGS.map(([k, label, icon]) => (
             <Tg key={k} on={inv.flags[k]} title={label} icon={icon} onClick={() => setInv((x) => (x.flags[k] = !x.flags[k]))} />
           ))}
-          <span style={{ ...lbl, marginBottom: 0, margin: "0 4px 0 14px" }}>Follow-up</span>
-          {FOLLOWUP_FLAGS.map(([k, label, icon]) => (
+          <button type="button" onClick={() => setFollowOpen((o) => !o)} title="After-sale follow-up ticks"
+            style={{ ...lbl, marginBottom: 0, margin: "0 4px 0 14px", background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", gap: 5, alignItems: "center" }}>
+            Follow-up <span style={{ color: NAVY }}>{FOLLOWUP_FLAGS.filter(([k]) => inv.flags[k]).length}/{FOLLOWUP_FLAGS.length}</span> {followOpen ? "▾" : "▸"}
+          </button>
+          {followOpen && FOLLOWUP_FLAGS.map(([k, label, icon]) => (
             <Tg key={k} on={inv.flags[k]} title={label} icon={icon} onClick={() => setInv((x) => (x.flags[k] = !x.flags[k]))} />
           ))}
-          <span style={{ flex: 1 }} />
-          <label style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 13.5, fontWeight: 700 }}>
-            <input type="checkbox" checked={inv.deliveryCompleted}
-              onChange={(e) => setInv((x, c) => { x.deliveryCompleted = e.target.checked; applyInvoiceStockDeduction(x, c, e.target.checked, me); })} />
-            Delivery completed
-            {inv.stockDeducted && <Chip tone="green" style={{ marginLeft: 6, fontSize: 10, padding: "1px 7px" }}>stock out</Chip>}
-          </label>
         </div>
       </div>
 
       {/* lines + totals */}
       <div style={card}>
-        <p style={sect}>Lines</p>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
+          <p style={{ ...sect, margin: 0 }}>Lines</p>
+          <span style={{ flex: 1 }} />
+          <button style={docBtn} onClick={() => tryPrint("invoice")}><Icon name="doc" stroke={NAVY} size={13} />Invoice PDF</button>
+          <button style={docBtn} onClick={() => tryPrint("job")}><Icon name="truck" stroke={NAVY} size={13} />Job sheet</button>
+          <button style={docBtn} onClick={() => tryPrint("loading")}><Icon name="box" stroke={NAVY} size={13} />Loading bill</button>
+          {!inv.riskFlag && (
+            <button style={{ ...docBtn, color: "#9b1c2e", borderColor: "#f3c2cb" }} title="Flag this job as high risk — it gets a red warning until someone checks it"
+              onClick={() => setInv((t) => { t.riskFlag = "manual"; t.riskNote = ""; t.riskChecked = ""; })}>
+              <Icon name="warn" stroke="#9b1c2e" size={13} />Flag risk
+            </button>
+          )}
+        </div>
         <LinesEditor doc={inv} edit={setInv} crm={crm} />
 
         <StockCheck inv={inv} crm={crm} planner={planner} updatePlanner={updatePlanner} updateCrm={updateCrm} me={me} openCollection={openCollection}

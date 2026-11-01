@@ -726,7 +726,6 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
                             </td>
                             <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", textAlign: "right" }}>
                               <span style={{ display: "inline-flex", gap: 5 }}>
-                                <button style={abtn} title="Open sample request" onClick={() => openSample(x.id)}><Icon name="pen" /></button>
                                 <button style={abtn} title="Delete sample request" onClick={() => removeSample(x)}><Icon name="bin" /></button>
                               </span>
                             </td>
