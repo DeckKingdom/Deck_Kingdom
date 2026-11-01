@@ -213,6 +213,16 @@ function dk_ops_order_payload( $order ) {
 		'shipping'       => $addr( 'shipping' ),
 		'items'          => $items,
 		'risk'           => dk_ops_risk( $order ),
+		'refundTotal'    => round( (float) $order->get_total_refunded(), 2 ),
+		'refunds'        => array_values( array_map( function ( $rf ) {
+			$d = $rf->get_date_created();
+			return array(
+				'id'     => (string) $rf->get_id(),
+				'amount' => round( (float) $rf->get_amount(), 2 ),
+				'reason' => (string) $rf->get_reason(),
+				'date'   => $d ? $d->date( 'Y-m-d' ) : '',
+			);
+		}, $order->get_refunds() ) ),
 	);
 }
 
@@ -373,6 +383,15 @@ function dk_ops_soon() {
 add_action( 'dk_ops_feed_soon', 'dk_ops_run' );
 add_action( 'woocommerce_new_order', 'dk_ops_soon' );
 add_action( 'woocommerce_order_status_changed', 'dk_ops_soon' );
+// a refund doesn't always change the order's own "last modified" date, so nudge it so the refund goes across
+add_action( 'woocommerce_order_refunded', function ( $order_id ) {
+	$o = wc_get_order( $order_id );
+	if ( $o ) {
+		$o->set_date_modified( time() );
+		$o->save();
+	}
+	dk_ops_soon();
+} );
 
 /* ---------- WPForms sample forms (while still in use) ---------- */
 add_action( 'wpforms_process_complete', function ( $fields, $entry, $form_data, $entry_id ) {

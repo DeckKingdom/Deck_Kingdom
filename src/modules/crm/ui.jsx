@@ -318,3 +318,17 @@ export const RiskChip = ({ inv, style }) => {
     </span>
   );
 };
+
+// website refund / cancellation marker on a job
+export const WebStatusChip = ({ inv, style }) => {
+  const w = (inv && inv.webStatus) || "";
+  if (!w) return null;
+  const part = w === "partial refund";
+  return (
+    <span title={part ? "Part refunded on the website — check the delivery" : "Refunded / cancelled on the website — off the schedule and out of sales"}
+      style={{ display: "inline-flex", alignItems: "center", fontSize: 11, fontWeight: 800, padding: "2px 8px", borderRadius: 999, whiteSpace: "nowrap",
+        background: part ? "#fdf3dc" : "#eef1f6", color: part ? "#8a5a00" : "#5a6a85", border: "1px solid " + (part ? "#f4d78f" : "#d5d9e0"), ...style }}>
+      {part ? "Part refunded" : w === "refunded" ? "Refunded" : "Cancelled"}
+    </span>
+  );
+};

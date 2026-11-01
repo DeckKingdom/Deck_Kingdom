@@ -6,9 +6,9 @@ import {
   recordOrigin, blankInvoice, blankLine, nextNumber, invoiceTotals, gbp, isPaid,
   JOB_TYPES, PAYMENT_TYPES, PREP_FLAGS, FOLLOWUP_FLAGS, today, TIME_SLOTS, vanOptions,
   skuIndex, invoiceCost, buildPicks, pickLandedCost, jobCost, blankPick, invoiceLoadKg, applyInvoiceStockDeduction,
-  TRADE_COUNTER, TRADE_COUNTER_LABEL, quoteRef, sampleRef, isSaleInvoice, riskOf, staffName,
+  TRADE_COUNTER, TRADE_COUNTER_LABEL, quoteRef, sampleRef, isSaleInvoice, riskOf, staffName, isVoidInvoice,
 } from "../../lib/crmCore.js";
-import { ListHero, HeroStat, HeroAdd, SearchBox, RiskChip } from "./ui.jsx";
+import { ListHero, HeroStat, HeroAdd, SearchBox, RiskChip, WebStatusChip } from "./ui.jsx";
 import { Icon, Chip, Tg, Modal, selectAllProps, SuggestInput, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
 import { printInvoice, printJobSheet, printLoadingBill } from "./printDocs.js";
 import { readableFor } from "./LinesEditor.jsx";
@@ -115,15 +115,16 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
           const monthKey = tod.slice(0, 7);
           const lastKey = addMonths(tod.slice(0, 8) + "01", -1).slice(0, 7);
           const dom = Number(tod.slice(8, 10));
-          const inMonth = (key, upto) => crm.invoices.filter((i) => (i.date || "").slice(0, 7) === key && (!upto || Number((i.date || "").slice(8, 10)) <= upto));
+          const live = crm.invoices.filter((i) => !isVoidInvoice(i)); // refunded / cancelled on the website don't count
+          const inMonth = (key, upto) => live.filter((i) => (i.date || "").slice(0, 7) === key && (!upto || Number((i.date || "").slice(8, 10)) <= upto));
           const sum = (l) => l.reduce((t, i) => t + invoiceTotals(i).total, 0);
           const thisM = inMonth(monthKey), salesNow = sum(thisM), salesLast = sum(inMonth(lastKey, dom));
-          const awaiting = crm.invoices.filter((i) => !isPaid(i));
+          const awaiting = live.filter((i) => !isPaid(i));
           const owed = sum(awaiting);
           const weekEnd = addDays(tod, 6);
-          const today_ = crm.invoices.filter((i) => i.deliveryDate === tod && !i.deliveryCompleted).length;
-          const week = crm.invoices.filter((i) => i.deliveryDate >= tod && i.deliveryDate <= weekEnd && !i.deliveryCompleted).length;
-          const toBook = crm.invoices.filter((i) => !i.deliveryDate && !i.deliveryCompleted).length;
+          const today_ = live.filter((i) => i.deliveryDate === tod && !i.deliveryCompleted).length;
+          const week = live.filter((i) => i.deliveryDate >= tod && i.deliveryDate <= weekEnd && !i.deliveryCompleted).length;
+          const toBook = live.filter((i) => !i.deliveryDate && !i.deliveryCompleted).length;
           const sales = thisM.filter(isSaleInvoice);
           const feeds = [["FileMaker feed", crm.fmBridge, 30], ["Website feed", crm.wooBridge, 24 * 60]].filter(([, fd]) => fd && fd.at);
           return (
@@ -199,14 +200,15 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
                             {String(i.id).startsWith("web-i-") && <span title="Came in from the website" style={{ marginLeft: 6, fontSize: 9.5, fontWeight: 800, padding: "1px 5px", borderRadius: 8, background: "#fdf3dc", color: "#8a5a00", letterSpacing: 0.3 }}>WEB</span>}
                           </td>
                           <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", whiteSpace: "nowrap" }}>{prettyDate(i.date)}</td>
-                          <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", fontWeight: 700 }}>{c ? c.name : <span style={{ color: RED }}>No customer</span>}<RiskChip inv={i} style={{ marginLeft: 8 }} /></td>
+                          <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", fontWeight: 700 }}>{c ? c.name : <span style={{ color: RED }}>No customer</span>}<RiskChip inv={i} style={{ marginLeft: 8 }} /><WebStatusChip inv={i} style={{ marginLeft: 8 }} /></td>
                           <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6" }}>{i.jobType}</td>
                           <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6" }}>
-                            {i.deliveryCompleted ? <Chip tone="green">Done</Chip> : i.deliveryDate ? <Chip tone="gold">{prettyDate(i.deliveryDate).slice(0, 6)}</Chip> : <Chip tone="red">Not booked</Chip>}
+                            {isVoidInvoice(i) ? <span style={{ color: "#aab3c2" }}>—</span> : i.deliveryCompleted ? <Chip tone="green">Done</Chip> : i.deliveryDate ? <Chip tone="gold">{prettyDate(i.deliveryDate).slice(0, 6)}</Chip> : <Chip tone="red">Not booked</Chip>}
                           </td>
                           <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", textAlign: "right", fontWeight: 700 }}>{t.total.toLocaleString("en-GB", { minimumFractionDigits: 2 })}</td>
                           <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6" }}>
-                            <Chip tone={isPaid(i) ? "green" : "amber"}>{isPaid(i) ? "Paid" : "Awaiting"}{i.paymentType ? " · " + i.paymentType : ""}</Chip>
+                            {isVoidInvoice(i) ? <Chip>{i.webStatus === "refunded" ? "Refunded" : "Cancelled"}</Chip>
+                              : <Chip tone={isPaid(i) ? "green" : "amber"}>{isPaid(i) ? "Paid" : "Awaiting"}{i.paymentType ? " · " + i.paymentType : ""}</Chip>}
                           </td>
                           <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", textAlign: "right" }}>
                             <button style={abtn} title="Open" onClick={(e) => { e.stopPropagation(); setSelId(i.id); }}><Icon name="pen" /></button>
@@ -306,6 +308,36 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
           <button style={{ ...navyBtn, border: "1px dashed #3a4f78", color: "#8fa0c0" }} onClick={() => removeInvoice(inv)}><Icon name="bin" stroke="#8fa0c0" />Delete</button>
         </div>
       </div>
+
+      {/* refunded / cancelled on the website */}
+      {inv.webStatus && (() => {
+        const part = inv.webStatus === "partial refund";
+        const refundLines = (inv.lines || []).filter((l) => String(l.id || "").startsWith("web-r-") || /^Website refund/.test(l.description || ""));
+        const refundSum = refundLines.reduce((t, l) => t + Math.abs(Number(l.price) || 0) * (Number(l.qty) || 1), 0);
+        return (
+          <div style={{ ...card, borderColor: part ? "#f4d78f" : "#c9d0db", background: part ? "#fff8e6" : "#f3f5f8", display: "flex", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
+            <div style={{ width: 36, height: 36, borderRadius: 8, background: part ? "#E8912D" : "#5a6a85", display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>
+              <Icon name="warn" stroke="#fff" size={18} />
+            </div>
+            <div style={{ flex: 1, minWidth: 220 }}>
+              <b style={{ fontSize: 14.5, color: part ? "#8a5a00" : NAVY }}>
+                {part ? "Part refunded on the website — " + gbp(refundSum) : inv.webStatus === "refunded" ? "Refunded on the website" : "Cancelled on the website"}
+              </b>
+              <div style={{ fontSize: 12.5, color: "#5a6a85", fontWeight: 600, marginTop: 2 }}>
+                {part
+                  ? "The refund is on the invoice as a minus line. Check whether anything needs taking off the delivery."
+                  : "This job is off the delivery schedule and out of the sales figures." + (inv.deliveryCompleted ? " It was already marked delivered — check whether goods need collecting." : "")}
+              </div>
+            </div>
+            {!part && inv.stockDeducted && (
+              <button style={goldBtn} title="The stock for this job was taken off — put it back now the order is refunded"
+                onClick={() => setInv((t, c) => applyInvoiceStockDeduction(t, c, false, me))}>
+                <Icon name="box" stroke={NAVY} />Put stock back
+              </button>
+            )}
+          </div>
+        );
+      })()}
 
       {/* payment risk */}
       {(() => {

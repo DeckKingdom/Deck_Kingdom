@@ -5,8 +5,9 @@ import { NAVY, GOLD, RED, prettyDate } from "../../lib/core.js";
 import {
   invoiceTotals, gbp, isPaid, scheduleStatus, STRIPE_COLOURS, daysSinceRaised, isCollectionJob, invoiceLoadKg, collectionProgress,
   PREP_FLAGS, FOLLOWUP_FLAGS, today,
+  isVoidInvoice,
 } from "../../lib/crmCore.js";
-import { Icon, Chip, Tg, sect, lbl, card, abtn, inp, btn, goldBtn, RiskChip } from "./ui.jsx";
+import { Icon, Chip, Tg, sect, lbl, card, abtn, inp, btn, goldBtn, RiskChip, WebStatusChip } from "./ui.jsx";
 
 const RANGE_OPTS = [
   ["upcoming", "Upcoming + last 7 days"],
@@ -60,6 +61,7 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
 
   const q = search.trim().toLowerCase();
   const visible = crm.invoices.filter((i) => {
+    if (isVoidInvoice(i)) return false; // refunded / cancelled on the website
     if (hideDone && i.deliveryCompleted) return false;
     if (van && i.van !== van) return false;
     if (q) {
@@ -118,6 +120,7 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
             </button>
             <span style={{ fontSize: 11.5, fontWeight: 700, color: "#185FA5" }}>#{i.invNo || "—"}</span>
             <RiskChip inv={i} />
+            <WebStatusChip inv={i} />
           </div>
           <div style={{ fontSize: 11.5, color: "#5a6a85", fontWeight: 600, marginTop: 2, display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
             {(s && s.postcode) || (c && c.postcode) || "—"}

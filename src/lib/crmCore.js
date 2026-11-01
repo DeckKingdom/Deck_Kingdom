@@ -2031,8 +2031,10 @@ export const blankSample = (customerId) => ({
 });
 
 // Invoices that count as a sale: money taken for goods, not a sample order itself.
+// refunded / cancelled on the website: off the schedule and out of the sales figures
+export const isVoidInvoice = (inv) => ["refunded", "cancelled", "failed", "trash"].includes((inv && inv.webStatus) || "");
 export const isSaleInvoice = (inv) =>
-  invoiceTotals(inv).total > 0 && !/sample/i.test(inv.paymentType || "") && !/sample/i.test(inv.jobType || "");
+  !isVoidInvoice(inv) && invoiceTotals(inv).total > 0 && !/sample/i.test(inv.paymentType || "") && !/sample/i.test(inv.jobType || "");
 
 export const sampleInvoice = (s, crm) =>
   s && s.convertedInvoiceId ? (crm.invoices || []).find((i) => i.id === s.convertedInvoiceId) || null : null;

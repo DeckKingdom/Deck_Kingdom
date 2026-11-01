@@ -6,7 +6,7 @@ import {
   invoiceTotals, gbp, isPaid, today, stockValuation, blankTask,
   dailyTasksFor, isDailyDone, dueScheduledFor, projectsFor, setTaskDone, scheduledOccurrence, nextScheduled,
   occurrenceAssignees, staffName, staffList, describeSchedule, PROJECT_STATUSES,
-  quoteTotals, quoteStatus, quoteIsOpen, sampleStats, sampleStatus,
+  quoteTotals, quoteStatus, quoteIsOpen, sampleStats, sampleStatus, isVoidInvoice,
 } from "../lib/crmCore.js";
 import { tasksAvailable } from "../data/crmStorage.js";
 import { Icon, Chip, card, sect, lbl, inp, btn, goldBtn, RiskChip } from "./crm/ui.jsx";
@@ -50,7 +50,7 @@ export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTa
   const firstName = me ? staffName(crm || {}, me).split(" ")[0] : "";
 
   // ===== reports =====
-  const invs = crm ? crm.invoices : [];
+  const invs = crm ? crm.invoices.filter((i) => !isVoidInvoice(i)) : []; // refunded / cancelled on the website don't count
   const monthKey = tod.slice(0, 7);
   const lastMonthKey = addMonths(tod.slice(0, 8) + "01", -1).slice(0, 7);
   const dayOfMonth = Number(tod.slice(8, 10));
@@ -148,7 +148,7 @@ export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTa
             {crm && (() => {
               // today + the next 3 days: drops, what to load for the next day, and supplier collections
               const days = [0, 1, 2, 3].map((n) => addDays(tod, n));
-              const open = (crm.invoices || []).filter((i) => !i.deliveryCompleted);
+              const open = (crm.invoices || []).filter((i) => !i.deliveryCompleted && !isVoidInvoice(i));
               const dropsOn = (d) => open.filter((i) => i.deliveryDate === d);
               const custName = (id) => { const c = (crm.customers || []).find((x) => x.id === id); return c ? c.name || "Unnamed" : "No customer"; };
               const postcodeOf = (i) => { const st = (crm.sites || []).find((x) => x.id === i.siteId); const c = (crm.customers || []).find((x) => x.id === i.customerId); return (st && st.postcode) || (c && c.postcode) || ""; };
