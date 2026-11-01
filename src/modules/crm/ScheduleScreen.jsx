@@ -6,7 +6,7 @@ import {
   RUN_NOS, TIME_SLOTS, DRIVERS, vanOptions,
   invoiceTotals, gbp, isPaid, scheduleStatus, STRIPE_COLOURS, daysSinceRaised, isCollectionJob, invoiceLoadKg, collectionProgress,
   PREP_FLAGS, FOLLOWUP_FLAGS, today,
-  isVoidInvoice,
+  isVoidInvoice, applyInvoiceStockDeduction,
 } from "../../lib/crmCore.js";
 import { Icon, Chip, Tg, sect, lbl, card, abtn, inp, btn, goldBtn, RiskChip, WebStatusChip } from "./ui.jsx";
 
@@ -25,10 +25,36 @@ const dayLabel = (d) => {
 
 const COLLECTION_BLUE = "#185FA5";
 // the board's columns: stripe · customer · driver · run · drop · van · weight · date+time · prep · follow-up · days
-const DS_COLS = "4px minmax(190px, 1fr) 88px 84px 60px 104px 58px 196px 162px 162px 42px";
+const dsCols = (prep) => "4px 46px minmax(190px, 1fr) 88px 84px 60px 104px 58px 196px " + (prep ? "162px 162px " : "") + "66px 42px";
 const DROP_NOS = Array.from({ length: 20 }, (_, n) => String(n + 1));
 const rowBox = { display: "grid", gap: 10, alignItems: "center", background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, padding: "8px 12px 8px 0", marginBottom: 6, overflow: "hidden" };
 const pill = { fontFamily: "inherit", fontSize: 12, fontWeight: 700, color: NAVY, border: "1px solid #c9d0db", borderRadius: 999, background: "#fff", padding: "3px 16px 3px 8px", height: 28, boxSizing: "border-box", cursor: "pointer", maxWidth: "100%" };
+// WhatsApp / email the customer a delivery update
+const UK_PHONE = (v) => { let d = String(v || "").replace(/\D/g, ""); if (d.startsWith("00")) d = d.slice(2); if (d.startsWith("0")) d = "44" + d.slice(1); return d.length >= 10 ? d : ""; };
+const deliveryText = (i, c) => {
+  const first = String((c && (c.contact || c.name)) || "").trim().split(/\s+/)[0];
+  const when = i.deliveryDate ? new Date(i.deliveryDate + "T00:00:00").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" }) : "";
+  const slot = i.deliveryTime ? (/^(AM|PM)$/.test(i.deliveryTime) ? " (" + i.deliveryTime + ")" : i.deliveryTime === "TBC" ? "" : " at around " + i.deliveryTime) : "";
+  return (first ? "Hi " + first : "Hi") + ", it's Deck Kingdom. " +
+    (isCollectionJob(i) ? "Your order is ready to collect" + (when ? " from " + when : "") + " at Whitelands Road, Ashton-under-Lyne, OL6 6UG — please call before you come." : when ? "Your delivery is booked for " + when + slot + "." : "We're arranging your delivery date and will be in touch shortly.") +
+    " Any questions, just reply or call 0161 399 1837.";
+};
+const NotifyButtons = ({ i, c }) => {
+  const phone = c && (UK_PHONE(c.mobile) || (/^447/.test(UK_PHONE(c.landline)) ? UK_PHONE(c.landline) : ""));
+  const email = c && String(c.email || "").includes("@") ? c.email.trim() : "";
+  const text = deliveryText(i, c);
+  const b = (bg) => ({ width: 26, height: 26, borderRadius: 8, border: "none", background: bg, display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0, textDecoration: "none" });
+  return (
+    <div style={{ display: "flex", gap: 5 }}>
+      {phone ? <a href={"whatsapp://send?phone=" + phone + "&text=" + encodeURIComponent(text)} title={"WhatsApp the delivery update to " + c.mobile} style={b("#25D36622")}><Icon name="wa" stroke="#128C7E" size={14} /></a>
+        : <span title="No mobile number" style={{ ...b("#f0f2f6"), cursor: "default", opacity: 0.5 }}><Icon name="wa" stroke="#aab3c2" size={14} /></span>}
+      {email ? <a href={"https://mail.google.com/mail/?view=cm&fs=1&to=" + encodeURIComponent(email) + "&su=" + encodeURIComponent(isCollectionJob(i) ? "Your Deck Kingdom order is ready" : "Your Deck Kingdom delivery") + "&body=" + encodeURIComponent(text.replace(", it's Deck Kingdom. ", ",\n\n") + "\n\nKind regards,\nDeck Kingdom")}
+          target="_blank" rel="noopener noreferrer" title={"Email the delivery update to " + email} style={b("#185FA51a")}><Icon name="mail" stroke="#185FA5" size={13} /></a>
+        : <span title="No email address" style={{ ...b("#f0f2f6"), cursor: "default", opacity: 0.5 }}><Icon name="mail" stroke="#aab3c2" size={13} /></span>}
+    </div>
+  );
+};
+
 // an editable pill: a small rounded drop-down; the list shows 10 at a time and scrolls
 const PillSelect = ({ value, options, placeholder, onChange, tone, labelOf = (o) => o }) => {
   const [box, setBox] = useState(null);
@@ -73,7 +99,7 @@ const SlaChip = ({ days, done }) => (
   </span>
 );
 
-export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollection }) {
+export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollection, me }) {
   const [search, setSearch] = useState("");
   const [range, setRange] = useState("upcoming");
   const [van, setVan] = useState("");
@@ -82,9 +108,44 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
   const [pop, setPop] = useState(null); // { id, rect }: the job whose details are open
   const [dragId, setDragId] = useState(null); // pending job being dragged onto a day
   const [overDate, setOverDate] = useState(null);
+  const [overRow, setOverRow] = useState(null);
+  const [overPending, setOverPending] = useState(false);
+  const [showPrep, setShowPrep] = useState(() => { try { return localStorage.getItem("dk-ds-prep") === "1"; } catch { return false; } });
+  const endDrag = () => { setDragId(null); setOverDate(null); setOverRow(null); setOverPending(false); };
+  const complete = (id, on) => updateCrm((c) => {
+    const t = c.invoices.find((x) => x.id === id);
+    if (t) { t.deliveryCompleted = on; applyInvoiceStockDeduction(t, c, on, me); }
+    return c;
+  });
+  // dropped onto another job: same day, driver and run, slotted in just before it; drops renumbered
+  const dropBefore = (target) => {
+    const id = dragId;
+    endDrag();
+    if (!id || id === target.id) return;
+    updateCrm((c) => {
+      const d = c.invoices.find((x) => x.id === id);
+      if (!d) return c;
+      d.deliveryDate = target.deliveryDate; d.driver = target.driver || ""; d.runNo = target.runNo || "";
+      if (!d.jobType || d.jobType === "Pending") d.jobType = "Delivery";
+      const same = c.invoices
+        .filter((x) => x.id !== d.id && !isVoidInvoice(x) && x.deliveryDate === target.deliveryDate && (x.driver || "") === (target.driver || "") && (x.runNo || "") === (target.runNo || ""))
+        .sort((a, b) => (Number(a.dropNo) || 999) - (Number(b.dropNo) || 999));
+      const at = same.findIndex((x) => x.id === target.id);
+      same.splice(at < 0 ? same.length : at, 0, d);
+      same.forEach((x, k) => (x.dropNo = String(k + 1)));
+      return c;
+    });
+  };
+  // dropped on the Pending card: no date again
+  const unschedule = () => {
+    const id = dragId;
+    endDrag();
+    if (!id) return;
+    updateCrm((c) => { const t = c.invoices.find((x) => x.id === id); if (t) { t.deliveryDate = ""; t.dropNo = ""; } return c; });
+  };
   const dropOn = (d) => {
     const id = dragId;
-    setDragId(null); setOverDate(null);
+    endDrag();
     if (!id) return;
     updateCrm((c) => {
       const t = c.invoices.find((x) => x.id === id);
@@ -213,9 +274,24 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
       i.created || i.date ? "Raised " + prettyDate(i.created || i.date) + (i.raisedBy ? " by " + i.raisedBy.split("@")[0] : "") : "",
       i.updatedAt ? "Updated " + prettyDateTime(i.updatedAt) + (i.modifiedBy ? " by " + i.modifiedBy.split("@")[0] : "") : "",
     ].filter(Boolean);
+    const done = !!i.deliveryCompleted;
     return (
-      <div style={{ ...rowBox, gridTemplateColumns: DS_COLS }}>
-        <div style={{ width: 4, alignSelf: "stretch", borderRadius: "12px 0 0 12px", margin: "-8px 0", background: STRIPE_COLOURS[status] }} />
+      <div style={{ ...rowBox, gridTemplateColumns: dsCols(showPrep), background: done ? "#e9f6ee" : "#fff", borderColor: done ? "#bfe3ca" : overRow === i.id ? GOLD : "#e6e9ef",
+          boxShadow: overRow === i.id ? "0 -3px 0 " + GOLD : "none", opacity: dragId === i.id ? 0.45 : 1 }}
+        onDragOver={(ev) => { if (dragId && dragId !== i.id) { ev.preventDefault(); ev.stopPropagation(); if (overRow !== i.id) setOverRow(i.id); } }}
+        onDragLeave={(ev) => { if (!ev.currentTarget.contains(ev.relatedTarget)) setOverRow((r) => (r === i.id ? null : r)); }}
+        onDrop={(ev) => { ev.preventDefault(); ev.stopPropagation(); dropBefore(i); }}>
+        <div style={{ width: 4, alignSelf: "stretch", borderRadius: "12px 0 0 12px", margin: "-8px 0", background: done ? "#3FA55C" : STRIPE_COLOURS[status] }} />
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <span draggable title="Drag to move — onto another job, another day, or back to Pending"
+            onDragStart={(ev) => { ev.dataTransfer.setData("text/plain", i.id); ev.dataTransfer.effectAllowed = "move"; setDragId(i.id); }}
+            onDragEnd={endDrag}
+            style={{ cursor: "grab", color: "#aab3c2", fontSize: 14, lineHeight: 1, padding: "4px 1px", userSelect: "none" }}>⋮⋮</span>
+          <button type="button" title={done ? "Completed — click to undo" : "Mark the delivery complete"} onClick={() => complete(i.id, !done)}
+            style={{ width: 18, height: 18, borderRadius: 999, border: "2px solid " + (done ? "#3FA55C" : "#b8c0cc"), background: "#fff", padding: 0, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", flex: "none" }}>
+            {done && <span style={{ width: 9, height: 9, borderRadius: 999, background: "#3FA55C" }} />}
+          </button>
+        </div>
         <div style={{ minWidth: 0, position: "relative" }} onMouseEnter={(ev) => setHover(ev.currentTarget.getBoundingClientRect())} onMouseLeave={() => setHover(false)}>
           <div style={{ display: "flex", gap: 7, alignItems: "center", minWidth: 0 }}>
             <button className="dk-title-link" onClick={(e) => { setHover(false); setPop({ id: i.id, rect: e.currentTarget.getBoundingClientRect() }); }}
@@ -241,16 +317,21 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
           <input type="date" value={i.deliveryDate || ""} onChange={(e) => setInv(i.id, (t) => (t.deliveryDate = e.target.value))} style={{ ...pill, width: 116, flex: "none", padding: "3px 8px" }} />
           <PillSelect value={i.deliveryTime || ""} options={TIME_SLOTS} placeholder="Time" onChange={(v) => setInv(i.id, (t) => (t.deliveryTime = v))} />
         </div>
-        <div style={{ display: "flex", gap: 3 }}>
-          {PREP_FLAGS.map(([k, label, icon]) => (
-            <Tg key={k} on={i.flags[k]} na={k === "courier" && isCollectionJob(i) && !i.flags[k]} title={label} icon={icon} onClick={() => setFlag(i.id, k)} />
-          ))}
-        </div>
-        <div style={{ display: "flex", gap: 3 }}>
-          {FOLLOWUP_FLAGS.map(([k, label, icon]) => (
-            <Tg key={k} on={i.flags[k]} title={label} icon={icon} onClick={() => setFlag(i.id, k)} />
-          ))}
-        </div>
+        {showPrep && (
+          <div style={{ display: "flex", gap: 3 }}>
+            {PREP_FLAGS.map(([k, label, icon]) => (
+              <Tg key={k} on={i.flags[k]} na={k === "courier" && isCollectionJob(i) && !i.flags[k]} title={label} icon={icon} onClick={() => setFlag(i.id, k)} />
+            ))}
+          </div>
+        )}
+        {showPrep && (
+          <div style={{ display: "flex", gap: 3 }}>
+            {FOLLOWUP_FLAGS.map(([k, label, icon]) => (
+              <Tg key={k} on={i.flags[k]} title={label} icon={icon} onClick={() => setFlag(i.id, k)} />
+            ))}
+          </div>
+        )}
+        <NotifyButtons i={i} c={c} />
         <div style={{ textAlign: "right" }}><SlaChip days={days} done={i.deliveryCompleted} /></div>
       </div>
     );
@@ -261,8 +342,14 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
     const done = pr.total > 0 && pr.pending === 0;
     const items = (c.items || []).reduce((t, it) => t + (Number(it.qty) || 0), 0);
     return (
-      <div style={{ ...rowBox, gridTemplateColumns: DS_COLS }}>
-        <div style={{ width: 4, alignSelf: "stretch", borderRadius: "12px 0 0 12px", margin: "-8px 0", background: COLLECTION_BLUE }} />
+      <div style={{ ...rowBox, gridTemplateColumns: dsCols(showPrep), background: c.collected ? "#e9f6ee" : "#fff", borderColor: c.collected ? "#bfe3ca" : "#e6e9ef" }}>
+        <div style={{ width: 4, alignSelf: "stretch", borderRadius: "12px 0 0 12px", margin: "-8px 0", background: c.collected ? "#3FA55C" : COLLECTION_BLUE }} />
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
+          <button type="button" title={c.collected ? "Collected — click to undo" : "Mark as collected"} onClick={() => setColl(c.id, (t) => (t.collected = !t.collected))}
+            style={{ width: 18, height: 18, borderRadius: 999, border: "2px solid " + (c.collected ? "#3FA55C" : "#b8c0cc"), background: "#fff", padding: 0, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+            {c.collected && <span style={{ width: 9, height: 9, borderRadius: 999, background: "#3FA55C" }} />}
+          </button>
+        </div>
         <div style={{ display: "flex", gap: 7, alignItems: "center", minWidth: 0 }}>
           <button className="dk-title-link" onClick={() => openCollection && openCollection(c.id)}
             style={{ fontWeight: 700, fontSize: 13.5, color: COLLECTION_BLUE, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -280,12 +367,8 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
           <input type="date" value={c.collectDate || ""} onChange={(e) => setColl(c.id, (t) => (t.collectDate = e.target.value))} style={{ ...pill, width: 118, padding: "3px 8px" }} />
           <PillSelect value={c.collectTime || ""} options={TIME_SLOTS} placeholder="Time" onChange={(v) => setColl(c.id, (t) => (t.collectTime = v))} />
         </div>
-        <div style={{ gridColumn: "span 2", fontSize: 12, fontWeight: 700 }}>
-          {done ? <Chip tone="green">Processed</Chip> : pr.done > 0 ? <Chip tone="gold">{pr.done}/{pr.total} processed</Chip> : (
-            <label style={{ display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
-              <input type="checkbox" checked={c.collected} onChange={(e) => setColl(c.id, (t) => (t.collected = e.target.checked))} />Collected
-            </label>
-          )}
+        <div style={{ gridColumn: showPrep ? "span 3" : "span 1", fontSize: 12, fontWeight: 700 }}>
+          {done ? <Chip tone="green">Processed</Chip> : pr.done > 0 ? <Chip tone="gold">{pr.done}/{pr.total} processed</Chip> : c.collected ? <span style={{ color: "#28713e" }}>Collected</span> : null}
         </div>
         <span />
       </div>
@@ -294,9 +377,9 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
 
   // column titles under each day
   const ColHeads = () => (
-    <div style={{ display: "grid", gridTemplateColumns: DS_COLS, gap: 10, alignItems: "center", padding: "0 12px 4px 0" }}>
-      {["", "Customer · postcode · source", "Driver", "Run", "Drop", "Van", "Weight", "Date · time", "Prep", "Follow-up", "Days"].map((h, k) => (
-        <span key={k} style={{ fontSize: 10.5, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", whiteSpace: "nowrap", textAlign: k === 6 || k === 10 ? "right" : "left" }}>{h}</span>
+    <div style={{ display: "grid", gridTemplateColumns: dsCols(showPrep), gap: 10, alignItems: "center", padding: "0 12px 4px 0" }}>
+      {["", "Done", "Customer · postcode · source", "Driver", "Run", "Drop", "Van", "Weight", "Date · time", ...(showPrep ? ["Prep", "Follow-up"] : []), "Update", "Days"].map((h, k, all) => (
+        <span key={k} style={{ fontSize: 10.5, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", whiteSpace: "nowrap", textAlign: h === "Weight" || h === "Days" ? "right" : "left" }}>{h}</span>
       ))}
     </div>
   );
@@ -394,6 +477,9 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
         <label style={{ fontSize: 12.5, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}>
           <input type="checkbox" checked={hideDone} onChange={(e) => setHideDone(e.target.checked)} /> Hide completed
         </label>
+        <span style={{ flex: 1 }} />
+        <button type="button" onClick={() => setShowPrep((v) => { try { localStorage.setItem("dk-ds-prep", v ? "0" : "1"); } catch {} return !v; })}
+          style={{ ...btn, padding: "6px 11px", fontSize: 12.5 }}>{showPrep ? "▾ Hide" : "▸ Show"} prep &amp; follow-up</button>
       </div>
 
       {/* legend */}
@@ -428,7 +514,7 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
             </div>
           ) : (
             <div style={{ overflowX: "auto" }}>
-              <div style={{ minWidth: 1270 }}>
+              <div style={{ minWidth: showPrep ? 1380 : 1060 }}>
                 <ColHeads />
                 {g.rows.map((e, k) => {
                   const key = runKey(e), prevKey = k ? runKey(g.rows[k - 1]) : null;
@@ -458,7 +544,11 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
       </div>
 
       {/* pending: always in view on the right */}
-      <div style={{ ...card, marginBottom: 0, position: "sticky", top: 70, maxHeight: "calc(100vh - 90px)", overflowY: "auto", padding: "12px 16px" }}>
+      <div style={{ ...card, marginBottom: 0, position: "sticky", top: 70, maxHeight: "calc(100vh - 90px)", overflowY: "auto", padding: "12px 16px",
+          outline: overPending ? "2px dashed " + GOLD : "none", outlineOffset: 3, background: overPending ? "#fff8e6" : "#fff" }}
+        onDragOver={(ev) => { const it = dragId && crm.invoices.find((x) => x.id === dragId); if (it && it.deliveryDate) { ev.preventDefault(); setOverPending(true); } }}
+        onDragLeave={(ev) => { if (!ev.currentTarget.contains(ev.relatedTarget)) setOverPending(false); }}
+        onDrop={(ev) => { ev.preventDefault(); unschedule(); }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
           <p style={{ ...sect, margin: 0, color: pending.length ? RED : "#8593a8" }}>Pending — no date</p>
           <span style={{ flex: 1 }} />
