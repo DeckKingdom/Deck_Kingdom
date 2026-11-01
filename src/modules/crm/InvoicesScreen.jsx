@@ -439,15 +439,32 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
 
       {/* prep & follow-up ticks */}
       <div style={{ ...card, padding: "10px 18px" }}>
-        <button type="button" onClick={() => setFollowOpen((o) => !o)}
-          style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}>
-          <span style={{ ...sect, margin: 0 }}>Prep &amp; follow-up</span>
-          <span style={{ fontSize: 12, fontWeight: 700, color: "#5a6a85" }}>
-            prep {PREP_FLAGS.filter(([k]) => inv.flags[k]).length}/{PREP_FLAGS.length} · follow-up {FOLLOWUP_FLAGS.filter(([k]) => inv.flags[k]).length}/{FOLLOWUP_FLAGS.length}
-          </span>
-          <span style={{ flex: 1 }} />
-          <span style={{ color: "#8593a8", fontSize: 12 }}>{followOpen ? "▾" : "▸"}</span>
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+          <button type="button" onClick={() => setFollowOpen((o) => !o)}
+            style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 260, background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}>
+            <span style={{ ...sect, margin: 0 }}>Prep &amp; follow-up</span>
+            <span style={{ fontSize: 12, fontWeight: 700, color: "#5a6a85" }}>
+              prep {PREP_FLAGS.filter(([k]) => inv.flags[k]).length}/{PREP_FLAGS.length} · follow-up {FOLLOWUP_FLAGS.filter(([k]) => inv.flags[k]).length}/{FOLLOWUP_FLAGS.length}
+            </span>
+            <span style={{ color: "#8593a8", fontSize: 12 }}>{followOpen ? "▾" : "▸"}</span>
+          </button>
+          <label title="Flag this job as high risk — it gets a red warning until someone checks it"
+            style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", color: inv.riskFlag && !inv.riskChecked ? "#9b1c2e" : NAVY }}>
+            <input type="checkbox" checked={!!inv.riskFlag && !inv.riskChecked}
+              onChange={(e) => setInv((t) => {
+                if (e.target.checked) { t.riskFlag = t.riskFlag || "manual"; t.riskChecked = ""; }
+                else if (t.riskFlag === "manual") { t.riskFlag = ""; t.riskNote = ""; }
+                else t.riskChecked = (staffName(crm, me) || (me || "").split("@")[0] || "staff") + " · " + prettyDate(today()); // website flag: unticking = checked
+              })} />
+            Flag risk
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", flexWrap: "wrap" }}>
+            <input type="checkbox" checked={inv.deliveryCompleted}
+              onChange={(e) => setInv((x, c) => { x.deliveryCompleted = e.target.checked; applyInvoiceStockDeduction(x, c, e.target.checked, me); })} />
+            Delivery completed
+            {inv.stockDeducted && <Chip tone="green" style={{ marginLeft: 4, fontSize: 10, padding: "1px 7px" }}>stock out</Chip>}
+          </label>
+        </div>
         {followOpen && (
           <div style={{ display: "flex", gap: 5, alignItems: "center", flexWrap: "wrap", marginTop: 10 }}>
             <span style={{ ...lbl, marginBottom: 0, marginRight: 4 }}>Prep</span>
@@ -495,24 +512,6 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
             <span style={lbl}>Payment type</span>
             <input style={inp} list="dk-paytypes" value={inv.paymentType} onChange={(e) => setInv((x) => (x.paymentType = e.target.value))} />
           </div>
-          {/* ticks sit under payment date / type */}
-          <div style={{ gridColumn: "1 / -3" }} />
-          <label title="Flag this job as high risk — it gets a red warning until someone checks it"
-            style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", color: inv.riskFlag && !inv.riskChecked ? "#9b1c2e" : NAVY }}>
-            <input type="checkbox" checked={!!inv.riskFlag && !inv.riskChecked}
-              onChange={(e) => setInv((t) => {
-                if (e.target.checked) { t.riskFlag = t.riskFlag || "manual"; t.riskChecked = ""; }
-                else if (t.riskFlag === "manual") { t.riskFlag = ""; t.riskNote = ""; }
-                else t.riskChecked = (staffName(crm, me) || (me || "").split("@")[0] || "staff") + " · " + prettyDate(today()); // website flag: unticking = checked
-              })} />
-            Flag risk
-          </label>
-          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", flexWrap: "wrap" }}>
-            <input type="checkbox" checked={inv.deliveryCompleted}
-              onChange={(e) => setInv((x, c) => { x.deliveryCompleted = e.target.checked; applyInvoiceStockDeduction(x, c, e.target.checked, me); })} />
-            Delivery completed
-            {inv.stockDeducted && <Chip tone="green" style={{ marginLeft: 4, fontSize: 10, padding: "1px 7px" }}>stock out</Chip>}
-          </label>
         </div>
       </div>
 
