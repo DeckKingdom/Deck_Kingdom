@@ -394,7 +394,8 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
   // sort key: named drivers A–Z, then jobs with no driver yet, then supplier collections
   // run number first (every driver's run 1, then run 2 …), then driver, then drop
   // a supplier collection with a run or driver sits inside that run; without one it waits under "Supplier collections"
-  const runKey = (e) => (e.kind === "col" && !e.obj.runNo && !e.obj.driver ? "2|collections" : "0|" + String(numOr(e.obj.runNo, 99)).padStart(2, "0") + "|" + (e.obj.driver ? "0" + e.obj.driver : "1"));
+  // customers collecting from the warehouse go last, in their own group
+  const runKey = (e) => (e.kind === "inv" && isCollectionJob(e.obj) ? "3|customer" : e.kind === "col" && !e.obj.runNo && !e.obj.driver ? "2|collections" : "0|" + String(numOr(e.obj.runNo, 99)).padStart(2, "0") + "|" + (e.obj.driver ? "0" + e.obj.driver : "1"));
   groups.forEach((g) =>
     g.rows.sort((a, b) =>
       runKey(a).localeCompare(runKey(b)) ||
@@ -747,6 +748,7 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
                   const key = runKey(e), prevKey = k ? runKey(g.rows[k - 1]) : null;
                   const sameRun = g.rows.filter((x) => runKey(x) === key);
                   const loose = key === "2|collections"; // collections not in a run yet
+                  const custGroup = key === "3|customer"; // customers collecting from the warehouse
                   const nDrops = sameRun.filter((x) => x.kind === "inv").length, nPicks = sameRun.length - nDrops;
                   const runKg = sameRun.reduce((t, x) => t + ((x.kind === "inv" ? invoiceLoadKg(x.obj, crm) : collKg(x.obj)) || 0), 0);
                   const head = key !== prevKey ? (
@@ -755,20 +757,20 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
                         padding: "0 12px 0 0", minHeight: 36, boxSizing: "border-box", overflow: "hidden", alignItems: "stretch", fontSize: 12, color: NAVY, whiteSpace: "nowrap" }}>
                       <span style={{ gridColumn: "1 / span 9", display: "flex", alignItems: "stretch" }}>
                         <span style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "#dce2ec", padding: "0 14px" }}>
-                          <b>{loose ? "Supplier collections" : (e.obj.runNo ? "Run " + e.obj.runNo : "No run yet") + " · " + (e.obj.driver || "no driver yet")}</b>
+                          <b>{custGroup ? "Customer collections" : loose ? "Supplier collections" : (e.obj.runNo ? "Run " + e.obj.runNo : "No run yet") + " · " + (e.obj.driver || "no driver yet")}</b>
                           <span style={{ fontWeight: 600, color: "#5a6a85" }}>
-                            {[nDrops ? nDrops + " drop" + (nDrops === 1 ? "" : "s") : "", nPicks ? nPicks + " pick-up" + (nPicks === 1 ? "" : "s") : ""].filter(Boolean).join(" · ")}
+                            {custGroup ? nDrops + " collecting from the warehouse" : [nDrops ? nDrops + " drop" + (nDrops === 1 ? "" : "s") : "", nPicks ? nPicks + " pick-up" + (nPicks === 1 ? "" : "s") : ""].filter(Boolean).join(" · ")}
                           </span>
                         </span>
                       </span>
                       {loose ? <span style={{ gridColumn: "10 / -1" }} /> : <>
-                        <span style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", fontWeight: 700, color: "#5a6a85" }}>Run weight</span>
+                        <span style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", fontWeight: 700, color: "#5a6a85" }}>{custGroup ? "Total weight" : "Run weight"}</span>
                         <span title="Run weight — deliveries going out plus pick-ups coming back"
                           style={{ display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800 }}>
                           {runKg ? Math.round(runKg).toLocaleString("en-GB") + " kg" : "—"}
                         </span>
                         <span style={{ gridColumn: "12 / -1", display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
-                          <PrintMenu title="Print or save this run's paperwork" onPick={(kk) => printJobs(sameRun.filter((x) => x.kind === "inv").map((x) => x.obj), kk, dayLabel(g.date) + " · " + (e.obj.runNo ? "Run " + e.obj.runNo : "No run") + (e.obj.driver ? " · " + e.obj.driver : ""))} />
+                          <PrintMenu title="Print or save this run's paperwork" onPick={(kk) => printJobs(sameRun.filter((x) => x.kind === "inv").map((x) => x.obj), kk, dayLabel(g.date) + " · " + (custGroup ? "Customer collections" : (e.obj.runNo ? "Run " + e.obj.runNo : "No run") + (e.obj.driver ? " · " + e.obj.driver : "")))} />
                         </span>
                       </>}
                     </div>
