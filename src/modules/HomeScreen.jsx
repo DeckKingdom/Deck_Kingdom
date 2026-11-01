@@ -11,6 +11,7 @@ import {
 import { tasksAvailable } from "../data/crmStorage.js";
 import { Icon, Chip, card, sect, lbl, inp, btn, goldBtn, RiskChip } from "./crm/ui.jsx";
 import WebsiteCard from "./WebsiteCard.jsx";
+import ReviewsCard from "./ReviewsCard.jsx";
 import { samplesIn, SAMPLE_GROUPS, printAllToSend, emailFollowUpGroup } from "./crm/sampleActions.js";
 import { analyticsReady } from "../data/analytics.js";
 import { TaskModal, TasksSchemaNotice, PRIORITY_TONES, STATUS_TONES } from "./crm/TasksScreen.jsx";
@@ -118,7 +119,7 @@ export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTa
       </div>
 
       {crm && !ready && <TasksSchemaNotice />}
-      {/* row 1: money | website · row 2: deliveries (3/4) | samples (1/4) · row 3: today | projects */}
+      {/* row 1: money | website · row 2: deliveries (3/4) | samples (1/4) · row 3: coming in · row 4: reviews & photos · row 5: today | projects */}
       <div className="dk-home-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 16, alignItems: "stretch" }}>
           <div className="dk-home-cell" style={{ gridColumn: "span 2", minWidth: 0 }}>
             <div style={{ ...card, marginBottom: 0, height: "100%", boxSizing: "border-box" }}>
@@ -286,6 +287,9 @@ export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTa
                 </div>
               );
             })()}
+          </div>
+          <div className="dk-home-cell" style={{ gridColumn: "span 4", minWidth: 0 }}>
+            {crm && <ReviewsCard crm={crm} updateCrm={updateCrm} openInvoice={openInvoice} />}
           </div>
           <div className="dk-home-cell" style={{ gridColumn: "span 2", minWidth: 0 }}>
             <div style={{ ...card, marginBottom: 0, height: "100%", boxSizing: "border-box" }}>
