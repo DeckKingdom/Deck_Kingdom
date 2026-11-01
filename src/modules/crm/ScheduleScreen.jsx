@@ -638,11 +638,12 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
     );
   };
 
-  const GroupHead = ({ label, meta, red, action, right }) => (
+  const GroupHead = ({ label, meta, red, action, right, after }) => (
     <div style={{ display: "flex", alignItems: "center", gap: 12, background: red ? RED : NAVY, color: "#fff", borderRadius: 12, padding: action ? "0 16px 0 8px" : "0 16px", minHeight: 42, margin: "18px 0 8px", flexWrap: "wrap" }}>
       {action}
       <b style={{ color: red ? "#fff" : GOLD, fontSize: 15 }}>{label}</b>
       <span style={{ fontSize: 12.5, color: red ? "#ffd8dd" : "#cfd6e4", fontWeight: 600 }}>{meta}</span>
+      {after}
       {right && <span style={{ marginLeft: "auto" }}>{right}</span>}
     </div>
   );
@@ -722,17 +723,17 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
           onDrop={(ev) => { ev.preventDefault(); dropOn(g.date); }}
           style={{ scrollMarginTop: 70, borderRadius: 14, outline: overDate === g.date ? "2px dashed " + GOLD : "none", outlineOffset: 4, background: overDate === g.date ? "#fff8e6" : "transparent" }}>
           <GroupHead label={dayLabel(g.date)} meta={g.rows.length ? groupMeta(g.rows) : "nothing booked"}
+            after={g.date >= tod && g.rows.some((x) => !(x.kind === "inv" ? x.obj.deliveryCompleted : x.obj.collected)) ? (
+              <button type="button" onClick={() => setResetAsk(g.date)} title="Clear driver, run, drop and van on this day's open jobs and line them up by postcode"
+                style={{ display: "inline-flex", alignItems: "center", gap: 6, border: "1px solid #3a4d6e", background: "transparent", color: "#fff", borderRadius: 8, padding: "5px 10px", fontFamily: "inherit", fontWeight: 700, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap" }}>
+                <Icon name="refresh" stroke="#fff" size={13} />Reset day
+              </button>
+            ) : null}
             right={g.rows.length ? (
               <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-                {g.date >= tod && g.rows.some((x) => !(x.kind === "inv" ? x.obj.deliveryCompleted : x.obj.collected)) && (
-                  <button type="button" onClick={() => setResetAsk(g.date)} title="Clear driver, run, drop and van on this day's open jobs and line them up by postcode"
-                    style={{ display: "inline-flex", alignItems: "center", gap: 6, border: "1px solid #3a4d6e", background: "transparent", color: "#fff", borderRadius: 8, padding: "5px 10px", fontFamily: "inherit", fontWeight: 700, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap" }}>
-                    <Icon name="refresh" stroke="#fff" size={13} />Reset day
-                  </button>
-                )}
+                <ConfirmBtn date={g.date} rows={g.rows} />
                 {g.rows.some((x) => x.kind === "inv") && <PrintMenu dark label="Print day" title="Print or save every run's paperwork for this day"
                   onPick={(kk) => printJobs(g.rows.filter((x) => x.kind === "inv").map((x) => x.obj), kk, dayLabel(g.date))} />}
-                <ConfirmBtn date={g.date} rows={g.rows} />
               </span>
             ) : null} />
           {g.rows.length === 0 ? (
@@ -752,7 +753,7 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
                     <div title={!loose ? "" : "Supplier pick-ups not in a run yet — give them a driver and run, or drag one onto a job"}
                       style={{ display: "grid", gridTemplateColumns: dsCols(showPrep), gap: 7, margin: k ? "12px 0 6px" : "4px 0 6px", background: "#eef1f6", border: "1px solid #dde2ea", borderRadius: 12,
                         padding: "0 12px 0 0", minHeight: 36, boxSizing: "border-box", overflow: "hidden", alignItems: "stretch", fontSize: 12, color: NAVY, whiteSpace: "nowrap" }}>
-                      <span style={{ gridColumn: "1 / span 10", display: "flex", alignItems: "stretch" }}>
+                      <span style={{ gridColumn: "1 / span 9", display: "flex", alignItems: "stretch" }}>
                         <span style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "#dce2ec", padding: "0 14px" }}>
                           <b>{loose ? "Supplier collections" : (e.obj.runNo ? "Run " + e.obj.runNo : "No run yet") + " · " + (e.obj.driver || "no driver yet")}</b>
                           <span style={{ fontWeight: 600, color: "#5a6a85" }}>
@@ -760,9 +761,10 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
                           </span>
                         </span>
                       </span>
-                      {loose ? <span style={{ gridColumn: "11 / -1" }} /> : <>
+                      {loose ? <span style={{ gridColumn: "10 / -1" }} /> : <>
+                        <span style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", fontWeight: 700, color: "#5a6a85" }}>Run weight</span>
                         <span title="Run weight — deliveries going out plus pick-ups coming back"
-                          style={{ display: "flex", alignItems: "center", justifyContent: "center", background: "#dce2ec", margin: "0 -3px", fontWeight: 800 }}>
+                          style={{ display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800 }}>
                           {runKg ? Math.round(runKg).toLocaleString("en-GB") + " kg" : "—"}
                         </span>
                         <span style={{ gridColumn: "12 / -1", display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
