@@ -608,7 +608,7 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
             style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "2px 8px", width: "100%", padding: "8px 0", borderBottom: "1px solid #f0f2f6", textAlign: "left" }}>
             <b style={{ fontSize: 13, color: COLLECTION_BLUE, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.supplier || "Supplier"} · collection</b>
             <span />
-            <span style={{ fontSize: 11.5, color: "#5a6a85", fontWeight: 600 }}>{c.postcode || "—"} · COL-{c.collectionNo || "—"}</span>
+            <span style={{ fontSize: 11.5, color: "#5a6a85", fontWeight: 600 }}>{c.postcode || "—"} · COL-{c.collectionNo || "—"}{(() => { const w = collKg(c); return w ? " · " + Math.round(w).toLocaleString("en-GB") + " kg" : ""; })()}</span>
           </button>
         </div>
       );
@@ -634,7 +634,7 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
           </span>
           <SlaChip days={days} />
           <span style={{ fontSize: 11.5, color: "#5a6a85", fontWeight: 600 }}>
-            {(st && st.postcode) || (c && c.postcode) || "—"} · <span style={{ color: isCollectionJob(i) ? "#9a7408" : "#5a6a85" }}>{i.jobType || "—"}</span>
+            {(st && st.postcode) || (c && c.postcode) || "—"} · <span style={{ color: isCollectionJob(i) ? "#9a7408" : "#5a6a85" }}>{i.jobType || "—"}</span>{(() => { const w = invoiceLoadKg(i, crm); return w ? " · " + Math.round(w).toLocaleString("en-GB") + " kg" : ""; })()}
           </span>
           <span />
         </button>
@@ -974,15 +974,16 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
                 {(col.contact || col.phone) && <div style={{ color: "#5a6a85" }}>{[col.contact, col.phone].filter(Boolean).join(" · ")}</div>}
                 {(col.driver || col.runNo || col.van) && <div style={{ color: "#5a6a85" }}>{[col.runNo ? "Run " + col.runNo : "", col.driver, col.dropNo ? "stop " + col.dropNo : "", col.van].filter(Boolean).join(" · ")}</div>}
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "44px 1fr 130px", gap: "0 10px", marginTop: 12, paddingBottom: 4, borderBottom: "1px solid #e6e9ef" }}>
-                {["Qty", "Item", "Colour"].map((h) => <span key={h} style={{ ...lbl, marginBottom: 0 }}>{h}</span>)}
+              <div style={{ display: "grid", gridTemplateColumns: "44px 1fr 120px 76px", gap: "0 10px", marginTop: 12, paddingBottom: 4, borderBottom: "1px solid #e6e9ef" }}>
+                {["Qty", "Product", "Colour", ""].map((h, k) => <span key={k} style={{ ...lbl, marginBottom: 0 }}>{h}</span>)}
               </div>
               {(col.items || []).length === 0 ? <div style={{ fontSize: 12.5, color: "#8593a8", padding: "6px 0" }}>No items listed</div> : (col.items || []).map((it) => {
                 return (
-                  <div key={it.id} style={{ display: "grid", gridTemplateColumns: "44px 1fr 130px", gap: "0 10px", fontSize: 12.5, fontWeight: 600, padding: "5px 0", color: NAVY, borderBottom: "1px solid #f3f5f9", alignItems: "baseline" }}>
+                  <div key={it.id} style={{ display: "grid", gridTemplateColumns: "44px 1fr 120px 76px", gap: "0 10px", fontSize: 12.5, fontWeight: 600, padding: "5px 0", color: NAVY, borderBottom: "1px solid #f3f5f9", alignItems: "baseline" }}>
                     <b>{it.qty}×</b>
                     <span style={{ minWidth: 0 }}>{it.description || it.sku || "—"}{it.sku && it.description ? <span style={{ color: "#8593a8" }}>{" · " + it.sku}</span> : null}</span>
                     <span style={{ color: "#5a6a85" }}>{it.colour || "—"}</span>
+                    <span />
                   </div>
                 );
               })}
