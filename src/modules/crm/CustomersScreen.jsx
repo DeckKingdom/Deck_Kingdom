@@ -98,7 +98,7 @@ const NoteBox = ({ children }) => (
   </div>
 );
 
-export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, setSelId, openInvoice, newInvoiceFor, openQuote, newQuoteFor, openSample, newSampleFor, onOutstanding, me, newSignal, onNewHandled, onEmailSetup }) {
+export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, setSelId, openInvoice, newInvoiceFor, newFollowUp, openQuote, newQuoteFor, openSample, newSampleFor, onOutstanding, me, newSignal, onNewHandled, onEmailSetup }) {
   const [search, setSearch] = useState("");
   const [custDraft, setCustDraft] = useState(null);
   const [siteDraft, setSiteDraft] = useState(null);
@@ -833,7 +833,10 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
                               {followUpDone(i)} / {FOLLOWUP_FLAGS.length} ✓
                             </td>
                             <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", textAlign: "right" }}>
-                              <button style={abtn} title="Open invoice" onClick={() => openInvoice(i.id)}><Icon name="pen" /></button>
+                              <span style={{ display: "inline-flex", gap: 6 }}>
+                                {newFollowUp && <button style={abtn} title="Follow-up job — something missing or broken that needs posting or delivering" onClick={() => newFollowUp(i.id)}><Icon name="wrench" /></button>}
+                                <button style={abtn} title="Open invoice" onClick={() => openInvoice(i.id)}><Icon name="pen" /></button>
+                              </span>
                             </td>
                           </tr>
                         );

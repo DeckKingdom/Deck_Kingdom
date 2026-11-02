@@ -30,7 +30,7 @@ const COLLECTION_BLUE = "#185FA5";
 const short16 = (t) => (String(t).length > 16 ? String(t).slice(0, 15).trimEnd() + "…" : String(t));
 // stripe · done · customer · postcode · source · job type · driver · run · drop · van · weight · date+time · payment · [prep · follow-up] · update · days
 // sized to fit a ~1300px board without scrolling; spare width is shared out between the columns
-const dsCols = (prep) => "4px 48px 140px 62px 86px 104px 76px 72px 44px 80px 52px 120px 176px " + (prep ? "162px 162px " : "") + "96px 38px";
+const dsCols = (prep) => "4px 48px 136px 60px 76px 100px 72px 72px 44px 80px 48px 120px 176px " + (prep ? "162px 162px " : "") + "126px 38px";
 // a thin divider at the start of each section (job · weight · when · payment · contact)
 const sep = { boxShadow: "inset 1px 0 0 #e3e7ee", alignSelf: "stretch", display: "flex", alignItems: "center", margin: "-8px 0", padding: "8px 0 8px 6px", minWidth: 0 };
 const DROP_NOS = Array.from({ length: 20 }, (_, n) => String(n + 1));
@@ -183,7 +183,7 @@ const SlaChip = ({ days, done }) => (
   </span>
 );
 
-export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollection, me, planner }) {
+export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollection, me, planner, goCustomer, newFollowUp }) {
   const [printMsg, setPrintMsg] = useState("");
   const printJobs = (jobs, kinds, title) => {
     const list = jobs.filter((x) => x && !isVoidInvoice(x));
@@ -529,6 +529,8 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
               <span style={{ display: "inline-flex", gap: 5 }}>
                 <NotifyButtons i={i} c={c} onSent={(via) => markSent([i.id], [via])} />
                 <PrintMenu onPick={(k) => printJobs([i], k, "#" + (i.invNo || "") + " paperwork")} />
+                {newFollowUp && <button type="button" title="Follow-up job — something missing or broken that needs posting or delivering" onClick={() => newFollowUp(i.id)}
+                  style={{ width: 26, height: 26, borderRadius: 8, border: "none", background: "#eef1f6", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0, flex: "none" }}><Icon name="wrench" stroke={NAVY} size={14} /></button>}
               </span>
               {ns.state !== "none" && (
                 <span title={ns.state === "ok" ? "Customer told " + shortStamp(ns.n.at) + " by " + ns.n.by + " (" + (ns.n.via || []).map((v) => (v === "wa" ? "WhatsApp" : "email")).join(" + ") + ")" : "Changed since the customer was told — send them a new update"}
@@ -576,7 +578,7 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
         </div>
         <span style={{ fontSize: 12.5, color: "#5a6a85", fontWeight: 700, whiteSpace: "nowrap" }}>{c.postcode || "—"}</span>
         <span style={{ fontSize: 11.5, fontWeight: 700, color: COLLECTION_BLUE }}>COL-{c.collectionNo || "—"}</span>
-        <span style={{ ...sep, fontSize: 12, fontWeight: 700, color: COLLECTION_BLUE, paddingLeft: 10 }}>Supplier pick-up</span>
+        <span style={{ ...sep, fontSize: 11.5, fontWeight: 700, color: COLLECTION_BLUE, paddingLeft: 8, whiteSpace: "nowrap" }}>Supplier pick-up</span>
         <PillSelect value={c.driver || ""} options={DRIVERS} placeholder="Driver" onChange={(v) => pickDriver("col", c, v)} />
         <PillSelect value={c.runNo || ""} options={RUN_NOS} placeholder="Run" labelOf={(o) => "Run " + o} onChange={(v) => setColl(c.id, (t) => (t.runNo = v))} />
         <PillSelect value={c.dropNo || ""} options={DROP_NOS} placeholder="#" onChange={(v) => setColl(c.id, (t) => (t.dropNo = v))} />
@@ -1078,6 +1080,7 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
               </div>
               {i.jobNotes && <div style={{ marginTop: 8, fontSize: 12.5, fontWeight: 600, color: "#6b5305", background: "#fff8e6", border: "1px solid #f4d78f", borderRadius: 8, padding: "6px 10px" }}>{i.jobNotes}</div>}
               <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10 }}>
+                {c && goCustomer && <button style={{ ...btn, marginRight: 8 }} onClick={() => { setPop(null); goCustomer(c.id); }}><Icon name="user" stroke={NAVY} />Open account</button>}
                 <button style={goldBtn} onClick={() => { setPop(null); openInvoice(i.id); }}><Icon name="doc" stroke={NAVY} />Open job</button>
               </div>
             </div>

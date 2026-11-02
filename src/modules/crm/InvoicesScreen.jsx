@@ -26,7 +26,7 @@ const NoteBox = ({ children }) => (
   </div>
 );
 
-export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setSelId, goCustomer, openQuote, openSample, openCollection, me, planner, updatePlanner, filter, setFilter }) {
+export default function InvoicesScreen({ newFollowUp, crm, updateCrm, askConfirm, selId, setSelId, goCustomer, openQuote, openSample, openCollection, me, planner, updatePlanner, filter, setFilter }) {
   const [search, setSearch] = useState("");
   const [custQuery, setCustQuery] = useState("");
   const [notice, setNotice] = useState("");
@@ -323,6 +323,12 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
           </div>
         </div>
         <span style={{ flex: 1 }} />
+        {newFollowUp && (
+          <button title="Something missing or broken? Create a follow-up job to post or deliver it" onClick={() => newFollowUp(inv.id)}
+            style={{ display: "inline-flex", alignItems: "center", gap: 6, height: 30, borderRadius: 8, border: "1px solid rgba(255,255,255,.35)", background: "transparent", color: "#fff", fontFamily: "inherit", fontWeight: 700, fontSize: 12, padding: "0 10px", cursor: "pointer", whiteSpace: "nowrap" }}>
+            <Icon name="wrench" stroke="#fff" size={13} />Follow-up job
+          </button>
+        )}
         <button title="Delete this invoice" onClick={() => removeInvoice(inv)}
           style={{ width: 28, height: 28, borderRadius: 8, border: "1px dashed #3a4f78", background: "transparent", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0, flex: "none" }}>
           <Icon name="bin" stroke="#8fa0c0" size={13} />

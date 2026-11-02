@@ -381,6 +381,34 @@ export default function ImportPlanner() {
     setSelInvoiceId(null);
     setTab("invoices");
   };
+  // Follow-up job: something was missing or broken — a new £0 job for the same customer and address,
+  // pointing back at the original, ready for the missing items to be added and posted / delivered
+  const newFollowUp = (origId) => {
+    if (!crm) return;
+    const o = crm.invoices.find((x) => x.id === origId);
+    if (!o) return;
+    setConfirmBox({
+      message: "Create a follow-up job for #" + (o.invNo || "—") + "? It's a new job for the same customer and address with no charge — add the missing or broken items, then book it on the Delivery Schedule or post it.",
+      confirmLabel: "Create follow-up",
+      action: () => {
+        const n = blankInvoice(o.customerId, o.siteId);
+        n.invNo = nextNumber(crm.invoices, "invNo", crm.numbering.invoice);
+        n.raisedBy = me;
+        n.orderRef = "Follow-up to #" + (o.invNo || "—");
+        n.jobNotes = "Follow-up to invoice #" + (o.invNo || "—") + " — missing / broken: ";
+        n.deliveryCharge = 0;
+        n.discountPct = "";
+        n.paymentDate = todayStr(); // nothing to pay, so it doesn't sit in "awaiting payment"
+        updateCrm((c) => {
+          c.invoices.unshift(n);
+          c.numbering.invoice = (Number(n.invNo) || 0) + 1;
+          return c;
+        });
+        setSelInvoiceId(n.id);
+        setTab("invoices");
+      },
+    });
+  };
   const newInvoiceFor = (customerId, siteId) => {
     if (!crm) return;
     const n = blankInvoice(customerId, siteId);
@@ -1065,6 +1093,7 @@ export default function ImportPlanner() {
             setSelId={setSelCustomerId}
             openInvoice={openInvoice}
             newInvoiceFor={newInvoiceFor}
+            newFollowUp={newFollowUp}
             openQuote={openQuote}
             newQuoteFor={newQuoteFor}
             openSample={openSample}
@@ -1100,6 +1129,7 @@ export default function ImportPlanner() {
           />
         ) : tab === "invoices" ? (
           <InvoicesScreen
+            newFollowUp={newFollowUp}
             crm={crm}
             updateCrm={updateCrm}
             askConfirm={setConfirmBox}
@@ -1116,7 +1146,7 @@ export default function ImportPlanner() {
             setFilter={setInvFilter}
           />
         ) : (
-          <ScheduleScreen crm={crm} updateCrm={updateCrm} openInvoice={openInvoice} openCollection={openCollection} me={me} planner={data} />
+          <ScheduleScreen crm={crm} updateCrm={updateCrm} openInvoice={openInvoice} openCollection={openCollection} me={me} planner={data} goCustomer={goCustomer} newFollowUp={newFollowUp} />
         ))}
 
       {(tab === "stock" || tab === "collections") &&
