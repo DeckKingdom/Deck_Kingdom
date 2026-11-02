@@ -11,7 +11,8 @@ const th = { textAlign: "left", fontSize: 10.5, fontWeight: 700, color: "#8593a8
 const td = { padding: "6px 6px", borderBottom: "1px solid #eef0f4", fontSize: 12.5 };
 const num = { ...td, textAlign: "right", whiteSpace: "nowrap" };
 
-export default function StockCheck({ inv, crm, planner, updatePlanner, updateCrm, me, onRaised, openCollection }) {
+// placeNew(made, crm): optional — lets the caller set up the new collection notes (e.g. put them in the job's run)
+export default function StockCheck({ inv, crm, planner, updatePlanner, updateCrm, me, onRaised, openCollection, placeNew, modalZ, compact }) {
   const [choices, setChoices] = useState(null); // modal state
   const rows = stockCheck(inv, crm);
   if (!rows.length) return null;
@@ -74,7 +75,8 @@ export default function StockCheck({ inv, crm, planner, updatePlanner, updateCrm
         return d;
       });
     updateCrm((c) => {
-      raiseShortfallCollections(c, inv.id, picked, me);
+      const made = raiseShortfallCollections(c, inv.id, picked, me);
+      if (placeNew) placeNew(made || [], c);
       return c;
     });
     setChoices(null);
@@ -82,7 +84,7 @@ export default function StockCheck({ inv, crm, planner, updatePlanner, updateCrm
   };
 
   return (
-    <div style={{ background: "#fff", border: "1px solid " + (short.length ? "#ecc4cb" : "#e6e9ef"), borderRadius: 12, padding: "10px 14px", marginTop: 16 }}>
+    <div style={compact ? {} : { background: "#fff", border: "1px solid " + (short.length ? "#ecc4cb" : "#e6e9ef"), borderRadius: 12, padding: "10px 14px", marginTop: 16 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
         <p style={{ fontSize: 11.5, fontWeight: 700, color: "#8593a8", letterSpacing: 0.6, textTransform: "uppercase", margin: 0 }}>Stock check</p>
         {inv.deliveryCompleted ? <Chip tone="green">Delivered</Chip>
@@ -101,7 +103,7 @@ export default function StockCheck({ inv, crm, planner, updatePlanner, updateCrm
           </button>
         )}
       </div>
-      <div className="dk-bleed" style={{ overflowX: "auto" }}>
+      {!compact && <div className="dk-bleed" style={{ overflowX: "auto" }}>
         <table className="dk-t" style={{ width: "100%", borderCollapse: "collapse", minWidth: 620 }}>
           <thead><tr>
             <th style={th}>Part</th><th style={{ ...th, textAlign: "right" }}>Needed</th><th style={{ ...th, textAlign: "right" }}>On collection</th>
@@ -122,10 +124,10 @@ export default function StockCheck({ inv, crm, planner, updatePlanner, updateCrm
             ))}
           </tbody>
         </table>
-      </div>
+      </div>}
 
       {choices && (
-        <Modal title="Collect the shortfall" onClose={() => setChoices(null)} width={680}>
+        <Modal title="Collect the shortfall" onClose={() => setChoices(null)} width={680} z={modalZ || 60}>
           <p style={{ fontSize: 13, color: "#5a6a85", fontWeight: 600, marginTop: 0 }}>
             Pick who to collect each part from — the cheapest is chosen for you. One collection note is raised per supplier, linked to job #{inv.invNo || "—"}.
           </p>

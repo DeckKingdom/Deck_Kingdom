@@ -10,7 +10,8 @@ import {
 } from "../../lib/crmCore.js";
 import { printJobDocs, DOC_KINDS } from "./printDocs.js";
 import LinesEditor from "./LinesEditor.jsx";
-import { JOB_TYPES, skuIndex, PAYMENT_TYPES, stockCheck, partKey, isColPick } from "../../lib/crmCore.js";
+import { JOB_TYPES, skuIndex, PAYMENT_TYPES, stockCheck, partKey, isColPick, blankPick, blankCollectionItem } from "../../lib/crmCore.js";
+import StockCheck from "./StockCheck.jsx";
 import { Icon, Chip, Tg, sect, lbl, card, abtn, inp, btn, goldBtn, RiskChip, WebStatusChip, Soon } from "./ui.jsx";
 
 const RANGE_OPTS = [
@@ -173,30 +174,13 @@ const partsStatus = (inv, crm, planner) => {
   });
   return { status: worst, parts };
 };
-const PartsIcon = ({ info }) => {
-  const [at, setAt] = useState(null);
+const PartsIcon = ({ info, onEnter, onLeave, onClick }) => {
   if (!info) return <span style={{ width: 22, flex: "none" }} />;
   const look = PARTS_LOOK[info.status];
   return (
-    <span onMouseEnter={(e) => setAt(e.currentTarget.getBoundingClientRect())} onMouseLeave={() => setAt(null)}
-      style={{ width: 22, height: 22, borderRadius: 7, background: look.bg, display: "inline-flex", alignItems: "center", justifyContent: "center", flex: "none", cursor: "help" }}>
+    <span onMouseEnter={onEnter} onMouseLeave={onLeave} onClick={onClick} title=""
+      style={{ width: 22, height: 22, borderRadius: 7, background: look.bg, display: "inline-flex", alignItems: "center", justifyContent: "center", flex: "none", cursor: "pointer" }}>
       <Icon name="box" stroke={look.fg} size={13} />
-      {at && (
-        <span style={{ position: "fixed", left: Math.max(8, Math.min(at.left - 20, window.innerWidth - 400)), ...(at.top > window.innerHeight / 2 ? { bottom: window.innerHeight - at.top + 6 } : { top: at.bottom + 6 }),
-          zIndex: 90, width: 380, background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, boxShadow: "0 12px 32px rgba(11,31,63,.25)", padding: "10px 12px", pointerEvents: "none", textAlign: "left" }}>
-          <b style={{ display: "block", fontSize: 13, color: look.fg, marginBottom: 6 }}>{look.label}</b>
-          {info.parts.map((p) => (
-            <span key={p.key} style={{ display: "grid", gridTemplateColumns: "10px 34px 1fr", gap: 8, alignItems: "baseline", padding: "4px 0", borderTop: "1px solid #f0f2f6", fontSize: 12, fontWeight: 600, color: NAVY }}>
-              <span style={{ width: 8, height: 8, borderRadius: 999, background: PARTS_LOOK[p.st].fg, alignSelf: "center" }} />
-              <b>{p.need}</b>
-              <span style={{ minWidth: 0 }}>
-                {p.description || p.sku}{p.colour ? <span style={{ color: "#5a6a85" }}>{" · " + p.colour}</span> : null}
-                <span style={{ display: "block", fontSize: 11.5, color: PARTS_LOOK[p.st].fg }}>{p.note}</span>
-              </span>
-            </span>
-          ))}
-        </span>
-      )}
     </span>
   );
 };
@@ -566,7 +550,9 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
           <PillSelect value={i.van || ""} options={vanOptions(crm)} placeholder="Van" onChange={(v) => setInv(i.id, (t) => (t.van = v))} />
         </>}
         <div style={{ ...sep, justifyContent: "space-between", gap: 4, fontSize: 12.5, fontWeight: 700, whiteSpace: "nowrap", paddingRight: 2 }}>
-          <PartsIcon info={partsStatus(i, crm, planner)} />
+          <PartsIcon info={partsStatus(i, crm, planner)}
+            onEnter={(e) => peekOpen({ id: i.id, kind: "parts", rect: e.currentTarget.getBoundingClientRect() })} onLeave={peekClose}
+            onClick={(e) => { peekCancel(); setPop({ id: i.id, kind: "parts", rect: e.currentTarget.getBoundingClientRect() }); }} />
           <span>{kg === null ? "—" : kg.toLocaleString("en-GB", { maximumFractionDigits: 0 }) + " kg"}</span>
         </div>
         <div style={{ ...sep, gap: 4 }}>
@@ -618,7 +604,7 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
   const CollRow = ({ c }) => {
     const [hover, setHover] = useState(false);
     const pr = collectionProgress(c);
-    const done = pr.total > 0 && pr.pending === 0;
+    const done = c.collected && pr.total > 0 && pr.pending === 0; // "processed" only once it's actually been collected
     const items = (c.items || []).reduce((t, it) => t + (Number(it.qty) || 0), 0);
     const kg = collKg(c);
     const me_ = "col:" + c.id;
@@ -660,7 +646,7 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
           <PillSelect value={c.collectTime || ""} options={TIME_SLOTS} placeholder="Time" onChange={(v) => setColl(c.id, (t) => (t.collectTime = v))} />
         </div>
         <div style={{ ...sep, gridColumn: showPrep ? "span 4" : "span 2", fontSize: 12, fontWeight: 700 }}>
-          {done ? <Chip tone="green">Processed</Chip> : pr.done > 0 ? <Chip tone="gold">{pr.done}/{pr.total} processed</Chip> : c.collected ? <span style={{ color: "#28713e" }}>Collected</span> : null}
+          {done ? <Chip tone="green">Processed</Chip> : c.collected ? (pr.done > 0 ? <Chip tone="gold">{pr.done}/{pr.total} processed</Chip> : <span style={{ color: "#28713e" }}>Collected</span>) : (c.items || []).some((it) => it.assignedInvoiceId) ? <span style={{ color: "#5a6a85" }}>For a job</span> : null}
         </div>
         <span />
       </div>
@@ -1082,7 +1068,117 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
         );
       })()}
 
-      {pop && pop.kind !== "col" && (() => {
+      {pop && pop.kind === "parts" && (() => {
+        const i = crm.invoices.find((x) => x.id === pop.id);
+        if (!i) return null;
+        const c = custById[i.customerId];
+        const info = partsStatus(i, crm, planner) || { status: "ready", parts: [] };
+        const look = PARTS_LOOK[info.status];
+        const PW = Math.min(780, window.innerWidth - 40), PH = Math.min(window.innerHeight - 20, 720);
+        const left = Math.max(10, Math.min(pop.rect.left - PW / 2, window.innerWidth - PW - 20));
+        const vpos = pop.rect.top < window.innerHeight / 2 ? { top: pop.rect.bottom + 6 } : { bottom: window.innerHeight - pop.rect.top + 6 };
+        const refs = [...new Set((i.picks || []).filter(isColPick).map((p) => String(p.batchRef).toUpperCase()))];
+        const notes = refs.map((ref) => ({ ref, col: (crm.collections || []).find((x) => "COL-" + x.collectionNo === ref) })).filter((x) => x.col);
+        // keep the collection note and the job's pick list in step
+        const editColl = (colId, fn) => updateCrm((cc) => {
+          const col = (cc.collections || []).find((x) => x.id === colId);
+          const job = cc.invoices.find((x) => x.id === i.id);
+          if (col && job) { job.picks = job.picks || []; col.items = col.items || []; fn(col, job, "COL-" + col.collectionNo); }
+          return cc;
+        });
+        const pickFor = (job, ref, sku) => job.picks.find((p) => String(p.batchRef).toUpperCase() === ref && p.sku === sku);
+        // new notes raised from here ride in this job's run, just before its drop
+        const placeNew = (made, cc) => {
+          const job = cc.invoices.find((x) => x.id === i.id);
+          if (!job || !made.length) return;
+          made.forEach((col) => { col.collectDate = job.deliveryDate || ""; col.driver = job.driver || ""; col.runNo = job.runNo || ""; col.van = job.van || ""; });
+          if (!job.deliveryDate || !(job.driver || job.runNo)) return;
+          const same = (x) => (x.driver || "") === (job.driver || "") && (x.runNo || "") === (job.runNo || "");
+          const madeIds = new Set(made.map((x) => x.id));
+          const stops = [
+            ...cc.invoices.filter((x) => !isVoidInvoice(x) && !isCollectionJob(x) && x.deliveryDate === job.deliveryDate && same(x)),
+            ...(cc.collections || []).filter((x) => !madeIds.has(x.id) && x.collectDate === job.deliveryDate && same(x)),
+          ].sort((p, q) => (Number(p.dropNo) || 999) - (Number(q.dropNo) || 999));
+          const at = stops.indexOf(job);
+          stops.splice(at < 0 ? stops.length : at, 0, ...made);
+          stops.forEach((x, n) => (x.dropNo = String(n + 1)));
+        };
+        const inp_ = { ...pill, width: 60, padding: "3px 8px", textAlign: "right", cursor: "text" };
+        return (
+          <>
+            {!pop.peek && <div onMouseDown={() => setPop(null)} style={{ position: "fixed", inset: 0, zIndex: 70 }} />}
+            <div onMouseEnter={() => pop.peek && clearTimeout(peekT.current.close)} onMouseLeave={() => pop.peek && peekClose()}
+              onMouseDown={() => { if (pop.peek) { peekCancel(); setPop({ ...pop, peek: false }); } }}
+              style={{ position: "fixed", left, ...vpos, zIndex: 71, width: PW, maxHeight: Math.min(PH, (vpos.top ? window.innerHeight - vpos.top : pop.rect.top) - 16), overflowY: "auto",
+                background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, boxShadow: "0 14px 40px rgba(11,31,63,.28)", padding: "14px 18px", boxSizing: "border-box" }}>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 4 }}>
+                <b style={{ fontSize: 15, color: NAVY }}>Parts · {c ? c.name || "Unnamed" : "No customer"}</b>
+                <span style={{ fontSize: 12, fontWeight: 700, color: "#185FA5" }}>#{i.invNo || "—"}</span>
+                <span style={{ flex: 1 }} />
+                <span style={{ fontSize: 12, fontWeight: 800, color: look.fg, background: look.bg, borderRadius: 999, padding: "2px 10px" }}>{look.label}</span>
+              </div>
+              <Stamp lines={[(i.runNo ? "Run " + i.runNo : "No run") + (i.driver ? " · " + i.driver : "") + (i.deliveryDate ? " · " + prettyDate(i.deliveryDate) : "")]} />
+              {info.parts.map((p) => (
+                <div key={p.key} style={{ display: "grid", gridTemplateColumns: "10px 40px 1fr", gap: 8, alignItems: "baseline", padding: "5px 0", borderTop: "1px solid #f0f2f6", fontSize: 12.5, fontWeight: 600, color: NAVY }}>
+                  <span style={{ width: 8, height: 8, borderRadius: 999, background: PARTS_LOOK[p.st].fg, alignSelf: "center" }} />
+                  <b>{p.need}</b>
+                  <span>{p.description || p.sku}{p.colour ? <span style={{ color: "#5a6a85" }}>{" · " + p.colour}</span> : null}
+                    <span style={{ display: "block", fontSize: 11.5, color: PARTS_LOOK[p.st].fg }}>{p.note}</span></span>
+                </div>
+              ))}
+              {info.parts.some((p) => p.short > 0) && (
+                <div style={{ marginTop: 10, borderTop: "1px solid #e6e9ef", paddingTop: 8 }}>
+                  <StockCheck compact inv={i} crm={crm} planner={planner} updateCrm={updateCrm} me={me} openCollection={openCollection} placeNew={placeNew} modalZ={95} />
+                </div>
+              )}
+              {notes.map(({ ref, col }) => {
+                const mine = (col.items || []).filter((it) => it.assignedInvoiceId === i.id);
+                const locked = !!col.collected;
+                return (
+                  <div key={col.id} style={{ marginTop: 12, border: "1px solid #dfe6f2", borderRadius: 10, padding: "8px 12px", background: "#f7f9fc" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
+                      <b style={{ color: COLLECTION_BLUE, fontSize: 13 }}>{ref} · {col.supplier || "Supplier"}</b>
+                      <span style={{ fontSize: 11.5, fontWeight: 700, color: "#5a6a85" }}>
+                        {[col.collectDate ? prettyDate(col.collectDate) : "no date", col.runNo ? "Run " + col.runNo : "", col.driver].filter(Boolean).join(" · ")}
+                      </span>
+                      <span style={{ fontSize: 11.5, fontWeight: 800, color: locked ? "#28713e" : "#a05f10" }}>{locked ? "collected" : "not collected yet"}</span>
+                      <span style={{ flex: 1 }} />
+                      <button style={{ ...btn, padding: "4px 10px", fontSize: 12 }} onClick={() => { setPop(null); openCollection && openCollection(col.id); }}><Icon name="box" stroke={NAVY} size={13} />Open note</button>
+                    </div>
+                    {mine.length === 0 && <div style={{ fontSize: 12, color: "#8593a8", fontWeight: 600 }}>No lines for this job on this note.</div>}
+                    {mine.map((it) => (
+                      <div key={it.id} style={{ display: "grid", gridTemplateColumns: "1fr 70px 30px", gap: 8, alignItems: "center", padding: "4px 0", borderTop: "1px solid #e9edf3", fontSize: 12.5, fontWeight: 600, color: NAVY }}>
+                        <span>{it.description || it.sku}{it.colour ? <span style={{ color: "#5a6a85" }}>{" · " + it.colour}</span> : null}<span style={{ color: "#8593a8" }}>{" · " + (it.sku || "")}</span></span>
+                        <input type="number" min="0" disabled={locked} value={it.qty} style={inp_}
+                          onChange={(e) => { const v = e.target.value; editColl(col.id, (cl, job, r) => { const t = cl.items.find((x) => x.id === it.id); if (!t) return; t.qty = v === "" ? "" : Number(v); const p = pickFor(job, r, t.sku); if (p) p.qty = t.qty; }); }} />
+                        {!locked ? <button type="button" title="Remove this line from the note" style={{ ...abtn, border: "none", width: 26, height: 26 }}
+                          onClick={() => editColl(col.id, (cl, job, r) => { const t = cl.items.find((x) => x.id === it.id); cl.items = cl.items.filter((x) => x.id !== it.id); if (t) job.picks = job.picks.filter((p) => !(String(p.batchRef).toUpperCase() === r && p.sku === t.sku)); })}><Icon name="x" stroke={RED} size={13} /></button> : <span />}
+                      </div>
+                    ))}
+                    {!locked && (
+                      <select style={{ ...pill, marginTop: 6, width: "auto", paddingRight: 24 }} value="" title="Add one of this job's parts to the note"
+                        onChange={(e) => { const r = info.parts.find((p) => p.key === e.target.value); if (!r) return; editColl(col.id, (cl, job, ref_) => {
+                          const sku = (r.row && r.row.sku) || r.sku;
+                          if (cl.items.some((x) => x.sku === sku && x.assignedInvoiceId === i.id)) return;
+                          cl.items.push({ ...blankCollectionItem(), sku, description: r.description || "", colour: r.colour || "", qty: Math.max(1, r.short || 1), assignedInvoiceId: i.id });
+                          job.picks.push({ ...blankPick(), sku, description: r.description || "", colour: r.colour || "", qty: Math.max(1, r.short || 1), batchRef: ref_, picked: false });
+                        }); }}>
+                        <option value="">+ Add a part to this note…</option>
+                        {info.parts.map((p) => <option key={p.key} value={p.key}>{(p.description || p.sku) + (p.colour ? " · " + p.colour : "") + (p.short ? " (short " + p.short + ")" : "")}</option>)}
+                      </select>
+                    )}
+                  </div>
+                );
+              })}
+              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 12 }}>
+                <button style={goldBtn} onClick={() => { setPop(null); openInvoice(i.id); }}><Icon name="doc" stroke={NAVY} />Open job</button>
+              </div>
+            </div>
+          </>
+        );
+      })()}
+
+      {pop && pop.kind !== "col" && pop.kind !== "parts" && (() => {
         const i = crm.invoices.find((x) => x.id === pop.id);
         if (!i) return null;
         const c = custById[i.customerId];

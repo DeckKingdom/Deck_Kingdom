@@ -228,8 +228,8 @@ export const enterToNext = (e) => {
   }
 };
 
-export const Modal = ({ title, onClose, children, width = 560 }) => (
-  <div style={{ position: "fixed", inset: 0, background: "rgba(11,31,63,0.45)", zIndex: 60, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "6vh 16px", overflowY: "auto" }}
+export const Modal = ({ title, onClose, children, width = 560, z = 60 }) => (
+  <div style={{ position: "fixed", inset: 0, background: "rgba(11,31,63,0.45)", zIndex: z, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "6vh 16px", overflowY: "auto" }}
     onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
     <div onKeyDown={enterToNext} style={{ background: "#fff", borderRadius: 12, padding: "18px 20px", width: "100%", maxWidth: width, boxShadow: "0 18px 50px rgba(11,31,63,0.35)" }}>
       <div style={{ display: "flex", alignItems: "center", marginBottom: 14 }}>
