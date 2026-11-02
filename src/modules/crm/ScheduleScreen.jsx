@@ -9,7 +9,7 @@ import {
   isVoidInvoice, applyInvoiceStockDeduction,
 } from "../../lib/crmCore.js";
 import { printJobDocs, DOC_KINDS } from "./printDocs.js";
-import { JOB_TYPES, skuIndex } from "../../lib/crmCore.js";
+import { JOB_TYPES, skuIndex, PAYMENT_TYPES } from "../../lib/crmCore.js";
 import { Icon, Chip, Tg, sect, lbl, card, abtn, inp, btn, goldBtn, RiskChip, WebStatusChip, Soon } from "./ui.jsx";
 
 const RANGE_OPTS = [
@@ -960,15 +960,11 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
                 <b style={{ fontSize: 15, color: COLLECTION_BLUE }}>{col.supplier || "Supplier"}</b>
                 <span style={{ fontSize: 12, fontWeight: 700, color: "#185FA5" }}>COL-{col.collectionNo || "—"}</span>
                 <span style={{ fontSize: 11.5, fontWeight: 700, color: "#8593a8" }}>supplier pick-up</span>
-                <span style={{ flex: 1 }} />
-                <button style={{ ...abtn, border: "none" }} title="Close" onClick={() => setPop(null)}><Icon name="x" /></button>
               </div>
               <Stamp lines={[col.date ? "Raised " + prettyDate(col.date) + (col.raisedBy ? " by " + String(col.raisedBy).split("@")[0] : "") : ""]} />
               <div style={{ display: "flex", gap: 8, alignItems: "center", background: col.collectDate ? "#f7f9fc" : "#fff8e6", border: "1px solid " + (col.collectDate ? "#e6e9ef" : "#f4d78f"), borderRadius: 10, padding: "6px 10px", marginBottom: 10 }}>
                 <span style={{ ...lbl, marginBottom: 0 }}>Collection date</span>
                 <input type="date" value={col.collectDate || ""} style={{ ...pill, width: 130, padding: "3px 8px" }} onChange={(e) => { const v = e.target.value; setColl(col.id, (t) => (t.collectDate = v)); }} />
-                <span style={{ ...lbl, marginBottom: 0, marginLeft: 10 }}>Weight</span>
-                <b style={{ fontSize: 13, color: NAVY }}>{kgAll === null ? "—" : Math.round(kgAll).toLocaleString("en-GB") + " kg"}</b>
                 <span style={{ flex: 1 }} />
                 {!col.collectDate && <span style={{ fontSize: 11.5, fontWeight: 700, color: "#a05f10" }}>not booked</span>}
               </div>
@@ -978,22 +974,19 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
                 {(col.contact || col.phone) && <div style={{ color: "#5a6a85" }}>{[col.contact, col.phone].filter(Boolean).join(" · ")}</div>}
                 {(col.driver || col.runNo || col.van) && <div style={{ color: "#5a6a85" }}>{[col.runNo ? "Run " + col.runNo : "", col.driver, col.dropNo ? "stop " + col.dropNo : "", col.van].filter(Boolean).join(" · ")}</div>}
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "44px 1fr 70px", gap: "0 10px", marginTop: 12, paddingBottom: 4, borderBottom: "1px solid #e6e9ef" }}>
-                {["Qty", "Item", "Weight"].map((h, k) => <span key={h} style={{ ...lbl, marginBottom: 0, textAlign: k === 1 ? "left" : "right" }}>{h}</span>)}
+              <div style={{ display: "grid", gridTemplateColumns: "44px 1fr 130px", gap: "0 10px", marginTop: 12, paddingBottom: 4, borderBottom: "1px solid #e6e9ef" }}>
+                {["Qty", "Item", "Colour"].map((h) => <span key={h} style={{ ...lbl, marginBottom: 0 }}>{h}</span>)}
               </div>
               {(col.items || []).length === 0 ? <div style={{ fontSize: 12.5, color: "#8593a8", padding: "6px 0" }}>No items listed</div> : (col.items || []).map((it) => {
-                const mp = by[String(it.sku || "").trim().toLowerCase()];
-                const w = mp && Number(mp.weightKg) ? Number(mp.weightKg) * (Number(it.qty) || 0) : null;
                 return (
-                  <div key={it.id} style={{ display: "grid", gridTemplateColumns: "44px 1fr 70px", gap: "0 10px", fontSize: 12.5, fontWeight: 600, padding: "5px 0", color: NAVY, borderBottom: "1px solid #f3f5f9", alignItems: "baseline" }}>
-                    <b style={{ textAlign: "right" }}>{it.qty}×</b>
-                    <span style={{ minWidth: 0 }}>{it.description || it.sku || "—"}{it.colour ? <span style={{ color: "#5a6a85" }}>{" · " + it.colour}</span> : null}{it.sku && it.description ? <span style={{ color: "#8593a8" }}>{" · " + it.sku}</span> : null}</span>
-                    <span style={{ textAlign: "right", color: "#5a6a85" }}>{w === null ? "—" : Math.round(w).toLocaleString("en-GB") + " kg"}</span>
+                  <div key={it.id} style={{ display: "grid", gridTemplateColumns: "44px 1fr 130px", gap: "0 10px", fontSize: 12.5, fontWeight: 600, padding: "5px 0", color: NAVY, borderBottom: "1px solid #f3f5f9", alignItems: "baseline" }}>
+                    <b>{it.qty}×</b>
+                    <span style={{ minWidth: 0 }}>{it.description || it.sku || "—"}{it.sku && it.description ? <span style={{ color: "#8593a8" }}>{" · " + it.sku}</span> : null}</span>
+                    <span style={{ color: "#5a6a85" }}>{it.colour || "—"}</span>
                   </div>
                 );
               })}
               <div style={{ marginTop: 8, fontSize: 12.5, fontWeight: 700, color: NAVY, display: "grid", gridTemplateColumns: "1fr auto", gap: "3px 10px" }}>
-                <span style={{ color: "#5a6a85" }}>Total weight</span><span>{kgAll === null ? "—" : Math.round(kgAll).toLocaleString("en-GB") + " kg"}</span>
                 <span>Items</span><span>{items} pcs</span>
                 <span style={{ color: col.collected ? "#28713e" : "#a05f10" }}>{col.collected ? "Collected" : "Not collected yet"}</span><span />
               </div>
@@ -1027,19 +1020,21 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
               <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 6 }}>
                 <b style={{ fontSize: 15, color: NAVY }}>{c ? c.name || "Unnamed" : "No customer"}</b>
                 <span style={{ fontSize: 12, fontWeight: 700, color: "#185FA5" }}>#{i.invNo || "—"}</span>
-                <span style={{ flex: 1 }} />
-                <button style={{ ...abtn, border: "none" }} title="Close" onClick={() => setPop(null)}><Icon name="x" /></button>
               </div>
               <Stamp lines={[
                 i.created || i.date ? "Raised " + prettyDate(i.created || i.date) + (i.raisedBy ? " by " + i.raisedBy.split("@")[0] : "") : "",
                 i.updatedAt ? "Updated " + prettyDateTime(i.updatedAt) + (i.modifiedBy ? " by " + i.modifiedBy.split("@")[0] : "") : "",
               ]} />
               <div style={{ display: "flex", gap: 8, alignItems: "center", background: i.deliveryDate ? "#f7f9fc" : "#fff8e6", border: "1px solid " + (i.deliveryDate ? "#e6e9ef" : "#f4d78f"), borderRadius: 10, padding: "6px 10px", marginBottom: 10 }}>
-                <span style={{ ...lbl, marginBottom: 0 }}>{isCollectionJob(i) ? "Collection date" : "Delivery date"}</span>
+                <span style={{ ...lbl, marginBottom: 0, whiteSpace: "nowrap" }}>{isCollectionJob(i) ? "Collection date" : "Delivery date"}</span>
                 <input type="date" value={i.deliveryDate || ""} style={{ ...pill, width: 130, padding: "3px 8px" }}
                   onChange={(e) => { const v = e.target.value; guard(i.id, () => setInv(i.id, (t) => { t.deliveryDate = v; if (v && (!t.jobType || t.jobType === "Pending")) t.jobType = "Delivery"; })); }} />
-                <span style={{ ...lbl, marginBottom: 0, marginLeft: 10 }}>Weight</span>
-                <b style={{ fontSize: 13, color: NAVY }}>{kgAll === null ? "—" : Math.round(kgAll).toLocaleString("en-GB") + " kg"}</b>
+                <span style={{ ...lbl, marginBottom: 0, marginLeft: 10 }}>Payment</span>
+                <span style={{ width: 104, flex: "none" }}>
+                  <PillSelect value={i.paymentType || ""} options={PAYMENT_TYPES} placeholder="Type" tone={isPaid(i) ? "#28713e" : NAVY} onChange={(v) => setInv(i.id, (t) => (t.paymentType = v))} />
+                </span>
+                <input type="date" value={i.paymentDate || ""} title="Date paid — leave blank while it's still owed" style={{ ...pill, width: 130, padding: "3px 8px", color: i.paymentDate ? "#28713e" : "#5a6a85", background: i.paymentDate ? "#eef8f1" : "#f3f5f9" }}
+                  onChange={(e) => { const v = e.target.value; setInv(i.id, (t) => (t.paymentDate = v)); }} />
                 <span style={{ flex: 1 }} />
                 {!i.deliveryDate && <span style={{ fontSize: 11.5, fontWeight: 700, color: "#a05f10" }}>not booked</span>}
               </div>
@@ -1048,22 +1043,20 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
                 {addr.filter(Boolean).map((l, k) => <div key={k}>{l}</div>)}
                 {contact && <div style={{ color: "#5a6a85" }}>{contact}</div>}
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "44px 1fr 70px 76px", gap: "0 10px", marginTop: 12, paddingBottom: 4, borderBottom: "1px solid #e6e9ef" }}>
-                {["Qty", "Product", "Weight", "Price"].map((h, k) => <span key={h} style={{ ...lbl, marginBottom: 0, textAlign: k === 1 ? "left" : "right" }}>{h}</span>)}
+              <div style={{ display: "grid", gridTemplateColumns: "44px 1fr 120px 76px", gap: "0 10px", marginTop: 12, paddingBottom: 4, borderBottom: "1px solid #e6e9ef" }}>
+                {["Qty", "Product", "Colour", "Price"].map((h, k) => <span key={h} style={{ ...lbl, marginBottom: 0, textAlign: k === 3 ? "right" : "left" }}>{h}</span>)}
               </div>
               {(i.lines || []).length === 0 ? <div style={{ fontSize: 12.5, color: "#8593a8", padding: "6px 0" }}>No lines</div> : (i.lines || []).map((l) => {
-                const lk = linesKg(l, i, crm);
                 return (
-                  <div key={l.id} style={{ display: "grid", gridTemplateColumns: "44px 1fr 70px 76px", gap: "0 10px", fontSize: 12.5, fontWeight: 600, padding: "5px 0", color: NAVY, borderBottom: "1px solid #f3f5f9", alignItems: "baseline" }}>
-                    <b style={{ textAlign: "right" }}>{l.qty}×</b>
-                    <span style={{ minWidth: 0 }}>{l.description || l.sku || "—"}{l.colour ? <span style={{ color: "#5a6a85" }}>{" · " + l.colour}</span> : null}</span>
-                    <span style={{ textAlign: "right", color: "#5a6a85" }}>{lk === null ? "—" : Math.round(lk).toLocaleString("en-GB") + " kg"}</span>
+                  <div key={l.id} style={{ display: "grid", gridTemplateColumns: "44px 1fr 120px 76px", gap: "0 10px", fontSize: 12.5, fontWeight: 600, padding: "5px 0", color: NAVY, borderBottom: "1px solid #f3f5f9", alignItems: "baseline" }}>
+                    <b>{l.qty}×</b>
+                    <span style={{ minWidth: 0 }}>{l.description || l.sku || "—"}</span>
+                    <span style={{ color: "#5a6a85" }}>{l.colour || "—"}</span>
                     <span style={{ textAlign: "right", color: "#5a6a85" }}>{gbp((Number(l.qty) || 0) * (Number(l.price) || 0))}</span>
                   </div>
                 );
               })}
               <div style={{ marginTop: 8, fontSize: 12.5, fontWeight: 700, color: NAVY, display: "grid", gridTemplateColumns: "1fr auto", gap: "3px 10px" }}>
-                <span style={{ color: "#5a6a85" }}>Total weight</span><span>{kgAll === null ? "—" : Math.round(kgAll).toLocaleString("en-GB") + " kg"}</span>
                 {Number(i.deliveryCharge) ? <><span style={{ color: "#5a6a85" }}>Delivery</span><span>{gbp(Number(i.deliveryCharge))}</span></> : null}
                 <span>Total</span><span>{gbp(t.total)}</span>
                 <span style={{ color: isPaid(i) ? "#28713e" : "#a05f10" }}>{isPaid(i) ? "Paid" + (i.paymentType ? " · " + i.paymentType : "") : i.paymentType === "COD" ? "Cash on delivery" : "Awaiting payment"}</span><span />
