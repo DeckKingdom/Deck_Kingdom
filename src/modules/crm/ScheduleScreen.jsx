@@ -28,8 +28,8 @@ const dayLabel = (d) => {
 const COLLECTION_BLUE = "#185FA5";
 // the board's columns: stripe · customer · driver · run · drop · van · weight · date+time · prep · follow-up · days
 const short16 = (t) => (String(t).length > 16 ? String(t).slice(0, 15).trimEnd() + "…" : String(t));
-// stripe · done · customer · postcode · source · job type · driver · run · drop · van · weight · date+time · [prep · follow-up] · update · days
-const dsCols = (prep) => "4px 50px 150px 70px 100px 116px 80px 72px 46px 80px 60px minmax(134px, 1fr) " + (prep ? "162px 162px " : "") + "98px 42px";
+// stripe · done · customer · postcode · source · job type · driver · run · drop · van · weight · date+time · payment · [prep · follow-up] · update · days
+const dsCols = (prep) => "4px 50px 150px 70px 100px 116px 80px 72px 46px 80px 60px 134px minmax(146px, 1fr) " + (prep ? "162px 162px " : "") + "98px 42px";
 const DROP_NOS = Array.from({ length: 20 }, (_, n) => String(n + 1));
 const rowBox = { display: "grid", gap: 7, alignItems: "center", background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, padding: "8px 12px 8px 0", marginBottom: 6, overflow: "hidden" };
 const pill = { fontFamily: "inherit", fontSize: 12, fontWeight: 700, color: NAVY, border: "1px solid #c9d0db", borderRadius: 999, background: "#fff", padding: "3px 16px 3px 8px", height: 28, boxSizing: "border-box", cursor: "pointer", maxWidth: "100%" };
@@ -113,16 +113,16 @@ const PrintMenu = ({ onPick, label, dark, title = "Print or save as PDF" }) => {
 
 // date pill showing just the day ("21st"); click opens the calendar
 const ordinal = (n) => n + (n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] || "th");
-const DayPill = ({ value, onChange }) => {
+const DayPill = ({ value, onChange, placeholder = "Date", paid, what = "" }) => {
   const ref = useRef(null);
   const d = value ? new Date(value + "T00:00:00") : null;
   const ok = d && !isNaN(d.getTime());
   return (
     <span style={{ position: "relative", flex: "none" }}>
-      <button type="button" title={ok ? d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" }) + " — click to change" : "Set a date"}
+      <button type="button" title={ok ? what + d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" }) + " — click to change" : what ? what.trim() + " — not yet" : "Set a date"}
         onClick={() => { const el = ref.current; if (!el) return; try { el.showPicker(); } catch { el.focus(); el.click(); } }}
-        style={{ ...pill, width: 50, padding: "3px 6px", textAlign: "center", color: ok ? NAVY : "#5a6a85", background: ok ? "#fff" : "#f3f5f9" }}>
-        {ok ? ordinal(d.getDate()) : "Date"}
+        style={{ ...pill, width: 50, padding: "3px 6px", textAlign: "center", color: ok ? (paid ? "#28713e" : NAVY) : "#5a6a85", background: ok ? (paid ? "#eef8f1" : "#fff") : "#f3f5f9", borderColor: ok && paid ? "#bfe3ca" : "#c9d0db" }}>
+        {ok ? ordinal(d.getDate()) : placeholder}
       </button>
       <input ref={ref} type="date" value={value || ""} onChange={(e) => onChange(e.target.value)} tabIndex={-1}
         style={{ position: "absolute", left: 0, bottom: 0, width: 1, height: 1, opacity: 0, pointerEvents: "none", border: 0, padding: 0 }} />
@@ -499,6 +499,12 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
           <DayPill value={i.deliveryDate} onChange={(v) => guard(i.id, () => setInv(i.id, (t) => (t.deliveryDate = v)))} />
           <PillSelect value={i.deliveryTime || ""} options={TIME_SLOTS} placeholder="Time" onChange={(v) => guard(i.id, () => setInv(i.id, (t) => (t.deliveryTime = v)))} />
         </div>
+        <div style={{ display: "flex", gap: 4, width: 146 }}>
+          <span style={{ width: 92, flex: "none" }}>
+            <PillSelect value={i.paymentType || ""} options={PAYMENT_TYPES} placeholder="Payment" tone={isPaid(i) ? "#28713e" : NAVY} onChange={(v) => setInv(i.id, (t) => (t.paymentType = v))} />
+          </span>
+          <DayPill value={i.paymentDate} placeholder="Paid" paid what="Paid " onChange={(v) => setInv(i.id, (t) => (t.paymentDate = v))} />
+        </div>
         {showPrep && (
           <div style={{ display: "flex", gap: 3 }}>
             {PREP_FLAGS.map(([k, label, icon]) => (
@@ -577,7 +583,7 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
           <DayPill value={c.collectDate} onChange={(v) => setColl(c.id, (t) => (t.collectDate = v))} />
           <PillSelect value={c.collectTime || ""} options={TIME_SLOTS} placeholder="Time" onChange={(v) => setColl(c.id, (t) => (t.collectTime = v))} />
         </div>
-        <div style={{ gridColumn: showPrep ? "span 3" : "span 1", fontSize: 12, fontWeight: 700 }}>
+        <div style={{ gridColumn: showPrep ? "span 4" : "span 2", fontSize: 12, fontWeight: 700 }}>
           {done ? <Chip tone="green">Processed</Chip> : pr.done > 0 ? <Chip tone="gold">{pr.done}/{pr.total} processed</Chip> : c.collected ? <span style={{ color: "#28713e" }}>Collected</span> : null}
         </div>
         <span />
@@ -767,7 +773,7 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
             </div>
           ) : (
             <div style={{ overflowX: "auto" }}>
-              <div style={{ minWidth: showPrep ? 1545 : 1205 }}>
+              <div style={{ minWidth: showPrep ? 1700 : 1360 }}>
                 {g.rows.map((e, k) => {
                   const key = runKey(e), prevKey = k ? runKey(g.rows[k - 1]) : null;
                   const sameRun = g.rows.filter((x) => runKey(x) === key);
@@ -980,7 +986,7 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
               {(col.items || []).length === 0 ? <div style={{ fontSize: 12.5, color: "#8593a8", padding: "6px 0" }}>No items listed</div> : (col.items || []).map((it) => {
                 return (
                   <div key={it.id} style={{ display: "grid", gridTemplateColumns: "44px 1fr 120px 76px", gap: "0 10px", fontSize: 12.5, fontWeight: 600, padding: "5px 0", color: NAVY, borderBottom: "1px solid #f3f5f9", alignItems: "baseline" }}>
-                    <b>{it.qty}×</b>
+                    <b>{it.qty}</b>
                     <span style={{ minWidth: 0 }}>{it.description || it.sku || "—"}{it.sku && it.description ? <span style={{ color: "#8593a8" }}>{" · " + it.sku}</span> : null}</span>
                     <span style={{ color: "#5a6a85" }}>{it.colour || "—"}</span>
                     <span />
@@ -1030,12 +1036,6 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
                 <span style={{ ...lbl, marginBottom: 0, whiteSpace: "nowrap" }}>{isCollectionJob(i) ? "Collection date" : "Delivery date"}</span>
                 <input type="date" value={i.deliveryDate || ""} style={{ ...pill, width: 130, padding: "3px 8px" }}
                   onChange={(e) => { const v = e.target.value; guard(i.id, () => setInv(i.id, (t) => { t.deliveryDate = v; if (v && (!t.jobType || t.jobType === "Pending")) t.jobType = "Delivery"; })); }} />
-                <span style={{ ...lbl, marginBottom: 0, marginLeft: 10 }}>Payment</span>
-                <span style={{ width: 104, flex: "none" }}>
-                  <PillSelect value={i.paymentType || ""} options={PAYMENT_TYPES} placeholder="Type" tone={isPaid(i) ? "#28713e" : NAVY} onChange={(v) => setInv(i.id, (t) => (t.paymentType = v))} />
-                </span>
-                <input type="date" value={i.paymentDate || ""} title="Date paid — leave blank while it's still owed" style={{ ...pill, width: 130, padding: "3px 8px", color: i.paymentDate ? "#28713e" : "#5a6a85", background: i.paymentDate ? "#eef8f1" : "#f3f5f9" }}
-                  onChange={(e) => { const v = e.target.value; setInv(i.id, (t) => (t.paymentDate = v)); }} />
                 <span style={{ flex: 1 }} />
                 {!i.deliveryDate && <span style={{ fontSize: 11.5, fontWeight: 700, color: "#a05f10" }}>not booked</span>}
               </div>
@@ -1050,7 +1050,7 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
               {(i.lines || []).length === 0 ? <div style={{ fontSize: 12.5, color: "#8593a8", padding: "6px 0" }}>No lines</div> : (i.lines || []).map((l) => {
                 return (
                   <div key={l.id} style={{ display: "grid", gridTemplateColumns: "44px 1fr 120px 76px", gap: "0 10px", fontSize: 12.5, fontWeight: 600, padding: "5px 0", color: NAVY, borderBottom: "1px solid #f3f5f9", alignItems: "baseline" }}>
-                    <b>{l.qty}×</b>
+                    <b>{l.qty}</b>
                     <span style={{ minWidth: 0 }}>{l.description || l.sku || "—"}</span>
                     <span style={{ color: "#5a6a85" }}>{l.colour || "—"}</span>
                     <span style={{ textAlign: "right", color: "#5a6a85" }}>{gbp((Number(l.qty) || 0) * (Number(l.price) || 0))}</span>
