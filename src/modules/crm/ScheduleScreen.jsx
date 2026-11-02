@@ -29,9 +29,12 @@ const COLLECTION_BLUE = "#185FA5";
 // the board's columns: stripe · customer · driver · run · drop · van · weight · date+time · prep · follow-up · days
 const short16 = (t) => (String(t).length > 16 ? String(t).slice(0, 15).trimEnd() + "…" : String(t));
 // stripe · done · customer · postcode · source · job type · driver · run · drop · van · weight · date+time · payment · [prep · follow-up] · update · days
-const dsCols = (prep) => "4px 50px 150px 70px 100px 116px 80px 72px 46px 80px 60px 134px minmax(146px, 1fr) " + (prep ? "162px 162px " : "") + "98px 42px";
+// sized to fit a ~1300px board without scrolling; spare width is shared out between the columns
+const dsCols = (prep) => "4px 48px 140px 62px 86px 104px 76px 72px 44px 80px 52px 120px 176px " + (prep ? "162px 162px " : "") + "96px 38px";
+// a thin divider at the start of each section (job · weight · when · payment · contact)
+const sep = { boxShadow: "inset 1px 0 0 #e3e7ee", alignSelf: "stretch", display: "flex", alignItems: "center", margin: "-8px 0", padding: "8px 0 8px 6px", minWidth: 0 };
 const DROP_NOS = Array.from({ length: 20 }, (_, n) => String(n + 1));
-const rowBox = { display: "grid", gap: 7, alignItems: "center", background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, padding: "8px 12px 8px 0", marginBottom: 6, overflow: "hidden" };
+const rowBox = { display: "grid", gap: 6, justifyContent: "space-between", alignItems: "center", background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, padding: "8px 12px 8px 0", marginBottom: 6, overflow: "hidden" };
 const pill = { fontFamily: "inherit", fontSize: 12, fontWeight: 700, color: NAVY, border: "1px solid #c9d0db", borderRadius: 999, background: "#fff", padding: "3px 16px 3px 8px", height: 28, boxSizing: "border-box", cursor: "pointer", maxWidth: "100%" };
 // WhatsApp / email the customer a delivery update
 const UK_PHONE = (v) => { let d = String(v || "").replace(/\D/g, ""); if (d.startsWith("00")) d = d.slice(2); if (d.startsWith("0")) d = "44" + d.slice(1); return d.length >= 10 ? d : ""; };
@@ -113,7 +116,7 @@ const PrintMenu = ({ onPick, label, dark, title = "Print or save as PDF" }) => {
 
 // date pill showing just the day ("21st"); click opens the calendar
 const ordinal = (n) => n + (n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] || "th");
-const DayPill = ({ value, onChange, placeholder = "Date", paid, what = "" }) => {
+const DayPill = ({ value, onChange, placeholder = "Date", paid, what = "", full }) => {
   const ref = useRef(null);
   const d = value ? new Date(value + "T00:00:00") : null;
   const ok = d && !isNaN(d.getTime());
@@ -121,8 +124,8 @@ const DayPill = ({ value, onChange, placeholder = "Date", paid, what = "" }) => 
     <span style={{ position: "relative", flex: "none" }}>
       <button type="button" title={ok ? what + d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" }) + " — click to change" : what ? what.trim() + " — not yet" : "Set a date"}
         onClick={() => { const el = ref.current; if (!el) return; try { el.showPicker(); } catch { el.focus(); el.click(); } }}
-        style={{ ...pill, width: 50, padding: "3px 6px", textAlign: "center", color: ok ? (paid ? "#28713e" : NAVY) : "#5a6a85", background: ok ? (paid ? "#eef8f1" : "#fff") : "#f3f5f9", borderColor: ok && paid ? "#bfe3ca" : "#c9d0db" }}>
-        {ok ? ordinal(d.getDate()) : placeholder}
+        style={{ ...pill, width: full ? 74 : 46, padding: "3px 6px", textAlign: "center", color: ok ? (paid ? "#28713e" : NAVY) : "#5a6a85", background: ok ? (paid ? "#eef8f1" : "#fff") : "#f3f5f9", borderColor: ok && paid ? "#bfe3ca" : "#c9d0db" }}>
+        {ok ? (full ? d.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "2-digit" }) : ordinal(d.getDate())) : placeholder}
       </button>
       <input ref={ref} type="date" value={value || ""} onChange={(e) => onChange(e.target.value)} tabIndex={-1}
         style={{ position: "absolute", left: 0, bottom: 0, width: 1, height: 1, opacity: 0, pointerEvents: "none", border: 0, padding: 0 }} />
@@ -484,7 +487,7 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
         </div>
         <span style={{ fontSize: 12.5, color: "#5a6a85", fontWeight: 700, whiteSpace: "nowrap" }}>{(s && s.postcode) || (c && c.postcode) || "—"}</span>
         <span style={{ minWidth: 0, overflow: "hidden" }}>{c && c.source ? <Chip style={{ fontSize: 10.5, padding: "1px 8px", whiteSpace: "nowrap", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis" }}>{c.source}</Chip> : <span style={{ color: "#aab3c2" }}>—</span>}</span>
-        <PillSelect value={i.jobType || ""} options={JOB_TYPES} placeholder="Job type" tone={isCollectionJob(i) ? "#9a7408" : NAVY} onChange={(v) => setInv(i.id, (t) => (t.jobType = v))} />
+        <span style={sep}><span style={{ width: "100%", minWidth: 0 }}><PillSelect value={i.jobType || ""} options={JOB_TYPES} placeholder="Job type" tone={isCollectionJob(i) ? "#9a7408" : NAVY} onChange={(v) => setInv(i.id, (t) => (t.jobType = v))} /></span></span>
         {isCollectionJob(i) ? (
           // customer collects from the warehouse: no driver, run, drop or van
           <span style={{ gridColumn: "span 4", fontSize: 12, fontWeight: 700, color: "#9a7408", paddingLeft: 8 }}>Collecting from the warehouse</span>
@@ -494,16 +497,16 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
           <PillSelect value={i.dropNo || ""} options={DROP_NOS} placeholder="#" onChange={(v) => setInv(i.id, (t) => (t.dropNo = v))} />
           <PillSelect value={i.van || ""} options={vanOptions(crm)} placeholder="Van" onChange={(v) => setInv(i.id, (t) => (t.van = v))} />
         </>}
-        <div style={{ textAlign: "center", fontSize: 12.5, fontWeight: 700, whiteSpace: "nowrap" }}>{kg === null ? "—" : kg.toLocaleString("en-GB", { maximumFractionDigits: 0 }) + " kg"}</div>
-        <div style={{ display: "flex", gap: 4, width: 134 }}>
+        <div style={{ ...sep, justifyContent: "center", fontSize: 12.5, fontWeight: 700, whiteSpace: "nowrap" }}>{kg === null ? "—" : kg.toLocaleString("en-GB", { maximumFractionDigits: 0 }) + " kg"}</div>
+        <div style={{ ...sep, gap: 4 }}>
           <DayPill value={i.deliveryDate} onChange={(v) => guard(i.id, () => setInv(i.id, (t) => (t.deliveryDate = v)))} />
           <PillSelect value={i.deliveryTime || ""} options={TIME_SLOTS} placeholder="Time" onChange={(v) => guard(i.id, () => setInv(i.id, (t) => (t.deliveryTime = v)))} />
         </div>
-        <div style={{ display: "flex", gap: 4, width: 146 }}>
-          <span style={{ width: 92, flex: "none" }}>
+        <div style={{ ...sep, gap: 4 }}>
+          <span style={{ width: 90, flex: "none" }}>
             <PillSelect value={i.paymentType || ""} options={PAYMENT_TYPES} placeholder="Payment" tone={isPaid(i) ? "#28713e" : NAVY} onChange={(v) => setInv(i.id, (t) => (t.paymentType = v))} />
           </span>
-          <DayPill value={i.paymentDate} placeholder="Paid" paid what="Paid " onChange={(v) => setInv(i.id, (t) => (t.paymentDate = v))} />
+          <DayPill value={i.paymentDate} placeholder="Paid" paid full what="Paid " onChange={(v) => setInv(i.id, (t) => (t.paymentDate = v))} />
         </div>
         {showPrep && (
           <div style={{ display: "flex", gap: 3 }}>
@@ -522,14 +525,14 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
         {(() => {
           const ns = notifyState(i, crm);
           return (
-            <div style={{ position: "relative", display: "inline-flex" }}>
+            <div style={{ ...sep, position: "relative" }}>
               <span style={{ display: "inline-flex", gap: 5 }}>
                 <NotifyButtons i={i} c={c} onSent={(via) => markSent([i.id], [via])} />
                 <PrintMenu onPick={(k) => printJobs([i], k, "#" + (i.invNo || "") + " paperwork")} />
               </span>
               {ns.state !== "none" && (
                 <span title={ns.state === "ok" ? "Customer told " + shortStamp(ns.n.at) + " by " + ns.n.by + " (" + (ns.n.via || []).map((v) => (v === "wa" ? "WhatsApp" : "email")).join(" + ") + ")" : "Changed since the customer was told — send them a new update"}
-                  style={{ position: "absolute", right: 27, top: -4, width: 9, height: 9, borderRadius: 999, border: "1.5px solid #fff", background: ns.state === "ok" ? "#3FA55C" : "#E8912D" }} />
+                  style={{ position: "absolute", left: 57, top: 4, width: 9, height: 9, borderRadius: 999, border: "1.5px solid #fff", background: ns.state === "ok" ? "#3FA55C" : "#E8912D" }} />
               )}
             </div>
           );
@@ -573,17 +576,17 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
         </div>
         <span style={{ fontSize: 12.5, color: "#5a6a85", fontWeight: 700, whiteSpace: "nowrap" }}>{c.postcode || "—"}</span>
         <span style={{ fontSize: 11.5, fontWeight: 700, color: COLLECTION_BLUE }}>COL-{c.collectionNo || "—"}</span>
-        <span style={{ fontSize: 12, fontWeight: 700, color: COLLECTION_BLUE, paddingLeft: 8 }}>Supplier pick-up</span>
+        <span style={{ ...sep, fontSize: 12, fontWeight: 700, color: COLLECTION_BLUE, paddingLeft: 10 }}>Supplier pick-up</span>
         <PillSelect value={c.driver || ""} options={DRIVERS} placeholder="Driver" onChange={(v) => pickDriver("col", c, v)} />
         <PillSelect value={c.runNo || ""} options={RUN_NOS} placeholder="Run" labelOf={(o) => "Run " + o} onChange={(v) => setColl(c.id, (t) => (t.runNo = v))} />
         <PillSelect value={c.dropNo || ""} options={DROP_NOS} placeholder="#" onChange={(v) => setColl(c.id, (t) => (t.dropNo = v))} />
         <PillSelect value={c.van || ""} options={vanOptions(crm)} placeholder="Van" onChange={(v) => setColl(c.id, (t) => (t.van = v))} />
-        <div style={{ textAlign: "center", fontSize: 12.5, fontWeight: 700, whiteSpace: "nowrap" }} title={items + " pcs"}>{kg !== null ? Math.round(kg).toLocaleString("en-GB") + " kg" : items ? items + " pcs" : "—"}</div>
-        <div style={{ display: "flex", gap: 4, width: 134 }}>
+        <div style={{ ...sep, justifyContent: "center", fontSize: 12.5, fontWeight: 700, whiteSpace: "nowrap" }} title={items + " pcs"}>{kg !== null ? Math.round(kg).toLocaleString("en-GB") + " kg" : items ? items + " pcs" : "—"}</div>
+        <div style={{ ...sep, gap: 4 }}>
           <DayPill value={c.collectDate} onChange={(v) => setColl(c.id, (t) => (t.collectDate = v))} />
           <PillSelect value={c.collectTime || ""} options={TIME_SLOTS} placeholder="Time" onChange={(v) => setColl(c.id, (t) => (t.collectTime = v))} />
         </div>
-        <div style={{ gridColumn: showPrep ? "span 4" : "span 2", fontSize: 12, fontWeight: 700 }}>
+        <div style={{ ...sep, gridColumn: showPrep ? "span 4" : "span 2", fontSize: 12, fontWeight: 700 }}>
           {done ? <Chip tone="green">Processed</Chip> : pr.done > 0 ? <Chip tone="gold">{pr.done}/{pr.total} processed</Chip> : c.collected ? <span style={{ color: "#28713e" }}>Collected</span> : null}
         </div>
         <span />
@@ -773,7 +776,7 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
             </div>
           ) : (
             <div style={{ overflowX: "auto" }}>
-              <div style={{ minWidth: showPrep ? 1700 : 1360 }}>
+              <div style={{ minWidth: showPrep ? 1640 : 1305 }}>
                 {g.rows.map((e, k) => {
                   const key = runKey(e), prevKey = k ? runKey(g.rows[k - 1]) : null;
                   const sameRun = g.rows.filter((x) => runKey(x) === key);
@@ -783,7 +786,7 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
                   const runKg = sameRun.reduce((t, x) => t + ((x.kind === "inv" ? invoiceLoadKg(x.obj, crm) : collKg(x.obj)) || 0), 0);
                   const head = key !== prevKey ? (
                     <div title={!loose ? "" : "Supplier pick-ups not in a run yet — give them a driver and run, or drag one onto a job"}
-                      style={{ display: "grid", gridTemplateColumns: dsCols(showPrep), gap: 7, margin: k ? "12px 0 6px" : "4px 0 6px", background: "#eef1f6", border: "1px solid #dde2ea", borderRadius: 12,
+                      style={{ display: "grid", gridTemplateColumns: dsCols(showPrep), gap: 6, justifyContent: "space-between", margin: k ? "12px 0 6px" : "4px 0 6px", background: "#eef1f6", border: "1px solid #dde2ea", borderRadius: 12,
                         padding: "0 12px 0 0", minHeight: 36, boxSizing: "border-box", overflow: "hidden", alignItems: "stretch", fontSize: 12, color: NAVY, whiteSpace: "nowrap" }}>
                       <span style={{ gridColumn: "1 / span 9", display: "flex", alignItems: "stretch" }}>
                         <span style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "#dce2ec", padding: "0 14px" }}>
