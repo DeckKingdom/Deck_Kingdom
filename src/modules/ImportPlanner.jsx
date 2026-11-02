@@ -1384,7 +1384,7 @@ export default function ImportPlanner() {
       )}
 
       {tab === "shipments" && (
-        <div style={{ padding: "18px 22px", maxWidth: 1100, margin: "0 auto" }}>
+        <div style={{ padding: "18px 22px", maxWidth: 1480, margin: "0 auto" }}>
           <div className="no-print" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 14 }}>
             <select
               value={active ? active.id : ""}
@@ -1517,18 +1517,18 @@ export default function ImportPlanner() {
               </div>
 
               <div style={{ background: "#fff", borderRadius: 12, border: "1px solid #e6e9ef", padding: "4px 12px 12px", overflowX: "auto", overflowY: "auto", maxHeight: "max(320px, calc(100vh - " + (headerH + 210) + "px))" }}>
-                <table className="dk-sticky-table" style={{ width: "100%", borderCollapse: "collapse", minWidth: 800 }}>
+                <table className="dk-sticky-table" style={{ width: "100%", borderCollapse: "collapse", minWidth: 1100 }}>
                   <thead>
                     <tr>
-                      <th style={{ ...th, width: "21%" }}>Product</th>
-                      <th style={{ ...th, width: "12%" }}>Colour</th>
+                      <th style={{ ...th, width: "34%", minWidth: 340 }}>Product</th>
+                      <th style={{ ...th, width: "11%" }}>Colour</th>
                       <th style={{ ...th, width: "8%", textAlign: "right" }}>Pallets / Cartons</th>
-                      <th style={{ ...th, width: "10%", textAlign: "right" }}>Qty / Pallet / Carton</th>
-                      <th style={{ ...th, width: "9%", textAlign: "right" }}>Pieces</th>
-                      <th style={{ ...th, width: "9%", textAlign: "right" }}>kg / pc</th>
-                      <th style={{ ...th, width: "10%", textAlign: "right" }}>Total kg</th>
-                      <th style={{ ...th, width: "9%", textAlign: "right" }}>$ / pc</th>
-                      <th style={{ ...th, width: "11%", textAlign: "right" }}>Total $</th>
+                      <th style={{ ...th, width: "8%", textAlign: "right" }}>Qty / Pallet / Carton</th>
+                      <th style={{ ...th, width: "6%", textAlign: "right" }}>Pieces</th>
+                      <th style={{ ...th, width: "7%", textAlign: "right" }}>kg / pc</th>
+                      <th style={{ ...th, width: "8%", textAlign: "right" }}>Total kg</th>
+                      <th style={{ ...th, width: "7%", textAlign: "right" }}>$ / pc</th>
+                      <th style={{ ...th, width: "8%", textAlign: "right" }}>Total $</th>
                       <th style={{ ...th, width: 34 }}></th>
                     </tr>
                   </thead>
@@ -1539,7 +1539,7 @@ export default function ImportPlanner() {
                       return (
                         <tr key={l.id}>
                           <td style={td}>
-                            <select value={l.productId} onChange={(e) => setLine(l.id, "productId", e.target.value)} style={inp}>
+                            <select value={l.productId} onChange={(e) => setLine(l.id, "productId", e.target.value)} style={inp} title={p ? p.name : ""}>
                               {lineOptions(l, (active.supplier || "").trim()).map((pr) => (
                                 <option key={pr.id} value={pr.id}>
                                   {pr.name}
