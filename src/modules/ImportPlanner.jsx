@@ -1680,7 +1680,7 @@ export default function ImportPlanner() {
                                     value: "pid:" + pr.id, label: [pr.name, pr.code, (pr.colours || []).join(" ")].join(" "),
                                     cells: [{ text: pr.name || "(no name)" }, { text: pr.code || "", style: { color: "#5a6a85", fontSize: 12 } }, { text: (pr.colours || []).join(", "), style: { color: "#8593a8", fontSize: 12 } }],
                                   })),
-                                  { value: "pid:__new", label: "+ New product " + (prodDraft[l.id] || ""), // always offered, whatever's typed cells: [{ text: "+ New product…", style: { color: "#185FA5", fontWeight: 800 } }, { text: "" }, { text: "" }] },
+                                  { value: "pid:__new", label: "+ New product " + (prodDraft[l.id] || "") /* always offered, whatever's typed */, cells: [{ text: "+ New product…", style: { color: "#185FA5", fontWeight: 800 } }, { text: "" }, { text: "" }] },
                                 ];
                                 const typing = prodDraft[l.id] !== undefined;
                                 return (
