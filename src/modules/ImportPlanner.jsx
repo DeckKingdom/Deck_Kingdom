@@ -623,6 +623,22 @@ export default function ImportPlanner() {
     });
   };
 
+  // a new line straight after this one, same product (pick another from the box)
+  const addLineAfter = (lineId) =>
+    updateShipment((s) => {
+      const at = s.lines.findIndex((x) => x.id === lineId);
+      const src = s.lines[at];
+      const prod = src && data.products.find((x) => x.id === src.productId);
+      s.lines.splice(at + 1, 0, {
+        id: uid(),
+        productId: prod ? prod.id : "",
+        colour: prod && prod.colours[0] ? prod.colours[0] : "",
+        pallets: 1,
+        qty: prod ? prod.qty : 0,
+        cost: prod ? prod.cost : 0,
+        weight: prod ? prod.weight : 0,
+      });
+    });
   const addLine = () => {
     updateShipment((s) => {
       const pool = productsForSupplier((s.supplier || "").trim());
@@ -1680,7 +1696,7 @@ export default function ImportPlanner() {
                       <th style={{ ...th, width: "8%", textAlign: "right" }}>Total kg</th>
                       <th style={{ ...th, width: "7%", textAlign: "right" }}>$ / pc</th>
                       <th style={{ ...th, width: "8%", textAlign: "right" }}>Total $</th>
-                      <th style={{ ...th, width: 34 }}></th>
+                      <th style={{ ...th, width: 64 }}></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1793,8 +1809,11 @@ export default function ImportPlanner() {
                             <input type="number" min="0" step="0.01" value={l.cost} onChange={(e) => setLine(l.id, "cost", e.target.value)} style={num} />
                           </td>
                           <td style={{ ...td, textAlign: "right", fontWeight: 700 }}>{money(c.total)}</td>
-                          <td style={{ ...td, textAlign: "center" }}>
-                            <button onClick={() => removeLine(l.id)} title="Remove line" style={{ ...btn, padding: "4px 9px", color: RED, border: "none", background: "transparent" }}>
+                          <td style={{ ...td, textAlign: "center", whiteSpace: "nowrap" }}>
+                            <button className="no-print" onClick={() => addLineAfter(l.id)} title="Add a line below this one" style={{ ...btn, padding: "4px 7px", color: "#28713e", border: "none", background: "transparent", fontSize: 17, fontWeight: 700, lineHeight: 1 }}>
+                              +
+                            </button>
+                            <button onClick={() => removeLine(l.id)} title="Remove line" style={{ ...btn, padding: "4px 7px", color: RED, border: "none", background: "transparent" }}>
                               ✕
                             </button>
                           </td>
