@@ -520,19 +520,15 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
               {TIME_SLOTS.map((t) => <option key={t} value={t}>{t}</option>)}
             </select>
           </div>
-          <div>
-            <span style={lbl}>Van</span>
-            <select style={inp} value={inv.van} onChange={(e) => setInv((x) => (x.van = e.target.value))}>
-              <option value="">—</option>
-              {inv.van && !vanOptions(crm).includes(inv.van) && <option value={inv.van}>{inv.van}</option>}
-              {vanOptions(crm).map((v) => <option key={v} value={v}>{v}</option>)}
-            </select>
-          </div>
           {field("Order ref / PO", "orderRef")}
           {field("Payment date", "paymentDate", { type: "date" })}
           <div>
             <span style={lbl}>Payment type</span>
-            <input style={inp} list="dk-paytypes" value={inv.paymentType} onChange={(e) => setInv((x) => (x.paymentType = e.target.value))} />
+            <select style={inp} value={inv.paymentType || ""} onChange={(e) => setInv((x) => (x.paymentType = e.target.value))}>
+              <option value="">—</option>
+              {inv.paymentType && !PAYMENT_TYPES.includes(inv.paymentType) && <option value={inv.paymentType}>{inv.paymentType}</option>}
+              {PAYMENT_TYPES.map((p) => <option key={p} value={p}>{p}</option>)}
+            </select>
           </div>
         </div>
       </div>
