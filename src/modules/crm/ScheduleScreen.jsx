@@ -9,6 +9,7 @@ import {
   isVoidInvoice, applyInvoiceStockDeduction,
 } from "../../lib/crmCore.js";
 import { printJobDocs, DOC_KINDS } from "./printDocs.js";
+import LinesEditor from "./LinesEditor.jsx";
 import { JOB_TYPES, skuIndex, PAYMENT_TYPES } from "../../lib/crmCore.js";
 import { Icon, Chip, Tg, sect, lbl, card, abtn, inp, btn, goldBtn, RiskChip, WebStatusChip, Soon } from "./ui.jsx";
 
@@ -1019,9 +1020,9 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
         const t = invoiceTotals(i);
         const addr = s ? [s.name !== s.address ? s.name : "", s.address, s.town, s.postcode] : c ? [c.address, c.town, c.postcode] : [];
         const contact = [(s && s.contact) || (c && c.contact), (s && (s.mobile || s.landline)) || (c && (c.mobile || c.landline))].filter(Boolean).join(" · ");
-        const PW = 580, PH = Math.min(window.innerHeight - 20, 680);
+        // wide enough for the line editor (code · qty · description · colour · price)
+        const PW = Math.min(900, window.innerWidth - 40), PH = Math.min(window.innerHeight - 20, 760);
         const top = Math.min(pop.rect.bottom + 6, window.innerHeight - PH - 10);
-        const kgAll = invoiceLoadKg(i, crm);
         return (
           <>
             {!pop.peek && <div onMouseDown={() => setPop(null)} style={{ position: "fixed", inset: 0, zIndex: 70 }} />}
@@ -1060,19 +1061,9 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
                 {addr.filter(Boolean).map((l, k) => <div key={k}>{l}</div>)}
                 {contact && <div style={{ color: "#5a6a85" }}>{contact}</div>}
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "44px 1fr 120px 76px", gap: "0 10px", marginTop: 12, paddingBottom: 4, borderBottom: "1px solid #e6e9ef" }}>
-                {["Qty", "Product", "Colour", "Price"].map((h, k) => <span key={h} style={{ ...lbl, marginBottom: 0, textAlign: k === 3 ? "right" : "left" }}>{h}</span>)}
+              <div style={{ marginTop: 12 }}>
+                <LinesEditor doc={i} crm={crm} edit={(fn) => setInv(i.id, (t) => fn(t))} />
               </div>
-              {(i.lines || []).length === 0 ? <div style={{ fontSize: 12.5, color: "#8593a8", padding: "6px 0" }}>No lines</div> : (i.lines || []).map((l) => {
-                return (
-                  <div key={l.id} style={{ display: "grid", gridTemplateColumns: "44px 1fr 120px 76px", gap: "0 10px", fontSize: 12.5, fontWeight: 600, padding: "5px 0", color: NAVY, borderBottom: "1px solid #f3f5f9", alignItems: "baseline" }}>
-                    <b>{l.qty}</b>
-                    <span style={{ minWidth: 0 }}>{l.description || l.sku || "—"}</span>
-                    <span style={{ color: "#5a6a85" }}>{l.colour || "—"}</span>
-                    <span style={{ textAlign: "right", color: "#5a6a85" }}>{gbp((Number(l.qty) || 0) * (Number(l.price) || 0))}</span>
-                  </div>
-                );
-              })}
               <div style={{ marginTop: 8, fontSize: 12.5, fontWeight: 700, color: NAVY, display: "grid", gridTemplateColumns: "1fr auto", gap: "3px 10px" }}>
                 {Number(i.deliveryCharge) ? <><span style={{ color: "#5a6a85" }}>Delivery</span><span>{gbp(Number(i.deliveryCharge))}</span></> : null}
                 <span>Total</span><span>{gbp(t.total)}</span>
