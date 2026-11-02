@@ -10,7 +10,7 @@ import {
 } from "../../lib/crmCore.js";
 import { printJobDocs, DOC_KINDS } from "./printDocs.js";
 import LinesEditor from "./LinesEditor.jsx";
-import { JOB_TYPES, skuIndex, PAYMENT_TYPES } from "../../lib/crmCore.js";
+import { JOB_TYPES, skuIndex, PAYMENT_TYPES, stockCheck, partKey, isColPick } from "../../lib/crmCore.js";
 import { Icon, Chip, Tg, sect, lbl, card, abtn, inp, btn, goldBtn, RiskChip, WebStatusChip, Soon } from "./ui.jsx";
 
 const RANGE_OPTS = [
@@ -31,7 +31,7 @@ const COLLECTION_BLUE = "#185FA5";
 const short16 = (t) => (String(t).length > 16 ? String(t).slice(0, 15).trimEnd() + "…" : String(t));
 // stripe · done · customer · postcode · source · job type · driver · run · drop · van · weight · date+time · payment · [prep · follow-up] · update · days
 // sized to fit a ~1300px board without scrolling; spare width is shared out between the columns
-const dsCols = (prep) => "4px 48px 136px 60px 76px 100px 72px 72px 44px 80px 48px 120px 176px " + (prep ? "162px 162px " : "") + "126px 38px";
+const dsCols = (prep) => "4px 48px 130px 60px 70px 100px 72px 72px 44px 80px 72px 120px 176px " + (prep ? "162px 162px " : "") + "126px 38px";
 // a thin divider at the start of each section (job · weight · when · payment · contact)
 const sep = { boxShadow: "inset 1px 0 0 #e3e7ee", alignSelf: "stretch", display: "flex", alignItems: "center", margin: "-8px 0", padding: "8px 0 8px 6px", minWidth: 0 };
 const DROP_NOS = Array.from({ length: 20 }, (_, n) => String(n + 1));
@@ -130,6 +130,73 @@ const DayPill = ({ value, onChange, placeholder = "Date", paid, what = "", full 
       </button>
       <input ref={ref} type="date" value={value || ""} onChange={(e) => onChange(e.target.value)} tabIndex={-1}
         style={{ position: "absolute", left: 0, bottom: 0, width: 1, height: 1, opacity: 0, pointerEvents: "none", border: 0, padding: 0 }} />
+    </span>
+  );
+};
+
+// ---- parts status for a job: ready · on a collection note · back order (on an inbound container) · needs collecting
+const PARTS_LOOK = {
+  ready: { bg: "#3FA55C22", fg: "#28713e", label: "All parts ready" },
+  coll: { bg: "#185FA51f", fg: "#185FA5", label: "Parts on a collection note" },
+  back: { bg: "#7a4dc222", fg: "#6a3fb5", label: "Parts on back order" },
+  need: { bg: "#C8102E1a", fg: "#C8102E", label: "Parts need collecting" },
+};
+const partsStatus = (inv, crm, planner) => {
+  if (inv.deliveryCompleted) return null;
+  const rows = stockCheck(inv, crm);
+  if (!rows.length) return null;
+  const collByRef = {};
+  (crm.collections || []).forEach((c) => (collByRef["COL-" + c.collectionNo] = c));
+  const ships = ((planner && planner.shipments) || []).filter((x) => !x.arrivedDate && x.status !== "Planning" && x.status !== "Paid");
+  const inbound = (row) => {
+    if (!row || !row.importProductId) return null;
+    const col = String(row.colour || "").trim().toLowerCase();
+    const hit = ships.find((sh) => (sh.lines || []).some((l) => l.productId === row.importProductId && (!col || !l.colour || String(l.colour).trim().toLowerCase() === col)));
+    return hit || null;
+  };
+  let worst = "ready";
+  const rank = { ready: 0, coll: 1, back: 2, need: 3 };
+  const parts = rows.map((r) => {
+    const cols = [...new Set((inv.picks || []).filter((p) => isColPick(p) && partKey(p.sku) === r.key).map((p) => p.batchRef))]
+      .map((ref) => ({ ref, c: collByRef[ref.toUpperCase()] || collByRef[ref] }));
+    const waiting = cols.filter((x) => !(x.c && x.c.collected));
+    let st = "ready", note = "In stock";
+    if (r.short > 0) {
+      const sh = inbound(r.row);
+      if (sh) { st = "back"; note = "Short " + r.short + " · on " + (sh.name || "a container") + (sh.etaDate ? " (due " + prettyDate(sh.etaDate) + ")" : ""); }
+      else { st = "need"; note = "Short " + r.short + " · needs collecting"; }
+    } else if (r.covered > 0 && waiting.length) {
+      st = "coll"; note = r.covered + " on " + waiting.map((x) => x.ref + (x.c && x.c.collectDate ? " (" + prettyDate(x.c.collectDate).slice(0, 6) + ")" : "")).join(", ") + " · not collected yet";
+    } else if (r.covered > 0) note = r.covered + " collected" + (r.fromStock ? " · " + r.fromStock + " from stock" : "");
+    if (rank[st] > rank[worst]) worst = st;
+    return { ...r, st, note };
+  });
+  return { status: worst, parts };
+};
+const PartsIcon = ({ info }) => {
+  const [at, setAt] = useState(null);
+  if (!info) return <span style={{ width: 22, flex: "none" }} />;
+  const look = PARTS_LOOK[info.status];
+  return (
+    <span onMouseEnter={(e) => setAt(e.currentTarget.getBoundingClientRect())} onMouseLeave={() => setAt(null)}
+      style={{ width: 22, height: 22, borderRadius: 7, background: look.bg, display: "inline-flex", alignItems: "center", justifyContent: "center", flex: "none", cursor: "help" }}>
+      <Icon name="box" stroke={look.fg} size={13} />
+      {at && (
+        <span style={{ position: "fixed", left: Math.max(8, Math.min(at.left - 20, window.innerWidth - 400)), ...(at.top > window.innerHeight / 2 ? { bottom: window.innerHeight - at.top + 6 } : { top: at.bottom + 6 }),
+          zIndex: 90, width: 380, background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, boxShadow: "0 12px 32px rgba(11,31,63,.25)", padding: "10px 12px", pointerEvents: "none", textAlign: "left" }}>
+          <b style={{ display: "block", fontSize: 13, color: look.fg, marginBottom: 6 }}>{look.label}</b>
+          {info.parts.map((p) => (
+            <span key={p.key} style={{ display: "grid", gridTemplateColumns: "10px 34px 1fr", gap: 8, alignItems: "baseline", padding: "4px 0", borderTop: "1px solid #f0f2f6", fontSize: 12, fontWeight: 600, color: NAVY }}>
+              <span style={{ width: 8, height: 8, borderRadius: 999, background: PARTS_LOOK[p.st].fg, alignSelf: "center" }} />
+              <b>{p.need}</b>
+              <span style={{ minWidth: 0 }}>
+                {p.description || p.sku}{p.colour ? <span style={{ color: "#5a6a85" }}>{" · " + p.colour}</span> : null}
+                <span style={{ display: "block", fontSize: 11.5, color: PARTS_LOOK[p.st].fg }}>{p.note}</span>
+              </span>
+            </span>
+          ))}
+        </span>
+      )}
     </span>
   );
 };
@@ -498,7 +565,10 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
           <PillSelect value={i.dropNo || ""} options={DROP_NOS} placeholder="#" onChange={(v) => setInv(i.id, (t) => (t.dropNo = v))} />
           <PillSelect value={i.van || ""} options={vanOptions(crm)} placeholder="Van" onChange={(v) => setInv(i.id, (t) => (t.van = v))} />
         </>}
-        <div style={{ ...sep, justifyContent: "center", fontSize: 12.5, fontWeight: 700, whiteSpace: "nowrap" }}>{kg === null ? "—" : kg.toLocaleString("en-GB", { maximumFractionDigits: 0 }) + " kg"}</div>
+        <div style={{ ...sep, justifyContent: "space-between", gap: 4, fontSize: 12.5, fontWeight: 700, whiteSpace: "nowrap", paddingRight: 2 }}>
+          <PartsIcon info={partsStatus(i, crm, planner)} />
+          <span>{kg === null ? "—" : kg.toLocaleString("en-GB", { maximumFractionDigits: 0 }) + " kg"}</span>
+        </div>
         <div style={{ ...sep, gap: 4 }}>
           <DayPill value={i.deliveryDate} onChange={(v) => guard(i.id, () => setInv(i.id, (t) => (t.deliveryDate = v)))} />
           <PillSelect value={i.deliveryTime || ""} options={TIME_SLOTS} placeholder="Time" onChange={(v) => guard(i.id, () => setInv(i.id, (t) => (t.deliveryTime = v)))} />
@@ -584,7 +654,7 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
         <PillSelect value={c.runNo || ""} options={RUN_NOS} placeholder="Run" labelOf={(o) => "Run " + o} onChange={(v) => setColl(c.id, (t) => (t.runNo = v))} />
         <PillSelect value={c.dropNo || ""} options={DROP_NOS} placeholder="#" onChange={(v) => setColl(c.id, (t) => (t.dropNo = v))} />
         <PillSelect value={c.van || ""} options={vanOptions(crm)} placeholder="Van" onChange={(v) => setColl(c.id, (t) => (t.van = v))} />
-        <div style={{ ...sep, justifyContent: "center", fontSize: 12.5, fontWeight: 700, whiteSpace: "nowrap" }} title={items + " pcs"}>{kg !== null ? Math.round(kg).toLocaleString("en-GB") + " kg" : items ? items + " pcs" : "—"}</div>
+        <div style={{ ...sep, justifyContent: "flex-end", paddingRight: 2, fontSize: 12.5, fontWeight: 700, whiteSpace: "nowrap" }} title={items + " pcs"}>{kg !== null ? Math.round(kg).toLocaleString("en-GB") + " kg" : items ? items + " pcs" : "—"}</div>
         <div style={{ ...sep, gap: 4 }}>
           <DayPill value={c.collectDate} onChange={(v) => setColl(c.id, (t) => (t.collectDate = v))} />
           <PillSelect value={c.collectTime || ""} options={TIME_SLOTS} placeholder="Time" onChange={(v) => setColl(c.id, (t) => (t.collectTime = v))} />
@@ -802,7 +872,7 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
                       {loose ? <span style={{ gridColumn: "10 / -1" }} /> : <>
                         <span style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", fontWeight: 700, color: "#5a6a85" }}>{custGroup ? "Total weight" : "Run weight"}</span>
                         <span title="Run weight — deliveries going out plus pick-ups coming back"
-                          style={{ display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800 }}>
+                          style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", paddingRight: 8, fontWeight: 800 }}>
                           {runKg ? Math.round(runKg).toLocaleString("en-GB") + " kg" : "—"}
                         </span>
                         <span style={{ gridColumn: "12 / -1", display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
