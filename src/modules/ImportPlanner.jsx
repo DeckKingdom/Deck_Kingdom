@@ -168,6 +168,19 @@ export default function ImportPlanner() {
   const [selSupplierId, setSelSupplierId] = useState(null);
   const [newSupplierSignal, setNewSupplierSignal] = useState(0);
   // menu and header buttons always land on the list, never on the last record that was open
+  // where the header's back arrow goes: an open record → its list; a shipment → Imports
+  const goBackTarget = () => {
+    if (tab === "shipments") return { label: "all shipments", go: () => setTab("overview") };
+    if (tab === "tasks") return { label: "Home", go: () => setTab("home") };
+    const open = {
+      customers: [selCustomerId, setSelCustomerId, "all customers"], invoices: [selInvoiceId, setSelInvoiceId, "all invoices"],
+      collections: [selCollectionId, setSelCollectionId, "all collections"], quotes: [selQuoteId, setSelQuoteId, "all quotes"],
+      samples: [selSampleId, setSelSampleId, "all samples"], purchases: [selPurchaseId, setSelPurchaseId, "all purchases"],
+      suppliers: [selSupplierId, setSelSupplierId, "all suppliers"],
+    }[tab];
+    if (open && open[0]) return { label: open[2], go: () => open[1](null) };
+    return null;
+  };
   const navTo = (t) => {
     setSelCustomerId(null); setSelInvoiceId(null); setSelCollectionId(null); setSelQuoteId(null);
     setSelSampleId(null); setSelPurchaseId(null); setSelSupplierId(null);
@@ -995,19 +1008,26 @@ export default function ImportPlanner() {
         }`}</style>
 
       <div style={{ display: "flex", alignItems: "stretch" }}>
-      <Sidebar tab={tab} setTab={navTo} open={sideOpen} footer={sideFooter} onNew={sideNew} />
+      <Sidebar tab={tab} setTab={navTo} open={sideOpen} footer={sideFooter} onNew={sideNew} onToggle={() => setSideOpen((o) => !o)} />
       <div style={{ flex: 1, minWidth: 0 }}>
 
       <div ref={headerRef} className="no-print" style={{ background: NAVY, padding: "10px 16px", display: "flex", alignItems: "center", gap: 10, position: "sticky", top: 0, zIndex: 25, boxShadow: "0 2px 8px rgba(11,31,63,0.25)" }}>
-        {/* the menu button and the page name are one target */}
-        <button onClick={() => setSideOpen((o) => !o)} title={sideOpen ? "Collapse the menu" : "Expand the menu"}
-          onMouseEnter={(e) => (e.currentTarget.style.background = "#ffffff12")} onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-          style={{ background: "transparent", border: "none", borderRadius: 8, height: 34, display: "flex", alignItems: "center", gap: 10, cursor: "pointer", flex: "none", padding: "0 10px 0 0", fontFamily: "inherit" }}>
-          <span style={{ border: "1px solid #33466b", borderRadius: 8, width: 34, height: 34, boxSizing: "border-box", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <Icon name={sideOpen ? "chevleft" : "menu"} size={17} stroke="#cfd6e4" />
-          </span>
-          <span style={{ color: "#fff", fontWeight: 700, fontSize: 15.5, whiteSpace: "nowrap" }}>{TAB_LABELS[tab] || "Home"}</span>
-        </button>
+        {/* back arrow + page name: back to this section's list (or to Imports from a shipment) */}
+        {(() => {
+          const back = goBackTarget();
+          return (
+            <button onClick={() => back && back.go()} disabled={!back} title={back ? "Back to " + back.label : ""}
+              onMouseEnter={(e) => back && (e.currentTarget.style.background = "#ffffff12")} onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+              style={{ background: "transparent", border: "none", borderRadius: 8, height: 34, display: "flex", alignItems: "center", gap: 10, cursor: back ? "pointer" : "default", flex: "none", padding: "0 10px 0 0", fontFamily: "inherit" }}>
+              {back && (
+                <span style={{ border: "1px solid #33466b", borderRadius: 8, width: 34, height: 34, boxSizing: "border-box", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <Icon name="chevleft" size={17} stroke="#cfd6e4" />
+                </span>
+              )}
+              <span style={{ color: "#fff", fontWeight: 700, fontSize: 15.5, whiteSpace: "nowrap", paddingLeft: back ? 0 : 6 }}>{TAB_LABELS[tab] || "Home"}</span>
+            </button>
+          );
+        })()}
         <span style={{ flex: 1 }} />
         <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
           {[["home", "Home", "home"], ["overview", "Imports", "ship"], ["customers", "Customers", "users"], ["invoices", "Invoices", "doc"], ["quotes", "Quotes", "tag"], ["samples", "Samples", "leaf"], ["schedule", "Delivery Schedule", "cal"]].map(([t, label, icon]) => (

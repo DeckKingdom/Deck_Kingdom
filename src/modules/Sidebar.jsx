@@ -46,7 +46,7 @@ export const NAV_SECTIONS = [
 
 export const TAB_LABELS = { ...Object.fromEntries(NAV_SECTIONS.flatMap((s) => s.items.map(([t, l]) => [t, l]))), shipments: "Shipment", tasks: "Tasks" };
 
-export default function Sidebar({ tab, setTab, open, footer, onNew }) {
+export default function Sidebar({ tab, setTab, open, footer, onNew, onToggle }) {
   const [shut, setShut] = useState({});
 
   // never leave the active screen hidden inside a shut section
@@ -79,12 +79,24 @@ export default function Sidebar({ tab, setTab, open, footer, onNew }) {
           DK
         </div>
         {open && (
-          <div style={{ minWidth: 0 }}>
+          <div style={{ minWidth: 0, flex: 1 }}>
             <div style={{ color: "#fff", fontWeight: 700, fontSize: 15.5, lineHeight: 1.15, whiteSpace: "nowrap" }}>Deck Kingdom</div>
             <div style={{ color: GOLD, fontSize: 12, fontWeight: 700 }}>Ops</div>
           </div>
         )}
+        {open && onToggle && (
+          <button onClick={onToggle} title="Collapse the menu"
+            style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid #33466b", background: "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0, flex: "none" }}>
+            <Icon name="menu" size={16} stroke="#cfd6e4" />
+          </button>
+        )}
       </div>
+      {!open && onToggle && (
+        <button onClick={onToggle} title="Expand the menu"
+          style={{ width: 36, height: 30, margin: "0 auto 4px", borderRadius: 8, border: "1px solid #33466b", background: "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0, flex: "none" }}>
+          <Icon name="menu" size={16} stroke="#cfd6e4" />
+        </button>
+      )}
 
       <nav style={{ padding: "4px 10px", flex: 1 }}>
         {NAV_SECTIONS.map((sec, si) => (
