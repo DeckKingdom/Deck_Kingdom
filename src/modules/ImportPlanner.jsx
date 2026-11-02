@@ -1412,6 +1412,16 @@ export default function ImportPlanner() {
                   }} />
                 <span style={{ fontSize: 12, fontWeight: 600, color: "#5a6a85", lineHeight: 1.35 }}>Sets this line and the product's default for new lines</span>
               </div>
+              <span style={l_}>Cost $ per piece</span>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <input type="number" min="0" step="any" style={{ ...f, width: 120, textAlign: "right" }} value={line ? line.cost : p.cost === undefined || p.cost === null ? "" : p.cost}
+                  onChange={(e) => {
+                    const v = e.target.value === "" ? "" : Number(e.target.value);
+                    setProd("cost", v);
+                    if (line) setLine(line.id, "cost", v);
+                  }} />
+                <span style={{ fontSize: 12, fontWeight: 600, color: "#5a6a85", lineHeight: 1.35 }}>Sets this line and the product's default for new lines</span>
+              </div>
               <div style={{ fontSize: 11.5, fontWeight: 600, color: "#8593a8", marginTop: 10 }}>Changes save as you type and show everywhere this product is used.</div>
               <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 12 }}>
                 <button onClick={() => setProdPop(null)} style={{ fontFamily: "inherit", fontWeight: 700, fontSize: 13, background: GOLD, color: NAVY, border: "none", borderRadius: 8, padding: "8px 16px", cursor: "pointer" }}>Done</button>

@@ -74,20 +74,20 @@ export default function Sidebar({ tab, setTab, open, footer, onNew, onToggle }) 
         zIndex: 26,
       }}
     >
-      <div style={{ padding: open ? "16px 14px 10px" : "16px 10px 10px", display: "flex", alignItems: "center", gap: 10, justifyContent: open ? "flex-start" : "center" }}>
+      <div style={{ padding: open ? "16px 10px 10px 14px" : "16px 10px 10px", display: "flex", alignItems: "center", gap: 9, justifyContent: open ? "flex-start" : "center" }}>
         <div style={{ width: 36, height: 36, borderRadius: 8, background: GOLD, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, color: NAVY, fontSize: 17, flex: "none" }}>
           DK
         </div>
         {open && (
-          <div style={{ minWidth: 0, flex: 1 }}>
-            <div style={{ color: "#fff", fontWeight: 700, fontSize: 15.5, lineHeight: 1.15, whiteSpace: "nowrap" }}>Deck Kingdom</div>
+          <div style={{ minWidth: 0, flex: 1, overflow: "hidden" }}>
+            <div style={{ color: "#fff", fontWeight: 700, fontSize: 14.5, lineHeight: 1.15, whiteSpace: "nowrap" }}>Deck Kingdom</div>
             <div style={{ color: GOLD, fontSize: 12, fontWeight: 700 }}>Ops</div>
           </div>
         )}
         {open && onToggle && (
           <button onClick={onToggle} title="Collapse the menu"
-            style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid #33466b", background: "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0, flex: "none" }}>
-            <Icon name="menu" size={16} stroke="#cfd6e4" />
+            style={{ width: 28, height: 28, borderRadius: 8, border: "1px solid #33466b", background: "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0, flex: "none" }}>
+            <Icon name="menu" size={15} stroke="#cfd6e4" />
           </button>
         )}
       </div>
