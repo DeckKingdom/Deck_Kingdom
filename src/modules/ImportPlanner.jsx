@@ -68,7 +68,22 @@ export default function ImportPlanner() {
     });
   };
   const [prodPop, setProdPop] = useState(null);
-  const [prodDraft, setProdDraft] = useState({}); // lineId -> text being typed in a line's product box // { productId, lineId, rect }: quick edit of a shipment line's product
+  const [prodDraft, setProdDraft] = useState({});
+  // "+ New product": a fresh product goes straight onto the line and the full product card opens to fill in
+  const newProductOnLine = (lineId, name, rect, codeHint) => {
+    const id = uid();
+    const was = active && active.lines.find((x) => x.id === lineId);
+    const prev = was && was.productId ? { productId: was.productId, colour: was.colour, qty: was.qty, cost: was.cost, weight: was.weight } : null;
+    update((d) => {
+      d.products.unshift({ id, code: codeHint || "", name: name || "", colours: [], qty: 0, cost: 0, weight: 0, cbm: 0,
+        supplier: (active && active.supplier) || "", category: "", salePrice: "", costGbp: "", segSup: "", segLen: "", segCat: "", segSub: "", segProd: "" });
+      const sh = active && d.shipments.find((x) => x.id === active.id);
+      const l = sh && sh.lines.find((x) => x.id === lineId);
+      if (l) Object.assign(l, { productId: id, colour: "", qty: 0, cost: 0, weight: 0 });
+      return d;
+    });
+    setProdPop({ productId: id, lineId, rect, created: true, prev });
+  }; // lineId -> text being typed in a line's product box // { productId, lineId, rect }: quick edit of a shipment line's product
   const [loadError, setLoadError] = useState(false);
   const [copyPanel, setCopyPanel] = useState(null);
   const [copied, setCopied] = useState(false);
@@ -1481,8 +1496,9 @@ export default function ImportPlanner() {
                 <b style={{ fontSize: 15, color: NAVY }}>{p.name || "Product"}</b>
                 <span style={{ fontSize: 12, fontWeight: 600, color: "#8593a8" }}>{[p.code, p.supplier].filter(Boolean).join(" · ")}</span>
                 <span style={{ flex: 1 }} />
-                <button onClick={() => setProdPop((pp) => ({ ...pp, mode: "new", draft: { code: p.code ? String(p.code).split("/").slice(0, -1).join("/") + "/" : "" } }))}
-                  style={{ fontFamily: "inherit", fontWeight: 700, fontSize: 12, background: "none", border: "none", color: "#185FA5", cursor: "pointer", padding: 0 }}>+ New product instead</button>
+                {prodPop.created ? <span style={{ fontSize: 12, fontWeight: 800, color: "#28713e", background: "#3FA55C22", borderRadius: 999, padding: "2px 10px" }}>New product</span>
+                  : <button onClick={() => newProductOnLine(prodPop.lineId, "", prodPop.rect, p.code ? String(p.code).split("/").slice(0, -1).join("/") + "/" : "")}
+                    style={{ fontFamily: "inherit", fontWeight: 700, fontSize: 12, background: "none", border: "none", color: "#185FA5", cursor: "pointer", padding: 0 }}>+ New product instead</button>}
               </div>
               {line && (
                 <div style={{ display: "flex", gap: 12, alignItems: "flex-end", background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, padding: "10px 12px", marginBottom: 10, flexWrap: "wrap" }}>
@@ -1494,7 +1510,20 @@ export default function ImportPlanner() {
                 </div>
               )}
               <ProductEditor planner={data} update={update} crm={crm || { masterProducts: [] }} productId={p.id} removeProduct={(pid) => { setProdPop(null); removeProduct(pid); }} />
-              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 8 }}>
+                {prodPop.created && (
+                  <button title="Throw this new product away" onClick={() => {
+                      const prev = prodPop.prev;
+                      update((d) => {
+                        d.products = d.products.filter((x) => x.id !== p.id);
+                        const sh = active && d.shipments.find((x) => x.id === active.id);
+                        if (sh && line) { if (prev) Object.assign(sh.lines.find((x) => x.id === line.id) || {}, prev); else sh.lines = sh.lines.filter((x) => x.id !== line.id); }
+                        return d;
+                      });
+                      setProdPop(null);
+                    }}
+                    style={{ fontFamily: "inherit", fontWeight: 700, fontSize: 13, background: "#fff", color: NAVY, border: "1px solid #d5d9e0", borderRadius: 8, padding: "8px 14px", cursor: "pointer" }}>Cancel</button>
+                )}
                 <button onClick={() => setProdPop(null)} style={{ fontFamily: "inherit", fontWeight: 700, fontSize: 13, background: GOLD, color: NAVY, border: "none", borderRadius: 8, padding: "8px 16px", cursor: "pointer" }}>Done</button>
               </div>
             </div>
@@ -1691,7 +1720,7 @@ export default function ImportPlanner() {
                                           const box = document.querySelector('[data-prodbox="' + l.id + '"]');
                                           const typed = prodDraft[l.id];
                                           setProdDraft((d) => { const n = { ...d }; delete n[l.id]; return n; });
-                                          return setProdPop({ mode: "new", lineId: l.id, rect: box ? box.getBoundingClientRect() : { left: 300, top: 300, bottom: 330 }, draft: { name: typed && typed !== (p && p.name) ? typed : "" } });
+                                          return newProductOnLine(l.id, typed && typed !== (p && p.name) ? typed : "", box ? box.getBoundingClientRect() : { left: 300, top: 300, bottom: 330 });
                                         }
                                         if (String(v).startsWith("pid:")) { // picked from the list
                                           setProdDraft((d) => { const n = { ...d }; delete n[l.id]; return n; });
