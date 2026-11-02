@@ -253,6 +253,8 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
   );
 
   const estCost = invoiceCost(inv, crm);
+  // finished jobs: every card on the record turns green
+  const cardX = inv.deliveryCompleted ? { ...card, background: "#e9f6ee", border: "1px solid #a9dbb8" } : card;
 
   return (
     <div style={{ maxWidth: 1140, margin: "0 auto", padding: "18px 22px" }}>
@@ -280,14 +282,14 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
       })()}
 
       {notice && (
-        <div style={{ ...card, borderColor: GOLD, background: "#fff8e6", display: "flex", gap: 10, alignItems: "center", fontWeight: 600, fontSize: 13 }}>
+        <div style={{ ...cardX, borderColor: GOLD, background: "#fff8e6", display: "flex", gap: 10, alignItems: "center", fontWeight: 600, fontSize: 13 }}>
           <span style={{ flex: 1 }}>{notice}</span>
           <button style={abtn} onClick={() => setNotice("")}><Icon name="x" /></button>
         </div>
       )}
 
       {/* header band */}
-      <div style={{ background: "linear-gradient(135deg,#0B1F3F 0%,#13294f 100%)", borderRadius: 12, padding: "16px 22px", color: "#fff", marginBottom: 14, display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
+      <div style={{ background: inv.deliveryCompleted ? "linear-gradient(135deg,#1f6b3a 0%,#2f8a4c 100%)" : "linear-gradient(135deg,#0B1F3F 0%,#13294f 100%)", borderRadius: 12, padding: "16px 22px", color: "#fff", marginBottom: 14, display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
         <div>
           <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
             <span style={{ position: "relative", display: "inline-block" }} onMouseEnter={() => setStampOpen(true)} onMouseLeave={() => setStampOpen(false)}>
@@ -333,7 +335,7 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
         const refundLines = (inv.lines || []).filter((l) => String(l.id || "").startsWith("web-r-") || /^Website refund/.test(l.description || ""));
         const refundSum = refundLines.reduce((t, l) => t + Math.abs(Number(l.price) || 0) * (Number(l.qty) || 1), 0);
         return (
-          <div style={{ ...card, borderColor: part ? "#f4d78f" : "#c9d0db", background: part ? "#fff8e6" : "#f3f5f8", display: "flex", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
+          <div style={{ ...cardX, borderColor: part ? "#f4d78f" : "#c9d0db", background: part ? "#fff8e6" : "#f3f5f8", display: "flex", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
             <div style={{ width: 36, height: 36, borderRadius: 8, background: part ? "#E8912D" : "#5a6a85", display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>
               <Icon name="warn" stroke="#fff" size={18} />
             </div>
@@ -363,7 +365,7 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
         if (!r) return null;
         const who = (me || "").split("@")[0];
         if (!r.open) return (
-          <div style={{ ...card, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "9px 14px", fontSize: 12.5, fontWeight: 600, color: "#5a6a85" }}>
+          <div style={{ ...cardX, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "9px 14px", fontSize: 12.5, fontWeight: 600, color: "#5a6a85" }}>
             <Icon name="warn" stroke="#8593a8" size={14} />
             <span><b style={{ color: NAVY }}>{r.label}</b> — checked by {r.checked}{r.note ? " · " + r.note : ""}</span>
             <span style={{ flex: 1 }} />
@@ -372,7 +374,7 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
           </div>
         );
         return (
-          <div style={{ ...card, borderColor: "#C8102E", background: "#C8102E0d", display: "flex", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
+          <div style={{ ...cardX, borderColor: "#C8102E", background: "#C8102E0d", display: "flex", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
             <div style={{ width: 36, height: 36, borderRadius: 8, background: "#C8102E", display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>
               <Icon name="warn" stroke="#fff" size={18} />
             </div>
@@ -397,7 +399,7 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
 
       {/* customer + site */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 14, marginBottom: 14 }}>
-        <div style={{ ...card, marginBottom: 0 }}>
+        <div style={{ ...cardX, marginBottom: 0 }}>
           <p style={sect}>Customer</p>
           {cust ? (
             <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
@@ -433,7 +435,7 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
           )}
         </div>
 
-        <div style={{ ...card, marginBottom: 0 }}>
+        <div style={{ ...cardX, marginBottom: 0 }}>
           <p style={sect}>Deliver to</p>
           <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
             <div style={{ width: 40, height: 40, borderRadius: 12, background: NAVY, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>
@@ -456,50 +458,8 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
         </div>
       </div>
 
-      {/* prep & follow-up ticks */}
-      <div style={{ ...card, padding: "10px 18px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
-          <button type="button" onClick={() => setFollowOpen((o) => !o)}
-            style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 260, background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}>
-            <span style={{ ...sect, margin: 0 }}>Prep &amp; follow-up</span>
-            <span style={{ fontSize: 12, fontWeight: 700, color: "#5a6a85" }}>
-              prep {PREP_FLAGS.filter(([k]) => inv.flags[k]).length}/{PREP_FLAGS.length} · follow-up {FOLLOWUP_FLAGS.filter(([k]) => inv.flags[k]).length}/{FOLLOWUP_FLAGS.length}
-            </span>
-            <span style={{ color: "#8593a8", fontSize: 12 }}>{followOpen ? "▾" : "▸"}</span>
-          </button>
-          <label title="Flag this job as high risk — it gets a red warning until someone checks it"
-            style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", color: inv.riskFlag && !inv.riskChecked ? "#9b1c2e" : NAVY }}>
-            <input type="checkbox" checked={!!inv.riskFlag && !inv.riskChecked}
-              onChange={(e) => setInv((t) => {
-                if (e.target.checked) { t.riskFlag = t.riskFlag || "manual"; t.riskChecked = ""; }
-                else if (t.riskFlag === "manual") { t.riskFlag = ""; t.riskNote = ""; }
-                else t.riskChecked = (staffName(crm, me) || (me || "").split("@")[0] || "staff") + " · " + prettyDate(today()); // website flag: unticking = checked
-              })} />
-            Flag risk
-          </label>
-          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", flexWrap: "wrap" }}>
-            <input type="checkbox" checked={inv.deliveryCompleted}
-              onChange={(e) => setInv((x, c) => { x.deliveryCompleted = e.target.checked; applyInvoiceStockDeduction(x, c, e.target.checked, me); })} />
-            Delivery completed
-            {inv.stockDeducted && <Chip tone="green" style={{ marginLeft: 4, fontSize: 10, padding: "1px 7px" }}>stock out</Chip>}
-          </label>
-        </div>
-        {followOpen && (
-          <div style={{ display: "flex", gap: 5, alignItems: "center", flexWrap: "wrap", marginTop: 10 }}>
-            <span style={{ ...lbl, marginBottom: 0, marginRight: 4 }}>Prep</span>
-            {PREP_FLAGS.map(([k, label, icon]) => (
-              <Tg key={k} on={inv.flags[k]} title={label} icon={icon} onClick={() => setInv((x) => (x.flags[k] = !x.flags[k]))} />
-            ))}
-            <span style={{ ...lbl, marginBottom: 0, margin: "0 4px 0 18px" }}>Follow-up</span>
-            {FOLLOWUP_FLAGS.map(([k, label, icon]) => (
-              <Tg key={k} on={inv.flags[k]} title={label} icon={icon} onClick={() => setInv((x) => (x.flags[k] = !x.flags[k]))} />
-            ))}
-          </div>
-        )}
-      </div>
-
       {/* job & delivery */}
-      <div style={card}>
+      <div style={cardX}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(118px, 1fr))", gap: 12 }}>
           <div style={{ gridColumn: "span 2" }}>
             <span style={lbl}>Job type</span>
@@ -534,11 +494,27 @@ export default function InvoicesScreen({ crm, updateCrm, askConfirm, selId, setS
       </div>
 
       {/* lines + totals */}
-      <div style={card}>
+      <div style={cardX}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
           <p style={{ ...sect, margin: 0 }}>Lines</p>
         </div>
         <LinesEditor doc={inv} edit={setInv} crm={crm} toolbar={<>
+          <label title="Flag this job as high risk — it gets a red warning until someone checks it"
+            style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", color: inv.riskFlag && !inv.riskChecked ? "#9b1c2e" : NAVY }}>
+            <input type="checkbox" checked={!!inv.riskFlag && !inv.riskChecked}
+              onChange={(e) => setInv((t) => {
+                if (e.target.checked) { t.riskFlag = t.riskFlag || "manual"; t.riskChecked = ""; }
+                else if (t.riskFlag === "manual") { t.riskFlag = ""; t.riskNote = ""; }
+                else t.riskChecked = (staffName(crm, me) || (me || "").split("@")[0] || "staff") + " · " + prettyDate(today()); // website flag: unticking = checked
+              })} />
+            Flag risk
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", flexWrap: "wrap", color: inv.deliveryCompleted ? "#28713e" : NAVY, marginRight: 10 }}>
+            <input type="checkbox" checked={inv.deliveryCompleted}
+              onChange={(e) => setInv((x, c) => { x.deliveryCompleted = e.target.checked; applyInvoiceStockDeduction(x, c, e.target.checked, me); })} />
+            Delivery completed
+            {inv.stockDeducted && <Chip tone="green" style={{ marginLeft: 4, fontSize: 10, padding: "1px 7px" }}>stock out</Chip>}
+          </label>
           <button style={docBtn} onClick={() => tryPrint("invoice")}><Icon name="doc" stroke={NAVY} size={13} />Invoice PDF</button>
           <button style={docBtn} onClick={() => tryPrint("job")}><Icon name="truck" stroke={NAVY} size={13} />Job sheet</button>
           <button style={docBtn} onClick={() => tryPrint("loading")}><Icon name="box" stroke={NAVY} size={13} />Packing slip</button>
