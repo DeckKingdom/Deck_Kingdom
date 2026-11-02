@@ -552,6 +552,78 @@ export const colourCode = (c) => {
 };
 export const cleanCode = (c) => String(c || "").trim().toUpperCase().replace(/\s+/g, "");
 export const codeSource = (code) => cleanCode(code).split("/")[0] || "";
+// ===== product naming conventions =====
+// Description: Material/type · product · spec · size (mm) · length (m), Title Case,
+// units lower-case and tight to the number:  "Aluminium Top Beam 50mm 2.2m".
+// Code: SUPPLIER/LENGTH/PRODUCT-SPEC, upper-case:  "DK/2.2/BEAM-TOP".
+const SMALL_WORDS = new Set(["for", "and", "of", "with", "in", "on", "to", "a", "the", "or", "x"]);
+const KEEP_UPPER = new Set(["UPVC", "PVC", "WPC", "HD", "XL", "UV", "LED", "DIY", "UK", "PP", "PE", "ASA"]);
+const MATERIAL_WORDS = new Set(["composite", "aluminium", "aluminum", "galvanised", "galvanized", "plastic", "steel", "wpc", "upvc", "pvc"]);
+const CODE_PHRASES = [
+  [/\bdecking boards?\b/, "DECK"], [/\bfence boards?\b/, "FENCE"], [/\bcladding boards?\b/, "CLAD"],
+  [/\btop beams?\b/, "BEAM-TOP"], [/\bbottom beams?\b/, "BEAM-BOTTOM"], [/\bu beams?\b/, "BEAM-U"], [/\bh beams?\b/, "BEAM-H"],
+  [/\bfence posts?\b/, "POST"], [/\bjoists?\b/, "JOIST"], [/\bbullnose\b/, "BULLNOSE"], [/\bfascia\b/, "FASCIA"],
+];
+const lengthOf = (name) => {
+  const m = String(name || "").match(/(\d+(?:\.\d+)?)\s*m\b(?!m)/i);
+  if (m) return m[1];
+  const ft = String(name || "").match(/(\d+(?:\.\d+)?)\s*(?:ft|foot|feet)\b/i);
+  return ft ? ft[1] + "FT" : "";
+};
+// tidy a product description: Title Case, units tight and lower-case, single spaces
+export const tidyDescription = (name) => {
+  let s = String(name || "").replace(/\s+/g, " ").trim();
+  if (!s) return "";
+  // a bracketed note is kept as typed (just tidied spaces)
+  const at = s.indexOf("(");
+  if (at > 0) return (tidyDescription(s.slice(0, at)) + " " + s.slice(at).replace(/\(\s+/, "(").replace(/\s+\)/, ")")).trim();
+  s = s.replace(/(\d+(?:\.\d+)?)\s*(mm|cm|m|kg|ft)\b/gi, (_, n, u) => n + u.toLowerCase());
+  s = s.replace(/[A-Za-z][A-Za-z'’-]*/g, (w, i) => {
+    const lw = w.toLowerCase();
+    if (KEEP_UPPER.has(w.toUpperCase())) return w.toUpperCase();
+    if (/^(mm|cm|m|kg|ft)$/.test(lw) && i > 0 && /\d/.test(s[i - 1])) return lw;
+    if (i > 0 && SMALL_WORDS.has(lw)) return lw;
+    return lw.charAt(0).toUpperCase() + lw.slice(1);
+  });
+  return s;
+};
+// the recommended layout of a description: everything else first, then size (mm), then length (m)
+export const suggestDescription = (name) => {
+  const full = tidyDescription(name);
+  if (!full) return "";
+  const at = full.indexOf("(");
+  const note0 = at > 0 ? full.slice(at) : "";
+  const t = at > 0 ? full.slice(0, at).trim() : full;
+  const len = (t.match(/\b\d+(?:\.\d+)?m\b/) || [])[0] || "";
+  const ft = (t.match(/\b\d+(?:\.\d+)?ft\b/) || [])[0] || "";
+  const mm = (t.match(/\b\d+(?:\.\d+)?mm\b/g) || []);
+  let rest = t.replace(/\b\d+(?:\.\d+)?(?:m|ft|mm)\b/g, " ").replace(/\(\s*\)/g, "").replace(/\s+/g, " ").trim();
+  // a bracketed note stays at the end, after the sizes
+  return [rest, ...mm, len || ft, note0].filter(Boolean).join(" ");
+};
+// a code from the description: SUPPLIER/LENGTH/PRODUCT-SPEC
+export const suggestCode = (name, supplierKey = "DK") => {
+  const t = String(name || "").toLowerCase().replace(/\(.*?\)/g, " ");
+  const len = lengthOf(t);
+  let rest = " " + t.replace(/\d+(?:\.\d+)?\s*(?:mm|cm|m|kg|ft|foot|feet)\b/g, " ") + " ";
+  const parts = [];
+  CODE_PHRASES.forEach(([re, tok]) => { if (re.test(rest)) { parts.push(tok); rest = rest.replace(re, " "); } });
+  const words = rest.split(/[^a-z0-9]+/).filter((w) => w && !MATERIAL_WORDS.has(w) && !SMALL_WORDS.has(w) && w.length > 1 && !/^\d+$/.test(w));
+  // "fence" / "decking" / "cladding" only name the range — dropped when there's something more specific
+  const range = new Set(["fence", "fencing", "decking", "cladding"]);
+  const specific = words.filter((w) => !range.has(w));
+  (parts.length || specific.length ? specific : words).forEach((w) => parts.push(w.toUpperCase()));
+  if (!parts.length) return "";
+  return cleanCode([supplierKey || "DK", len, parts.join("-")].filter(Boolean).join("/"));
+};
+// when a description changes, the code follows it — unless someone has set their own code
+export const codeFollowsName = (p, newName, supplierKey) => {
+  const key = supplierKey || codeSource(p.code) || "DK";
+  const cur = cleanCode(p.code);
+  const auto = !cur || cur === key || cur === key + "/" || cur === suggestCode(p.name, key);
+  return auto ? suggestCode(newName, key) || cur : cur;
+};
+
 export const skuFor = (code, colour) => cleanCode(code) + (colourCode(colour) ? "/" + colourCode(colour) : "");
 
 

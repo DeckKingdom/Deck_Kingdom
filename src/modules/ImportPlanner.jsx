@@ -23,7 +23,7 @@ import {
   money,
   int,
 } from "../lib/core.js";
-import { blankInvoice, blankQuote, blankSample, blankSampleItem, nextNumber, TRADE_COUNTER, vanReminders, syncCatalogue, renameSkus, syncOpenPicks, colourTidyPlan, syncSampleConversions, cleanCode, codeSource, PRODUCT_SOURCES, dueScheduledFor, setTaskDone, describeSchedule, today as todayStr, newPurchaseFor } from "../lib/crmCore.js";
+import { blankInvoice, blankQuote, blankSample, blankSampleItem, nextNumber, TRADE_COUNTER, vanReminders, syncCatalogue, renameSkus, syncOpenPicks, colourTidyPlan, syncSampleConversions, cleanCode, codeSource, PRODUCT_SOURCES, suggestDescription, suggestCode, codeFollowsName, dueScheduledFor, setTaskDone, describeSchedule, today as todayStr, newPurchaseFor } from "../lib/crmCore.js";
 import { useCrm } from "./crm/useCrm.js";
 import CustomersScreen from "./crm/CustomersScreen.jsx";
 import InvoicesScreen from "./crm/InvoicesScreen.jsx";
@@ -75,7 +75,8 @@ export default function ImportPlanner() {
     const was = active && active.lines.find((x) => x.id === lineId);
     const prev = was && was.productId ? { productId: was.productId, colour: was.colour, qty: was.qty, cost: was.cost, weight: was.weight } : null;
     update((d) => {
-      d.products.unshift({ id, code: codeHint || "", name: name || "", colours: [], qty: 0, cost: 0, weight: 0, cbm: 0,
+      const nm = suggestDescription(name || "");
+      d.products.unshift({ id, code: (nm && suggestCode(nm, codeSource(codeHint) || "DK")) || codeHint || "DK/", name: nm, colours: [], qty: 0, cost: 0, weight: 0, cbm: 0,
         supplier: (active && active.supplier) || "", category: "", salePrice: "", costGbp: "", segSup: "", segLen: "", segCat: "", segSub: "", segProd: "" });
       const sh = active && d.shipments.find((x) => x.id === active.id);
       const l = sh && sh.lines.find((x) => x.id === lineId);
@@ -912,6 +913,7 @@ export default function ImportPlanner() {
       if (field === "colours") p.colours = value.split(",").map((c) => c.trim()).filter(Boolean);
       else if (field === "qty" || field === "cost" || field === "weight" || field === "cbm" || field === "salePrice" || field === "costGbp") p[field] = value === "" ? "" : Number(value);
       else if (field === "code") p.code = cleanCode(value);
+      else if (field === "name") { p.code = codeFollowsName(p, value, codeSource(p.code) || "DK"); p.name = value; }
       else p[field] = value;
       return d;
     });

@@ -8,6 +8,7 @@ import {
   kitWeight,
   skuLists, productSkuBase, masterKey, productsInList, colourSeg, numericSku, segLabel, cleanCode, codeSource,
   DEFAULT_SKU_LISTS, gbp, kitPartsFor, supplierKey,
+  tidyDescription, suggestDescription, codeFollowsName,
 } from "../../lib/crmCore.js";
 import { Icon, Chip, Modal, lbl, card, inp, btn, goldBtn, abtn } from "./ui.jsx";
 
@@ -32,6 +33,7 @@ export default function ProductsScreen({ planner, update, crm, updateCrm, remove
       if (field === "colours") p.colours = String(value).split(",").map((c) => c.trim()).filter(Boolean);
       else if (["qty", "cost", "weight", "cbm", "salePrice", "costGbp"].includes(field)) p[field] = value === "" ? "" : Number(value);
       else if (field === "code") p.code = cleanCode(value);
+      else if (field === "name") { p.code = codeFollowsName(p, value, codeSource(p.code) || "DK"); p.name = value; }
       else p[field] = value;
       // changing category or sub-category clears a product pick that no longer fits
       if ((field === "segCat" || field === "segSub") && p.segProd && !productsInList(lists, p.segCat, p.segSub).some((x) => x.code === p.segProd)) p.segProd = "";
@@ -654,7 +656,18 @@ function Version({ p, lists, rows, rowsByProduct, products, setP, removeProduct,
         </div>
         <div>
           <span style={{ ...lbl, fontSize: 10 }}>Description</span>
-          <input style={sm} value={p.name} placeholder="Product, spec, size" onChange={(e) => setP(p.id, "name", e.target.value)} />
+          <input style={sm} value={p.name} placeholder="Type · product · spec · size mm · length m" title="e.g. Aluminium Top Beam 50mm 2.2m — the code fills itself in from this"
+            onChange={(e) => setP(p.id, "name", e.target.value)}
+            onBlur={(e) => { const t = tidyDescription(e.target.value); if (t !== e.target.value) setP(p.id, "name", t); }} />
+          {(() => {
+            const sug = suggestDescription(p.name);
+            return sug && sug !== p.name ? (
+              <button type="button" onClick={() => setP(p.id, "name", sug)} title="Use the recommended layout: type · product · spec · size (mm) · length (m)"
+                style={{ display: "block", marginTop: 3, background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit", fontSize: 11, fontWeight: 700, color: "#185FA5", textAlign: "left" }}>
+                Suggested: {sug} — use
+              </button>
+            ) : null;
+          })()}
         </div>
         <div>
           <span style={{ ...lbl, fontSize: 10 }}>Bought from</span>
@@ -911,6 +924,7 @@ export function ProductEditor({ planner, update, crm, productId, removeProduct }
       if (field === "colours") q.colours = String(value).split(",").map((c) => c.trim()).filter(Boolean);
       else if (["qty", "cost", "weight", "cbm", "salePrice", "costGbp"].includes(field)) q[field] = value === "" ? "" : Number(value);
       else if (field === "code") q.code = cleanCode(value);
+      else if (field === "name") { q.code = codeFollowsName(q, value, codeSource(q.code) || "DK"); q.name = value; }
       else q[field] = value;
       if ((field === "segCat" || field === "segSub") && q.segProd && !productsInList(lists, q.segCat, q.segSub).some((x) => x.code === q.segProd)) q.segProd = "";
       if (field === "segCat" && !q.category) q.category = segLabel(lists.category, value);
