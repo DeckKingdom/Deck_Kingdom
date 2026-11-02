@@ -1396,7 +1396,64 @@ export default function ImportPlanner() {
         </div>
       )}
 
-      {prodPop && (() => {
+      {prodPop && prodPop.mode === "new" && (() => {
+        // add a brand-new product from the shipment and put it on this line
+        const line = active && active.lines.find((x) => x.id === prodPop.lineId);
+        const dft = prodPop.draft;
+        const setD = (k, v) => setProdPop((pp) => ({ ...pp, draft: { ...pp.draft, [k]: v } }));
+        const W = 400;
+        const below = prodPop.rect.bottom + 470 < window.innerHeight;
+        const f = { width: "100%", boxSizing: "border-box", fontFamily: "inherit", fontSize: 14, fontWeight: 600, color: NAVY, border: "1px solid #d5d9e0", borderRadius: 8, padding: "8px 10px" };
+        const l_ = { display: "block", fontSize: 11, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", margin: "10px 0 4px" };
+        const n = (v) => (v === "" || v === undefined ? 0 : Number(v) || 0);
+        const ok = String(dft.name || "").trim();
+        const create = () => {
+          if (!ok) return;
+          const id = uid();
+          const colours = String(dft.colours || "").split(",").map((c) => c.trim()).filter(Boolean);
+          update((d) => {
+            d.products.unshift({ id, code: cleanCode(dft.code || ""), name: dft.name.trim(), colours, qty: n(dft.qty), cost: n(dft.cost), weight: n(dft.weight), cbm: 0,
+              supplier: (active && active.supplier) || "", category: "", salePrice: "", costGbp: "" });
+            const sh = active && d.shipments.find((x) => x.id === active.id);
+            if (sh) {
+              const l = sh.lines.find((x) => x.id === prodPop.lineId);
+              const vals = { productId: id, colour: colours[0] || "", qty: n(dft.qty), cost: n(dft.cost), weight: n(dft.weight) };
+              if (l) Object.assign(l, vals);
+              else sh.lines.push({ id: uid(), pallets: 1, ...vals });
+            }
+            return d;
+          });
+          setProdPop(null);
+        };
+        return (
+          <>
+            <div onMouseDown={() => setProdPop(null)} style={{ position: "fixed", inset: 0, zIndex: 80 }} />
+            <div style={{ position: "fixed", left: Math.max(10, Math.min(prodPop.rect.left - 10, window.innerWidth - W - 16)), ...(below ? { top: prodPop.rect.bottom + 6 } : { bottom: Math.max(10, window.innerHeight - prodPop.rect.top + 6) }),
+              zIndex: 81, width: W, background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, boxShadow: "0 14px 40px rgba(11,31,63,.28)", padding: "14px 16px" }}>
+              <b style={{ fontSize: 14.5, color: NAVY }}>New product</b>
+              <div style={{ fontSize: 11.5, fontWeight: 600, color: "#8593a8", marginTop: 2 }}>{((active && active.supplier) || "No supplier") + (line ? " · goes on this line" : " · added as a new line")}</div>
+              <span style={l_}>Product description</span>
+              <input autoFocus style={f} value={dft.name || ""} placeholder="e.g. Fence Board 2.4m" onChange={(e) => setD("name", e.target.value)} />
+              <span style={l_}>Code</span>
+              <input style={f} value={dft.code || ""} placeholder="e.g. DK/2.4/FENCE" onChange={(e) => setD("code", e.target.value)} />
+              <span style={l_}>Colours</span>
+              <input style={f} value={dft.colours || ""} placeholder="Black, Grey, Teak" onChange={(e) => setD("colours", e.target.value)} />
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+                <div><span style={l_}>Qty / pallet</span><input type="number" min="0" step="any" style={{ ...f, textAlign: "right" }} value={dft.qty || ""} onChange={(e) => setD("qty", e.target.value)} /></div>
+                <div><span style={l_}>$ / piece</span><input type="number" min="0" step="any" style={{ ...f, textAlign: "right" }} value={dft.cost || ""} onChange={(e) => setD("cost", e.target.value)} /></div>
+                <div><span style={l_}>kg / piece</span><input type="number" min="0" step="any" style={{ ...f, textAlign: "right" }} value={dft.weight || ""} onChange={(e) => setD("weight", e.target.value)} /></div>
+              </div>
+              <div style={{ fontSize: 11.5, fontWeight: 600, color: "#8593a8", marginTop: 10 }}>Category, size and sale price can be filled in later on Products.</div>
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 12 }}>
+                <button onClick={() => setProdPop(null)} style={{ fontFamily: "inherit", fontWeight: 700, fontSize: 13, background: "#fff", color: NAVY, border: "1px solid #d5d9e0", borderRadius: 8, padding: "8px 14px", cursor: "pointer" }}>Cancel</button>
+                <button onClick={create} disabled={!ok} style={{ fontFamily: "inherit", fontWeight: 700, fontSize: 13, background: GOLD, color: NAVY, border: "none", borderRadius: 8, padding: "8px 16px", cursor: ok ? "pointer" : "default", opacity: ok ? 1 : 0.5 }}>Add product</button>
+              </div>
+            </div>
+          </>
+        );
+      })()}
+
+      {prodPop && prodPop.mode !== "new" && (() => {
         const p = data.products.find((x) => x.id === prodPop.productId);
         const line = active && active.lines.find((x) => x.id === prodPop.lineId);
         if (!p) return null;
@@ -1410,7 +1467,11 @@ export default function ImportPlanner() {
             <div onMouseDown={() => setProdPop(null)} style={{ position: "fixed", inset: 0, zIndex: 80 }} />
             <div style={{ position: "fixed", left: Math.min(prodPop.rect.left - 10, window.innerWidth - W - 16), ...(below ? { top: prodPop.rect.bottom + 6 } : { bottom: window.innerHeight - prodPop.rect.top + 6 }),
               zIndex: 81, width: W, background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, boxShadow: "0 14px 40px rgba(11,31,63,.28)", padding: "14px 16px" }}>
-              <b style={{ fontSize: 14.5, color: NAVY }}>Edit product</b>
+              <div style={{ display: "flex", alignItems: "center" }}>
+                <b style={{ fontSize: 14.5, color: NAVY, flex: 1 }}>Edit product</b>
+                <button onClick={() => setProdPop((pp) => ({ ...pp, mode: "new", draft: { code: p.code ? String(p.code).split("/").slice(0, -1).join("/") + "/" : "" } }))}
+                  style={{ fontFamily: "inherit", fontWeight: 700, fontSize: 12, background: "none", border: "none", color: "#185FA5", cursor: "pointer", padding: 0 }}>+ New product instead</button>
+              </div>
               <div style={{ fontSize: 11.5, fontWeight: 600, color: "#8593a8", marginTop: 2 }}>{[p.code, p.supplier].filter(Boolean).join(" · ")}</div>
               <span style={l_}>Product description</span>
               <input autoFocus style={f} value={p.name || ""} onChange={(e) => setProd("name", e.target.value)} />
@@ -1611,12 +1672,17 @@ export default function ImportPlanner() {
                           </td>
                           <td style={td}>
                             <div style={{ display: "flex", gap: 6, alignItems: "stretch" }}>
-                              <select value={l.productId} onChange={(e) => setLine(l.id, "productId", e.target.value)} style={{ ...inp, flex: 1, minWidth: 0 }} title={p ? p.name : ""}>
+                              <select value={l.productId} style={{ ...inp, flex: 1, minWidth: 0 }} title={p ? p.name : ""}
+                                onChange={(e) => {
+                                  if (e.target.value === "__new") return setProdPop({ mode: "new", lineId: l.id, rect: e.currentTarget.getBoundingClientRect(), draft: {} });
+                                  setLine(l.id, "productId", e.target.value);
+                                }}>
                                 {lineOptions(l, (active.supplier || "").trim()).map((pr) => (
                                   <option key={pr.id} value={pr.id}>
                                     {pr.name}
                                   </option>
                                 ))}
+                                <option value="__new">+ New product…</option>
                               </select>
                               {p && (
                                 <button type="button" className="no-print" title="Edit this product's description and pallet qty"
