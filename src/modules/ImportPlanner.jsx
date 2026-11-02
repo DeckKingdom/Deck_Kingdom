@@ -1577,8 +1577,8 @@ export default function ImportPlanner() {
                       return (
                         <tr key={l.id}>
                           <td style={td}>
-                            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                              <select value={l.productId} onChange={(e) => setLine(l.id, "productId", e.target.value)} style={{ ...inp, flex: 1, minWidth: 0 }} title={p ? p.name : ""}>
+                            <div style={{ position: "relative" }}>
+                              <select value={l.productId} onChange={(e) => setLine(l.id, "productId", e.target.value)} style={{ ...inp, width: "100%" }} title={p ? p.name : ""}>
                                 {lineOptions(l, (active.supplier || "").trim()).map((pr) => (
                                   <option key={pr.id} value={pr.id}>
                                     {pr.name}
@@ -1588,8 +1588,8 @@ export default function ImportPlanner() {
                               {p && (
                                 <button type="button" className="no-print" title="Edit this product's description and pallet qty"
                                   onClick={(e) => setProdPop({ productId: p.id, lineId: l.id, rect: e.currentTarget.getBoundingClientRect() })}
-                                  style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid #d5d9e0", background: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0, flex: "none" }}>
-                                  <Icon name="pen" size={14} stroke={NAVY} />
+                                  style={{ position: "absolute", left: -7, bottom: -7, width: 20, height: 20, borderRadius: 6, border: "1px solid #d5d9e0", background: "#fff", boxShadow: "0 1px 3px rgba(11,31,63,.15)", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0, zIndex: 1 }}>
+                                  <Icon name="pen" size={11} stroke={NAVY} />
                                 </button>
                               )}
                             </div>
