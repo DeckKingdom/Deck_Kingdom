@@ -884,3 +884,53 @@ function ListsEditor({ lists, custom, onClose, onSave }) {
     </Modal>
   );
 }
+
+// One product's full editor (the same card as on Products) for use elsewhere,
+// e.g. the shipment line pop-over. Edits save straight to the product.
+export function ProductEditor({ planner, update, crm, productId, removeProduct }) {
+  const lists = skuLists(crm);
+  const products = planner.products || [];
+  const p = products.find((x) => x.id === productId);
+  const rowsByProduct = useMemo(() => {
+    const m = {};
+    (crm.masterProducts || []).filter((r) => !r.grade).forEach((r) => (m[r.importProductId] = m[r.importProductId] || []).push(r));
+    return m;
+  }, [crm.masterProducts]);
+  const supplierNames = useMemo(() => {
+    const byKey = new Map();
+    const add = (n) => { const name = String(n || "").trim(); const k = supplierKey(name); if (k && !k.startsWith("deckkingdom") && !byKey.has(k)) byKey.set(k, name); };
+    products.forEach((x) => add(x.supplier));
+    lists.supplier.forEach((x) => add(supplierName(x)));
+    return [...byKey.values()].sort((a, b) => a.localeCompare(b));
+  }, [products, lists]);
+  if (!p) return null;
+  const setP = (pid, field, value) =>
+    update((d) => {
+      const q = d.products.find((x) => x.id === pid);
+      if (!q) return d;
+      if (field === "colours") q.colours = String(value).split(",").map((c) => c.trim()).filter(Boolean);
+      else if (["qty", "cost", "weight", "cbm", "salePrice", "costGbp"].includes(field)) q[field] = value === "" ? "" : Number(value);
+      else if (field === "code") q.code = cleanCode(value);
+      else q[field] = value;
+      if ((field === "segCat" || field === "segSub") && q.segProd && !productsInList(lists, q.segCat, q.segSub).some((x) => x.code === q.segProd)) q.segProd = "";
+      if (field === "segCat" && !q.category) q.category = segLabel(lists.category, value);
+      return d;
+    });
+  const setSupplier = (pid, code) =>
+    update((d) => {
+      const q = d.products.find((x) => x.id === pid);
+      const sup = lists.supplier.find((x) => x.code === code);
+      if (!q || !sup) return d;
+      q.segSup = code;
+      const parts = cleanCode(q.code || "").split("/").filter(Boolean);
+      if (sup.key && parts.length) { parts[0] = sup.key; q.code = cleanCode(parts.join("/")); }
+      else if (sup.key && !parts.length) q.code = sup.key + "/";
+      if (!q.isKit && sup.key !== "DK" && (!q.supplier || lists.supplier.some((x) => x.code !== code && supplierName(x) === q.supplier))) q.supplier = supplierName(sup);
+      return d;
+    });
+  const supKey = segLabel(lists.supplier.map((x) => ({ code: x.code, label: x.key })), p.segSup) || codeSource(p.code) || "";
+  return (
+    <Version p={p} shipments={planner.shipments || []} supplierNames={supplierNames} lists={lists} rows={(rowsByProduct[p.id] || []).filter((r) => r.active !== false)}
+      rowsByProduct={rowsByProduct} products={products} setP={setP} removeProduct={removeProduct || (() => {})} supKey={supKey} shared={false} showSkus showCosts setSupplier={setSupplier} />
+  );
+}

@@ -36,6 +36,7 @@ import SuppliersScreen from "./crm/SuppliersScreen.jsx";
 import { quotesAvailable, samplesAvailable, tasksAvailable, purchasesAvailable } from "../data/crmStorage.js";
 import ScheduleScreen from "./crm/ScheduleScreen.jsx";
 import Sidebar, { TAB_LABELS } from "./Sidebar.jsx";
+import { ProductEditor } from "./crm/ProductsScreen.jsx";
 import HomeScreen from "./HomeScreen.jsx";
 import ActivityScreen from "./crm/ActivityScreen.jsx";
 import StockScreen from "./crm/StockScreen.jsx";
@@ -1458,46 +1459,42 @@ export default function ImportPlanner() {
         const p = data.products.find((x) => x.id === prodPop.productId);
         const line = active && active.lines.find((x) => x.id === prodPop.lineId);
         if (!p) return null;
-        const setProd = (k, v) => setProduct(p.id, k, v);
-        const W = 380;
-        const below = prodPop.rect.bottom + 330 < window.innerHeight;
-        const f = { width: "100%", boxSizing: "border-box", fontFamily: "inherit", fontSize: 14, fontWeight: 600, color: NAVY, border: "1px solid #d5d9e0", borderRadius: 8, padding: "8px 10px" };
-        const l_ = { display: "block", fontSize: 11, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", margin: "10px 0 4px" };
+        const W = Math.min(1180, window.innerWidth - 40);
+        const below = prodPop.rect.top < window.innerHeight / 2;
+        const f = { width: "100%", boxSizing: "border-box", fontFamily: "inherit", fontSize: 14, fontWeight: 600, color: NAVY, border: "1px solid #d5d9e0", borderRadius: 8, padding: "7px 10px", textAlign: "right" };
+        const l_ = { display: "block", fontSize: 10.5, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 4 };
+        // this line's numbers: typing here also becomes the product's default for new lines
+        const lineNum = (label, field) => (
+          <div style={{ width: 130 }}>
+            <span style={l_}>{label}</span>
+            <input type="number" min="0" step="any" style={f} value={line ? line[field] : p[field] === undefined || p[field] === null ? "" : p[field]}
+              onChange={(e) => { const v = e.target.value === "" ? "" : Number(e.target.value); setProduct(p.id, field, v); if (line) setLine(line.id, field, v); }} />
+          </div>
+        );
         return (
           <>
-            <div onMouseDown={() => setProdPop(null)} style={{ position: "fixed", inset: 0, zIndex: 80 }} />
-            <div style={{ position: "fixed", left: Math.min(prodPop.rect.left - 10, window.innerWidth - W - 16), ...(below ? { top: prodPop.rect.bottom + 6 } : { bottom: window.innerHeight - prodPop.rect.top + 6 }),
-              zIndex: 81, width: W, background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, boxShadow: "0 14px 40px rgba(11,31,63,.28)", padding: "14px 16px" }}>
-              <div style={{ display: "flex", alignItems: "center" }}>
-                <b style={{ fontSize: 14.5, color: NAVY, flex: 1 }}>Edit product</b>
+            <div onMouseDown={() => setProdPop(null)} style={{ position: "fixed", inset: 0, zIndex: 80, background: "rgba(11,31,63,.15)" }} />
+            <div style={{ position: "fixed", left: Math.max(16, (window.innerWidth - W) / 2),
+              ...(below ? { top: prodPop.rect.bottom + 6, maxHeight: window.innerHeight - prodPop.rect.bottom - 20 } : { bottom: window.innerHeight - prodPop.rect.top + 6, maxHeight: prodPop.rect.top - 20 }),
+              overflowY: "auto", zIndex: 81, width: W, boxSizing: "border-box", background: "#f7f9fc", border: "1px solid #e6e9ef", borderRadius: 12, boxShadow: "0 14px 40px rgba(11,31,63,.28)", padding: "14px 16px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                <b style={{ fontSize: 15, color: NAVY }}>{p.name || "Product"}</b>
+                <span style={{ fontSize: 12, fontWeight: 600, color: "#8593a8" }}>{[p.code, p.supplier].filter(Boolean).join(" · ")}</span>
+                <span style={{ flex: 1 }} />
                 <button onClick={() => setProdPop((pp) => ({ ...pp, mode: "new", draft: { code: p.code ? String(p.code).split("/").slice(0, -1).join("/") + "/" : "" } }))}
                   style={{ fontFamily: "inherit", fontWeight: 700, fontSize: 12, background: "none", border: "none", color: "#185FA5", cursor: "pointer", padding: 0 }}>+ New product instead</button>
               </div>
-              <div style={{ fontSize: 11.5, fontWeight: 600, color: "#8593a8", marginTop: 2 }}>{[p.code, p.supplier].filter(Boolean).join(" · ")}</div>
-              <span style={l_}>Product description</span>
-              <input autoFocus style={f} value={p.name || ""} onChange={(e) => setProd("name", e.target.value)} />
-              <span style={l_}>Qty per pallet / carton</span>
-              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <input type="number" min="0" step="any" style={{ ...f, width: 120, textAlign: "right" }} value={line ? line.qty : p.qty === undefined || p.qty === null ? "" : p.qty}
-                  onChange={(e) => {
-                    const v = e.target.value === "" ? "" : Number(e.target.value);
-                    setProd("qty", v);
-                    if (line) setLine(line.id, "qty", v);
-                  }} />
-                <span style={{ fontSize: 12, fontWeight: 600, color: "#5a6a85", lineHeight: 1.35 }}>Sets this line and the product's default for new lines</span>
-              </div>
-              <span style={l_}>Cost $ per piece</span>
-              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <input type="number" min="0" step="any" style={{ ...f, width: 120, textAlign: "right" }} value={line ? line.cost : p.cost === undefined || p.cost === null ? "" : p.cost}
-                  onChange={(e) => {
-                    const v = e.target.value === "" ? "" : Number(e.target.value);
-                    setProd("cost", v);
-                    if (line) setLine(line.id, "cost", v);
-                  }} />
-                <span style={{ fontSize: 12, fontWeight: 600, color: "#5a6a85", lineHeight: 1.35 }}>Sets this line and the product's default for new lines</span>
-              </div>
-              <div style={{ fontSize: 11.5, fontWeight: 600, color: "#8593a8", marginTop: 10 }}>Changes save as you type and show everywhere this product is used.</div>
-              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 12 }}>
+              {line && (
+                <div style={{ display: "flex", gap: 12, alignItems: "flex-end", background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, padding: "10px 12px", marginBottom: 10, flexWrap: "wrap" }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: NAVY, alignSelf: "center", minWidth: 120 }}>On this shipment line</div>
+                  {lineNum("Qty / pallet", "qty")}
+                  {lineNum("$ / piece", "cost")}
+                  {lineNum("kg / piece", "weight")}
+                  <span style={{ fontSize: 11.5, fontWeight: 600, color: "#8593a8", alignSelf: "center", flex: 1, minWidth: 180 }}>These set this line and become the product's default for new lines.</span>
+                </div>
+              )}
+              <ProductEditor planner={data} update={update} crm={crm || { masterProducts: [] }} productId={p.id} removeProduct={(pid) => { setProdPop(null); removeProduct(pid); }} />
+              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
                 <button onClick={() => setProdPop(null)} style={{ fontFamily: "inherit", fontWeight: 700, fontSize: 13, background: GOLD, color: NAVY, border: "none", borderRadius: 8, padding: "8px 16px", cursor: "pointer" }}>Done</button>
               </div>
             </div>
