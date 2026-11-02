@@ -1036,11 +1036,22 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
                 i.updatedAt ? "Updated " + prettyDateTime(i.updatedAt) + (i.modifiedBy ? " by " + i.modifiedBy.split("@")[0] : "") : "",
               ]} />
               <div style={{ display: "flex", gap: 8, alignItems: "center", background: i.deliveryDate ? "#f7f9fc" : "#fff8e6", border: "1px solid " + (i.deliveryDate ? "#e6e9ef" : "#f4d78f"), borderRadius: 10, padding: "6px 10px", marginBottom: 10 }}>
-                <span style={{ ...lbl, marginBottom: 0, whiteSpace: "nowrap" }}>{isCollectionJob(i) ? "Collection date" : "Delivery date"}</span>
+                <span style={{ ...lbl, marginBottom: 0, whiteSpace: "nowrap", minWidth: 96 }}>{isCollectionJob(i) ? "Collection date" : "Delivery date"}</span>
                 <input type="date" value={i.deliveryDate || ""} style={{ ...pill, width: 130, padding: "3px 8px" }}
                   onChange={(e) => { const v = e.target.value; guard(i.id, () => setInv(i.id, (t) => { t.deliveryDate = v; if (v && (!t.jobType || t.jobType === "Pending")) t.jobType = "Delivery"; })); }} />
                 <span style={{ flex: 1 }} />
                 {!i.deliveryDate && <span style={{ fontSize: 11.5, fontWeight: 700, color: "#a05f10" }}>not booked</span>}
+              </div>
+              <div style={{ display: "flex", gap: 8, alignItems: "center", background: isPaid(i) ? "#eef8f1" : "#f7f9fc", border: "1px solid " + (isPaid(i) ? "#bfe3ca" : "#e6e9ef"), borderRadius: 10, padding: "6px 10px", margin: "-4px 0 10px" }}>
+                <span style={{ ...lbl, marginBottom: 0, whiteSpace: "nowrap", minWidth: 96 }}>Payment</span>
+                <span style={{ width: 110, flex: "none" }}>
+                  <PillSelect value={i.paymentType || ""} options={PAYMENT_TYPES} placeholder="Type" tone={isPaid(i) ? "#28713e" : NAVY} onChange={(v) => setInv(i.id, (t) => (t.paymentType = v))} />
+                </span>
+                <span style={{ ...lbl, marginBottom: 0, marginLeft: 6 }}>Paid</span>
+                <input type="date" value={i.paymentDate || ""} title="Date paid — leave blank while it's still owed" style={{ ...pill, width: 130, padding: "3px 8px", color: i.paymentDate ? "#28713e" : "#5a6a85" }}
+                  onChange={(e) => { const v = e.target.value; setInv(i.id, (t) => (t.paymentDate = v)); }} />
+                <span style={{ flex: 1 }} />
+                <span style={{ fontSize: 11.5, fontWeight: 700, color: isPaid(i) ? "#28713e" : "#a05f10" }}>{isPaid(i) ? "paid" : "owed"}</span>
               </div>
               <span style={lbl}>{s ? "Deliver to (site)" : isCollectionJob(i) ? "Customer collects" : "Deliver to (invoice address)"}</span>
               <div style={{ fontSize: 13, fontWeight: 600, color: NAVY, lineHeight: 1.5, marginBottom: 4 }}>
