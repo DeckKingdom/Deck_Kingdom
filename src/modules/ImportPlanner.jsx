@@ -41,7 +41,7 @@ import ActivityScreen from "./crm/ActivityScreen.jsx";
 import StockScreen from "./crm/StockScreen.jsx";
 import CollectionsScreen from "./crm/CollectionsScreen.jsx";
 import VansScreen from "./crm/VansScreen.jsx";
-import { Icon } from "./crm/ui.jsx";
+import { Icon, SuggestInput } from "./crm/ui.jsx";
 import { EmailSettings } from "./crm/EmailPanels.jsx";
 import { emailReady } from "../data/email.js";
 
@@ -66,7 +66,8 @@ export default function ImportPlanner() {
       s.lines.splice(to < 0 ? s.lines.length : to, 0, l);
     });
   };
-  const [prodPop, setProdPop] = useState(null); // { productId, lineId, rect }: quick edit of a shipment line's product
+  const [prodPop, setProdPop] = useState(null);
+  const [prodDraft, setProdDraft] = useState({}); // lineId -> text being typed in a line's product box // { productId, lineId, rect }: quick edit of a shipment line's product
   const [loadError, setLoadError] = useState(false);
   const [copyPanel, setCopyPanel] = useState(null);
   const [copied, setCopied] = useState(false);
@@ -1672,18 +1673,38 @@ export default function ImportPlanner() {
                           </td>
                           <td style={td}>
                             <div style={{ display: "flex", gap: 6, alignItems: "stretch" }}>
-                              <select value={l.productId} style={{ ...inp, flex: 1, minWidth: 0 }} title={p ? p.name : ""}
-                                onChange={(e) => {
-                                  if (e.target.value === "__new") return setProdPop({ mode: "new", lineId: l.id, rect: e.currentTarget.getBoundingClientRect(), draft: {} });
-                                  setLine(l.id, "productId", e.target.value);
-                                }}>
-                                {lineOptions(l, (active.supplier || "").trim()).map((pr) => (
-                                  <option key={pr.id} value={pr.id}>
-                                    {pr.name}
-                                  </option>
-                                ))}
-                                <option value="__new">+ New product…</option>
-                              </select>
+                              {(() => {
+                                // type to search, like the invoice line codes: name · code · colours
+                                const opts = [
+                                  ...lineOptions(l, (active.supplier || "").trim()).map((pr) => ({
+                                    value: "pid:" + pr.id, label: [pr.name, pr.code, (pr.colours || []).join(" ")].join(" "),
+                                    cells: [{ text: pr.name || "(no name)" }, { text: pr.code || "", style: { color: "#5a6a85", fontSize: 12 } }, { text: (pr.colours || []).join(", "), style: { color: "#8593a8", fontSize: 12 } }],
+                                  })),
+                                  { value: "pid:__new", label: "+ New product " + (prodDraft[l.id] || ""), // always offered, whatever's typed cells: [{ text: "+ New product…", style: { color: "#185FA5", fontWeight: 800 } }, { text: "" }, { text: "" }] },
+                                ];
+                                const typing = prodDraft[l.id] !== undefined;
+                                return (
+                                  <div style={{ flex: 1, minWidth: 0 }} data-prodbox={l.id}
+                                    onBlur={() => setTimeout(() => setProdDraft((d) => { if (d[l.id] === undefined) return d; const n = { ...d }; delete n[l.id]; return n; }), 200)}>
+                                    <SuggestInput options={opts} listWidth={620} cols="minmax(0,1fr) 150px 170px"
+                                      value={typing ? prodDraft[l.id] : p ? p.name : ""} title={p ? p.name : ""}
+                                      placeholder="Type to find a product…"
+                                      onChange={(v) => {
+                                        if (v === "pid:__new") {
+                                          const box = document.querySelector('[data-prodbox="' + l.id + '"]');
+                                          const typed = prodDraft[l.id];
+                                          setProdDraft((d) => { const n = { ...d }; delete n[l.id]; return n; });
+                                          return setProdPop({ mode: "new", lineId: l.id, rect: box ? box.getBoundingClientRect() : { left: 300, top: 300, bottom: 330 }, draft: { name: typed && typed !== (p && p.name) ? typed : "" } });
+                                        }
+                                        if (String(v).startsWith("pid:")) { // picked from the list
+                                          setProdDraft((d) => { const n = { ...d }; delete n[l.id]; return n; });
+                                          return setLine(l.id, "productId", String(v).slice(4));
+                                        }
+                                        setProdDraft((d) => ({ ...d, [l.id]: v }));
+                                      }} />
+                                  </div>
+                                );
+                              })()}
                               {p && (
                                 <button type="button" className="no-print" title="Edit this product's description and pallet qty"
                                   onClick={(e) => setProdPop({ productId: p.id, lineId: l.id, rect: e.currentTarget.getBoundingClientRect() })}
