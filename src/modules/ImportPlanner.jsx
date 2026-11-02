@@ -54,6 +54,18 @@ export default function ImportPlanner() {
   const [sideOpen, setSideOpen] = useState(() => (typeof window === "undefined" ? true : window.innerWidth >= 950));
   const [saveState, setSaveState] = useState("");
   const [pop, setPop] = useState(null);
+  const [dragLine, setDragLine] = useState(null); // shipment line being dragged to a new place
+  const [overLine, setOverLine] = useState(null);
+  const moveLine = (fromId, toId) => {
+    if (!fromId || fromId === toId) return;
+    updateShipment((s) => {
+      const from = s.lines.findIndex((x) => x.id === fromId);
+      if (from < 0) return;
+      const [l] = s.lines.splice(from, 1);
+      const to = toId ? s.lines.findIndex((x) => x.id === toId) : -1;
+      s.lines.splice(to < 0 ? s.lines.length : to, 0, l);
+    });
+  };
   const [prodPop, setProdPop] = useState(null); // { productId, lineId, rect }: quick edit of a shipment line's product
   const [loadError, setLoadError] = useState(false);
   const [copyPanel, setCopyPanel] = useState(null);
@@ -1568,6 +1580,7 @@ export default function ImportPlanner() {
                 <table className="dk-sticky-table" style={{ width: "100%", borderCollapse: "collapse", minWidth: 1100 }}>
                   <thead>
                     <tr>
+                      <th style={{ ...th, width: 22, padding: 0 }}></th>
                       <th style={{ ...th, width: "34%", minWidth: 340 }}>Product</th>
                       <th style={{ ...th, width: "11%" }}>Colour</th>
                       <th style={{ ...th, width: "8%", textAlign: "right" }}>Pallets / Cartons</th>
@@ -1585,7 +1598,17 @@ export default function ImportPlanner() {
                       const p = data.products.find((x) => x.id === l.productId);
                       const c = lineCalc(l);
                       return (
-                        <tr key={l.id}>
+                        <tr key={l.id}
+                          onDragOver={(e) => { if (dragLine && dragLine !== l.id) { e.preventDefault(); if (overLine !== l.id) setOverLine(l.id); } }}
+                          onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setOverLine((x) => (x === l.id ? null : x)); }}
+                          onDrop={(e) => { e.preventDefault(); moveLine(dragLine, l.id); setDragLine(null); setOverLine(null); }}
+                          style={{ opacity: dragLine === l.id ? 0.4 : 1, boxShadow: overLine === l.id ? "inset 0 3px 0 " + GOLD : "none" }}>
+                          <td style={{ ...td, padding: "0 2px", width: 22 }}>
+                            <span draggable className="no-print" title="Drag to move this line"
+                              onDragStart={(e) => { e.dataTransfer.setData("text/plain", l.id); e.dataTransfer.effectAllowed = "move"; setDragLine(l.id); }}
+                              onDragEnd={() => { setDragLine(null); setOverLine(null); }}
+                              style={{ cursor: "grab", color: "#aab3c2", fontSize: 14, lineHeight: 1, padding: "6px 2px", userSelect: "none", display: "inline-block" }}>⋮⋮</span>
+                          </td>
                           <td style={td}>
                             <div style={{ display: "flex", gap: 6, alignItems: "stretch" }}>
                               <select value={l.productId} onChange={(e) => setLine(l.id, "productId", e.target.value)} style={{ ...inp, flex: 1, minWidth: 0 }} title={p ? p.name : ""}>
@@ -1663,8 +1686,8 @@ export default function ImportPlanner() {
                         </tr>
                       );
                     })}
-                    <tr>
-                      <td colSpan={10} style={{ padding: "10px 8px" }}>
+                    <tr onDragOver={(e) => { if (dragLine) e.preventDefault(); }} onDrop={(e) => { e.preventDefault(); moveLine(dragLine, null); setDragLine(null); setOverLine(null); }}>
+                      <td colSpan={11} style={{ padding: "10px 8px" }}>
                         <button onClick={addLine} style={{ ...btn, border: "1px dashed #b9c2d0", width: "100%" }}>
                           + Add line
                         </button>
