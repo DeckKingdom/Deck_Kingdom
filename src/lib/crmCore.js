@@ -620,7 +620,8 @@ export const suggestCode = (name, supplierKey = "DK") => {
 export const codeFollowsName = (p, newName, supplierKey) => {
   const key = supplierKey || codeSource(p.code) || "DK";
   const cur = cleanCode(p.code);
-  const auto = !cur || cur === key || cur === key + "/" || cur === suggestCode(p.name, key);
+  // blank, just a prefix ("DK/", "DK/2.4/") or still the one made from the old description → keep it in step
+  const auto = !cur || cur === key || cur.endsWith("/") || cur === suggestCode(p.name, key);
   return auto ? suggestCode(newName, key) || cur : cur;
 };
 
