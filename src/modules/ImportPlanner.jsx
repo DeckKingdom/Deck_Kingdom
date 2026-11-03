@@ -745,7 +745,6 @@ export default function ImportPlanner() {
       ["Status", active.status],
       ["Planned order date", active.orderDate ? prettyDate(active.orderDate) : "—"],
       ["Expected delivery", active.orderDate ? prettyDate(addMonths(active.orderDate, 3)) : "—"],
-      ["Expected balance", active.orderDate ? prettyDate(addDays(addMonths(active.orderDate, 3), 30)) : "—"],
       [],
       ["Product", "Colour", "Pallets / Cartons", "Qty per Pallet / Carton", "Total pieces", "Weight per piece (kg)", "Line weight (kg)", "Cost per piece (USD)", "Line total (USD)"],
     ];
