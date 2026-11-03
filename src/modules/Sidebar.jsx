@@ -79,16 +79,19 @@ export default function Sidebar({ tab, setTab, open, footer, onNew, onToggle }) 
           DK
         </div>
         {open && (
-          <div style={{ minWidth: 0, flex: 1, overflow: "hidden" }}>
-            <div style={{ color: "#fff", fontWeight: 700, fontSize: 14.5, lineHeight: 1.15, whiteSpace: "nowrap" }}>Deck Kingdom</div>
-            <div style={{ color: GOLD, fontSize: 12, fontWeight: 700 }}>Ops</div>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ color: "#fff", fontWeight: 700, fontSize: 15, lineHeight: 1.15, whiteSpace: "nowrap" }}>Deck Kingdom</div>
+            {/* the menu button sits on the "Ops" line so it never covers the name */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", height: 20 }}>
+              <span style={{ color: GOLD, fontSize: 12, fontWeight: 700 }}>Ops</span>
+              {onToggle && (
+                <button onClick={onToggle} title="Collapse the menu"
+                  style={{ width: 26, height: 20, borderRadius: 6, border: "1px solid #33466b", background: "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0, flex: "none" }}>
+                  <Icon name="menu" size={13} stroke="#cfd6e4" />
+                </button>
+              )}
+            </div>
           </div>
-        )}
-        {open && onToggle && (
-          <button onClick={onToggle} title="Collapse the menu"
-            style={{ width: 28, height: 28, borderRadius: 8, border: "1px solid #33466b", background: "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0, flex: "none" }}>
-            <Icon name="menu" size={15} stroke="#cfd6e4" />
-          </button>
         )}
       </div>
       {!open && onToggle && (
