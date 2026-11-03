@@ -765,6 +765,9 @@ export default function ImportPlanner() {
       return d;
     });
 
+  // balance falls due 30 days after the goods land: the real arrived date once entered, else the expected delivery
+  const balanceDate = (s) => addDays(s.arrivedDate || addMonths(s.orderDate, 3), 30);
+
   const productName = (id) => {
     const p = data.products.find((x) => x.id === id);
     return p ? p.name : "";
@@ -1431,7 +1434,7 @@ export default function ImportPlanner() {
                       <td style={{ ...td, whiteSpace: "nowrap", fontSize: 12, fontWeight: s.arrivedDate ? 700 : 400, color: s.arrivedDate ? undefined : "#9aa5b1" }}>
                         {prettyDate(s.arrivedDate)}
                       </td>
-                      <td style={{ ...td, whiteSpace: "nowrap", fontSize: 12 }}>{prettyDate(addDays(addMonths(s.orderDate, 3), 30))}</td>
+                      <td style={{ ...td, whiteSpace: "nowrap", fontSize: 12, fontWeight: s.arrivedDate ? 700 : 400 }} title={s.arrivedDate ? "30 days after it arrived" : "30 days after expected delivery"}>{prettyDate(balanceDate(s))}</td>
                       <td style={{ ...td, textAlign: "center" }}>
                         <button
                           onClick={() => duplicateShipment(s.id)}
@@ -1455,7 +1458,7 @@ export default function ImportPlanner() {
             </table>
           </div>
           <p style={{ fontSize: 12.5, color: "#5a6a85", marginTop: 10 }}>
-            Expected delivery is the planned order date plus a 3 month turnaround; expected balance is 30 days after delivery. Click a shipment name to open it.
+            Expected delivery is the planned order date plus a 3 month turnaround; expected balance is 30 days after delivery — or 30 days after the arrived date once that's entered. Click a shipment name to open it.
           </p>
           {pop &&
             (() => {
@@ -1734,7 +1737,7 @@ export default function ImportPlanner() {
                 </div>
                 <div style={{ textAlign: "right" }}>
                   <span style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#5a6a85", marginBottom: 2 }}>Expected balance</span>
-                  <span style={{ fontSize: 15, fontWeight: 700, whiteSpace: "nowrap" }}>{prettyDate(addDays(addMonths(active.orderDate, 3), 30))}</span>
+                  <span style={{ fontSize: 15, fontWeight: 700, whiteSpace: "nowrap" }} title={active.arrivedDate ? "30 days after it arrived" : "30 days after expected delivery"}>{prettyDate(balanceDate(active))}</span>
                 </div>
               </div>
 
