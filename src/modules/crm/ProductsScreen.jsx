@@ -11,6 +11,7 @@ import {
   tidyDescription, suggestDescription, codeFollowsName,
 } from "../../lib/crmCore.js";
 import { Icon, Chip, Modal, lbl, card, inp, btn, goldBtn, abtn } from "./ui.jsx";
+import { tidyPlan, applyTidy } from "../../lib/productTidy.js";
 
 const sel = { ...inp, padding: "5px 6px", fontSize: 12.5 };
 const numI = { ...inp, textAlign: "right", padding: "5px 7px", fontSize: 13 };
@@ -145,8 +146,62 @@ export default function ProductsScreen({ planner, update, crm, updateCrm, remove
   const th = { textAlign: "left", fontSize: 10.5, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", padding: "8px 8px", borderBottom: "2px solid #e6e9ef", whiteSpace: "nowrap", background: "#fff", position: "sticky", top: 0, zIndex: 2 };
   const td = { padding: "9px 8px", borderBottom: "1px solid #f0f2f6", verticalAlign: "middle" };
 
+  // the agreed product tidy-up: offered until it's been applied
+  const tidyLog = useMemo(() => tidyPlan(planner, crm), [planner.products, crm.skuLists]);
+  const [tidyOpen, setTidyOpen] = useState(false);
+  const [tidyDone, setTidyDone] = useState(0);
+  const runTidy = () => {
+    const r = applyTidy(planner, crm);
+    const gone = new Set(r.removedIds);
+    updateCrm((c) => {
+      c.skuLists = r.skuLists;
+      // merged-away products: stock rows with nothing in them go; any with stock move to the product they merged into
+      c.masterProducts = (c.masterProducts || []).flatMap((m) => {
+        if (!gone.has(m.importProductId)) return [m];
+        if (!(Number(m.stock) > 0)) return [];
+        return [{ ...m, importProductId: r.mergeInto[m.importProductId] }];
+      });
+      return c;
+    });
+    update((d) => {
+      d.products = r.products;
+      (d.shipments || []).forEach((sh) => (sh.lines || []).forEach((l) => { if (gone.has(l.productId)) l.productId = r.mergeInto[l.productId]; }));
+      return d;
+    });
+    setTidyDone(tidyLog.length);
+    setTidyOpen(false);
+  };
+
   return (
     <div style={{ padding: "18px 22px", maxWidth: 1500, margin: "0 auto" }}>
+      {tidyLog.length > 0 && (
+        <div style={{ ...card, display: "flex", alignItems: "center", gap: 12, background: "#eef5ff", borderColor: "#bcd3f2", marginBottom: 10 }}>
+          <Icon name="refresh" stroke="#185FA5" />
+          <span style={{ flex: 1, fontSize: 13.5, fontWeight: 600, color: NAVY }}>
+            The product tidy-up you agreed is ready — {tidyLog.length} changes: duplicates merged, 6ft fencing on 1.83m, screens filed under Screens, retro kits set as kits, one name per product.
+          </span>
+          <button style={goldBtn} onClick={() => setTidyOpen(true)}>Review &amp; apply</button>
+        </div>
+      )}
+      {tidyDone > 0 && tidyLog.length === 0 && (
+        <div style={{ ...card, background: "#eef8f1", borderColor: "#bfe3ca", fontSize: 13.5, fontWeight: 700, color: "#28713e", marginBottom: 10 }}>
+          Tidy-up applied — {tidyDone} changes. Stock codes are being updated; stock history and invoices move with them.
+        </div>
+      )}
+      {tidyOpen && (
+        <Modal title={"Product tidy-up · " + tidyLog.length + " changes"} onClose={() => setTidyOpen(false)} width={760}>
+          <div style={{ maxHeight: "55vh", overflowY: "auto", border: "1px solid #e6e9ef", borderRadius: 10, padding: "6px 12px" }}>
+            {tidyLog.map((l, k) => (
+              <div key={k} style={{ fontSize: 12.5, fontWeight: 600, color: NAVY, padding: "5px 0", borderBottom: "1px solid #f0f2f6" }}>{l}</div>
+            ))}
+          </div>
+          <p style={{ fontSize: 12.5, color: "#5a6a85", fontWeight: 600 }}>Merged-away products had no stock or invoices. Take a Backup first if you'd like a copy of how things are now.</p>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+            <button style={btn} onClick={() => setTidyOpen(false)}>Not now</button>
+            <button style={goldBtn} onClick={runTidy}>Apply {tidyLog.length} changes</button>
+          </div>
+        </Modal>
+      )}
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 10, position: "sticky", top: headerH, zIndex: 16, background: "#f3f5f8", padding: "8px 0" }}>
         <h2 style={{ fontSize: 19, fontWeight: 700, margin: 0 }}>Products</h2>
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, code, SKU, colour…" style={{ ...inp, width: 240, maxWidth: "100%" }} />
