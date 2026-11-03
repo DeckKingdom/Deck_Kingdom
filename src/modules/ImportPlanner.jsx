@@ -89,6 +89,7 @@ export default function ImportPlanner() {
   const [copyPanel, setCopyPanel] = useState(null);
   const [copied, setCopied] = useState(false);
   const [confirmBox, setConfirmBox] = useState(null);
+  const [priceReview, setPriceReview] = useState(false);
   const [pinHash, setPinHash] = useState(null);
   const [locked, setLocked] = useState(false);
   const [pinEntry, setPinEntry] = useState("");
@@ -683,7 +684,7 @@ export default function ImportPlanner() {
   };
 
   const setLine = (lineId, field, value) =>
-    updateShipment((s) => {
+    updateShipment((s, d) => {
       const l = s.lines.find((x) => x.id === lineId);
       if (!l) return;
       if (field === "productId") {
@@ -697,6 +698,11 @@ export default function ImportPlanner() {
         }
       } else if (field === "pallets" || field === "qty" || field === "cost" || field === "weight") {
         l[field] = value === "" ? "" : Number(value);
+        // a real figure typed on a line becomes the product's default, so it fills in next time
+        if (field !== "pallets" && Number(value) > 0) {
+          const p = d.products.find((x) => x.id === l.productId);
+          if (p) p[field] = Number(value);
+        }
       } else {
         l[field] = value;
       }
@@ -944,6 +950,32 @@ export default function ImportPlanner() {
       const src = prodFilter.src;
       const sup = src ? (d.products.find((x) => codeSource(x.code) === src && x.supplier) || {}).supplier || "" : "";
       d.products.unshift({ id: uid(), code: src ? src + "/" : "", name: "", colours: [], qty: 0, cost: 0, weight: 0, cbm: 0, supplier: sup, category: "", salePrice: "", costGbp: "" });
+      return d;
+    });
+
+  // what past shipments say each product's $/pc (and qty/kg where blank) should be — latest order date wins
+  const pastPriceFixes = () => {
+    const seen = {};
+    const ships = data.shipments.map((s, i) => ({ s, i })).sort((a, b) => String(b.s.orderDate || "").localeCompare(String(a.s.orderDate || "")) || a.i - b.i);
+    ships.forEach(({ s }) => [...(s.lines || [])].reverse().forEach((l) => {
+      const k = l.productId; if (!k) return;
+      const r = (seen[k] = seen[k] || {});
+      ["cost", "qty", "weight"].forEach((f) => { if (r[f] === undefined && Number(l[f]) > 0) r[f] = { v: Number(l[f]), from: s.name }; });
+    }));
+    const out = [];
+    data.products.forEach((p) => {
+      const r = seen[p.id]; if (!r) return;
+      const ch = {};
+      if (r.cost && Number(p.cost) !== r.cost.v) ch.cost = r.cost;
+      if (r.qty && !(Number(p.qty) > 0)) ch.qty = r.qty;
+      if (r.weight && !(Number(p.weight) > 0)) ch.weight = r.weight;
+      if (Object.keys(ch).length) out.push({ p, ch });
+    });
+    return out;
+  };
+  const applyPastPrices = (fixes) =>
+    update((d) => {
+      fixes.forEach(({ p, ch }) => { const x = d.products.find((y) => y.id === p.id); if (x) Object.entries(ch).forEach(([f, r]) => { x[f] = r.v; }); });
       return d;
     });
 
@@ -1576,6 +1608,17 @@ export default function ImportPlanner() {
 
       {tab === "shipments" && (
         <div style={{ padding: "18px 22px", maxWidth: 1480, margin: "0 auto" }}>
+          {(() => {
+            const n = pastPriceFixes().length;
+            if (!n) return null;
+            return (
+              <div className="no-print" style={{ display: "flex", alignItems: "center", gap: 10, background: "#fff8e6", border: "1px solid #f3dc9c", borderRadius: 12, padding: "9px 14px", marginBottom: 12, fontSize: 13, fontWeight: 600, color: NAVY }}>
+                <span>{n} product{n === 1 ? "" : "s"} can take {n === 1 ? "its" : "their"} price from past shipments, so it fills in by itself next time.</span>
+                <span style={{ flex: 1 }} />
+                <button onClick={() => setPriceReview(true)} style={{ ...btn, background: GOLD, border: "1px solid " + GOLD, padding: "6px 14px" }}>Review & update</button>
+              </div>
+            );
+          })()}
           <div className="no-print" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 14 }}>
             {shipPicker()}
             <div style={{ flex: 1 }} />
@@ -1846,7 +1889,7 @@ export default function ImportPlanner() {
                 </table>
               </div>
               <p style={{ fontSize: 12.5, color: "#5a6a85", marginTop: 10 }}>
-                Picking a product pre-fills qty per pallet and cost from your product list — both stay editable per line. Everything saves automatically.
+                Picking a product pre-fills qty per pallet, $ / pc and kg from your product list. Changing them on a line updates the product too, so next time they fill in by themselves. Everything saves automatically.
               </p>
             </>
           )}
@@ -2378,6 +2421,43 @@ export default function ImportPlanner() {
           </div>
         </div>
       )}
+
+      {priceReview && (() => {
+        const fixes = pastPriceFixes();
+        const lab = { cost: "$ / pc", qty: "Qty / pallet", weight: "kg / pc" };
+        const cell = { padding: "7px 8px", borderBottom: "1px solid #eef1f5", fontSize: 13, textAlign: "left", verticalAlign: "top" };
+        const fmt = (f, v) => (v === "" || v === undefined || v === null || !(Number(v) > 0) ? "—" : f === "cost" ? "$" + Number(v) : String(Number(v)));
+        return (
+          <div onClick={() => setPriceReview(false)} style={{ position: "fixed", inset: 0, zIndex: 60, background: "rgba(11,31,63,0.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+            <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", borderRadius: 12, width: "100%", maxWidth: 820, maxHeight: "85vh", display: "flex", flexDirection: "column", padding: "18px 20px", fontFamily: "inherit" }}>
+              <b style={{ fontSize: 16, color: NAVY }}>Product prices from past shipments</b>
+              <p style={{ fontSize: 12.5, color: "#5a6a85", margin: "4px 0 10px" }}>
+                Each product takes its $ / pc from the most recent shipment it was on (by order date). Qty / pallet and kg / pc are only filled where the product has none. From now on, typing a figure on a shipment line updates the product too.
+              </p>
+              <div style={{ overflowY: "auto", flex: 1 }}>
+                {fixes.length ? (
+                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                    <thead><tr>{["Product", "Change", "From"].map((h) => <th key={h} style={{ ...cell, fontSize: 11, color: "#8593a8", textTransform: "uppercase", letterSpacing: 0.4 }}>{h}</th>)}</tr></thead>
+                    <tbody>
+                      {fixes.map(({ p, ch }) => (
+                        <tr key={p.id}>
+                          <td style={{ ...cell, fontWeight: 700, color: NAVY }}>{p.name || p.code}<div style={{ fontSize: 11.5, fontWeight: 600, color: "#8593a8" }}>{[p.code, p.supplier].filter(Boolean).join(" · ")}</div></td>
+                          <td style={cell}>{Object.entries(ch).map(([f, r]) => <div key={f}><span style={{ color: "#8593a8" }}>{lab[f]}</span> {fmt(f, p[f])} → <b>{fmt(f, r.v)}</b></div>)}</td>
+                          <td style={{ ...cell, color: "#5a6a85" }}>{[...new Set(Object.values(ch).map((r) => r.from))].join(", ")}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : <p style={{ fontSize: 13.5 }}>All products already match their latest shipment.</p>}
+              </div>
+              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 12 }}>
+                <button onClick={() => setPriceReview(false)} style={btn}>Cancel</button>
+                {fixes.length > 0 && <button onClick={() => { applyPastPrices(fixes); setPriceReview(false); }} style={{ ...btn, background: GOLD, border: "1px solid " + GOLD }}>Update {fixes.length} product{fixes.length === 1 ? "" : "s"}</button>}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {confirmBox && (
         <div
