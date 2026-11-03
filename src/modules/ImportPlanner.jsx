@@ -42,11 +42,22 @@ import ActivityScreen from "./crm/ActivityScreen.jsx";
 import StockScreen from "./crm/StockScreen.jsx";
 import CollectionsScreen from "./crm/CollectionsScreen.jsx";
 import VansScreen from "./crm/VansScreen.jsx";
-import { Icon, SuggestInput } from "./crm/ui.jsx";
+import { Icon, SuggestInput, abtn } from "./crm/ui.jsx";
 import { EmailSettings } from "./crm/EmailPanels.jsx";
 import { emailReady } from "../data/email.js";
 
 const CRM_TABS = ["customers", "samples", "quotes", "invoices", "schedule"];
+
+// shipment lines left blank ($ / pc, qty, kg at 0) take the product's current figure; never overwrites a typed one
+const fillBlankLines = (d) => {
+  let n = 0;
+  d.shipments.forEach((s) => (s.lines || []).forEach((l) => {
+    const p = d.products.find((x) => x.id === l.productId);
+    if (!p) return;
+    ["cost", "qty", "weight"].forEach((f) => { if (!(Number(l[f]) > 0) && Number(p[f]) > 0) { l[f] = Number(p[f]); n++; } });
+  }));
+  return n;
+};
 
 export default function ImportPlanner() {
   const [data, setData] = useState(null);
@@ -533,6 +544,17 @@ export default function ImportPlanner() {
       </div>
     );
 
+  const linesFilled = useRef(false);
+  useEffect(() => {
+    if (linesFilled.current || !loaded.current || !data || !data.shipments) return;
+    linesFilled.current = true;
+    const copy = JSON.parse(JSON.stringify(data));
+    if (fillBlankLines(copy)) {
+      dirty.current = true;
+      setData((d0) => { const d = JSON.parse(JSON.stringify(d0)); fillBlankLines(d); return d; });
+    }
+  }, [data]);
+
   if (!data)
     return (
       <div style={{ fontFamily: "Quicksand, sans-serif", padding: 40, textAlign: "center", color: NAVY }}>
@@ -546,23 +568,23 @@ export default function ImportPlanner() {
   const shipPicker = () => {
     const list = data.shipments;
     const i = active ? list.findIndex((s) => s.id === active.id) : -1;
-    const step = (d) => { const n = list[i + d]; if (n) setActiveId(n.id); };
-    const arrow = (d, dis) => (
-      <button type="button" onClick={() => step(d)} disabled={dis}
-        title={dis ? "" : (d < 0 ? "Previous: " : "Next: ") + list[i + d].name}
-        style={{ fontFamily: "inherit", width: 36, height: 36, borderRadius: 8, border: "1px solid #d5dbe5", background: "#fff",
-          color: dis ? "#c3cad6" : "#1f2d45", cursor: dis ? "default" : "pointer", fontSize: 18, fontWeight: 700, lineHeight: 1, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
-        {d < 0 ? "‹" : "›"}
-      </button>
-    );
+    const arrow = (d) => {
+      const x = i >= 0 ? list[i + d] : null;
+      return (
+        <button type="button" style={{ ...abtn, width: 36, height: 36, opacity: x ? 1 : 0.4, cursor: x ? "pointer" : "default" }} disabled={!x} onClick={() => x && setActiveId(x.id)}
+          title={x ? (d < 0 ? "Previous: " : "Next: ") + x.name : d < 0 ? "First shipment" : "Last shipment"}>
+          <span style={{ display: "inline-flex", transform: d < 0 ? "rotate(90deg)" : "rotate(-90deg)" }}><Icon name="back" stroke={NAVY} /></span>
+        </button>
+      );
+    };
     return (
-      <div style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
-        {arrow(-1, i <= 0)}
+      <div style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
         <select value={active ? active.id : ""} onChange={(e) => setActiveId(e.target.value)} style={{ ...inp, width: "auto", minWidth: 220, fontWeight: 600 }}>
           {list.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
-        {arrow(1, i < 0 || i >= list.length - 1)}
-        {list.length > 1 && i >= 0 && <span style={{ fontSize: 12, color: "#7a879c", marginLeft: 2 }}>{i + 1} of {list.length}</span>}
+        {arrow(-1)}
+        {arrow(1)}
+        {i >= 0 && <span style={{ fontSize: 12, fontWeight: 700, color: "#8593a8" }}>{i + 1} of {list.length}</span>}
       </div>
     );
   };
@@ -976,8 +998,10 @@ export default function ImportPlanner() {
   const applyPastPrices = (fixes) =>
     update((d) => {
       fixes.forEach(({ p, ch }) => { const x = d.products.find((y) => y.id === p.id); if (x) Object.entries(ch).forEach(([f, r]) => { x[f] = r.v; }); });
+      fillBlankLines(d);
       return d;
     });
+
 
   const setProduct = (pid, field, value) =>
     update((d) => {
