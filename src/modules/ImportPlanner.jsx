@@ -101,6 +101,7 @@ export default function ImportPlanner() {
   const [copied, setCopied] = useState(false);
   const [confirmBox, setConfirmBox] = useState(null);
   const [priceReview, setPriceReview] = useState(false);
+  const [lineRefresh, setLineRefresh] = useState(null); // { skip: Set of line ids }
   const [pinHash, setPinHash] = useState(null);
   const [locked, setLocked] = useState(false);
   const [pinEntry, setPinEntry] = useState("");
@@ -988,7 +989,7 @@ export default function ImportPlanner() {
     data.products.forEach((p) => {
       const r = seen[p.id]; if (!r) return;
       const ch = {};
-      if (r.cost && Number(p.cost) !== r.cost.v) ch.cost = r.cost;
+      if (r.cost && !(Number(p.cost) > 0)) ch.cost = r.cost;
       if (r.qty && !(Number(p.qty) > 0)) ch.qty = r.qty;
       if (r.weight && !(Number(p.weight) > 0)) ch.weight = r.weight;
       if (Object.keys(ch).length) out.push({ p, ch });
@@ -1646,6 +1647,8 @@ export default function ImportPlanner() {
           <div className="no-print" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 14 }}>
             {shipPicker()}
             <div style={{ flex: 1 }} />
+            <button onClick={() => setLineRefresh({ skip: new Set() })} style={btn} disabled={!active}
+              title="Compare this shipment's lines with the products' current $ / pc, qty / pallet and kg / pc">↻ Refresh prices</button>
             <button onClick={addShipment} style={btn}>+ New</button>
             <button onClick={() => active && duplicateShipment(active.id)} style={btn} disabled={!active}>Duplicate</button>
             <button onClick={deleteShipment} style={{ ...btn, color: RED, borderColor: "#ecc4cb" }} disabled={!active}>
@@ -2446,6 +2449,57 @@ export default function ImportPlanner() {
         </div>
       )}
 
+      {lineRefresh && active && (() => {
+        const lab = { cost: "$ / pc", qty: "Qty / pallet", weight: "kg / pc" };
+        const diffs = (active.lines || []).map((l) => {
+          const p = data.products.find((x) => x.id === l.productId);
+          if (!p) return null;
+          const ch = {};
+          ["cost", "qty", "weight"].forEach((f) => { if (Number(p[f]) > 0 && Number(l[f]) !== Number(p[f])) ch[f] = { from: l[f], to: Number(p[f]) }; });
+          return Object.keys(ch).length ? { l, p, ch } : null;
+        }).filter(Boolean);
+        const picked = diffs.filter((x) => !lineRefresh.skip.has(x.l.id));
+        const cell = { padding: "7px 8px", borderBottom: "1px solid #eef1f5", fontSize: 13, textAlign: "left", verticalAlign: "top" };
+        const fmt = (f, v) => (!(Number(v) > 0) ? "—" : f === "cost" ? "$" + Number(v) : String(Number(v)));
+        const flip = (id) => setLineRefresh((r) => { const k = new Set(r.skip); k.has(id) ? k.delete(id) : k.add(id); return { skip: k }; });
+        return (
+          <div onClick={() => setLineRefresh(null)} style={{ position: "fixed", inset: 0, zIndex: 60, background: "rgba(11,31,63,0.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+            <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", borderRadius: 12, width: "100%", maxWidth: 860, maxHeight: "85vh", display: "flex", flexDirection: "column", padding: "18px 20px", fontFamily: "inherit" }}>
+              <b style={{ fontSize: 16, color: NAVY }}>Refresh {active.name} from current product prices</b>
+              <p style={{ fontSize: 12.5, color: "#5a6a85", margin: "4px 0 10px" }}>
+                Lines whose $ / pc, qty / pallet or kg / pc differ from the product. Untick any line you want to keep as it is.
+              </p>
+              <div style={{ overflowY: "auto", flex: 1 }}>
+                {diffs.length ? (
+                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                    <thead><tr>{["", "Line", "Colour", "Change"].map((h, i) => <th key={i} style={{ ...cell, fontSize: 11, color: "#8593a8", textTransform: "uppercase", letterSpacing: 0.4 }}>{h}</th>)}</tr></thead>
+                    <tbody>
+                      {diffs.map(({ l, p, ch }) => (
+                        <tr key={l.id} onClick={() => flip(l.id)} style={{ cursor: "pointer", opacity: lineRefresh.skip.has(l.id) ? 0.45 : 1 }}>
+                          <td style={{ ...cell, width: 24 }}><input type="checkbox" readOnly checked={!lineRefresh.skip.has(l.id)} /></td>
+                          <td style={{ ...cell, fontWeight: 700, color: NAVY }}>{p.name || p.code}</td>
+                          <td style={{ ...cell, color: "#5a6a85" }}>{l.colour || "—"}</td>
+                          <td style={cell}>{Object.entries(ch).map(([f, r]) => <div key={f}><span style={{ color: "#8593a8" }}>{lab[f]}</span> {fmt(f, r.from)} → <b>{fmt(f, r.to)}</b></div>)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : <p style={{ fontSize: 13.5 }}>Every line already matches its product.</p>}
+              </div>
+              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 12 }}>
+                <button onClick={() => setLineRefresh(null)} style={btn}>{diffs.length ? "Cancel" : "Close"}</button>
+                {diffs.length > 0 && (
+                  <button disabled={!picked.length} onClick={() => {
+                    updateShipment((sh) => picked.forEach(({ l, ch }) => { const x = sh.lines.find((y) => y.id === l.id); if (x) Object.entries(ch).forEach(([f, r]) => { x[f] = r.to; }); }));
+                    setLineRefresh(null);
+                  }} style={{ ...btn, background: GOLD, border: "1px solid " + GOLD }}>Update {picked.length} line{picked.length === 1 ? "" : "s"}</button>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {priceReview && (() => {
         const fixes = pastPriceFixes();
         const lab = { cost: "$ / pc", qty: "Qty / pallet", weight: "kg / pc" };
@@ -2456,7 +2510,7 @@ export default function ImportPlanner() {
             <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", borderRadius: 12, width: "100%", maxWidth: 820, maxHeight: "85vh", display: "flex", flexDirection: "column", padding: "18px 20px", fontFamily: "inherit" }}>
               <b style={{ fontSize: 16, color: NAVY }}>Product prices from past shipments</b>
               <p style={{ fontSize: 12.5, color: "#5a6a85", margin: "4px 0 10px" }}>
-                Each product takes its $ / pc from the most recent shipment it was on (by order date). Qty / pallet and kg / pc are only filled where the product has none. From now on, typing a figure on a shipment line updates the product too.
+                Products with no figures take them from the most recent shipment they were on (by order date). A figure already on the product is never changed. From now on, typing a figure on a shipment line updates the product too.
               </p>
               <div style={{ overflowY: "auto", flex: 1 }}>
                 {fixes.length ? (
