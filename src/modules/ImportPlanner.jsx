@@ -541,6 +541,30 @@ export default function ImportPlanner() {
     );
 
   const active = data.shipments.find((s) => s.id === activeId) || data.shipments[0];
+  // shipment picker with ‹ › arrows to step through the records (same order as the list)
+  const shipPicker = () => {
+    const list = data.shipments;
+    const i = active ? list.findIndex((s) => s.id === active.id) : -1;
+    const step = (d) => { const n = list[i + d]; if (n) setActiveId(n.id); };
+    const arrow = (d, dis) => (
+      <button type="button" onClick={() => step(d)} disabled={dis}
+        title={dis ? "" : (d < 0 ? "Previous: " : "Next: ") + list[i + d].name}
+        style={{ fontFamily: "inherit", width: 36, height: 36, borderRadius: 8, border: "1px solid #d5dbe5", background: "#fff",
+          color: dis ? "#c3cad6" : "#1f2d45", cursor: dis ? "default" : "pointer", fontSize: 18, fontWeight: 700, lineHeight: 1, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+        {d < 0 ? "‹" : "›"}
+      </button>
+    );
+    return (
+      <div style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+        {arrow(-1, i <= 0)}
+        <select value={active ? active.id : ""} onChange={(e) => setActiveId(e.target.value)} style={{ ...inp, width: "auto", minWidth: 220, fontWeight: 600 }}>
+          {list.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+        </select>
+        {arrow(1, i < 0 || i >= list.length - 1)}
+        {list.length > 1 && i >= 0 && <span style={{ fontSize: 12, color: "#7a879c", marginLeft: 2 }}>{i + 1} of {list.length}</span>}
+      </div>
+    );
+  };
 
   const update = (fn) => {
     dirty.current = true;
@@ -1553,17 +1577,7 @@ export default function ImportPlanner() {
       {tab === "shipments" && (
         <div style={{ padding: "18px 22px", maxWidth: 1480, margin: "0 auto" }}>
           <div className="no-print" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 14 }}>
-            <select
-              value={active ? active.id : ""}
-              onChange={(e) => setActiveId(e.target.value)}
-              style={{ ...inp, width: "auto", minWidth: 220, fontWeight: 600 }}
-            >
-              {data.shipments.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
+            {shipPicker()}
             <div style={{ flex: 1 }} />
             <button onClick={addShipment} style={btn}>+ New</button>
             <button onClick={() => active && duplicateShipment(active.id)} style={btn} disabled={!active}>Duplicate</button>
@@ -1842,17 +1856,7 @@ export default function ImportPlanner() {
       {tab === "completion" && (
         <div style={{ padding: "18px 22px", maxWidth: 720, margin: "0 auto" }}>
           <div className="no-print" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 10, position: "sticky", top: headerH, zIndex: 16, background: "#f3f5f8", padding: "8px 0" }}>
-            <select
-              value={active ? active.id : ""}
-              onChange={(e) => setActiveId(e.target.value)}
-              style={{ ...inp, width: "auto", minWidth: 220, fontWeight: 600 }}
-            >
-              {data.shipments.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
+            {shipPicker()}
           </div>
           {active &&
             (() => {
@@ -2088,17 +2092,7 @@ export default function ImportPlanner() {
       {tab === "landed" && (
         <div style={{ padding: "18px 22px", maxWidth: 1000, margin: "0 auto" }}>
           <div className="no-print" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 10, position: "sticky", top: headerH, zIndex: 16, background: "#f3f5f8", padding: "8px 0" }}>
-            <select
-              value={active ? active.id : ""}
-              onChange={(e) => setActiveId(e.target.value)}
-              style={{ ...inp, width: "auto", minWidth: 220, fontWeight: 600 }}
-            >
-              {data.shipments.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
+            {shipPicker()}
           </div>
           {active &&
             (() => {
