@@ -163,6 +163,7 @@ export default function ImportPlanner() {
         if (s.supplier === undefined) s.supplier = "";
         if (s.depositDate === undefined) s.depositDate = "";
         if (s.balancePaidDate === undefined) s.balancePaidDate = "";
+        if (s.balanceDue === undefined) s.balanceDue = "";
         if (s.surchargeOn === undefined) s.surchargeOn = true;
         if (s.arrivedDate === undefined) s.arrivedDate = "";
         if (s.etaDate === undefined) s.etaDate = "";
@@ -633,6 +634,7 @@ export default function ImportPlanner() {
     copy.lines = copy.lines.map((l) => ({ ...l, id: uid() }));
     copy.depositDate = "";
     copy.balancePaidDate = "";
+    copy.balanceDue = "";
     copy.arrivedDate = "";
     copy.etaDate = "";
     copy.valueUsd = "";
@@ -768,7 +770,24 @@ export default function ImportPlanner() {
   // balance falls due 30 days after the goods land: the real arrived date once entered, else the expected delivery.
   // Shipments already marked Paid keep the date they had.
   const balanceFromArrival = (s) => !!s.arrivedDate && s.status !== "Paid";
-  const balanceDate = (s) => addDays(balanceFromArrival(s) ? s.arrivedDate : addMonths(s.orderDate, 3), 30);
+  const autoBalanceDate = (s) => addDays(balanceFromArrival(s) ? s.arrivedDate : addMonths(s.orderDate, 3), 30);
+  // a date typed in (balanceDue) wins; clear it to go back to the automatic one
+  const balanceDate = (s) => s.balanceDue || autoBalanceDate(s);
+  const balanceInput = (s, big) => {
+    const manual = !!s.balanceDue;
+    return (
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+        <input type="date" value={balanceDate(s) || ""} onChange={(e) => setShipmentField(s.id, "balanceDue", e.target.value)}
+          title={manual ? "Set by hand — the automatic date would be " + prettyDate(autoBalanceDate(s)) : balanceFromArrival(s) ? "Automatic: 30 days after it arrived. Change it to set your own." : "Automatic: 30 days after expected delivery. Change it to set your own."}
+          style={{ ...inp, width: "auto", fontSize: big ? 14 : 12, padding: big ? undefined : "6px 6px", fontWeight: manual || balanceFromArrival(s) ? 700 : 400,
+            ...(manual ? { borderColor: GOLD, background: "#fff8e6" } : {}) }} />
+        {manual && (
+          <button type="button" onClick={() => setShipmentField(s.id, "balanceDue", "")} title={"Back to automatic (" + prettyDate(autoBalanceDate(s)) + ")"}
+            style={{ fontFamily: "inherit", border: "none", background: "none", cursor: "pointer", color: "#8593a8", fontSize: 15, padding: 2, lineHeight: 1 }}>↺</button>
+        )}
+      </span>
+    );
+  };
 
   const productName = (id) => {
     const p = data.products.find((x) => x.id === id);
@@ -1436,7 +1455,7 @@ export default function ImportPlanner() {
                       <td style={{ ...td, whiteSpace: "nowrap", fontSize: 12, fontWeight: s.arrivedDate ? 700 : 400, color: s.arrivedDate ? undefined : "#9aa5b1" }}>
                         {prettyDate(s.arrivedDate)}
                       </td>
-                      <td style={{ ...td, whiteSpace: "nowrap", fontSize: 12, fontWeight: balanceFromArrival(s) ? 700 : 400 }} title={balanceFromArrival(s) ? "30 days after it arrived" : "30 days after expected delivery"}>{prettyDate(balanceDate(s))}</td>
+                      <td style={{ ...td, whiteSpace: "nowrap" }}>{balanceInput(s, false)}</td>
                       <td style={{ ...td, textAlign: "center" }}>
                         <button
                           onClick={() => duplicateShipment(s.id)}
@@ -1460,7 +1479,7 @@ export default function ImportPlanner() {
             </table>
           </div>
           <p style={{ fontSize: 12.5, color: "#5a6a85", marginTop: 10 }}>
-            Expected delivery is the planned order date plus a 3 month turnaround; expected balance is 30 days after delivery — or 30 days after the arrived date once that's entered (paid shipments keep their original date). Click a shipment name to open it.
+            Expected delivery is the planned order date plus a 3 month turnaround; expected balance is 30 days after delivery — or 30 days after the arrived date once that's entered (paid shipments keep their original date). Type your own balance date to override it; ↺ puts it back. Click a shipment name to open it.
           </p>
           {pop &&
             (() => {
@@ -1739,7 +1758,7 @@ export default function ImportPlanner() {
                 </div>
                 <div style={{ textAlign: "right" }}>
                   <span style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#5a6a85", marginBottom: 2 }}>Expected balance</span>
-                  <span style={{ fontSize: 15, fontWeight: 700, whiteSpace: "nowrap" }} title={balanceFromArrival(active) ? "30 days after it arrived" : "30 days after expected delivery"}>{prettyDate(balanceDate(active))}</span>
+                  {balanceInput(active, true)}
                 </div>
               </div>
 
