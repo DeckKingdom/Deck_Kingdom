@@ -255,8 +255,8 @@ export default function ProductsScreen({ planner, update, crm, updateCrm, remove
               const p0 = g.p0;
               return (
                 <React.Fragment key={g.key}>
-                  <tr onClick={() => toggle(g.key)} style={{ cursor: "pointer", background: isOpen ? "#f3f6fb" : g.complete ? undefined : "#fff8e6" }}>
-                    <td style={{ ...td, fontWeight: 700, paddingLeft: nested ? 34 : td.padding.split(" ")[1] }}>
+                  <tr id={"pm-" + g.key} onClick={() => toggle(g.key)} style={{ cursor: "pointer", background: g.complete ? (isOpen ? "#f3f6fb" : undefined) : "#fff3d6" }}>
+                    <td style={{ ...td, fontWeight: 700, paddingLeft: nested ? 34 : td.padding.split(" ")[1], ...(g.complete ? {} : { boxShadow: "inset 4px 0 0 " + GOLD }) }}>
                       <span style={{ fontSize: 10, color: "#5a6a85", marginRight: 8 }}>{isOpen ? "▼" : "▶"}</span>
                       {g.name || <span style={{ color: "#aab3c2" }}>New product</span>}
 
@@ -414,13 +414,34 @@ export default function ProductsScreen({ planner, update, crm, updateCrm, remove
         <span style={{ flex: 1 }} />
         <button style={btn} onClick={() => setListsOpen(true)} title="The two-digit lists the SKUs are built from"><Icon name="gear" />SKU lists</button>
         <button style={goldBtn} onClick={addProduct}><Icon name="plus" stroke={NAVY} />New product</button>
+        {incomplete > 0 && (
+          <div style={{ ...card, flexBasis: "100%", margin: 0, borderColor: "#f0d0a8", background: "#fff8e6", padding: "9px 14px", boxShadow: "0 6px 10px -8px rgba(11,31,63,.3)", fontSize: 13, fontWeight: 600, color: "#6b5305" }}>
+            {incomplete === 1 ? "1 product still needs its" : incomplete + " products still need their"} SKU fields (supplier, length, category, sub-category, product) — highlighted and listed first. Their stock keeps its readable code until then.
+            {(() => {
+              const todo = groups.filter((g) => !g.complete);
+              const hidden = todo.filter((g) => !shown.includes(g));
+              return (
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6, alignItems: "center" }}>
+                  {todo.slice(0, 8).map((g) => (
+                    <button key={g.key} type="button"
+                      onClick={() => {
+                        if (hidden.includes(g)) { setQ(""); setSrc(""); }
+                        setOpen((o) => new Set(o).add(g.key));
+                        setTimeout(() => { const el = document.getElementById("pm-" + g.key); if (el) el.scrollIntoView({ behavior: "smooth", block: "center" }); }, 60);
+                      }}
+                      style={{ fontFamily: "inherit", fontSize: 12, fontWeight: 700, color: NAVY, background: "#fff", border: "1px solid #f0d0a8", borderRadius: 999, padding: "3px 11px", cursor: "pointer" }}>
+                      {g.name || "New product"} →
+                    </button>
+                  ))}
+                  {todo.length > 8 && <span style={{ fontSize: 12 }}>+{todo.length - 8} more</span>}
+                  {hidden.length > 0 && <span style={{ fontSize: 12, fontWeight: 600, color: "#8a6a1f" }}>{hidden.length === todo.length ? (todo.length === 1 ? "It's" : "They're") : hidden.length + " are"} hidden by your search or filter — click to show.</span>}
+                </div>
+              );
+            })()}
+          </div>
+        )}
       </div>
 
-      {incomplete > 0 && (
-        <div style={{ ...card, borderColor: "#f0d0a8", background: "#fff8e6", padding: "9px 14px", fontSize: 13, fontWeight: 600, color: "#6b5305" }}>
-          {incomplete} product{incomplete === 1 ? "" : "s"} still need their SKU fields (supplier, length, category, sub-category, product) — they're listed first. Their stock keeps its readable code until then.
-        </div>
-      )}
 
       <div style={{ ...card, padding: "0 6px 6px", overflow: "auto", maxHeight: "max(360px, calc(100vh - " + (headerH + 170) + "px))" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1000, fontSize: 13 }}>
