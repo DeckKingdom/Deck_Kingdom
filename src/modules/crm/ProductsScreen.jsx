@@ -8,7 +8,7 @@ import {
   kitWeight,
   skuLists, productSkuBase, masterKey, productsInList, colourSeg, numericSku, segLabel, cleanCode, codeSource,
   DEFAULT_SKU_LISTS, gbp, kitPartsFor, supplierKey,
-  tidyDescription, suggestDescription, codeFollowsName,
+  tidyDescription, suggestDescription, codeFollowsName, suggestCode,
 } from "../../lib/crmCore.js";
 import { Icon, Chip, Modal, lbl, card, inp, btn, goldBtn, abtn } from "./ui.jsx";
 import { tidyPlan, applyTidy } from "../../lib/productTidy.js";
@@ -77,6 +77,104 @@ export default function ProductsScreen({ planner, update, crm, updateCrm, remove
       a.name.localeCompare(b.name)
     );
   const incomplete = groups.filter((g) => !g.complete).length;
+  // a range sub-category (e.g. Screens) shows its styles as one product: every style is still its own
+  // master product (own SKUs), listed inside the range with each supplier's version underneath
+  const isRangeSub = (sub) => (lists.sub || []).some((x) => x.code === sub && (x.range || /^screens?$/i.test(x.label || "")));
+  const rangeName = (gs) => {
+    const words = gs.map((g) => String(g.name || "").split(/\s+/).filter(Boolean));
+    if (!words.length) return "Range";
+    let a = 0; while (words.every((w) => w[a] !== undefined && w[a] === words[0][a])) a++;
+    let b = 0; while (words.every((w) => w.length - b - 1 >= a && w[w.length - b - 1] === words[0][words[0].length - b - 1])) b++;
+    const name = [...words[0].slice(0, a), ...words[0].slice(words[0].length - b)].join(" ");
+    return name || gs[0].name;
+  };
+  const rangedShown = (() => {
+    const out = [], ranges = {};
+    shown.forEach((g) => {
+      if (g.complete && isRangeSub(g.p0.segSub)) {
+        const k = "r:" + g.p0.segLen + "-" + g.p0.segCat + "-" + g.p0.segSub;
+        if (!ranges[k]) { ranges[k] = { range: true, key: k, groups: [] }; out.push(ranges[k]); }
+        ranges[k].groups.push(g);
+      } else out.push(g);
+    });
+    out.forEach((r) => { if (r.range) { r.groups.sort((a, b) => String(a.p0.segProd).localeCompare(String(b.p0.segProd))); r.name = rangeName(r.groups); } });
+    return out;
+  })();
+  // a new style in a range: next free product code under that sub-category, for the chosen supplier
+  const addStyle = (r, supCode) => {
+    const p0 = r.groups[0].p0;
+    const listKey = p0.segCat + "-" + p0.segSub;
+    const list = productsInList(lists, p0.segCat, p0.segSub);
+    const taken = new Set(products.filter((p) => p.segCat === p0.segCat && p.segSub === p0.segSub && p.segLen === p0.segLen).map((p) => p.segProd));
+    let entry = list.find((x) => !taken.has(x.code));
+    const sup = lists.supplier.find((x) => x.code === supCode);
+    if (!entry) {
+      const n = Math.max(0, ...list.map((x) => Number(x.code) || 0)) + 1;
+      entry = { code: String(n).padStart(2, "0"), label: (sup && sup.key !== "DK" ? supplierName(sup) + " " : "") + "Style " + (list.filter((x) => /style/i.test(x.label)).length + 1) };
+      updateCrm((c) => {
+        const sl = c.skuLists || JSON.parse(JSON.stringify(lists));
+        sl.product = sl.product || {};
+        sl.product[listKey] = [...(sl.product[listKey] || list), entry];
+        c.skuLists = sl;
+        return c;
+      });
+    }
+    const words = r.name.split(" ");
+    const at = words.findIndex((w) => /\d/.test(w));
+    const name = (at > 0 ? [...words.slice(0, at), entry.label, ...words.slice(at)] : [...words, entry.label]).join(" ");
+    const id = uid();
+    update((d) => {
+      const v = { id, code: "", name, colours: [...(p0.colours || [])], qty: 0, cost: 0, weight: 0, cbm: 0, supplier: "", category: p0.category || "", salePrice: "", costGbp: "",
+        segSup: "", segLen: p0.segLen, segCat: p0.segCat, segSub: p0.segSub, segProd: entry.code, isKit: false, kit: [] };
+      applySupplier(v, supCode);
+      // "bought from" as on this supplier's other styles in the range (e.g. Veejoy for DK)
+      const twin = r.groups.flatMap((g) => g.items).find((x) => x.segSup === supCode && x.supplier);
+      if (twin && !v.supplier) v.supplier = twin.supplier;
+      v.code = suggestCode(name, (sup && sup.key) || "DK");
+      d.products.unshift(v);
+      return d;
+    });
+    setOpen((o) => new Set(o).add(r.key).add([p0.segLen, p0.segCat, p0.segSub, entry.code].join("-")));
+  };
+  const renderRange = (r) => {
+    const isOpen = open.has(r.key);
+    const items = r.groups.flatMap((g) => g.items);
+    const skuRows = items.flatMap((p) => rowsByProduct[p.id] || []);
+    const stock = skuRows.reduce((t, x) => t + (Number(x.stock) || 0), 0);
+    const prices = items.map((p) => Number(p.salePrice)).filter((n) => n > 0);
+    const sups = [...new Set(items.map((p) => supKey(p) || "?"))];
+    const p0 = r.groups[0].p0;
+    return (
+      <React.Fragment key={r.key}>
+        <tr onClick={() => toggle(r.key)} style={{ cursor: "pointer", background: isOpen ? "#eef3fb" : "#fafbfd" }}>
+          <td style={{ ...td, fontWeight: 800 }}>
+            <span style={{ fontSize: 10, color: "#5a6a85", marginRight: 8 }}>{isOpen ? "▼" : "▶"}</span>
+            {r.name}
+            <Chip tone="grey" style={{ marginLeft: 8, fontSize: 10, padding: "1px 7px" }}>{r.groups.length} style{r.groups.length === 1 ? "" : "s"}</Chip>
+          </td>
+          <td style={td} />
+          <td style={{ ...td, color: "#5a6a85", fontWeight: 600 }}>{[segLabel(lists.category, p0.segCat), segLabel(lists.sub, p0.segSub)].filter(Boolean).join(" › ")}</td>
+          <td style={{ ...td, fontWeight: 600 }}>{segLabel(lists.length, p0.segLen) || "—"}</td>
+          <td style={td}><div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>{sups.map((k) => <Chip key={k} tone={k === "DK" ? "gold" : "grey"} style={{ fontSize: 10.5, padding: "1px 8px" }}>{k}</Chip>)}</div></td>
+          <td style={{ ...td, textAlign: "right" }}>{new Set(items.flatMap((p) => (p.colours || []).map((c) => c.toLowerCase()))).size || "—"}</td>
+          <td style={{ ...td, textAlign: "right", fontWeight: 700, color: stock ? NAVY : "#aab3c2" }}>{stock ? stock.toLocaleString("en-GB") : "—"}</td>
+          <td style={{ ...td, textAlign: "right" }}>{prices.length ? (Math.min(...prices) === Math.max(...prices) ? Math.min(...prices).toFixed(2) : Math.min(...prices).toFixed(2) + "–" + Math.max(...prices).toFixed(2)) : "—"}</td>
+          <td style={{ ...td, textAlign: "right", color: "#5a6a85" }}>{skuRows.length || "—"}</td>
+        </tr>
+        {isOpen && r.groups.map((g) => renderMaster(g, true))}
+        {isOpen && (
+          <tr><td colSpan={9} style={{ ...td, paddingLeft: 34, background: "#fafbfd" }}>
+            <RadioPick options={lists.supplier.map((x) => ({ value: x.code, label: x.code + " · " + x.key + " — " + x.label }))} onPick={(code) => addStyle(r, code)} width={340}
+              button={(openIt) => (
+                <button style={{ ...btn, padding: "6px 12px", fontSize: 12.5, borderStyle: "dashed" }} onClick={openIt} title="A new design in this range — pick who makes it. To buy an existing style from another supplier, open that style and use 'Add another supplier's version'.">
+                  <Icon name="plus" stroke={NAVY} />Add a style
+                </button>
+              )} />
+          </td></tr>
+        )}
+      </React.Fragment>
+    );
+  };
   const srcCounts = {};
   products.forEach((p) => { const k = supKey(p); if (k) srcCounts[k] = (srcCounts[k] || 0) + 1; });
 
@@ -145,6 +243,93 @@ export default function ProductsScreen({ planner, update, crm, updateCrm, remove
 
   const th = { textAlign: "left", fontSize: 10.5, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", padding: "8px 8px", borderBottom: "2px solid #e6e9ef", whiteSpace: "nowrap", background: "#fff", position: "sticky", top: 0, zIndex: 2 };
   const td = { padding: "9px 8px", borderBottom: "1px solid #f0f2f6", verticalAlign: "middle" };
+
+  // one master product row (+ its open panel); nested = shown inside a range
+  const renderMaster = (g, nested) => {
+              const isOpen = open.has(g.key);
+              const skuRows = g.items.flatMap((p) => rowsByProduct[p.id] || []);
+              const stock = skuRows.reduce((t, r) => t + (Number(r.stock) || 0), 0);
+              const prices = g.items.map((p) => Number(p.salePrice)).filter((n) => n > 0);
+              const colours = new Set(g.items.flatMap((p) => (p.colours || []).map((c) => c.toLowerCase())));
+              const p0 = g.p0;
+              return (
+                <React.Fragment key={g.key}>
+                  <tr onClick={() => toggle(g.key)} style={{ cursor: "pointer", background: isOpen ? "#f3f6fb" : g.complete ? undefined : "#fff8e6" }}>
+                    <td style={{ ...td, fontWeight: 700, paddingLeft: nested ? 34 : td.padding.split(" ")[1] }}>
+                      <span style={{ fontSize: 10, color: "#5a6a85", marginRight: 8 }}>{isOpen ? "▼" : "▶"}</span>
+                      {g.name || <span style={{ color: "#aab3c2" }}>New product</span>}
+
+                      {!g.complete && <Chip tone="amber" style={{ marginLeft: 8, fontSize: 10, padding: "1px 7px" }}>SKU fields needed</Chip>}
+                    </td>
+                    <td style={{ ...td, width: 70 }}>
+                      {(() => {
+                        const on = g.items.some((p) => p.isKit === true);
+                        return (
+                          <span role="switch" aria-checked={on} tabIndex={0} title={on ? "Kit — sold as one line, loaded and taken out of stock as its parts. Click to undo." : "Make this a kit"}
+                            onClick={(e) => { e.stopPropagation(); setGroup(g, "isKit", !on); }}
+                            onKeyDown={(e) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); e.stopPropagation(); setGroup(g, "isKit", !on); } }}
+                            style={{ display: "inline-flex", alignItems: "center", gap: 6, verticalAlign: "middle", cursor: "pointer", fontSize: 11, fontWeight: 700, letterSpacing: 0.6, textTransform: "uppercase", color: on ? "#a86b12" : "#b3bccb" }}>
+                            <span style={{ position: "relative", width: 26, height: 15, borderRadius: 999, background: on ? GOLD : "#dde2ea", transition: "background .15s" }}>
+                              <span style={{ position: "absolute", top: 2, left: on ? 13 : 2, width: 11, height: 11, borderRadius: "50%", background: "#fff", boxShadow: "0 1px 2px rgba(11,31,63,.25)", transition: "left .15s" }} />
+                            </span>
+                            Kit
+                          </span>
+                        );
+                      })()}
+                    </td>
+                    <td style={{ ...td, color: "#5a6a85", fontWeight: 600 }}>{[segLabel(lists.category, p0.segCat), segLabel(lists.sub, p0.segSub)].filter((x) => x && x !== "N/a").join(" › ") || "—"}</td>
+                    <td style={{ ...td, fontWeight: 600 }}>{segLabel(lists.length, p0.segLen) || "—"}</td>
+                    <td style={td}>
+                      <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                        {g.items.map((p) => (
+                          <Chip key={p.id} tone={supKey(p) === "DK" ? "gold" : "grey"} style={{ fontSize: 10.5, padding: "1px 8px" }}>{supKey(p) || "?"}</Chip>
+                        ))}
+                      </div>
+                    </td>
+                    <td style={{ ...td, textAlign: "right" }}>{colours.size || "—"}</td>
+                    <td style={{ ...td, textAlign: "right", fontWeight: 700, color: stock ? NAVY : "#aab3c2" }}>{stock ? stock.toLocaleString("en-GB") : "—"}</td>
+                    <td style={{ ...td, textAlign: "right" }}>
+                      {prices.length ? (Math.min(...prices) === Math.max(...prices) ? Math.min(...prices).toFixed(2) : Math.min(...prices).toFixed(2) + "–" + Math.max(...prices).toFixed(2)) : "—"}
+                    </td>
+                    <td style={{ ...td, textAlign: "right", color: "#5a6a85" }}>{skuRows.length || "—"}</td>
+                  </tr>
+                  {isOpen && (
+                    <tr>
+                      <td colSpan={9} style={{ padding: "8px 10px 14px 26px", background: "#f8f9fb", borderBottom: "1px solid #e6e9ef" }}>
+                        {(
+                          <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+                            {[...(g.complete ? [["fields", "product attributes"], ["skus", "SKUs"]] : []), ["costs", "costs & margins"]].map(([k, label]) => {
+                              const on = shownBits.has(g.key + "|" + k);
+                              return (
+                                <button key={k} type="button" onClick={() => toggleBit(g.key + "|" + k)}
+                                  style={{ fontFamily: "inherit", fontSize: 11.5, fontWeight: 700, padding: "3px 10px", borderRadius: 999, cursor: "pointer", border: "1px solid " + (on ? NAVY : "#d5d9e0"), background: on ? NAVY : "#fff", color: on ? "#fff" : "#5a6a85" }}>
+                                  {(on ? "Hide " : "Show ") + label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                        {g.complete && shownBits.has(g.key + "|fields") && <MasterBar g={g} lists={lists} setGroup={setGroup} />}
+                        {g.items.map((p) => (
+                          <Version key={p.id} p={p} shipments={planner.shipments || []} supplierNames={supplierNames} lists={lists} rows={(rowsByProduct[p.id] || []).filter((r) => r.active !== false)} rowsByProduct={rowsByProduct} products={products} setP={setP} removeProduct={removeProduct} supKey={supKey(p)}
+                            shared={g.complete} showSkus={!g.complete || shownBits.has(g.key + "|skus")} showCosts={shownBits.has(g.key + "|costs")} setSupplier={setSupplier} usedSup={g.items.filter((x) => x.id !== p.id).map((x) => x.segSup)} />
+                        ))}
+                        {g.complete && (
+                          <RadioPick
+                            options={lists.supplier.map((x) => ({ value: x.code, label: x.code + " · " + x.key + " — " + x.label, disabled: g.items.some((it) => it.segSup === x.code), note: g.items.some((it) => it.segSup === x.code) ? "added" : "" }))}
+                            onPick={(code) => addVersion(g, code)} width={340}
+                            button={(openIt) => (
+                              <button style={{ ...btn, padding: "6px 12px", fontSize: 12.5, borderStyle: "dashed" }} onClick={openIt}>
+                                <Icon name="plus" stroke={NAVY} />Add another supplier's version
+                              </button>
+                            )} />
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              );
+};
 
   // the agreed product tidy-up: offered until it's been applied
   const tidyLog = useMemo(() => tidyPlan(planner, crm), [planner.products, crm.skuLists]);
@@ -247,91 +432,7 @@ export default function ProductsScreen({ planner, update, crm, updateCrm, remove
             </tr>
           </thead>
           <tbody>
-            {shown.map((g) => {
-              const isOpen = open.has(g.key);
-              const skuRows = g.items.flatMap((p) => rowsByProduct[p.id] || []);
-              const stock = skuRows.reduce((t, r) => t + (Number(r.stock) || 0), 0);
-              const prices = g.items.map((p) => Number(p.salePrice)).filter((n) => n > 0);
-              const colours = new Set(g.items.flatMap((p) => (p.colours || []).map((c) => c.toLowerCase())));
-              const p0 = g.p0;
-              return (
-                <React.Fragment key={g.key}>
-                  <tr onClick={() => toggle(g.key)} style={{ cursor: "pointer", background: isOpen ? "#f3f6fb" : g.complete ? undefined : "#fff8e6" }}>
-                    <td style={{ ...td, fontWeight: 700 }}>
-                      <span style={{ fontSize: 10, color: "#5a6a85", marginRight: 8 }}>{isOpen ? "▼" : "▶"}</span>
-                      {g.name || <span style={{ color: "#aab3c2" }}>New product</span>}
-
-                      {!g.complete && <Chip tone="amber" style={{ marginLeft: 8, fontSize: 10, padding: "1px 7px" }}>SKU fields needed</Chip>}
-                    </td>
-                    <td style={{ ...td, width: 70 }}>
-                      {(() => {
-                        const on = g.items.some((p) => p.isKit === true);
-                        return (
-                          <span role="switch" aria-checked={on} tabIndex={0} title={on ? "Kit — sold as one line, loaded and taken out of stock as its parts. Click to undo." : "Make this a kit"}
-                            onClick={(e) => { e.stopPropagation(); setGroup(g, "isKit", !on); }}
-                            onKeyDown={(e) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); e.stopPropagation(); setGroup(g, "isKit", !on); } }}
-                            style={{ display: "inline-flex", alignItems: "center", gap: 6, verticalAlign: "middle", cursor: "pointer", fontSize: 11, fontWeight: 700, letterSpacing: 0.6, textTransform: "uppercase", color: on ? "#a86b12" : "#b3bccb" }}>
-                            <span style={{ position: "relative", width: 26, height: 15, borderRadius: 999, background: on ? GOLD : "#dde2ea", transition: "background .15s" }}>
-                              <span style={{ position: "absolute", top: 2, left: on ? 13 : 2, width: 11, height: 11, borderRadius: "50%", background: "#fff", boxShadow: "0 1px 2px rgba(11,31,63,.25)", transition: "left .15s" }} />
-                            </span>
-                            Kit
-                          </span>
-                        );
-                      })()}
-                    </td>
-                    <td style={{ ...td, color: "#5a6a85", fontWeight: 600 }}>{[segLabel(lists.category, p0.segCat), segLabel(lists.sub, p0.segSub)].filter((x) => x && x !== "N/a").join(" › ") || "—"}</td>
-                    <td style={{ ...td, fontWeight: 600 }}>{segLabel(lists.length, p0.segLen) || "—"}</td>
-                    <td style={td}>
-                      <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                        {g.items.map((p) => (
-                          <Chip key={p.id} tone={supKey(p) === "DK" ? "gold" : "grey"} style={{ fontSize: 10.5, padding: "1px 8px" }}>{supKey(p) || "?"}</Chip>
-                        ))}
-                      </div>
-                    </td>
-                    <td style={{ ...td, textAlign: "right" }}>{colours.size || "—"}</td>
-                    <td style={{ ...td, textAlign: "right", fontWeight: 700, color: stock ? NAVY : "#aab3c2" }}>{stock ? stock.toLocaleString("en-GB") : "—"}</td>
-                    <td style={{ ...td, textAlign: "right" }}>
-                      {prices.length ? (Math.min(...prices) === Math.max(...prices) ? Math.min(...prices).toFixed(2) : Math.min(...prices).toFixed(2) + "–" + Math.max(...prices).toFixed(2)) : "—"}
-                    </td>
-                    <td style={{ ...td, textAlign: "right", color: "#5a6a85" }}>{skuRows.length || "—"}</td>
-                  </tr>
-                  {isOpen && (
-                    <tr>
-                      <td colSpan={9} style={{ padding: "8px 10px 14px 26px", background: "#f8f9fb", borderBottom: "1px solid #e6e9ef" }}>
-                        {(
-                          <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
-                            {[...(g.complete ? [["fields", "product attributes"], ["skus", "SKUs"]] : []), ["costs", "costs & margins"]].map(([k, label]) => {
-                              const on = shownBits.has(g.key + "|" + k);
-                              return (
-                                <button key={k} type="button" onClick={() => toggleBit(g.key + "|" + k)}
-                                  style={{ fontFamily: "inherit", fontSize: 11.5, fontWeight: 700, padding: "3px 10px", borderRadius: 999, cursor: "pointer", border: "1px solid " + (on ? NAVY : "#d5d9e0"), background: on ? NAVY : "#fff", color: on ? "#fff" : "#5a6a85" }}>
-                                  {(on ? "Hide " : "Show ") + label}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        )}
-                        {g.complete && shownBits.has(g.key + "|fields") && <MasterBar g={g} lists={lists} setGroup={setGroup} />}
-                        {g.items.map((p) => (
-                          <Version key={p.id} p={p} shipments={planner.shipments || []} supplierNames={supplierNames} lists={lists} rows={(rowsByProduct[p.id] || []).filter((r) => r.active !== false)} rowsByProduct={rowsByProduct} products={products} setP={setP} removeProduct={removeProduct} supKey={supKey(p)}
-                            shared={g.complete} showSkus={!g.complete || shownBits.has(g.key + "|skus")} showCosts={shownBits.has(g.key + "|costs")} setSupplier={setSupplier} usedSup={g.items.filter((x) => x.id !== p.id).map((x) => x.segSup)} />
-                        ))}
-                        {g.complete && (
-                          <RadioPick
-                            options={lists.supplier.map((x) => ({ value: x.code, label: x.code + " · " + x.key + " — " + x.label, disabled: g.items.some((it) => it.segSup === x.code), note: g.items.some((it) => it.segSup === x.code) ? "added" : "" }))}
-                            onPick={(code) => addVersion(g, code)} width={340}
-                            button={(openIt) => (
-                              <button style={{ ...btn, padding: "6px 12px", fontSize: 12.5, borderStyle: "dashed" }} onClick={openIt}>
-                                <Icon name="plus" stroke={NAVY} />Add another supplier's version
-                              </button>
-                            )} />
-                        )}
-                      </td>
-                    </tr>
-                  )}
-                </React.Fragment>
-              );
-            })}
+            {rangedShown.map((it) => (it.range ? renderRange(it) : renderMaster(it)))}
             {!shown.length && (
               <tr><td colSpan={9} style={{ ...td, textAlign: "center", color: "#8593a8", padding: 24 }}>No products match.</td></tr>
             )}

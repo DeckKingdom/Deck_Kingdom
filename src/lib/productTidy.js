@@ -23,7 +23,7 @@ const SET = {
   "4w425blc": { segLen: "01", segSub: "07", segProd: "01", salePrice: 35, name: "Fence Screen Style 1 300mm 1.83m", code: "DK/1.83/SCREEN-STYLE-1" },
   "prd-tg-300mm-screen": { segLen: "01", segSub: "07", segProd: "05", name: "Fence Screen Tuda Grass 300mm 1.83m", code: "TG/1.83/SCREEN-TG" },
   "prd-fn-300mm-screen": { segLen: "01", segSub: "07", segProd: "06", name: "Fence Screen Finch 300mm 1.83m", code: "FN/1.83/SCREEN-FN" },
-  "prd-cl-1-8-screen": { segLen: "01", segSub: "07", segProd: "07", name: "Fence Screen Easy Composite 1.83m", code: "CL/1.83/SCREEN-CL" },
+  "prd-cl-1-8-screen": { segLen: "01", segSub: "07", segProd: "07", name: "Fence Screen Easy Composite 300mm 1.83m", code: "CL/1.83/SCREEN-CL" },
   "prd-dk-3ft-retro-kit": { isKit: true },
   "prd-dk-4ft-retro-kit": { isKit: true },
   "prd-dk-6ft-retro-kit": { isKit: true },

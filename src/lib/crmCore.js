@@ -605,10 +605,15 @@ export const suggestDescription = (name) => {
 export const suggestCode = (name, supplierKey = "DK") => {
   const t = String(name || "").toLowerCase().replace(/\(.*?\)/g, " ");
   const len = lengthOf(t);
-  let rest = " " + t.replace(/\d+(?:\.\d+)?\s*(?:mm|cm|m|kg|ft|foot|feet)\b/g, " ") + " ";
+  let rest = " " + t.replace(/\d+(?:\.\d+)?\s*x\s*\d+(?:\.\d+)?\s*(?:mm|cm|m)?\b/g, " ").replace(/\d+(?:\.\d+)?\s*(?:mm|cm|m|kg|ft|foot|feet)\b/g, " ") + " ";
   const parts = [];
   CODE_PHRASES.forEach(([re, tok]) => { if (re.test(rest)) { parts.push(tok); rest = rest.replace(re, " "); } });
-  const words = rest.split(/[^a-z0-9]+/).filter((w) => w && !MATERIAL_WORDS.has(w) && !SMALL_WORDS.has(w) && w.length > 1 && !/^\d+$/.test(w));
+  // a lone number names a style / version ("Style 2") — kept, joined to the word before it
+  const words = rest.split(/[^a-z0-9]+/).filter(Boolean).reduce((acc, w) => {
+    if (/^\d+$/.test(w)) { if (acc.length) acc[acc.length - 1] += "-" + w; return acc; }
+    if (!MATERIAL_WORDS.has(w) && !SMALL_WORDS.has(w) && w.length > 1) acc.push(w);
+    return acc;
+  }, []);
   // "fence" / "decking" / "cladding" only name the range — dropped when there's something more specific
   const range = new Set(["fence", "fencing", "decking", "cladding"]);
   const specific = words.filter((w) => !range.has(w));
