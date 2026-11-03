@@ -548,6 +548,8 @@ export const COLOUR_CODES = {
 export const colourCode = (c) => {
   const k = String(c || "").trim().toLowerCase();
   if (!k) return "";
+  const style = k.match(/^style\s*([a-z0-9]+)$/); // "Style 2" → S2
+  if (style) return "S" + style[1].toUpperCase();
   return COLOUR_CODES[k] || k.replace(/[^a-z]/g, "").toUpperCase().slice(0, 3);
 };
 export const cleanCode = (c) => String(c || "").trim().toUpperCase().replace(/\s+/g, "");
@@ -1318,8 +1320,12 @@ export const skuLists = (crm) => {
     sub: Array.isArray(l.sub) ? l.sub : DEFAULT_SKU_LISTS.sub,
     product: l.product && typeof l.product === "object" ? l.product : DEFAULT_SKU_LISTS.product,
     colour: Array.isArray(l.colour) ? tidyColours(l.colour) : DEFAULT_SKU_LISTS.colour,
+    // styles stand in for colours where a sub-category says so (e.g. Screens): same SKU slot
+    style: Array.isArray(l.style) ? l.style : [],
   };
 };
+// does this sub-category pick styles instead of colours?
+export const usesStyles = (lists, sub) => (lists.sub || []).some((x) => x.code === sub && x.variants === "style");
 // Colour clean-up (Oct 2026): one Grey (was Grey/Anthracite, Dark grey folded in) and
 // one Black (was Black/Charcoal). Applied to a saved list too; old names stay as aliases.
 const COLOUR_MERGES = { "12": { label: "Grey", aliases: ["grey", "anthracite", "grey/anthracite", "dark grey"] }, "14": { label: "Black", aliases: ["black", "charcoal", "black/charcoal"] } };
@@ -1362,7 +1368,8 @@ export const productsInList = (lists, cat, sub) => (lists.product[cat + "-" + su
 export const colourSeg = (lists, colour) => {
   const k = String(colour || "").trim().toLowerCase();
   if (!k) return "00";
-  const hit = lists.colour.find((c) => (c.label || "").toLowerCase() === k || (c.aliases || []).some((a) => String(a).toLowerCase() === k));
+  const hit = lists.colour.find((c) => (c.label || "").toLowerCase() === k || (c.aliases || []).some((a) => String(a).toLowerCase() === k))
+    || (lists.style || []).find((c) => (c.label || "").toLowerCase() === k);
   return hit ? hit.code : null;
 };
 // stock-row SKU: 12 digits when the product's fields and colour are all in the lists

@@ -8,7 +8,7 @@ import {
   kitWeight,
   skuLists, productSkuBase, masterKey, productsInList, colourSeg, numericSku, segLabel, cleanCode, codeSource,
   DEFAULT_SKU_LISTS, gbp, kitPartsFor, supplierKey,
-  tidyDescription, suggestDescription, codeFollowsName, suggestCode,
+  tidyDescription, suggestDescription, codeFollowsName, suggestCode, usesStyles,
 } from "../../lib/crmCore.js";
 import { Icon, Chip, Modal, lbl, card, inp, btn, goldBtn, abtn } from "./ui.jsx";
 import { tidyPlan, applyTidy } from "../../lib/productTidy.js";
@@ -49,6 +49,7 @@ export default function ProductsScreen({ planner, update, crm, updateCrm, remove
   }, [crm.masterProducts]);
 
   const supKey = (p) => segLabel(lists.supplier.map((x) => ({ code: x.code, label: x.key })), p.segSup) || codeSource(p.code) || "";
+  const addStyleOption = makeAddStyle(lists, updateCrm);
 
   // ===== group into master products =====
   const ql = q.trim().toLowerCase();
@@ -79,7 +80,7 @@ export default function ProductsScreen({ planner, update, crm, updateCrm, remove
   const incomplete = groups.filter((g) => !g.complete).length;
   // a range sub-category (e.g. Screens) shows its styles as one product: every style is still its own
   // master product (own SKUs), listed inside the range with each supplier's version underneath
-  const isRangeSub = (sub) => (lists.sub || []).some((x) => x.code === sub && (x.range || /^screens?$/i.test(x.label || "")));
+  const isRangeSub = (sub) => (lists.sub || []).some((x) => x.code === sub && x.range);
   const rangeName = (gs) => {
     const words = gs.map((g) => String(g.name || "").split(/\s+/).filter(Boolean));
     if (!words.length) return "Range";
@@ -312,7 +313,7 @@ export default function ProductsScreen({ planner, update, crm, updateCrm, remove
                         {g.complete && shownBits.has(g.key + "|fields") && <MasterBar g={g} lists={lists} setGroup={setGroup} />}
                         {g.items.map((p) => (
                           <Version key={p.id} p={p} shipments={planner.shipments || []} supplierNames={supplierNames} lists={lists} rows={(rowsByProduct[p.id] || []).filter((r) => r.active !== false)} rowsByProduct={rowsByProduct} products={products} setP={setP} removeProduct={removeProduct} supKey={supKey(p)}
-                            shared={g.complete} showSkus={!g.complete || shownBits.has(g.key + "|skus")} showCosts={shownBits.has(g.key + "|costs")} setSupplier={setSupplier} usedSup={g.items.filter((x) => x.id !== p.id).map((x) => x.segSup)} />
+                            shared={g.complete} showSkus={!g.complete || shownBits.has(g.key + "|skus")} showCosts={shownBits.has(g.key + "|costs")} setSupplier={setSupplier} usedSup={g.items.filter((x) => x.id !== p.id).map((x) => x.segSup)} addStyle={addStyleOption} />
                         ))}
                         {g.complete && (
                           <RadioPick
@@ -341,7 +342,10 @@ export default function ProductsScreen({ planner, update, crm, updateCrm, remove
     updateCrm((c) => {
       c.skuLists = r.skuLists;
       // merged-away products: stock rows with nothing in them go; any with stock move to the product they merged into
+      const sc = r.screenColours || {};
       c.masterProducts = (c.masterProducts || []).flatMap((m) => {
+        // a screen's old colour rows (now styles) go when empty
+        if (sc[m.importProductId] && !sc[m.importProductId].includes(String(m.colour || "").toLowerCase()) && !(Number(m.stock) > 0)) return [];
         if (!gone.has(m.importProductId)) return [m];
         if (!(Number(m.stock) > 0)) return [];
         return [{ ...m, importProductId: r.mergeInto[m.importProductId] }];
@@ -350,7 +354,12 @@ export default function ProductsScreen({ planner, update, crm, updateCrm, remove
     });
     update((d) => {
       d.products = r.products;
-      (d.shipments || []).forEach((sh) => (sh.lines || []).forEach((l) => { if (gone.has(l.productId)) l.productId = r.mergeInto[l.productId]; }));
+      const sc = r.screenColours || {};
+      (d.shipments || []).forEach((sh) => (sh.lines || []).forEach((l) => {
+        if (gone.has(l.productId)) l.productId = r.mergeInto[l.productId];
+        const cols = sc[l.productId];
+        if (cols && !cols.includes(String(l.colour || "").toLowerCase())) { const p = r.products.find((x) => x.id === l.productId); l.colour = (p && p.colours[0]) || ""; }
+      }));
       return d;
     });
     setTidyDone(tidyLog.length);
@@ -679,7 +688,8 @@ function BoughtFrom({ value, names, onChange }) {
 }
 
 // ===== colours: chosen ones as chips, add more from the colour list =====
-function ColourPicker({ p, lists, unknown, onChange }) {
+function ColourPicker({ p, lists, unknown, onChange, styles, onAddStyle }) {
+  const [newStyle, setNewStyle] = useState("");
   const cur = p.colours || [];
   const [open, setOpen] = useState(false);
   const ref = React.useRef(null);
@@ -695,7 +705,7 @@ function ColourPicker({ p, lists, unknown, onChange }) {
   // chosen colours sit at the top when the panel opens, the rest in list order
   const [order, setOrder] = useState([]);
   React.useEffect(() => { if (open) setOrder(cur.map(segOf).filter(Boolean)); }, [open]);
-  const all = (lists.colour || []).filter((x) => x.code !== "00");
+  const all = (styles ? lists.style || [] : lists.colour || []).filter((x) => x.code !== "00");
   const opts = [...all.filter((x) => order.includes(x.code)), ...all.filter((x) => !order.includes(x.code))];
   const toggle = (x) => onChange(has.has(x.code) ? cur.filter((c) => segOf(c) !== x.code) : [...cur, x.label]);
   const dropUnknown = (c) => onChange(cur.filter((y) => y !== c));
@@ -709,7 +719,7 @@ function ColourPicker({ p, lists, unknown, onChange }) {
       <button type="button" onClick={() => setOpen((o) => !o)}
         style={{ ...sm, width: "100%", textAlign: "left", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, borderColor: unknown.length ? RED : open ? NAVY : "#d5d9e0" }}>
         <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: cur.length ? 700 : 400, color: cur.length ? NAVY : "#8593a8" }}>
-          {cur.length ? [...cur].sort((a, b) => a.localeCompare(b)).join(", ") : "No colour — one stock row"}
+          {cur.length ? [...cur].sort((a, b) => a.localeCompare(b)).join(", ") : styles ? "Pick styles…" : "No colour — one stock row"}
         </span>
         <span style={{ color: "#5a6a85", fontSize: 10 }}>▾</span>
       </button>
@@ -732,6 +742,14 @@ function ColourPicker({ p, lists, unknown, onChange }) {
               </label>
             ))}
           </div>
+          {styles && onAddStyle && (
+            <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+              <input value={newStyle} onChange={(e) => setNewStyle(e.target.value)} placeholder="New style, e.g. Style 5 or Lattice"
+                style={{ ...sm, flex: 1 }} onKeyDown={(e) => { if (e.key === "Enter" && newStyle.trim()) { const v = onAddStyle(newStyle); setNewStyle(""); if (v) onChange([...cur, v]); } }} />
+              <button type="button" disabled={!newStyle.trim()} onClick={() => { const v = onAddStyle(newStyle); setNewStyle(""); if (v) onChange([...cur, v]); }}
+                style={{ ...btn, padding: "4px 10px", fontSize: 12 }}>Add</button>
+            </div>
+          )}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8, paddingTop: 8, borderTop: "1px solid #eef0f4" }}>
             <button type="button" onClick={() => onChange([])} style={{ border: "none", background: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 700, color: "#8593a8" }}>Clear</button>
             <button type="button" onClick={() => setOpen(false)} style={{ ...goldBtn, padding: "5px 14px", fontSize: 12.5 }}>Done</button>
@@ -743,7 +761,8 @@ function ColourPicker({ p, lists, unknown, onChange }) {
 }
 
 // ===== one supplier's version of a master product =====
-function Version({ p, lists, rows, rowsByProduct, products, setP, removeProduct, supKey, shared, showSkus = true, showCosts = false, setSupplier, usedSup = [], shipments = [], supplierNames = [] }) {
+function Version({ p, lists, rows, rowsByProduct, products, setP, removeProduct, supKey, shared, showSkus = true, showCosts = false, setSupplier, usedSup = [], shipments = [], supplierNames = [], addStyle }) {
+  const styleMode = usesStyles(lists, p.segSub);
   const base = productSkuBase(p);
   const prodList = productsInList(lists, p.segCat, p.segSub);
   const isImport = supKey === "DK" || (!supKey && (!p.code || codeSource(p.code) === "DK"));
@@ -832,8 +851,8 @@ function Version({ p, lists, rows, rowsByProduct, products, setP, removeProduct,
             : <BoughtFrom value={p.supplier || ""} names={supplierNames} onChange={(v) => setP(p.id, "supplier", v)} />}
         </div>
         <div>
-          <span style={{ ...lbl, fontSize: 10 }}>Colours</span>
-          <ColourPicker p={p} lists={lists} unknown={unknownColours} onChange={(cols) => setP(p.id, "colours", [...cols].sort((a, b) => a.localeCompare(b)).join(", "))} />
+          <span style={{ ...lbl, fontSize: 10 }}>{styleMode ? "Styles" : "Colours"}</span>
+          <ColourPicker p={p} lists={lists} unknown={unknownColours} styles={styleMode} onAddStyle={addStyle} onChange={(cols) => setP(p.id, "colours", [...cols].sort((a, b) => a.localeCompare(b)).join(", "))} />
         </div>
         <div>
           <span style={{ ...lbl, fontSize: 10 }}>Retail £ inc VAT</span>
@@ -1054,9 +1073,25 @@ function ListsEditor({ lists, custom, onClose, onSave }) {
   );
 }
 
+// a new entry in the styles list (next free 2-digit code); returns the label to tick
+const makeAddStyle = (lists, updateCrm) => (label) => {
+  const name = String(label || "").trim().replace(/\s+/g, " ").replace(/^./, (c) => c.toUpperCase());
+  if (!name || !updateCrm) return "";
+  const have = (lists.style || []).find((x) => (x.label || "").toLowerCase() === name.toLowerCase());
+  if (have) return have.label;
+  const n = Math.max(0, ...(lists.style || []).map((x) => Number(x.code) || 0)) + 1;
+  updateCrm((c) => {
+    const sl = c.skuLists || JSON.parse(JSON.stringify(lists));
+    sl.style = [...(sl.style || []), { code: String(n).padStart(2, "0"), label: name }];
+    c.skuLists = sl;
+    return c;
+  });
+  return name;
+};
+
 // One product's full editor (the same card as on Products) for use elsewhere,
 // e.g. the shipment line pop-over. Edits save straight to the product.
-export function ProductEditor({ planner, update, crm, productId, removeProduct }) {
+export function ProductEditor({ planner, update, crm, productId, removeProduct, updateCrm }) {
   const lists = skuLists(crm);
   const products = planner.products || [];
   const p = products.find((x) => x.id === productId);
@@ -1101,6 +1136,7 @@ export function ProductEditor({ planner, update, crm, productId, removeProduct }
   const supKey = segLabel(lists.supplier.map((x) => ({ code: x.code, label: x.key })), p.segSup) || codeSource(p.code) || "";
   return (
     <Version p={p} shipments={planner.shipments || []} supplierNames={supplierNames} lists={lists} rows={(rowsByProduct[p.id] || []).filter((r) => r.active !== false)}
-      rowsByProduct={rowsByProduct} products={products} setP={setP} removeProduct={removeProduct || (() => {})} supKey={supKey} shared={false} showSkus showCosts setSupplier={setSupplier} />
+      rowsByProduct={rowsByProduct} products={products} setP={setP} removeProduct={removeProduct || (() => {})} supKey={supKey} shared={false} showSkus showCosts setSupplier={setSupplier}
+      addStyle={makeAddStyle(lists, updateCrm)} />
   );
 }

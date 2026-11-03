@@ -1527,7 +1527,7 @@ export default function ImportPlanner() {
                   <span style={{ fontSize: 11.5, fontWeight: 600, color: "#8593a8", alignSelf: "center", flex: 1, minWidth: 180 }}>These set this line and become the product's default for new lines.</span>
                 </div>
               )}
-              <ProductEditor planner={data} update={update} crm={crm || { masterProducts: [] }} productId={p.id} removeProduct={(pid) => { setProdPop(null); removeProduct(pid); }} />
+              <ProductEditor planner={data} update={update} updateCrm={updateCrm} crm={crm || { masterProducts: [] }} productId={p.id} removeProduct={(pid) => { setProdPop(null); removeProduct(pid); }} />
               <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 8 }}>
                 {prodPop.created && (
                   <button title="Throw this new product away" onClick={() => {
