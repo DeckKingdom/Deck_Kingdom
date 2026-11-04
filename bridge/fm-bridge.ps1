@@ -55,6 +55,12 @@ if ($FreshStart) {
   $Full = $true
 }
 if ($StartFrom) { $cfg.startDate = $StartFrom }
+# delivery schedule details (Nov 2026): driver and drop number, added here so older config files pick them up
+if ($cfg.invoices -and $cfg.invoices.fields) {
+  if (-not $cfg.invoices.fields.PSObject.Properties["driver"]) { $cfg.invoices.fields | Add-Member -NotePropertyName "driver" -NotePropertyValue "Driver" }
+  if (-not $cfg.invoices.fields.PSObject.Properties["dropNo"]) { $cfg.invoices.fields | Add-Member -NotePropertyName "dropNo" -NotePropertyValue "Drop #" }
+  if (-not $cfg.invoices.fields.PSObject.Properties["van"]) { $cfg.invoices.fields | Add-Member -NotePropertyName "van" -NotePropertyValue "Van" }
+}
 
 # ---------- FileMaker (ODBC) ----------
 function Open-FM {

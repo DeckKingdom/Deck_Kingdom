@@ -68,7 +68,9 @@
       "reviewReceived": "Review Received",
       "photosRequested": "Photos Requested",
       "socialPosted": "Social Post Created",
-      "sampleFollowed": "Sample Followed Up"
+      "sampleFollowed": "Sample Followed Up",
+      "driver": "Driver",
+      "dropNo": "Drop #"
     }
   },
   "lines": {
