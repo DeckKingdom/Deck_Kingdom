@@ -1,5 +1,5 @@
 // Shared CRM UI: icon set, workflow toggles, chips, field styles.
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { NAVY, GOLD } from "../../lib/core.js";
 
 const PATHS = {
@@ -353,4 +353,18 @@ export const Soon = ({ label = "Soon", icon, note, style }) => {
       )}
     </span>
   );
+};
+
+// true on phone-width screens (and updates when the window is resized)
+export const usePhone = (max = 760) => {
+  const q = "(max-width: " + max + "px)";
+  const [on, setOn] = useState(() => typeof window !== "undefined" && !!window.matchMedia && window.matchMedia(q).matches);
+  useEffect(() => {
+    if (!window.matchMedia) return;
+    const m = window.matchMedia(q);
+    const f = () => setOn(m.matches);
+    m.addEventListener ? m.addEventListener("change", f) : m.addListener(f);
+    return () => (m.removeEventListener ? m.removeEventListener("change", f) : m.removeListener(f));
+  }, [q]);
+  return on;
 };

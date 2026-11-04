@@ -12,7 +12,7 @@ import { printJobDocs, DOC_KINDS, printPendingList } from "./printDocs.js";
 import LinesEditor from "./LinesEditor.jsx";
 import { JOB_TYPES, skuIndex, PAYMENT_TYPES, stockCheck, partKey, isColPick, blankPick, blankCollectionItem } from "../../lib/crmCore.js";
 import StockCheck from "./StockCheck.jsx";
-import { Icon, Chip, Tg, sect, lbl, card, abtn, inp, btn, goldBtn, RiskChip, WebStatusChip, Soon } from "./ui.jsx";
+import { Icon, Chip, Tg, sect, lbl, card, abtn, inp, btn, goldBtn, RiskChip, WebStatusChip, Soon, usePhone } from "./ui.jsx";
 
 const RANGE_OPTS = [
   ["upcoming", "Upcoming + last 7 days"],
@@ -237,6 +237,7 @@ const SlaChip = ({ days, done }) => (
 
 export default function ScheduleScreen({ money = true, crm, updateCrm, openInvoice, openCollection, me, planner, goCustomer, newFollowUp }) {
   const [printMsg, setPrintMsg] = useState("");
+  const phone = usePhone();
   const printJobs = (jobs, kinds, title) => {
     const list = jobs.filter((x) => x && !isVoidInvoice(x) && onSchedule(x, crm));
     if (!list.length) return;
@@ -631,6 +632,98 @@ export default function ScheduleScreen({ money = true, crm, updateCrm, openInvoi
     );
   };
 
+  // ===== phones: one card per job instead of the wide row =====
+  const mini = { width: 34, height: 34, borderRadius: 10, border: "none", display: "inline-flex", alignItems: "center", justifyContent: "center", padding: 0, textDecoration: "none", flex: "none" };
+  const PhoneRow = ({ i }) => {
+    const c = custById[i.customerId];
+    const s = siteById[i.siteId];
+    const status = scheduleStatus(i);
+    const kg = invoiceLoadKg(i, crm);
+    const done = !!i.deliveryCompleted;
+    const pc = (s && s.postcode) || (c && c.postcode) || "";
+    const addr = [s ? s.address : c && c.address, s ? s.town : c && c.town, pc].filter(Boolean).join(", ");
+    const tel = c && (c.mobile || c.landline || "").replace(/[^\d+]/g, "");
+    return (
+      <div style={{ display: "flex", background: done ? "#e9f6ee" : "#fff", border: "1px solid " + (done ? "#bfe3ca" : "#e6e9ef"), borderRadius: 12, marginBottom: 8, overflow: "hidden" }}>
+        <div style={{ width: 5, flex: "none", background: done ? "#3FA55C" : STRIPE_COLOURS[status] }} />
+        <div style={{ flex: 1, minWidth: 0, padding: "10px 10px 10px 10px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+            <button type="button" title={done ? "Completed — tap to undo" : "Mark the delivery complete"} onClick={() => complete(i.id, !done)}
+              style={{ width: 26, height: 26, borderRadius: 999, border: "2px solid " + (done ? "#3FA55C" : "#b8c0cc"), background: "#fff", padding: 0, boxSizing: "border-box", cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", flex: "none" }}>
+              {done && <span style={{ width: 12, height: 12, borderRadius: 999, background: "#3FA55C" }} />}
+            </button>
+            <button className="dk-title-link" onClick={(e) => setPop({ id: i.id, rect: e.currentTarget.getBoundingClientRect() })}
+              style={{ fontWeight: 700, fontSize: 15, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, flex: 1, textAlign: "left" }}>
+              {c ? c.name || "Unnamed" : "No customer"}
+            </button>
+            {i.dropNo && <span style={{ fontSize: 12, fontWeight: 800, color: "#fff", background: NAVY, borderRadius: 999, padding: "2px 8px", flex: "none" }}>Drop {i.dropNo}</span>}
+          </div>
+          <div style={{ fontSize: 12.5, color: "#5a6a85", fontWeight: 600, margin: "4px 0 8px 35px", display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+            <b style={{ color: NAVY }}>{pc || "—"}</b>
+            <span>· {i.jobType || "—"}</span>
+            {i.deliveryTime && <span>· {i.deliveryTime}</span>}
+            {kg !== null && <span>· {kg.toLocaleString("en-GB", { maximumFractionDigits: 0 })} kg</span>}
+            <span>· {isPaid(i) ? "Paid" : <b style={{ color: RED }}>Not paid</b>}</span>
+            <RiskChip inv={i} /><WebStatusChip inv={i} />
+          </div>
+          {!isCollectionJob(i) && (
+            <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr 0.8fr 1.1fr", gap: 5, marginBottom: 8 }}>
+              <PillSelect value={i.driver || ""} options={DRIVERS} placeholder="Driver" onChange={(v) => pickDriver("inv", i, v)} />
+              <PillSelect value={i.runNo || ""} options={RUN_NOS} placeholder="Run" labelOf={(o) => "Run " + o} onChange={(v) => setInv(i.id, (t) => (t.runNo = v))} />
+              <PillSelect value={i.dropNo || ""} options={DROP_NOS} placeholder="#" onChange={(v) => setInv(i.id, (t) => (t.dropNo = v))} />
+              <PillSelect value={i.van || ""} options={vanOptions(crm)} placeholder="Van" onChange={(v) => setInv(i.id, (t) => (t.van = v))} />
+            </div>
+          )}
+          <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+            {tel ? <a href={"tel:" + tel} title="Call" style={{ ...mini, background: "#eef1f6" }}><Icon name="phone" stroke={NAVY} size={16} /></a> : null}
+            {addr ? <a href={"https://www.google.com/maps/dir/?api=1&destination=" + encodeURIComponent(addr)} target="_blank" rel="noopener noreferrer" title="Directions" style={{ ...mini, background: "#eef1f6" }}><Icon name="pin" stroke={NAVY} size={16} /></a> : null}
+            <NotifyButtons i={i} c={c} onSent={(via) => markSent([i.id], [via])} />
+            <PrintMenu onPick={(k) => printJobs([i], k, "#" + (i.invNo || "") + " paperwork")} />
+            <span style={{ flex: 1 }} />
+            <span style={{ fontSize: 12, fontWeight: 700, color: "#8593a8" }}>{i.invNo ? "#" + i.invNo : i.orderRef || ""}</span>
+          </div>
+        </div>
+      </div>
+    );
+  };
+  const PhoneCollRow = ({ c }) => {
+    const pr = collectionProgress(c);
+    const kg = collKg(c);
+    const addr = [c.address, c.town, c.postcode].filter(Boolean).join(", ");
+    const tel = String(c.phone || "").replace(/[^\d+]/g, "");
+    return (
+      <div style={{ display: "flex", background: c.collected ? "#e9f6ee" : "#fff", border: "1px solid " + (c.collected ? "#bfe3ca" : "#e6e9ef"), borderRadius: 12, marginBottom: 8, overflow: "hidden" }}>
+        <div style={{ width: 5, flex: "none", background: c.collected ? "#3FA55C" : COLLECTION_BLUE }} />
+        <div style={{ flex: 1, minWidth: 0, padding: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+            <button type="button" title={c.collected ? "Collected — tap to undo" : "Mark as collected"} onClick={() => setColl(c.id, (t) => (t.collected = !t.collected))}
+              style={{ width: 26, height: 26, borderRadius: 999, border: "2px solid " + (c.collected ? "#3FA55C" : "#b8c0cc"), background: "#fff", padding: 0, boxSizing: "border-box", cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", flex: "none" }}>
+              {c.collected && <span style={{ width: 12, height: 12, borderRadius: 999, background: "#3FA55C" }} />}
+            </button>
+            <button className="dk-title-link" onClick={(e) => setPop({ id: c.id, kind: "col", rect: e.currentTarget.getBoundingClientRect() })}
+              style={{ fontWeight: 700, fontSize: 15, color: COLLECTION_BLUE, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, flex: 1, textAlign: "left" }}>
+              {c.supplier || "Supplier"} · pick-up
+            </button>
+            {c.dropNo && <span style={{ fontSize: 12, fontWeight: 800, color: "#fff", background: COLLECTION_BLUE, borderRadius: 999, padding: "2px 8px", flex: "none" }}>Drop {c.dropNo}</span>}
+          </div>
+          <div style={{ fontSize: 12.5, color: "#5a6a85", fontWeight: 600, margin: "4px 0 8px 35px" }}>
+            <b style={{ color: NAVY }}>{c.postcode || "—"}</b> · COL-{c.collectionNo || "—"}{kg !== null ? " · " + Math.round(kg).toLocaleString("en-GB") + " kg" : ""}{c.collected && pr.total ? " · " + pr.done + "/" + pr.total + " processed" : ""}
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr 0.8fr 1.1fr", gap: 5, marginBottom: 8 }}>
+            <PillSelect value={c.driver || ""} options={DRIVERS} placeholder="Driver" onChange={(v) => pickDriver("col", c, v)} />
+            <PillSelect value={c.runNo || ""} options={RUN_NOS} placeholder="Run" labelOf={(o) => "Run " + o} onChange={(v) => setColl(c.id, (t) => (t.runNo = v))} />
+            <PillSelect value={c.dropNo || ""} options={DROP_NOS} placeholder="#" onChange={(v) => setColl(c.id, (t) => (t.dropNo = v))} />
+            <PillSelect value={c.van || ""} options={vanOptions(crm)} placeholder="Van" onChange={(v) => setColl(c.id, (t) => (t.van = v))} />
+          </div>
+          <div style={{ display: "flex", gap: 6 }}>
+            {tel ? <a href={"tel:" + tel} title="Call" style={{ ...mini, background: "#eef1f6" }}><Icon name="phone" stroke={NAVY} size={16} /></a> : null}
+            {addr ? <a href={"https://www.google.com/maps/dir/?api=1&destination=" + encodeURIComponent(addr)} target="_blank" rel="noopener noreferrer" title="Directions" style={{ ...mini, background: "#eef1f6" }}><Icon name="pin" stroke={NAVY} size={16} /></a> : null}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const CollRow = ({ c }) => {
     const [hover, setHover] = useState(false);
     const pr = collectionProgress(c);
@@ -762,12 +855,12 @@ export default function ScheduleScreen({ money = true, crm, updateCrm, openInvoi
   };
 
   const GroupHead = ({ label, meta, red, action, right, after }) => (
-    <div style={{ display: "flex", alignItems: "center", gap: 12, background: red ? RED : NAVY, color: "#fff", borderRadius: 12, padding: action ? "0 16px 0 8px" : "0 16px", minHeight: 42, margin: "18px 0 8px", flexWrap: "wrap" }}>
+    <div style={{ display: "flex", alignItems: "center", gap: phone ? "6px 10px" : 12, background: red ? RED : NAVY, color: "#fff", borderRadius: 12, padding: phone ? "8px 12px" : action ? "0 16px 0 8px" : "0 16px", minHeight: 42, margin: "18px 0 8px", flexWrap: "wrap" }}>
       {action}
       <b style={{ color: red ? "#fff" : GOLD, fontSize: 15 }}>{label}</b>
       <span style={{ fontSize: 12.5, color: red ? "#ffd8dd" : "#cfd6e4", fontWeight: 600 }}>{meta}</span>
       {after}
-      {right && <span style={{ marginLeft: "auto" }}>{right}</span>}
+      {right && <span style={{ marginLeft: "auto", ...(phone ? { width: "100%", display: "flex", justifyContent: "flex-end" } : {}) }}>{right}</span>}
     </div>
   );
 
@@ -831,7 +924,7 @@ export default function ScheduleScreen({ money = true, crm, updateCrm, openInvoi
         </div>
       )}
 
-      <div className="dk-sched-grid" style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 300px", gap: 14, alignItems: "start" }}>
+      <div className="dk-sched-grid" style={{ display: "grid", gridTemplateColumns: phone ? "minmax(0, 1fr)" : "minmax(0, 1fr) 300px", gap: 14, alignItems: "start" }}>
       <div style={{ minWidth: 0 }}>
       {groups.length === 0 && (
         <div style={{ ...card, textAlign: "center", padding: "36px 10px", color: "#5a6a85", fontWeight: 600, marginTop: 14 }}>
@@ -845,7 +938,7 @@ export default function ScheduleScreen({ money = true, crm, updateCrm, openInvoi
           onDragLeave={(ev) => { if (!ev.currentTarget.contains(ev.relatedTarget)) setOverDate((d) => (d === g.date ? null : d)); }}
           onDrop={(ev) => { ev.preventDefault(); dropOn(g.date); }}
           style={{ scrollMarginTop: 70, borderRadius: 14, outline: overDate === g.date ? "2px dashed " + GOLD : "none", outlineOffset: 4, background: overDate === g.date ? "#fff8e6" : "transparent" }}>
-          <GroupHead label={dayLabel(g.date)} meta={g.rows.length ? groupMeta(g.rows) : "nothing booked"}
+          <GroupHead label={phone ? new Date(g.date + "T00:00:00").toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "short" }) : dayLabel(g.date)} meta={g.rows.length ? groupMeta(g.rows) : "nothing booked"}
             after={g.date >= tod && g.rows.some((x) => !(x.kind === "inv" ? x.obj.deliveryCompleted : x.obj.collected)) ? (
               <button type="button" onClick={() => setResetAsk(g.date)} title="Clear driver, run, drop and van on this day's open jobs and line them up by postcode"
                 style={{ display: "inline-flex", alignItems: "center", gap: 6, border: "1px solid #3a4d6e", background: "transparent", color: "#fff", borderRadius: 8, padding: "5px 10px", fontFamily: "inherit", fontWeight: 700, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap" }}>
@@ -865,7 +958,7 @@ export default function ScheduleScreen({ money = true, crm, updateCrm, openInvoi
             </div>
           ) : (
             <div style={{ overflowX: "auto" }}>
-              <div style={{ minWidth: showPrep ? 1640 : 1305 }}>
+              <div style={{ minWidth: phone ? 0 : showPrep ? 1640 : 1305 }}>
                 {g.rows.map((e, k) => {
                   const key = runKey(e), prevKey = k ? runKey(g.rows[k - 1]) : null;
                   const sameRun = g.rows.filter((x) => runKey(x) === key);
@@ -875,7 +968,17 @@ export default function ScheduleScreen({ money = true, crm, updateCrm, openInvoi
                   const runKg = sameRun.reduce((t, x) => t + ((x.kind === "inv" ? invoiceLoadKg(x.obj, crm) : collKg(x.obj)) || 0), 0);
                   const canMove = key.startsWith("0|") && new Set(g.rows.map(runKey).filter((x) => x.startsWith("0|"))).size > 1;
                   const isOver = overRun === g.date + key && runDrag && runDrag.key !== key;
-                  const head = key !== prevKey ? (
+                  const head = key === prevKey ? null : phone ? (
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, margin: k ? "14px 0 6px" : "4px 0 6px", background: "#dce2ec", borderRadius: 10, padding: "8px 12px", fontSize: 13, color: NAVY }}>
+                      <b style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {custGroup ? "Customer collections" : loose ? "Supplier collections" : (e.obj.runNo ? "Run " + e.obj.runNo : "No run yet") + " · " + (e.obj.driver || "no driver yet")}
+                      </b>
+                      <span style={{ fontWeight: 600, color: "#5a6a85", fontSize: 12, whiteSpace: "nowrap" }}>
+                        {[nDrops ? nDrops + (custGroup ? " collecting" : " drop" + (nDrops === 1 ? "" : "s")) : "", nPicks ? nPicks + " pick-up" + (nPicks === 1 ? "" : "s") : "", runKg && !loose ? Math.round(runKg).toLocaleString("en-GB") + " kg" : ""].filter(Boolean).join(" · ")}
+                      </span>
+                      {!loose && <PrintMenu title="Print or save this run's paperwork" onPick={(kk) => printJobs(sameRun.filter((x) => x.kind === "inv").map((x) => x.obj), kk, dayLabel(g.date) + " · " + (custGroup ? "Customer collections" : (e.obj.runNo ? "Run " + e.obj.runNo : "No run") + (e.obj.driver ? " · " + e.obj.driver : "")))} />}
+                    </div>
+                  ) : key !== prevKey ? (
                     <div title={loose ? "Supplier pick-ups not in a run yet — give them a driver and run, or drag one onto a job" : canMove ? "Drag to change the order the runs go out" : ""}
                       draggable={canMove}
                       onDragStart={canMove ? (ev) => { ev.dataTransfer.effectAllowed = "move"; try { ev.dataTransfer.setData("text/plain", "run"); } catch (x) { /* ignore */ } setRunDrag({ date: g.date, key }); } : undefined}
@@ -910,7 +1013,7 @@ export default function ScheduleScreen({ money = true, crm, updateCrm, openInvoi
                   return (
                     <React.Fragment key={e.kind + e.obj.id}>
                       {head}
-                      {e.kind === "col" ? <CollRow c={e.obj} /> : <Row i={e.obj} />}
+                      {phone ? (e.kind === "col" ? <PhoneCollRow c={e.obj} /> : <PhoneRow i={e.obj} />) : e.kind === "col" ? <CollRow c={e.obj} /> : <Row i={e.obj} />}
                     </React.Fragment>
                   );
                 })}
@@ -923,7 +1026,7 @@ export default function ScheduleScreen({ money = true, crm, updateCrm, openInvoi
       </div>
 
       {/* pending: always in view on the right */}
-      <div style={{ ...card, marginBottom: 0, position: "sticky", top: 70, maxHeight: "calc(100vh - 90px)", overflowY: "auto", padding: "12px 16px",
+      <div style={{ ...card, marginBottom: 0, position: phone ? "static" : "sticky", top: 70, maxHeight: phone ? "none" : "calc(100vh - 90px)", overflowY: phone ? "visible" : "auto", padding: "12px 16px",
           outline: overPending ? "2px dashed " + GOLD : "none", outlineOffset: 3, background: overPending ? "#fff8e6" : "#fff" }}
         onDragOver={(ev) => {
           const it = dragId && (isColDrag(dragId) ? (crm.collections || []).find((x) => "col:" + x.id === dragId) : crm.invoices.find((x) => x.id === dragId));
@@ -1084,7 +1187,7 @@ export default function ScheduleScreen({ money = true, crm, updateCrm, openInvoi
             {!pop.peek && <div onMouseDown={() => setPop(null)} style={{ position: "fixed", inset: 0, zIndex: 70 }} />}
             <div onMouseEnter={() => pop.peek && clearTimeout(peekT.current.close)} onMouseLeave={() => pop.peek && peekClose()}
               onMouseDown={() => { if (pop.peek) { peekCancel(); setPop({ ...pop, peek: false }); } }}
-              style={{ position: "fixed", left: pop.side === "left" ? Math.max(10, pop.rect.left - PW - 24) : Math.min(pop.rect.left, window.innerWidth - PW - 20), top: Math.max(10, pop.side === "left" ? Math.min(pop.rect.top - 60, window.innerHeight - PH - 10) : top), zIndex: 71, width: PW, maxHeight: PH, overflowY: "auto",
+              style={{ position: "fixed", ...(phone ? { left: 8, right: 8, top: 62, width: "auto", maxHeight: "calc(100dvh - 74px)" } : { left: pop.side === "left" ? Math.max(10, pop.rect.left - PW - 24) : Math.min(pop.rect.left, window.innerWidth - PW - 20), top: Math.max(10, pop.side === "left" ? Math.min(pop.rect.top - 60, window.innerHeight - PH - 10) : top), width: PW, maxHeight: PH }), zIndex: 71, overflowY: "auto",
               background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, boxShadow: "0 14px 40px rgba(11,31,63,.28)", padding: "14px 18px", boxSizing: "border-box" }}>
               <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 6 }}>
                 <b style={{ fontSize: 15, color: COLLECTION_BLUE }}>{col.supplier || "Supplier"}</b>
@@ -1171,7 +1274,7 @@ export default function ScheduleScreen({ money = true, crm, updateCrm, openInvoi
             {!pop.peek && <div onMouseDown={() => setPop(null)} style={{ position: "fixed", inset: 0, zIndex: 70 }} />}
             <div onMouseEnter={() => pop.peek && clearTimeout(peekT.current.close)} onMouseLeave={() => pop.peek && peekClose()}
               onMouseDown={() => { if (pop.peek) { peekCancel(); setPop({ ...pop, peek: false }); } }}
-              style={{ position: "fixed", left, ...vpos, zIndex: 71, width: PW, maxHeight: Math.min(PH, (vpos.top ? window.innerHeight - vpos.top : pop.rect.top) - 16), overflowY: "auto",
+              style={{ position: "fixed", ...(phone ? { left: 8, right: 8, top: 62, width: "auto", maxHeight: "calc(100dvh - 74px)" } : { left, ...vpos, width: PW, maxHeight: Math.min(PH, (vpos.top ? window.innerHeight - vpos.top : pop.rect.top) - 16) }), zIndex: 71, overflowY: "auto",
                 background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, boxShadow: "0 14px 40px rgba(11,31,63,.28)", padding: "14px 18px", boxSizing: "border-box" }}>
               <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 4 }}>
                 <b style={{ fontSize: 15, color: NAVY }}>Parts · {c ? c.name || "Unnamed" : "No customer"}</b>
@@ -1256,7 +1359,7 @@ export default function ScheduleScreen({ money = true, crm, updateCrm, openInvoi
             {!pop.peek && <div onMouseDown={() => setPop(null)} style={{ position: "fixed", inset: 0, zIndex: 70 }} />}
             <div onMouseEnter={() => pop.peek && clearTimeout(peekT.current.close)} onMouseLeave={() => pop.peek && peekClose()}
               onMouseDown={() => { if (pop.peek) { peekCancel(); setPop({ ...pop, peek: false }); } }}
-              style={{ position: "fixed", left: pop.side === "left" ? Math.max(10, pop.rect.left - PW - 24) : Math.min(pop.rect.left, window.innerWidth - PW - 20), top: Math.max(10, pop.side === "left" ? Math.min(pop.rect.top - 60, window.innerHeight - PH - 10) : top), zIndex: 71, width: PW, maxHeight: PH, overflowY: "auto",
+              style={{ position: "fixed", ...(phone ? { left: 8, right: 8, top: 62, width: "auto", maxHeight: "calc(100dvh - 74px)" } : { left: pop.side === "left" ? Math.max(10, pop.rect.left - PW - 24) : Math.min(pop.rect.left, window.innerWidth - PW - 20), top: Math.max(10, pop.side === "left" ? Math.min(pop.rect.top - 60, window.innerHeight - PH - 10) : top), width: PW, maxHeight: PH }), zIndex: 71, overflowY: "auto",
               background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, boxShadow: "0 14px 40px rgba(11,31,63,.28)", padding: "14px 18px", boxSizing: "border-box" }}>
               <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 6 }}>
                 <b style={{ fontSize: 15, color: NAVY }}>{c ? c.name || "Unnamed" : "No customer"}</b>

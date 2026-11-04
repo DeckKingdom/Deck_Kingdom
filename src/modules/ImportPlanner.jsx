@@ -85,6 +85,14 @@ export default function ImportPlanner() {
   const [roNote, setRoNote] = useState(false);
   useEffect(() => { if (!roNote) return; const t = setTimeout(() => setRoNote(false), 3500); return () => clearTimeout(t); }, [roNote]);
   const [sideOpen, setSideOpen] = useState(() => (typeof window === "undefined" ? true : window.innerWidth >= 950));
+  // phones: the side menu becomes a drawer and the header slims down
+  const [isPhone, setIsPhone] = useState(() => typeof window !== "undefined" && window.innerWidth < 760);
+  useEffect(() => {
+    const on = () => { const p = window.innerWidth < 760; setIsPhone((was) => { if (p && !was) setSideOpen(false); return p; }); };
+    window.addEventListener("resize", on);
+    if (window.innerWidth < 760) setSideOpen(false);
+    return () => window.removeEventListener("resize", on);
+  }, []);
   const [saveState, setSaveState] = useState("");
   const [pop, setPop] = useState(null);
   const [dragLine, setDragLine] = useState(null); // shipment line being dragged to a new place
@@ -254,6 +262,7 @@ export default function ImportPlanner() {
   };
   const navTo = (t) => {
     if (!access.canTab(t)) return;
+    if (isPhone) setSideOpen(false);
     setSelCustomerId(null); setSelInvoiceId(null); setSelCollectionId(null); setSelQuoteId(null);
     setSelSampleId(null); setSelPurchaseId(null); setSelSupplierId(null);
     setQuoteFilter(null); setPurchaseFilter(null); setInvFilter(null);
@@ -1192,6 +1201,26 @@ export default function ImportPlanner() {
         input.dk-pallets::-webkit-outer-spin-button, input.dk-pallets::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
         input.dk-pallets { -moz-appearance: textfield; appearance: textfield; }
         .dk-sticky-table thead th { position: sticky; top: 0; background: #fff; z-index: 4; }
+        /* ===== phones ===== */
+        @media (max-width: 760px) {
+          /* page wrappers and cards: less padding so content gets the width */
+          div[style*="padding: 18px 22px"] { padding: 12px 10px 20px !important; }
+          div[style*="padding: 16px 18px"] { padding: 12px 12px !important; }
+          div[style*="padding: 20px 22px"], div[style*="padding: 16px 22px"], div[style*="padding: 18px 22px"][style*="border-radius"] { padding: 14px 14px !important; }
+          /* Home: one column */
+          .dk-home-grid { grid-template-columns: 1fr !important; }
+          .dk-home-cell { grid-column: auto !important; }
+          /* stop iOS zooming in on every field */
+          input, select, textarea { font-size: 16px !important; }
+          h2 { font-size: 18px !important; }
+          /* wide tables scroll sideways inside their card instead of squashing or pushing the page wider */
+          div:has(> table) { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+          table:has(th:nth-child(5)), table:has(td:nth-child(5)) { min-width: 640px; }
+          /* tool bars that stick under the header on desktop just scroll away on phones */
+          div[style*="position: sticky"][style*="z-index: 15"], div[style*="position: sticky"][style*="z-index: 16"] { position: static !important; }
+          /* pop-overs and dialogs never wider than the screen */
+          div[style*="position: fixed"][style*="width:"] { max-width: calc(100vw - 16px) !important; }
+        }
         @media print {
           .no-print, button { display: none !important; }
           body { background: #fff !important; }
@@ -1218,10 +1247,16 @@ export default function ImportPlanner() {
         );
       })()}
       <div style={{ display: "flex", alignItems: "stretch" }}>
-      <Sidebar tab={tab} setTab={navTo} open={sideOpen} footer={sideFooter} onNew={access.canEdit ? sideNew : null} onToggle={() => setSideOpen((o) => !o)} allow={access.canTab} />
+      <Sidebar phone={isPhone} tab={tab} setTab={navTo} open={sideOpen} footer={sideFooter} onNew={access.canEdit ? (t) => { if (isPhone) setSideOpen(false); sideNew(t); } : null} onToggle={() => setSideOpen((o) => !o)} allow={access.canTab} />
       <div style={{ flex: 1, minWidth: 0 }}>
 
-      <div ref={headerRef} className="no-print" style={{ background: NAVY, padding: "10px 16px", display: "flex", alignItems: "center", gap: 10, position: "sticky", top: 0, zIndex: 25, boxShadow: "0 2px 8px rgba(11,31,63,0.25)" }}>
+      <div ref={headerRef} className="no-print" style={{ background: NAVY, padding: isPhone ? "8px 10px" : "10px 16px", display: "flex", alignItems: "center", gap: isPhone ? 6 : 10, position: "sticky", top: 0, zIndex: 25, boxShadow: "0 2px 8px rgba(11,31,63,0.25)" }}>
+        {isPhone && (
+          <button onClick={() => setSideOpen(true)} title="Menu" aria-label="Menu"
+            style={{ width: 38, height: 38, borderRadius: 8, border: "1px solid #33466b", background: "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flex: "none", padding: 0 }}>
+            <Icon name="menu" size={18} stroke="#fff" />
+          </button>
+        )}
         {/* back arrow + page name: back to this section's list (or to Imports from a shipment) */}
         {(() => {
           const back = goBackTarget();
@@ -1234,12 +1269,12 @@ export default function ImportPlanner() {
                   <Icon name="chevleft" size={17} stroke="#cfd6e4" />
                 </span>
               )}
-              <span style={{ color: "#fff", fontWeight: 700, fontSize: 15.5, whiteSpace: "nowrap", paddingLeft: back ? 0 : 6 }}>{TAB_LABELS[tab] || "Home"}</span>
+              <span style={{ color: "#fff", fontWeight: 700, fontSize: isPhone ? 15 : 15.5, whiteSpace: "nowrap", paddingLeft: back ? 0 : 6, overflow: "hidden", textOverflow: "ellipsis", maxWidth: isPhone ? "46vw" : undefined }}>{TAB_LABELS[tab] || "Home"}</span>
             </button>
           );
         })()}
         <span style={{ flex: 1 }} />
-        <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+        <div style={{ display: isPhone ? "none" : "flex", gap: 4, alignItems: "center" }}>
           {[["home", "Home", "home"], ["overview", "Imports", "ship"], ["customers", "Customers", "users"], ["invoices", "Invoices", "doc"], ["quotes", "Quotes", "tag"], ["samples", "Samples", "leaf"], ["schedule", "Delivery Schedule", "cal"]].filter(([t]) => access.canTab(t)).map(([t, label, icon]) => (
             <button key={t} onClick={() => navTo(t)} title={label} style={{ width: 34, height: 34, borderRadius: 8, border: "1px solid " + (tab === t ? GOLD : "#33466b"), background: tab === t ? GOLD : "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flex: "none", padding: 0 }}>
               <Icon name={icon} size={16} stroke={tab === t ? NAVY : "#cfd6e4"} />

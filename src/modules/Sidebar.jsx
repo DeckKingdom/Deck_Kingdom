@@ -46,7 +46,7 @@ export const NAV_SECTIONS = [
 
 export const TAB_LABELS = { ...Object.fromEntries(NAV_SECTIONS.flatMap((s) => s.items.map(([t, l]) => [t, l]))), shipments: "Shipment", tasks: "Tasks" };
 
-export default function Sidebar({ tab, setTab, open, footer, onNew, onToggle, allow }) {
+export default function Sidebar({ tab, setTab, open, footer, onNew, onToggle, allow, phone }) {
   const ok = allow || (() => true);
   const sections = NAV_SECTIONS.map((s) => ({ ...s, items: s.items.filter(([t]) => ok(t)) })).filter((s) => s.items.length);
   const [shut, setShut] = useState({});
@@ -57,23 +57,29 @@ export default function Sidebar({ tab, setTab, open, footer, onNew, onToggle, al
     if (sec && shut[sec.title]) setShut((x) => ({ ...x, [sec.title]: false }));
   }, [tab]);
 
+  // phones: the menu is a drawer over the page, opened from the header's menu button
+  if (phone && !open) return null;
   return (
+    <>
+    {phone && <div className="no-print" onClick={onToggle} style={{ position: "fixed", inset: 0, background: "rgba(11,31,63,.45)", zIndex: 59 }} />}
     <aside
       className="no-print"
       style={{
-        width: open ? 218 : 62,
+        width: phone ? 264 : open ? 218 : 62,
+        maxWidth: phone ? "82vw" : undefined,
         flex: "none",
         background: NAVY,
-        position: "sticky",
+        position: phone ? "fixed" : "sticky",
+        left: 0,
         top: 0,
-        height: "100vh",
+        height: phone ? "100dvh" : "100vh",
         overflowY: "auto",
         overflowX: "hidden",
         display: "flex",
         flexDirection: "column",
         transition: "width .18s ease",
         boxShadow: "2px 0 8px rgba(11,31,63,0.25)",
-        zIndex: 26,
+        zIndex: phone ? 60 : 26,
       }}
     >
       <div style={{ padding: open ? "16px 10px 10px 14px" : "16px 10px 10px", display: "flex", alignItems: "center", gap: 9, justifyContent: open ? "flex-start" : "center" }}>
@@ -87,7 +93,7 @@ export default function Sidebar({ tab, setTab, open, footer, onNew, onToggle, al
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", height: 20 }}>
               <span style={{ color: GOLD, fontSize: 12, fontWeight: 700 }}>Ops</span>
               {onToggle && (
-                <button onClick={onToggle} title="Collapse the menu"
+                <button onClick={onToggle} title={phone ? "Close the menu" : "Collapse the menu"}
                   style={{ width: 26, height: 20, borderRadius: 6, border: "1px solid #33466b", background: "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0, flex: "none" }}>
                   <Icon name="menu" size={13} stroke="#cfd6e4" />
                 </button>
@@ -176,5 +182,6 @@ export default function Sidebar({ tab, setTab, open, footer, onNew, onToggle, al
 
       <div style={{ padding: "10px 10px 14px", borderTop: "1px solid #24375f" }}>{footer(open)}</div>
     </aside>
+    </>
   );
 }
