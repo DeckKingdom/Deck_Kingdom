@@ -317,6 +317,8 @@ export default function ScheduleScreen({ money = true, crm, updateCrm, openInvoi
     setAsk({ id, n: ns.n, apply });
   };
   const [dragId, setDragId] = useState(null); // pending job being dragged onto a day
+  const [runDrag, setRunDrag] = useState(null); // { date, key }: a whole run being dragged into a new order
+  const [overRun, setOverRun] = useState(null);
   const [overDate, setOverDate] = useState(null);
   const [overRow, setOverRow] = useState(null);
   const [overPending, setOverPending] = useState(false);
@@ -478,12 +480,37 @@ export default function ScheduleScreen({ money = true, crm, updateCrm, openInvoi
     const p = e.kind === "col" ? e.obj.postcode : ((siteById[e.obj.siteId] || {}).postcode || (custById[e.obj.customerId] || {}).postcode);
     return p ? String(p).toUpperCase().replace(/[^A-Z0-9]/g, "") : "~";
   };
+  // runs dragged into the order the vans actually go out (saved per day); runs not placed yet follow after
+  const runOrder = (crm.dsRunOrder && typeof crm.dsRunOrder === "object") ? crm.dsRunOrder : {};
+  const runRank = (date, key) => {
+    if (!key.startsWith("0|")) return 10000;
+    const i = (runOrder[date] || []).indexOf(key);
+    return i < 0 ? 5000 : i;
+  };
   groups.forEach((g) =>
     g.rows.sort((a, b) =>
+      runRank(g.date, runKey(a)) - runRank(g.date, runKey(b)) ||
       runKey(a).localeCompare(runKey(b)) ||
       numOr(a.obj.dropNo, 999) - numOr(b.obj.dropNo, 999) ||
       pcKey(a).localeCompare(pcKey(b), "en", { numeric: true }) ||
       (a.time || "").localeCompare(b.time || "")));
+
+  // drag a run bar above/below another: that day's runs go out in the new order
+  const moveRun = (date, from, to, rows) => {
+    const keys = [...new Set(rows.map(runKey).filter((k) => k.startsWith("0|")))];
+    const fi = keys.indexOf(from), ti = keys.indexOf(to);
+    if (fi < 0 || ti < 0 || fi === ti) return;
+    keys.splice(fi, 1);
+    keys.splice(ti, 0, from);
+    updateCrm((c) => {
+      const o = { ...((c.dsRunOrder && typeof c.dsRunOrder === "object") ? c.dsRunOrder : {}) };
+      o[date] = keys;
+      const old = addDays(tod, -14);
+      Object.keys(o).forEach((d) => { if (d < old) delete o[d]; }); // forget past days
+      c.dsRunOrder = o;
+      return c;
+    });
+  };
 
   const setInv = (invId, fn) =>
     updateCrm((c) => {
@@ -844,12 +871,22 @@ export default function ScheduleScreen({ money = true, crm, updateCrm, openInvoi
                   const custGroup = key === "3|customer"; // customers collecting from the warehouse
                   const nDrops = sameRun.filter((x) => x.kind === "inv").length, nPicks = sameRun.length - nDrops;
                   const runKg = sameRun.reduce((t, x) => t + ((x.kind === "inv" ? invoiceLoadKg(x.obj, crm) : collKg(x.obj)) || 0), 0);
+                  const canMove = key.startsWith("0|") && new Set(g.rows.map(runKey).filter((x) => x.startsWith("0|"))).size > 1;
+                  const isOver = overRun === g.date + key && runDrag && runDrag.key !== key;
                   const head = key !== prevKey ? (
-                    <div title={!loose ? "" : "Supplier pick-ups not in a run yet — give them a driver and run, or drag one onto a job"}
-                      style={{ display: "grid", gridTemplateColumns: dsCols(showPrep), gap: 6, justifyContent: "space-between", margin: k ? "12px 0 6px" : "4px 0 6px", background: "#eef1f6", border: "1px solid #dde2ea", borderRadius: 12,
+                    <div title={loose ? "Supplier pick-ups not in a run yet — give them a driver and run, or drag one onto a job" : canMove ? "Drag to change the order the runs go out" : ""}
+                      draggable={canMove}
+                      onDragStart={canMove ? (ev) => { ev.dataTransfer.effectAllowed = "move"; try { ev.dataTransfer.setData("text/plain", "run"); } catch (x) { /* ignore */ } setRunDrag({ date: g.date, key }); } : undefined}
+                      onDragEnd={() => { setRunDrag(null); setOverRun(null); }}
+                      onDragOver={(ev) => { if (runDrag && runDrag.date === g.date && key.startsWith("0|") && runDrag.key !== key) { ev.preventDefault(); if (overRun !== g.date + key) setOverRun(g.date + key); } }}
+                      onDragLeave={(ev) => { if (!ev.currentTarget.contains(ev.relatedTarget) && overRun === g.date + key) setOverRun(null); }}
+                      onDrop={(ev) => { if (!runDrag || runDrag.date !== g.date) return; ev.preventDefault(); moveRun(g.date, runDrag.key, key, g.rows); setRunDrag(null); setOverRun(null); }}
+                      style={{ display: "grid", gridTemplateColumns: dsCols(showPrep), gap: 6, justifyContent: "space-between", margin: k ? "12px 0 6px" : "4px 0 6px", background: "#eef1f6", border: "1px solid " + (isOver ? GOLD : "#dde2ea"), borderRadius: 12,
+                        boxShadow: isOver ? "0 0 0 2px " + GOLD : "none", opacity: runDrag && runDrag.date === g.date && runDrag.key === key ? 0.5 : 1, cursor: canMove ? "grab" : "default",
                         padding: "0 12px 0 0", minHeight: 36, boxSizing: "border-box", overflow: "hidden", alignItems: "stretch", fontSize: 12, color: NAVY, whiteSpace: "nowrap" }}>
                       <span style={{ gridColumn: "1 / span 9", display: "flex", alignItems: "stretch" }}>
-                        <span style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "#dce2ec", padding: "0 14px" }}>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "#dce2ec", padding: canMove ? "0 14px 0 8px" : "0 14px" }}>
+                          {canMove && <span aria-hidden style={{ color: "#8593a8", fontSize: 13, letterSpacing: -2, marginRight: 2 }}>⋮⋮</span>}
                           <b>{custGroup ? "Customer collections" : loose ? "Supplier collections" : (e.obj.runNo ? "Run " + e.obj.runNo : "No run yet") + " · " + (e.obj.driver || "no driver yet")}</b>
                           <span style={{ fontWeight: 600, color: "#5a6a85" }}>
                             {custGroup ? nDrops + " collecting from the warehouse" : [nDrops ? nDrops + " drop" + (nDrops === 1 ? "" : "s") : "", nPicks ? nPicks + " pick-up" + (nPicks === 1 ? "" : "s") : ""].filter(Boolean).join(" · ")}
