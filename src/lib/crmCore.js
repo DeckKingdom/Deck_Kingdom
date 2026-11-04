@@ -2120,6 +2120,19 @@ export const blankSample = (customerId) => ({
 
 // Invoices that count as a sale: money taken for goods, not a sample order itself.
 // refunded / cancelled on the website: off the schedule and out of the sales figures
+// customers whose jobs never go on the delivery schedule (or its pending list / delivery counts)
+export const OFF_SCHEDULE_CUSTOMERS = [/spotless\s*water/i];
+const offSchedCache = new WeakMap();
+export const offScheduleIds = (crm) => {
+  const list = (crm && crm.customers) || [];
+  let hit = offSchedCache.get(list);
+  if (!hit) {
+    hit = new Set(list.filter((c) => OFF_SCHEDULE_CUSTOMERS.some((re) => re.test(c.name || "") || re.test(c.contact || ""))).map((c) => c.id));
+    offSchedCache.set(list, hit);
+  }
+  return hit;
+};
+export const onSchedule = (inv, crm) => !!inv && !offScheduleIds(crm).has(inv.customerId);
 export const isVoidInvoice = (inv) => ["refunded", "cancelled", "failed", "trash"].includes((inv && inv.webStatus) || "");
 export const isSaleInvoice = (inv) =>
   !isVoidInvoice(inv) && invoiceTotals(inv).total > 0 && !/sample/i.test(inv.paymentType || "") && !/sample/i.test(inv.jobType || "");

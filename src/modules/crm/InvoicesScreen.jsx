@@ -6,7 +6,7 @@ import {
   recordOrigin, blankInvoice, blankLine, nextNumber, invoiceTotals, gbp, isPaid,
   JOB_TYPES, PAYMENT_TYPES, PREP_FLAGS, FOLLOWUP_FLAGS, today, TIME_SLOTS, vanOptions,
   skuIndex, invoiceCost, buildPicks, pickLandedCost, jobCost, blankPick, invoiceLoadKg, applyInvoiceStockDeduction,
-  TRADE_COUNTER, TRADE_COUNTER_LABEL, quoteRef, sampleRef, isSaleInvoice, riskOf, staffName, isVoidInvoice, userInitials,
+  TRADE_COUNTER, TRADE_COUNTER_LABEL, quoteRef, sampleRef, isSaleInvoice, riskOf, staffName, isVoidInvoice, onSchedule, userInitials,
 } from "../../lib/crmCore.js";
 import { ListHero, HeroStat, HeroAdd, SearchBox, RiskChip, WebStatusChip, Soon } from "./ui.jsx";
 import { Icon, Chip, Tg, Modal, selectAllProps, SuggestInput, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
@@ -125,9 +125,10 @@ export default function InvoicesScreen({ money = true, newFollowUp, crm, updateC
           const awaiting = live.filter((i) => !isPaid(i));
           const owed = sum(awaiting);
           const weekEnd = addDays(tod, 6);
-          const today_ = live.filter((i) => i.deliveryDate === tod && !i.deliveryCompleted).length;
-          const week = live.filter((i) => i.deliveryDate >= tod && i.deliveryDate <= weekEnd && !i.deliveryCompleted).length;
-          const toBook = live.filter((i) => !i.deliveryDate && !i.deliveryCompleted).length;
+          const sched = live.filter((i) => onSchedule(i, crm)); // delivery counts: not off-schedule customers
+          const today_ = sched.filter((i) => i.deliveryDate === tod && !i.deliveryCompleted).length;
+          const week = sched.filter((i) => i.deliveryDate >= tod && i.deliveryDate <= weekEnd && !i.deliveryCompleted).length;
+          const toBook = sched.filter((i) => !i.deliveryDate && !i.deliveryCompleted).length;
           const sales = thisM.filter(isSaleInvoice);
           const feeds = [["FileMaker feed", crm.fmBridge, 30], ["Website feed", crm.wooBridge, 24 * 60]].filter(([, fd]) => fd && fd.at);
           return (

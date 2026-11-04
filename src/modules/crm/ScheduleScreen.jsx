@@ -6,7 +6,7 @@ import {
   RUN_NOS, TIME_SLOTS, DRIVERS, vanOptions,
   invoiceTotals, gbp, isPaid, scheduleStatus, STRIPE_COLOURS, daysSinceRaised, isCollectionJob, invoiceLoadKg, collectionProgress,
   PREP_FLAGS, FOLLOWUP_FLAGS, today,
-  isVoidInvoice, applyInvoiceStockDeduction,
+  isVoidInvoice, onSchedule, applyInvoiceStockDeduction,
 } from "../../lib/crmCore.js";
 import { printJobDocs, DOC_KINDS } from "./printDocs.js";
 import LinesEditor from "./LinesEditor.jsx";
@@ -238,7 +238,7 @@ const SlaChip = ({ days, done }) => (
 export default function ScheduleScreen({ money = true, crm, updateCrm, openInvoice, openCollection, me, planner, goCustomer, newFollowUp }) {
   const [printMsg, setPrintMsg] = useState("");
   const printJobs = (jobs, kinds, title) => {
-    const list = jobs.filter((x) => x && !isVoidInvoice(x));
+    const list = jobs.filter((x) => x && !isVoidInvoice(x) && onSchedule(x, crm));
     if (!list.length) return;
     const ok = printJobDocs(list, kinds, { custOf: (x) => custById[x.customerId], siteOf: (x) => siteById[x.siteId], crm, planner, title });
     setPrintMsg(ok ? "" : "Printing is blocked here — allow pop-ups for ops.deckkingdom.co.uk and try again.");
@@ -262,7 +262,7 @@ export default function ScheduleScreen({ money = true, crm, updateCrm, openInvoi
     const set = (fn) => (kind === "col" ? setColl(obj.id, fn) : setInv(obj.id, fn));
     if (!v || !date || (kind === "inv" && isCollectionJob(obj))) return set((t) => (t.driver = v));
     const others = [
-      ...crm.invoices.filter((x) => x.id !== obj.id && !isVoidInvoice(x) && !isCollectionJob(x) && x.deliveryDate === date),
+      ...crm.invoices.filter((x) => x.id !== obj.id && !isVoidInvoice(x) && onSchedule(x, crm) && !isCollectionJob(x) && x.deliveryDate === date),
       ...(crm.collections || []).filter((x) => x.id !== obj.id && x.collectDate === date),
     ].filter((x) => x.driver === v);
     const maxRun = others.reduce((m, x) => Math.max(m, Number(x.runNo) || 0), 0);
@@ -281,7 +281,7 @@ export default function ScheduleScreen({ money = true, crm, updateCrm, openInvoi
       return String((st && st.postcode) || (cu && cu.postcode) || "");
     };
     const list = [
-      ...c.invoices.filter((x) => !isVoidInvoice(x) && x.deliveryDate === date && !x.deliveryCompleted).map((o) => ({ o, p: pc(o, "inv") })),
+      ...c.invoices.filter((x) => !isVoidInvoice(x) && onSchedule(x, c) && x.deliveryDate === date && !x.deliveryCompleted).map((o) => ({ o, p: pc(o, "inv") })),
       ...(c.collections || []).filter((x) => x.collectDate === date && !x.collected).map((o) => ({ o, p: pc(o, "col") })),
     ];
     list.forEach(({ o }) => { o.driver = ""; o.runNo = ""; o.van = ""; o.dropNo = ""; });
@@ -346,7 +346,7 @@ export default function ScheduleScreen({ money = true, crm, updateCrm, openInvoi
       moving.driver = target.driver || ""; moving.runNo = target.runNo || "";
       const sameRun = (x) => (x.driver || "") === (target.driver || "") && (x.runNo || "") === (target.runNo || "");
       const stops = [
-        ...c.invoices.filter((x) => !isVoidInvoice(x) && x.deliveryDate === date && sameRun(x)).map((x) => ({ k: x.id, o: x })),
+        ...c.invoices.filter((x) => !isVoidInvoice(x) && onSchedule(x, c) && x.deliveryDate === date && sameRun(x)).map((x) => ({ k: x.id, o: x })),
         ...(c.collections || []).filter((x) => x.collectDate === date && sameRun(x) && (x.runNo || x.driver)).map((x) => ({ k: "col:" + x.id, o: x })),
       ].filter((x) => x.k !== id).sort((p, q) => (Number(p.o.dropNo) || 999) - (Number(q.o.dropNo) || 999));
       const at = stops.findIndex((x) => x.k === tKey);
@@ -417,6 +417,7 @@ export default function ScheduleScreen({ money = true, crm, updateCrm, openInvoi
   const q = search.trim().toLowerCase();
   const visible = crm.invoices.filter((i) => {
     if (isVoidInvoice(i)) return false; // refunded / cancelled on the website
+    if (!onSchedule(i, crm)) return false; // e.g. Spotless Water: never on the schedule
     if (hideDone && i.deliveryCompleted) return false;
     if (van && i.van !== van) return false;
     if (q) {
@@ -1096,7 +1097,7 @@ export default function ScheduleScreen({ money = true, crm, updateCrm, openInvoi
           const same = (x) => (x.driver || "") === (job.driver || "") && (x.runNo || "") === (job.runNo || "");
           const madeIds = new Set(made.map((x) => x.id));
           const stops = [
-            ...cc.invoices.filter((x) => !isVoidInvoice(x) && !isCollectionJob(x) && x.deliveryDate === job.deliveryDate && same(x)),
+            ...cc.invoices.filter((x) => !isVoidInvoice(x) && onSchedule(x, cc) && !isCollectionJob(x) && x.deliveryDate === job.deliveryDate && same(x)),
             ...(cc.collections || []).filter((x) => !madeIds.has(x.id) && x.collectDate === job.deliveryDate && same(x)),
           ].sort((p, q) => (Number(p.dropNo) || 999) - (Number(q.dropNo) || 999));
           const at = stops.indexOf(job);

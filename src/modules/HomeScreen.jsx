@@ -6,7 +6,7 @@ import {
   invoiceTotals, gbp, isPaid, today, stockValuation, blankTask,
   dailyTasksFor, isDailyDone, dueScheduledFor, projectsFor, setTaskDone, scheduledOccurrence, nextScheduled,
   occurrenceAssignees, staffName, staffList, describeSchedule, PROJECT_STATUSES,
-  quoteTotals, quoteStatus, quoteIsOpen, sampleStats, sampleStatus, isVoidInvoice,
+  quoteTotals, quoteStatus, quoteIsOpen, sampleStats, sampleStatus, isVoidInvoice, onSchedule,
 } from "../lib/crmCore.js";
 import { tasksAvailable } from "../data/crmStorage.js";
 import { Icon, Chip, card, sect, lbl, inp, btn, goldBtn, RiskChip } from "./crm/ui.jsx";
@@ -60,10 +60,11 @@ export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTa
   const salesLastToDate = salesIn(lastMonthKey, dayOfMonth);
   const awaiting = invs.filter((i) => !isPaid(i));
   const owed = awaiting.reduce((t, i) => t + invoiceTotals(i).total, 0);
-  const todays = invs.filter((i) => i.deliveryDate === tod && !i.deliveryCompleted).length;
+  const schedInvs = invs.filter((i) => onSchedule(i, crm)); // delivery counts leave out off-schedule customers
+  const todays = schedInvs.filter((i) => i.deliveryDate === tod && !i.deliveryCompleted).length;
   const weekEnd = addDays(tod, 6);
-  const thisWeek = invs.filter((i) => i.deliveryDate >= tod && i.deliveryDate <= weekEnd && !i.deliveryCompleted).length;
-  const toBook = invs.filter((i) => !i.deliveryDate && !i.deliveryCompleted).length;
+  const thisWeek = schedInvs.filter((i) => i.deliveryDate >= tod && i.deliveryDate <= weekEnd && !i.deliveryCompleted).length;
+  const toBook = schedInvs.filter((i) => !i.deliveryDate && !i.deliveryCompleted).length;
   const quotes = crm ? crm.quotes || [] : [];
   const openQuotes = quotes.filter((q) => quoteIsOpen(q, crm));
   const acceptedWaiting = quotes.filter((q) => quoteStatus(q, crm) === "Accepted").length;
@@ -162,7 +163,7 @@ export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTa
             {crm && (() => {
               // today + the next 3 days: drops, what to load for the next day, and supplier collections
               const days = [0, 1, 2, 3].map((n) => addDays(tod, n));
-              const open = (crm.invoices || []).filter((i) => !i.deliveryCompleted && !isVoidInvoice(i));
+              const open = (crm.invoices || []).filter((i) => !i.deliveryCompleted && !isVoidInvoice(i) && onSchedule(i, crm));
               const dropsOn = (d) => open.filter((i) => i.deliveryDate === d);
               const custName = (id) => { const c = (crm.customers || []).find((x) => x.id === id); return c ? c.name || "Unnamed" : "No customer"; };
               const postcodeOf = (i) => { const st = (crm.sites || []).find((x) => x.id === i.siteId); const c = (crm.customers || []).find((x) => x.id === i.customerId); return (st && st.postcode) || (c && c.postcode) || ""; };
