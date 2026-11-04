@@ -1,6 +1,6 @@
 DECK KINGDOM — FILEMAKER BRIDGE
 Copies new and changed customers and invoices from FileMaker into ops.deckkingdom.co.uk
-every 5 minutes. One way only: FileMaker stays the master while the two run side by side.
+every minute. One way only: FileMaker stays the master while the two run side by side.
 It only makes outgoing connections, so nothing new needs opening on the router.
 
 ----------------------------------------------------------------------
@@ -55,10 +55,10 @@ c) Double-click  discover.cmd  -> it writes  fm-discover.txt  (a list of your Fi
 ----------------------------------------------------------------------
 a) test.cmd       -> reads FileMaker and writes fm-test.json; sends nothing. Check it looks right.
 b) sync-now.cmd   -> first real run: brings across everything from the start date.
-c) install-task.cmd -> from then on it runs by itself every 5 minutes.
+c) install-task.cmd -> from then on it runs by itself every minute.
    Progress and any problems: fm-bridge.log in this folder.
    In ops, FileMaker invoices show a small "FM" tag, and the Invoices screen shows when the
-   feed last ran. Reload the page to see the newest.
+   feed last ran. Open screens update by themselves (the green "Live" dot in the top bar).
    To stop it: uninstall-task.cmd
 
 Good to know
@@ -68,3 +68,14 @@ Good to know
   pick list, van) are left alone.
 - Once a day the last 14 days are sent again in full, so FileMaker always wins.
 - During the trial, raise new orders in FileMaker only, or the invoice numbers will clash.
+
+----------------------------------------------------------------------
+FRESH START (Nov 2026) - clear ops and bring everything across again
+----------------------------------------------------------------------
+1. In ops: Backup (bottom of the menu). Ask everyone to close ops.
+2. Supabase SQL Editor: run fm-sync-faster.sql, then fresh-start-clear.sql.
+3. Website FIRST: WooCommerce > Ops feed > "resend orders changed since" 31/10/2026 > Resend.
+   Wait until that page shows it has caught up (a couple of minutes). Doing this before FileMaker
+   means FileMaker's copy of a web order joins up with it instead of making a second job.
+4. Office PC: copy the new files over the old ones in C:\DeckKingdomBridge (keep fm-bridge.config.json),
+   then double-click fresh-import.cmd. It sends every job since 1 January, then runs every minute.

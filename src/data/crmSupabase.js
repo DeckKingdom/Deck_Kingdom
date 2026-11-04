@@ -704,6 +704,17 @@ async function saveAll(d) {
   snapshot = next;
 }
 
+// ===== live refresh: the newest change someone else made (FileMaker, the website, another member of staff) =====
+// one tiny query against the audit log, so it can run every few seconds; the feeds' own status rows are ignored
+export async function latestOtherChange(myEmail) {
+  const sb = await getSupabase();
+  let q = sb.from("audit_log").select("id").not("record_id", "in", "(fmBridgeLast,wooBridgeLast)").order("id", { ascending: false }).limit(1);
+  if (myEmail) q = q.neq("actor", myEmail);
+  const { data, error } = await q;
+  if (error) throw new Error(error.message);
+  return data && data[0] ? Number(data[0].id) : 0;
+}
+
 // ===== audit log (read-only; the database triggers write it) =====
 export async function fetchAuditLog(limit = 200, beforeId = null) {
   const sb = await getSupabase();

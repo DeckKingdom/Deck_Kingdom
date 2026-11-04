@@ -199,7 +199,7 @@ export default function ImportPlanner() {
 
   // ===== CRM module (customers / invoices / schedule) =====
   const [crmOn, setCrmOn] = useState(false);
-  const { crm, updateCrm, replaceCrm, crmError, loadCrm, crmSave } = useCrm(crmOn);
+  const { crm, updateCrm, replaceCrm, crmError, loadCrm, crmSave, lastLive } = useCrm(crmOn);
   const [selCustomerId, setSelCustomerId] = useState(null);
   const [selInvoiceId, setSelInvoiceId] = useState(null);
   const [selCollectionId, setSelCollectionId] = useState(null);
@@ -1200,6 +1200,12 @@ export default function ImportPlanner() {
             e.target.value = "";
           }}
         />
+        {crm && storageMode === "supabase" && (
+          <span title={"Live: changes from FileMaker, the website and other staff appear by themselves within about 10 seconds" + (lastLive ? " — last pulled in at " + lastLive.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : "")}
+            style={{ display: "inline-flex", alignItems: "center", gap: 5, color: "#8fa0c0", fontSize: 12 }}>
+            <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#3FA55C", boxShadow: "0 0 0 3px rgba(63,165,92,.25)" }} />Live
+          </span>
+        )}
         <span style={{ color: "#8fa0c0", fontSize: 12, minWidth: 48, textAlign: "right" }}>{CRM_TABS.includes(tab) ? crmSave : saveState}</span>
       </div>
 

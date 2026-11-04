@@ -11,6 +11,8 @@
     powershell -ExecutionPolicy Bypass -File fm-bridge.ps1 -Test       # read and show what would be sent, send nothing
     powershell -ExecutionPolicy Bypass -File fm-bridge.ps1             # sync (what the scheduled task runs)
     powershell -ExecutionPolicy Bypass -File fm-bridge.ps1 -Full       # resend everything from the start date
+    powershell -ExecutionPolicy Bypass -File fm-bridge.ps1 -FreshStart # after ops has been cleared: settings for a fresh
+                                                                       # import from 1 Jan (or -StartFrom yyyy-MM-dd), then everything
 
   Written for Windows PowerShell 5.1 (built into Windows 10/11).
 #>
@@ -18,6 +20,8 @@ param(
   [switch]$Discover,
   [switch]$Test,
   [switch]$Full,
+  [switch]$FreshStart,
+  [string]$StartFrom = "",
   [string]$ConfigPath = (Join-Path $PSScriptRoot "fm-bridge.config.json")
 )
 $ErrorActionPreference = "Stop"
@@ -35,6 +39,22 @@ function Log([string]$msg) {
 }
 
 $cfg = Get-Content $ConfigPath -Raw -Encoding UTF8 | ConvertFrom-Json
+
+# ---------- fresh start: set the config up for a clean import, then send everything ----------
+function SetProp($obj, [string]$name, $value) {
+  if ($obj.PSObject.Properties[$name]) { $obj.$name = $value } else { $obj | Add-Member -NotePropertyName $name -NotePropertyValue $value }
+}
+if ($FreshStart) {
+  $firstDate = $(if ($StartFrom) { $StartFrom } else { (Get-Date).Year.ToString() + "-01-01" })
+  SetProp $cfg "startDate" $firstDate
+  # customers: those on the jobs, plus accounts created or edited since the start date - not all 3,600 every day
+  SetProp $cfg.customers "allDaily" $false
+  SetProp $cfg.customers "scan" ([pscustomobject]@{ created = "Date Created"; modified = "Last Modified"; everyMinutes = 5 })
+  $cfg | ConvertTo-Json -Depth 8 | Set-Content -Path $ConfigPath -Encoding UTF8
+  if (Test-Path $statePath) { Remove-Item $statePath -Force }
+  $Full = $true
+}
+if ($StartFrom) { $cfg.startDate = $StartFrom }
 
 # ---------- FileMaker (ODBC) ----------
 function Open-FM {
@@ -270,8 +290,16 @@ if ($Discover) {
 
 # =====================================================================
 # sync
-$state = @{ lastRun = ""; lastDaily = "" }
-if ((Test-Path $statePath) -and -not $Full) { $s = Get-Content $statePath -Raw | ConvertFrom-Json; $state.lastRun = [string]$s.lastRun; $state.lastDaily = [string]$s.lastDaily }
+# one run at a time: it now runs every minute, and a big first import takes longer than that
+$lockPath = Join-Path $here "fm-bridge.lock"
+if ((Test-Path $lockPath) -and ((Get-Item $lockPath).LastWriteTime -gt (Get-Date).AddMinutes(-30))) {
+  if ($Full -or $Test) { Log "Another run is still going - try again in a minute."; exit 1 }
+  exit 0   # the scheduled run quietly waits its turn
+}
+Set-Content -Path $lockPath -Value (Get-Date).ToString("o")
+
+$state = @{ lastRun = ""; lastDaily = ""; lastScan = "" }
+if ((Test-Path $statePath) -and -not $Full) { $s = Get-Content $statePath -Raw | ConvertFrom-Json; $state.lastRun = [string]$s.lastRun; $state.lastDaily = [string]$s.lastDaily; $state.lastScan = [string]$s.lastScan }
 # once a day the last couple of weeks are sent again in full, so anything changed in the ops
 # app by mistake is put back to what FileMaker says (FileMaker is the master)
 $today = (Get-Date).ToString("yyyy-MM-dd")
@@ -282,7 +310,7 @@ try {
   $conn = Open-FM
   $inv = $cfg.invoices; $cus = $cfg.customers; $lin = $cfg.lines
   $since = $null
-  if ($state.lastRun) { $since = ([datetime]$state.lastRun).AddMinutes(-15) }   # overlap a little; resending is harmless
+  if ($state.lastRun) { $since = ([datetime]$state.lastRun).AddMinutes(-3) }   # overlap a little; resending is harmless
 
   # ----- which invoices -----
   $start = [datetime]$cfg.startDate
@@ -358,6 +386,31 @@ try {
     foreach ($o in $invoices) { if (-not $o["customerFmId"] -and $o["siteFmId"] -and $siteCust[$o["siteFmId"]]) { $o["customerFmId"] = $siteCust[$o["siteFmId"]] } }
   }
 
+  # ----- accounts created or edited lately (FileMaker keeps those dates as text, so they're checked here) -----
+  $scanned = $false
+  $scan = $cus.scan
+  if ($scan -and ($Full -or $daily -or -not $state.lastScan -or ([datetime]$state.lastScan) -lt (Get-Date).AddMinutes(-[int]$scan.everyMinutes))) {
+    $gb = [System.Globalization.CultureInfo]::GetCultureInfo("en-GB")
+    if ($Full -or -not $state.lastScan) { $cutoff = $start }
+    elseif ($daily) { $cutoff = (Get-Date).Date.AddDays(-[int]$cfg.lookbackDays) }
+    else { $cutoff = ([datetime]$state.lastScan).AddMinutes(-3) }
+    $cols = @($cus.id, $scan.created, $scan.modified) | Where-Object { $_ }
+    $rows = Query $conn ("SELECT " + (($cols | ForEach-Object { Q $_ }) -join ", ") + " FROM " + (Q $cus.table))
+    $hit = 0
+    foreach ($r in $rows.Rows) {
+      $fresh = $false
+      foreach ($fld in @($scan.created, $scan.modified)) {
+        if (-not $fld) { continue }
+        $v = $r[$fld]; $d = [datetime]::MinValue
+        if ($v -is [datetime]) { $d = $v } elseif (-not [datetime]::TryParse(([string]$v).Trim(), $gb, [System.Globalization.DateTimeStyles]::None, [ref]$d)) { continue }
+        if ($d -ge $cutoff) { $fresh = $true }
+      }
+      if ($fresh) { $id = IdText $r[$cus.id]; if ($id) { if ($custIds.Add($id)) { $hit++ } } }
+    }
+    $scanned = $true
+    Log ("Accounts created or edited since " + $cutoff.ToString("dd MMM yyyy HH:mm") + ": " + $hit)
+  }
+
   # ----- which customers: everyone on those invoices, plus accounts created/changed recently -----
   $custWhere = @()
   if ($since -and $cus.modified) { $custWhere += ((Q $cus.modified) + " >= " + (Lit $cfg.timestampLiteral $since.ToString("yyyy-MM-dd HH:mm:ss"))) }
@@ -411,7 +464,7 @@ try {
     $total.invoices += [int]$res.invoices; $total.lines += [int]$res.lines
     foreach ($s in @($res.skipped)) { if ($s) { $total.skipped++; Log ("Skipped invoice " + $s.invoice + ": " + $s.reason) } }
   }
-  @{ lastRun = $started.ToString("o"); lastDaily = $today } | ConvertTo-Json | Set-Content -Path $statePath -Encoding UTF8
+  @{ lastRun = $started.ToString("o"); lastDaily = $today; lastScan = $(if ($scanned) { $started.ToString("o") } else { $state.lastScan }) } | ConvertTo-Json | Set-Content -Path $statePath -Encoding UTF8
   Log ("Sent " + $total.customers + " customers, " + $ss.Count + " sites, " + $total.invoices + " invoices, " + $total.lines + " lines" + $(if ($total.skipped) { ", skipped " + $total.skipped } else { "" }))
 }
 catch {
@@ -420,4 +473,5 @@ catch {
 }
 finally {
   if ($conn) { $conn.Close() }
+  if (Test-Path $lockPath) { Remove-Item $lockPath -Force -ErrorAction SilentlyContinue }
 }
