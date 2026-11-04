@@ -235,7 +235,7 @@ const SlaChip = ({ days, done }) => (
   </span>
 );
 
-export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollection, me, planner, goCustomer, newFollowUp }) {
+export default function ScheduleScreen({ money = true, crm, updateCrm, openInvoice, openCollection, me, planner, goCustomer, newFollowUp }) {
   const [printMsg, setPrintMsg] = useState("");
   const printJobs = (jobs, kinds, title) => {
     const list = jobs.filter((x) => x && !isVoidInvoice(x));
@@ -1128,7 +1128,7 @@ export default function ScheduleScreen({ crm, updateCrm, openInvoice, openCollec
               ))}
               {info.parts.some((p) => p.short > 0) && (
                 <div style={{ marginTop: 10, borderTop: "1px solid #e6e9ef", paddingTop: 8 }}>
-                  <StockCheck compact inv={i} crm={crm} planner={planner} updateCrm={updateCrm} me={me} openCollection={openCollection} placeNew={placeNew} modalZ={95} />
+                  <StockCheck money={money} compact inv={i} crm={crm} planner={planner} updateCrm={updateCrm} me={me} openCollection={openCollection} placeNew={placeNew} modalZ={95} />
                 </div>
               )}
               {notes.map(({ ref, col }) => {

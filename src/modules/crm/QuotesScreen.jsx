@@ -35,7 +35,7 @@ const SchemaNotice = () => (
 
 const FILTERS = ["Open", "Accepted", "Converted", "Declined", "Expired", "All"];
 
-export default function QuotesScreen({ crm, updateCrm, askConfirm, selId, setSelId, goCustomer, openInvoice, me, filter, setFilter }) {
+export default function QuotesScreen({ money = true, crm, updateCrm, askConfirm, selId, setSelId, goCustomer, openInvoice, me, filter, setFilter }) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("Open");
   const [custQuery, setCustQuery] = useState("");
@@ -113,7 +113,7 @@ export default function QuotesScreen({ crm, updateCrm, askConfirm, selId, setSel
         <ListHero title="Quotes" sub={quotes.length.toLocaleString("en-GB") + " quote" + (quotes.length === 1 ? "" : "s") + " · newest first"}
           action={<HeroAdd title="New quote" onClick={newQuote} disabled={!ready} />}>
           <HeroStat label="Open quotes" value={openCount.toLocaleString("en-GB")} sub="draft, sent or accepted" />
-          <HeroStat label="Open value" value={gbp(openValue)} sub="inc VAT" />
+          {money && <HeroStat label="Open value" value={gbp(openValue)} sub="inc VAT" />}
           <HeroStat label="Accepted — not invoiced" value={acceptedWaiting.toLocaleString("en-GB")} tone={acceptedWaiting ? "#f6c48a" : undefined}
             sub={acceptedWaiting ? "ready to convert · click to list" : "all converted"} onClick={acceptedWaiting ? () => setStatusFilter("Accepted") : undefined} />
           <HeroStat label="Win rate" value={winRate === null ? "—" : winRate + "%"} sub={decided.won + " won · " + decided.lost + " lost"} />
@@ -456,7 +456,7 @@ export default function QuotesScreen({ crm, updateCrm, askConfirm, selId, setSel
                 <span style={{ fontWeight: 700, letterSpacing: 0.5 }}>QUOTE TOTAL</span>
                 <span style={{ fontSize: 20, fontWeight: 700, background: GOLD, color: NAVY, borderRadius: 8, padding: "4px 14px" }}>{gbp(t.total)}</span>
               </div>
-              {estCost.matched > 0 && (
+              {money && estCost.matched > 0 && (
                 <div style={{ fontSize: 11, color: "#8fa0c0", fontWeight: 600, textAlign: "right", paddingTop: 7 }}>
                   Est. cost {gbp(estCost.cost)} · margin {t.net > 0 ? (((t.net - estCost.cost) / t.net) * 100).toFixed(0) + "%" : "—"}
                   {estCost.matched < estCost.of ? " (" + estCost.matched + " of " + estCost.of + " lines costed)" : ""}

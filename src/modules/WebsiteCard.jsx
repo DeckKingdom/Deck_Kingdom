@@ -66,7 +66,7 @@ const ListBars = ({ items, valueKey, unit }) => {
   ));
 };
 
-export default function WebsiteCard() {
+export default function WebsiteCard({ money = true } = {}) {
   const [d, setD] = useState(null);
   const [err, setErr] = useState(null);
   const [more, setMore] = useState(() => { try { return localStorage.getItem("dk-web-more") === "1"; } catch { return false; } });
@@ -143,7 +143,7 @@ export default function WebsiteCard() {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 8, marginBottom: 12 }}>
         <Tile label="Visitors today" value={fmt(T.activeUsers)} sub={"yesterday " + fmt(Y.activeUsers)} />
         <Tile label="Page views today" value={fmt(T.screenPageViews)} sub={pct(T.engagementRate) + " engaged"} />
-        <Tile label="Web orders today" value={fmt(T.ecommercePurchases)} sub={gbp(T.purchaseRevenue || 0)} />
+        <Tile label="Web orders today" value={fmt(T.ecommercePurchases)} sub={money ? gbp(T.purchaseRevenue || 0) : ""} />
         <Tile label="Visitors · 7 days" value={fmt(W.activeUsers)} sub={cWeek ? cWeek.text + " vs week before" : ""} subTone={cWeek ? (cWeek.up ? GREEN : RED) : undefined} />
       </div>
 
@@ -169,7 +169,7 @@ export default function WebsiteCard() {
                 </div>
               );
             })}
-            <div style={{ fontSize: 11.5, color: "#8593a8", fontWeight: 600, marginTop: 4 }}>{fmt(W.ecommercePurchases)} orders · {gbp(W.purchaseRevenue || 0)} this week</div>
+            <div style={{ fontSize: 11.5, color: "#8593a8", fontWeight: 600, marginTop: 4 }}>{fmt(W.ecommercePurchases)} orders{money ? " · " + gbp(W.purchaseRevenue || 0) : ""} this week</div>
           </div>
           <div>
             <span style={{ ...lbl, marginBottom: 6 }}>Where visits came from · 7 days</span>

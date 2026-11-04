@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import * as XLSX from "xlsx";
 import { storage, storageMode } from "../data/storage.js";
-import { signOut, getSessionEmail } from "../data/auth.js";
+import { signOut, getSessionEmail, getMyAccess } from "../data/auth.js";
+import { accessFor, LOCAL_ACCESS, LOADING_ACCESS, levelLabel } from "../lib/access.js";
 import {
   NAVY,
   GOLD,
@@ -39,6 +40,7 @@ import Sidebar, { TAB_LABELS } from "./Sidebar.jsx";
 import { ProductEditor } from "./crm/ProductsScreen.jsx";
 import HomeScreen from "./HomeScreen.jsx";
 import ActivityScreen from "./crm/ActivityScreen.jsx";
+import UsersScreen from "./crm/UsersScreen.jsx";
 import StockScreen from "./crm/StockScreen.jsx";
 import CollectionsScreen from "./crm/CollectionsScreen.jsx";
 import VansScreen from "./crm/VansScreen.jsx";
@@ -63,6 +65,25 @@ export default function ImportPlanner() {
   const [data, setData] = useState(null);
   const [activeId, setActiveId] = useState(null);
   const [tab, setTab] = useState("home");
+  // this login's access level (admin / manager / office / warehouse, optionally read only)
+  const [access, setAccess] = useState(() => {
+    if (storageMode === "supabase") return LOADING_ACCESS;
+    // local preview only: ?as=office&ro=1 shows the app as that level
+    try { const q = new URLSearchParams(window.location.search); if (q.get("as")) return accessFor(q.get("as"), q.get("ro") === "1"); } catch (e) { /* ignore */ }
+    return LOCAL_ACCESS;
+  });
+  useEffect(() => {
+    if (storageMode !== "supabase") return;
+    let live = true;
+    const get = () => getMyAccess().then((p) => { if (live && p) setAccess(p.legacy ? LOCAL_ACCESS : { ...accessFor(p.role, p.read_only), name: p.full_name || "" }); }).catch(() => {});
+    get();
+    const t = setInterval(get, 60_000); // a level changed by the admin applies within a minute
+    return () => { live = false; clearInterval(t); };
+  }, []);
+  // never sit on a screen this login can't open
+  useEffect(() => { if (access.known && !access.canTab(tab)) setTab("home"); }, [access, tab]);
+  const [roNote, setRoNote] = useState(false);
+  useEffect(() => { if (!roNote) return; const t = setTimeout(() => setRoNote(false), 3500); return () => clearTimeout(t); }, [roNote]);
   const [sideOpen, setSideOpen] = useState(() => (typeof window === "undefined" ? true : window.innerWidth >= 950));
   const [saveState, setSaveState] = useState("");
   const [pop, setPop] = useState(null);
@@ -199,7 +220,12 @@ export default function ImportPlanner() {
 
   // ===== CRM module (customers / invoices / schedule) =====
   const [crmOn, setCrmOn] = useState(false);
-  const { crm, updateCrm, replaceCrm, crmError, loadCrm, crmSave, lastLive } = useCrm(crmOn);
+  const { crm, updateCrm: updateCrmRaw, replaceCrm, crmError, loadCrm, crmSave, lastLive } = useCrm(crmOn);
+  // read-only logins can look but not change: edits are ignored with a short note
+  const updateCrm = (fn) => {
+    if (!access.canEdit) { setRoNote(true); return; }
+    updateCrmRaw(fn);
+  };
   const [selCustomerId, setSelCustomerId] = useState(null);
   const [selInvoiceId, setSelInvoiceId] = useState(null);
   const [selCollectionId, setSelCollectionId] = useState(null);
@@ -227,6 +253,7 @@ export default function ImportPlanner() {
     return null;
   };
   const navTo = (t) => {
+    if (!access.canTab(t)) return;
     setSelCustomerId(null); setSelInvoiceId(null); setSelCollectionId(null); setSelQuoteId(null);
     setSelSampleId(null); setSelPurchaseId(null); setSelSupplierId(null);
     setQuoteFilter(null); setPurchaseFilter(null); setInvFilter(null);
@@ -548,14 +575,14 @@ export default function ImportPlanner() {
 
   const linesFilled = useRef(false);
   useEffect(() => {
-    if (linesFilled.current || !loaded.current || !data || !data.shipments) return;
+    if (linesFilled.current || !loaded.current || !data || !data.shipments || !access.known || !access.canManage) return;
     linesFilled.current = true;
     const copy = JSON.parse(JSON.stringify(data));
     if (fillBlankLines(copy)) {
       dirty.current = true;
       setData((d0) => { const d = JSON.parse(JSON.stringify(d0)); fillBlankLines(d); return d; });
     }
-  }, [data]);
+  }, [data, access]);
 
   if (!data)
     return (
@@ -592,6 +619,8 @@ export default function ImportPlanner() {
   };
 
   const update = (fn) => {
+    // products and shipments: managers and admin only
+    if (!access.canManage) { if (access.known) setRoNote(true); return; }
     dirty.current = true;
     setData((d) => fn(JSON.parse(JSON.stringify(d))));
   };
@@ -1073,15 +1102,24 @@ export default function ImportPlanner() {
           {getSessionEmail()}
         </div>
       )}
+      {storageMode === "supabase" && open && access.known && (
+        <div style={{ color: "#5f729a", fontSize: 10.5, fontWeight: 700, padding: "0 11px 6px", letterSpacing: 0.3, textTransform: "uppercase" }}>
+          {levelLabel(access.role)}{access.readOnly ? " · read only" : ""}
+        </div>
+      )}
+      {access.money && (
       <button onClick={backupJson} title="Copy or download all data as a backup" style={footBtnStyle(open)}>
         <Icon name="doc" size={15} stroke="#8fa0c0" />
         {open && "Backup"}
       </button>
+      )}
+      {access.system && (
       <button onClick={() => restoreInput.current && restoreInput.current.click()} title="Restore from a backup file" style={footBtnStyle(open)}>
         <Icon name="note" size={15} stroke="#8fa0c0" />
         {open && "Restore"}
       </button>
-      {emailReady && (
+      )}
+      {emailReady && access.system && (
         <button onClick={() => setEmailSettings(true)} title="Which mailbox each login sends email from" style={footBtnStyle(open)}>
           <Icon name="mail" size={15} stroke="#8fa0c0" />
           {open && "Email settings"}
@@ -1161,8 +1199,26 @@ export default function ImportPlanner() {
           input[type="date"]::-webkit-calendar-picker-indicator { display: none; }
         }`}</style>
 
+      {access.known && !access.staff && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "#f3f5f8", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+          <div style={{ background: "#fff", borderRadius: 12, border: "1px solid #e6e9ef", padding: "26px 28px", maxWidth: 420, textAlign: "center" }}>
+            <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>Your login doesn't have access yet</div>
+            <div style={{ fontSize: 14, color: "#5a6a85", marginBottom: 18 }}>
+              Signed in as {getSessionEmail()}. Ask Jon to give this email an access level in Users &amp; access, then reload this page.
+            </div>
+            <button onClick={() => signOut()} style={{ fontFamily: "inherit", fontSize: 14, fontWeight: 700, padding: "9px 18px", borderRadius: 8, border: "1px solid " + GOLD, background: GOLD, color: NAVY, cursor: "pointer" }}>Sign out</button>
+          </div>
+        </div>
+      )}
+      {roNote && (() => {
+        return (
+          <div className="no-print" style={{ position: "fixed", bottom: 22, left: "50%", transform: "translateX(-50%)", zIndex: 150, background: NAVY, color: "#fff", borderRadius: 999, padding: "10px 20px", fontSize: 13.5, fontWeight: 700, boxShadow: "0 8px 24px rgba(11,31,63,.3)" }}>
+            {access.readOnly ? "Your login is read only — nothing was changed." : "Only managers can change this — nothing was changed."}
+          </div>
+        );
+      })()}
       <div style={{ display: "flex", alignItems: "stretch" }}>
-      <Sidebar tab={tab} setTab={navTo} open={sideOpen} footer={sideFooter} onNew={sideNew} onToggle={() => setSideOpen((o) => !o)} />
+      <Sidebar tab={tab} setTab={navTo} open={sideOpen} footer={sideFooter} onNew={access.canEdit ? sideNew : null} onToggle={() => setSideOpen((o) => !o)} allow={access.canTab} />
       <div style={{ flex: 1, minWidth: 0 }}>
 
       <div ref={headerRef} className="no-print" style={{ background: NAVY, padding: "10px 16px", display: "flex", alignItems: "center", gap: 10, position: "sticky", top: 0, zIndex: 25, boxShadow: "0 2px 8px rgba(11,31,63,0.25)" }}>
@@ -1184,7 +1240,7 @@ export default function ImportPlanner() {
         })()}
         <span style={{ flex: 1 }} />
         <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-          {[["home", "Home", "home"], ["overview", "Imports", "ship"], ["customers", "Customers", "users"], ["invoices", "Invoices", "doc"], ["quotes", "Quotes", "tag"], ["samples", "Samples", "leaf"], ["schedule", "Delivery Schedule", "cal"]].map(([t, label, icon]) => (
+          {[["home", "Home", "home"], ["overview", "Imports", "ship"], ["customers", "Customers", "users"], ["invoices", "Invoices", "doc"], ["quotes", "Quotes", "tag"], ["samples", "Samples", "leaf"], ["schedule", "Delivery Schedule", "cal"]].filter(([t]) => access.canTab(t)).map(([t, label, icon]) => (
             <button key={t} onClick={() => navTo(t)} title={label} style={{ width: 34, height: 34, borderRadius: 8, border: "1px solid " + (tab === t ? GOLD : "#33466b"), background: tab === t ? GOLD : "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flex: "none", padding: 0 }}>
               <Icon name={icon} size={16} stroke={tab === t ? NAVY : "#cfd6e4"} />
             </button>
@@ -1200,6 +1256,9 @@ export default function ImportPlanner() {
             e.target.value = "";
           }}
         />
+        {access.known && access.readOnly && (
+          <span title="Your login can look at everything it can open, but changes aren't saved" style={{ fontSize: 11.5, fontWeight: 800, letterSpacing: 0.4, textTransform: "uppercase", color: NAVY, background: GOLD, borderRadius: 999, padding: "3px 10px" }}>Read only</span>
+        )}
         {crm && storageMode === "supabase" && (
           <span title={"Live: changes from FileMaker, the website and other staff appear by themselves within about 10 seconds" + (lastLive ? " — last pulled in at " + lastLive.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : "")}
             style={{ display: "inline-flex", alignItems: "center", gap: 5, color: "#8fa0c0", fontSize: 12 }}>
@@ -1221,7 +1280,7 @@ export default function ImportPlanner() {
               </div>
             </div>
           )}
-          <HomeScreen data={data} crm={crm} updateCrm={updateCrm} me={me} askConfirm={setConfirmBox} setTab={setTab} openInvoice={openInvoice} openCollection={openCollection} addShipment={addShipment} newInvoice={() => (crm ? newInvoiceFor("", "") : setTab("invoices"))} />
+          <HomeScreen money={access.money} canTab={access.canTab} data={data} crm={crm} updateCrm={updateCrm} me={me} askConfirm={setConfirmBox} setTab={setTab} openInvoice={openInvoice} openCollection={openCollection} addShipment={addShipment} newInvoice={() => (crm ? newInvoiceFor("", "") : setTab("invoices"))} />
         </>
       )}
 
@@ -1246,6 +1305,7 @@ export default function ImportPlanner() {
 
       {emailSettings && <EmailSettings me={me} onClose={() => setEmailSettings(false)} />}
       {tab === "activity" && <ActivityScreen crm={crm} data={data} storageMode={storageMode} />}
+      {tab === "users" && access.system && storageMode === "supabase" && <UsersScreen me={me} />}
 
       {tab === "vans" &&
         (!crm ? (
@@ -1264,7 +1324,7 @@ export default function ImportPlanner() {
         ) : !crm ? (
           <div style={{ padding: 40, textAlign: "center", color: "#5a6a85", fontWeight: 600 }}>Loading customers…</div>
         ) : tab === "customers" ? (
-          <CustomersScreen
+          <CustomersScreen money={access.money}
             onEmailSetup={() => setEmailSettings(true)}
             crm={crm}
             updateCrm={updateCrm}
@@ -1284,7 +1344,7 @@ export default function ImportPlanner() {
             me={me}
           />
         ) : tab === "samples" ? (
-          <SamplesScreen
+          <SamplesScreen money={access.money}
             crm={crm}
             updateCrm={updateCrm}
             askConfirm={setConfirmBox}
@@ -1295,7 +1355,7 @@ export default function ImportPlanner() {
             me={me}
           />
         ) : tab === "quotes" ? (
-          <QuotesScreen
+          <QuotesScreen money={access.money}
             crm={crm}
             updateCrm={updateCrm}
             askConfirm={setConfirmBox}
@@ -1308,7 +1368,7 @@ export default function ImportPlanner() {
             setFilter={setQuoteFilter}
           />
         ) : tab === "invoices" ? (
-          <InvoicesScreen
+          <InvoicesScreen money={access.money}
             newFollowUp={newFollowUp}
             crm={crm}
             updateCrm={updateCrm}
@@ -1326,7 +1386,7 @@ export default function ImportPlanner() {
             setFilter={setInvFilter}
           />
         ) : (
-          <ScheduleScreen crm={crm} updateCrm={updateCrm} openInvoice={openInvoice} openCollection={openCollection} me={me} planner={data} goCustomer={goCustomer} newFollowUp={newFollowUp} />
+          <ScheduleScreen money={access.money} crm={crm} updateCrm={updateCrm} openInvoice={openInvoice} openCollection={openCollection} me={me} planner={data} goCustomer={goCustomer} newFollowUp={newFollowUp} />
         ))}
 
       {(tab === "stock" || tab === "collections") &&
@@ -1335,7 +1395,7 @@ export default function ImportPlanner() {
         ) : tab === "stock" ? (
           <StockScreen crm={crm} updateCrm={updateCrm} planner={data} updatePlanner={update} askConfirm={setConfirmBox} me={me} />
         ) : (
-          <CollectionsScreen crm={crm} updateCrm={updateCrm} askConfirm={setConfirmBox} selId={selCollectionId} setSelId={setSelCollectionId} openInvoice={openInvoice} me={me} goSupplier={goSupplier} planner={data} />
+          <CollectionsScreen money={access.money} crm={crm} updateCrm={updateCrm} askConfirm={setConfirmBox} selId={selCollectionId} setSelId={setSelCollectionId} openInvoice={openInvoice} me={me} goSupplier={goSupplier} planner={data} />
         ))}
 
       {tab === "overview" && (

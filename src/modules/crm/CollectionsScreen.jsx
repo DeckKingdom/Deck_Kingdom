@@ -27,7 +27,7 @@ export const collectionStatus = (c) => {
   return ["Not booked", "red"];
 };
 
-export default function CollectionsScreen({ crm, updateCrm, askConfirm, selId, setSelId, openInvoice, me, goSupplier, planner }) {
+export default function CollectionsScreen({ money = true, crm, updateCrm, askConfirm, selId, setSelId, openInvoice, me, goSupplier, planner }) {
   const [allProducts, setAllProducts] = useState(false);
   const [supDraft, setSupDraft] = useState(null);
   const [search, setSearch] = useState("");
@@ -160,7 +160,7 @@ export default function CollectionsScreen({ crm, updateCrm, askConfirm, selId, s
             </div>
           ) : (
             <table className="dk-t dk-bleed" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-              <thead><tr>{["COL #", "Supplier", "Postcode", "Collect", "Van", "Lines", "Done", "Value £", "Status", ""].map((h, i) => (
+              <thead><tr>{["COL #", "Supplier", "Postcode", "Collect", "Van", "Lines", "Done", "Value £", "Status", ""].map((h, i) => (!money && i === 7) ? null : (
                 <th key={i} style={{ textAlign: i >= 5 && i <= 7 ? "right" : "left", fontSize: 10.5, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", padding: "8px 7px", borderBottom: "2px solid #e6e9ef", whiteSpace: "nowrap" }}>{h}</th>
               ))}</tr></thead>
               <tbody>
@@ -178,7 +178,7 @@ export default function CollectionsScreen({ crm, updateCrm, askConfirm, selId, s
                       <td style={td}>{c.van || "—"}</td>
                       <td style={{ ...td, textAlign: "right", fontWeight: 700 }}>{prog.total}</td>
                       <td style={{ ...td, textAlign: "right", fontWeight: 700, color: prog.done ? "#28713e" : "#aab3c2" }}>{prog.done}</td>
-                      <td style={{ ...td, textAlign: "right", fontWeight: 700 }}>{itemsValue(c) ? itemsValue(c).toLocaleString("en-GB", { minimumFractionDigits: 2 }) : "—"}</td>
+                      {money && <td style={{ ...td, textAlign: "right", fontWeight: 700 }}>{itemsValue(c) ? itemsValue(c).toLocaleString("en-GB", { minimumFractionDigits: 2 }) : "—"}</td>}
                       <td style={td}><Chip tone={tone}>{label}</Chip></td>
                       <td style={{ ...td, textAlign: "right" }}><button style={abtn} onClick={(e) => { e.stopPropagation(); setSelId(c.id); }}><Icon name="pen" /></button></td>
                     </tr>
@@ -344,7 +344,7 @@ export default function CollectionsScreen({ crm, updateCrm, askConfirm, selId, s
         </div>
         <div className="dk-bleed" style={{ overflowX: "auto" }}>
           <table className="dk-t" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 780 }}>
-            <thead><tr>{["SKU", "Description", "Colour", "Qty", "Unit cost £", "Line £", "Where it went", ""].map((h, i) => (
+            <thead><tr>{["SKU", "Description", "Colour", "Qty", "Unit cost £", "Line £", "Where it went", ""].map((h, i) => (!money && (i === 4 || i === 5)) ? null : (
               <th key={i} style={{ textAlign: i >= 3 && i <= 5 ? "right" : "left", fontSize: 10.5, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", padding: "7px 6px", borderBottom: "2px solid #e6e9ef", whiteSpace: "nowrap" }}>{h}</th>
             ))}</tr></thead>
             <tbody>
@@ -368,12 +368,12 @@ export default function CollectionsScreen({ crm, updateCrm, askConfirm, selId, s
                     <td style={{ ...td, width: 64, textAlign: "right" }}>
                       {pending ? <input style={{ ...inp, textAlign: "right" }} inputMode="decimal" {...selectAllProps} value={it.qty} onChange={(e) => setItem(it.id, "qty", e.target.value)} /> : <b>{it.qty}</b>}
                     </td>
-                    <td style={{ ...td, width: 88, textAlign: "right" }}>
+                    {money && <td style={{ ...td, width: 88, textAlign: "right" }}>
                       {pending ? <input style={{ ...inp, textAlign: "right" }} inputMode="decimal" {...selectAllProps} value={it.unitCost} onChange={(e) => setItem(it.id, "unitCost", e.target.value)} /> : (it.unitCost === "" ? "—" : Number(it.unitCost).toFixed(2))}
-                    </td>
-                    <td style={{ ...td, textAlign: "right", fontWeight: 700, whiteSpace: "nowrap", width: 80 }}>
+                    </td>}
+                    {money && <td style={{ ...td, textAlign: "right", fontWeight: 700, whiteSpace: "nowrap", width: 80 }}>
                       {((Number(it.qty) || 0) * (Number(it.unitCost) || 0)).toLocaleString("en-GB", { minimumFractionDigits: 2 })}
-                    </td>
+                    </td>}
                     <td style={{ ...td, whiteSpace: "nowrap", width: 150 }}>
                       {it.postedAt ? (
                         <Chip tone="green">In stock · {prettyDate(it.postedAt)}</Chip>
@@ -406,9 +406,9 @@ export default function CollectionsScreen({ crm, updateCrm, askConfirm, selId, s
           onClick={() => setColl((t) => t.items.push(blankCollectionItem()))}>
           <Icon name="plus" />Add item
         </button>
-        <div style={{ display: "flex", gap: 16, alignItems: "center", justifyContent: "flex-end", marginTop: 12, fontSize: 13.5, fontWeight: 700 }}>
+        {money && <div style={{ display: "flex", gap: 16, alignItems: "center", justifyContent: "flex-end", marginTop: 12, fontSize: 13.5, fontWeight: 700 }}>
           Purchase value: <span style={{ background: GOLD + "33", border: "1px solid " + GOLD, borderRadius: 8, padding: "4px 12px" }}>{gbp(itemsValue(coll))}</span>
-        </div>
+        </div>}
         <div style={{ marginTop: 12 }}>
           <span style={lbl}>Notes for the driver</span>
           <textarea style={{ ...inp, resize: "vertical" }} rows={2} value={coll.notes} onChange={(e) => setColl((t) => (t.notes = e.target.value))} />

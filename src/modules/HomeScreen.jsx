@@ -37,7 +37,7 @@ const Report = ({ label, value, sub, tone, onClick }) => (
 
 const rowStyle = { display: "flex", gap: 11, alignItems: "flex-start", padding: "9px 0", borderBottom: "1px solid #f0f2f6" };
 
-export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTab, addShipment, newInvoice, openInvoice, openCollection }) {
+export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTab, addShipment, newInvoice, openInvoice, openCollection, money = true, canTab = () => true }) {
   const tod = today();
   const [viewAs, setViewAs] = useState(me || "");
   const [draft, setDraft] = useState(null);
@@ -123,10 +123,22 @@ export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTa
       <div className="dk-home-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 16, alignItems: "stretch" }}>
           <div className="dk-home-cell" style={{ gridColumn: "span 2", minWidth: 0 }}>
             <div style={{ ...card, marginBottom: 0, height: "100%", boxSizing: "border-box" }}>
-              <p style={sect}>Financial overview</p>
+              <p style={sect}>{money ? "Financial overview" : "Overview"}</p>
               {!crm ? (
                 <div style={{ color: "#8593a8", fontWeight: 600, fontSize: 13 }}>Loading…</div>
               ) : (
+                !money ? (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 8 }}>
+                  {/* office / warehouse: counts only, no money */}
+                  <Report label="Customers" value={(crm.customers || []).length.toLocaleString("en-GB")} sub="accounts" onClick={() => setTab("customers")} />
+                  <Report label="Orders this month" value={invs.filter((i) => (i.date || "").slice(0, 7) === monthKey).length.toLocaleString("en-GB")}
+                    sub={invs.filter((i) => (i.date || "").slice(0, 7) === lastMonthKey && Number((i.date || "").slice(8, 10)) <= dayOfMonth).length + " by this day last month"} onClick={() => setTab("invoices")} />
+                  <Report label="Awaiting payment" value={awaiting.length + " invoice" + (awaiting.length === 1 ? "" : "s")} tone={awaiting.length ? "#a05f10" : NAVY} onClick={() => setTab("invoices")} />
+                  <Report label="Deliveries" value={todays + " today"} sub={thisWeek + " this week · " + toBook + " to book"} onClick={() => setTab("schedule")} />
+                  <Report label="Open quotes" value={openQuotes.length + " open"} sub={acceptedWaiting ? acceptedWaiting + " to invoice" : ""} onClick={() => setTab("quotes")} />
+                  <Report label="Samples" value={toSend + " to send"} sub={s90.requests + " requests · 90 days" + (s90.rate === null ? "" : " · " + Math.round(s90.rate * 100) + "% convert")} onClick={() => setTab("samples")} />
+                </div>
+                ) : (
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 8 }}>
                   <Report label="Sales this month" value={gbp(salesThisMonth)}
                     sub={salesLastToDate ? (salesThisMonth >= salesLastToDate ? "▲ " : "▼ ") + gbp(Math.abs(salesThisMonth - salesLastToDate)) + " vs last month to date" : "inc VAT"}
@@ -137,11 +149,12 @@ export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTa
                   <Report label="Samples · 90 days" value={s90.rate === null ? "—" : Math.round(s90.rate * 100) + "% convert"} sub={s90.requests + " requests"} onClick={() => setTab("samples")} />
                   <Report label="Imports" value={live.length + " live"} sub={inbound.length ? inbound[0].s.name + " ~ " + prettyDate(inbound[0].eta) : "nothing inbound"} onClick={() => setTab("overview")} />
                 </div>
+                )
               )}
             </div>
           </div>
           <div className="dk-home-cell" style={{ gridColumn: "span 2", minWidth: 0 }}>
-            {analyticsReady ? <WebsiteCard /> : (
+            {analyticsReady ? <WebsiteCard money={money} /> : (
               <div style={{ ...card, marginBottom: 0 }}><p style={sect}>Website</p><div style={{ color: "#8593a8", fontWeight: 600, fontSize: 13 }}>Website stats show here on the live site.</div></div>
             )}
           </div>
@@ -268,7 +281,7 @@ export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTa
                     <span style={{ fontSize: 12, fontWeight: 700, color: "#5a6a85" }}>{ships.length} container{ships.length === 1 ? "" : "s"} · {colls.length} collection{colls.length === 1 ? "" : "s"}</span>
                     {late > 0 && <span style={{ fontSize: 12, fontWeight: 700, color: RED }}>{late} overdue</span>}
                     <span style={{ flex: 1 }} />
-                    <button onClick={() => setTab("overview")} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 700, color: "#185FA5", padding: 0 }}>Imports ▸</button>
+                    {canTab("overview") && <button onClick={() => setTab("overview")} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 700, color: "#185FA5", padding: 0 }}>Imports ▸</button>}
                     <button onClick={() => setTab("collections")} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 700, color: "#185FA5", padding: 0 }}>Collections ▸</button>
                   </div>
                   {rows.length === 0 ? (

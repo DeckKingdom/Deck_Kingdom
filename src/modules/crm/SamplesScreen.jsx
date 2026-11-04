@@ -107,7 +107,7 @@ function StepDate({ value, onDate, todo, done, icon, plain }) {
   );
 }
 
-export default function SamplesScreen({ crm, updateCrm, askConfirm, selId, setSelId, goCustomer, openInvoice, me }) {
+export default function SamplesScreen({ money = true, crm, updateCrm, askConfirm, selId, setSelId, goCustomer, openInvoice, me }) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState(null); // null = pick a sensible default
   const [period, setPeriod] = useState("90");
@@ -272,8 +272,8 @@ export default function SamplesScreen({ crm, updateCrm, askConfirm, selId, setSe
           <HeroStat label="Sample requests" value={<>{stats.requests.toLocaleString("en-GB")} <span style={{ fontSize: 14, color: "#aeb9cf", fontWeight: 700 }}>· {stats.open.toLocaleString("en-GB")} still open</span></>}
             sub={itemsSent.toLocaleString("en-GB") + " sample" + (itemsSent === 1 ? "" : "s") + " in them"} />
           <HeroStat label="Converted to orders" value={stats.converted.toLocaleString("en-GB") + " · " + pct(stats.rate)} sub={stats.lost ? pct(stats.decidedRate) + " of closed requests" : "of all requests"} />
-          <HeroStat label="Sales · spent on samples" value={<>{gbp(stats.revenue)} <span style={{ fontSize: 14, color: "#aeb9cf", fontWeight: 700 }}>· {gbp(spent)}</span></>}
-            sub={spent ? gbp(stats.revenue / spent) + " back per £1 · " + gbp(SAMPLE_COST) + " a sample" : gbp(SAMPLE_COST) + " a sample"} />
+          {money && <HeroStat label="Sales · spent on samples" value={<>{gbp(stats.revenue)} <span style={{ fontSize: 14, color: "#aeb9cf", fontWeight: 700 }}>· {gbp(spent)}</span></>}
+            sub={spent ? gbp(stats.revenue / spent) + " back per £1 · " + gbp(SAMPLE_COST) + " a sample" : gbp(SAMPLE_COST) + " a sample"} />}
           <HeroStat label="Avg time to order" value={stats.avgDays === null ? "—" : stats.avgDays + " days"} sub="request → invoice" />
         </ListHero>
 

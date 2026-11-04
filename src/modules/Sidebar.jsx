@@ -41,17 +41,19 @@ export const NAV_SECTIONS = [
     ],
   },
   { title: "Fleet", items: [["vans", "Vans", "truck"]] },
-  { title: "System", items: [["activity", "Activity", "clock"]] },
+  { title: "System", items: [["activity", "Activity", "clock"], ["users", "Users & access", "lock"]] },
 ];
 
 export const TAB_LABELS = { ...Object.fromEntries(NAV_SECTIONS.flatMap((s) => s.items.map(([t, l]) => [t, l]))), shipments: "Shipment", tasks: "Tasks" };
 
-export default function Sidebar({ tab, setTab, open, footer, onNew, onToggle }) {
+export default function Sidebar({ tab, setTab, open, footer, onNew, onToggle, allow }) {
+  const ok = allow || (() => true);
+  const sections = NAV_SECTIONS.map((s) => ({ ...s, items: s.items.filter(([t]) => ok(t)) })).filter((s) => s.items.length);
   const [shut, setShut] = useState({});
 
   // never leave the active screen hidden inside a shut section
   useEffect(() => {
-    const sec = NAV_SECTIONS.find((s) => s.title && s.items.some(([t]) => t === tab));
+    const sec = sections.find((s) => s.title && s.items.some(([t]) => t === tab));
     if (sec && shut[sec.title]) setShut((x) => ({ ...x, [sec.title]: false }));
   }, [tab]);
 
@@ -102,7 +104,7 @@ export default function Sidebar({ tab, setTab, open, footer, onNew, onToggle }) 
       )}
 
       <nav style={{ padding: "4px 10px", flex: 1 }}>
-        {NAV_SECTIONS.map((sec, si) => (
+        {sections.map((sec, si) => (
           <div key={si} style={{ marginBottom: 6 }}>
             {sec.title &&
               (open ? (

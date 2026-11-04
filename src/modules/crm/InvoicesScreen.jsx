@@ -26,7 +26,7 @@ const NoteBox = ({ children }) => (
   </div>
 );
 
-export default function InvoicesScreen({ newFollowUp, crm, updateCrm, askConfirm, selId, setSelId, goCustomer, openQuote, openSample, openCollection, me, planner, updatePlanner, filter, setFilter }) {
+export default function InvoicesScreen({ money = true, newFollowUp, crm, updateCrm, askConfirm, selId, setSelId, goCustomer, openQuote, openSample, openCollection, me, planner, updatePlanner, filter, setFilter }) {
   const [search, setSearch] = useState("");
   const [custQuery, setCustQuery] = useState("");
   const [notice, setNotice] = useState("");
@@ -146,13 +146,13 @@ export default function InvoicesScreen({ newFollowUp, crm, updateCrm, askConfirm
                 })}
               </span>}
               action={<HeroAdd title="New invoice" onClick={newInvoice} />}>
-              <HeroStat label="Sales this month" value={gbp(salesNow)}
-                sub={salesLast ? (salesNow >= salesLast ? "▲ " : "▼ ") + gbp(Math.abs(salesNow - salesLast)) + " vs last month to date" : "inc VAT"} />
-              <HeroStat label="Awaiting payment" value={gbp(owed)} tone={awaiting.length ? "#f6c48a" : undefined}
+              {money && <HeroStat label="Sales this month" value={gbp(salesNow)}
+                sub={salesLast ? (salesNow >= salesLast ? "▲ " : "▼ ") + gbp(Math.abs(salesNow - salesLast)) + " vs last month to date" : "inc VAT"} />}
+              <HeroStat label="Awaiting payment" value={money ? gbp(owed) : awaiting.length.toLocaleString("en-GB")} tone={awaiting.length ? "#f6c48a" : undefined}
                 sub={awaiting.length + " invoice" + (awaiting.length === 1 ? "" : "s") + (awaiting.length ? " · click to list" : "")}
                 onClick={awaiting.length ? () => setFilter({ outstanding: true }) : undefined} />
               <HeroStat label="Deliveries" value={today_ + " today"} tone={toBook ? "#f2a6b1" : undefined} sub={week + " this week · " + toBook + " to book in"} />
-              <HeroStat label="Orders this month" value={sales.length.toLocaleString("en-GB")} sub={sales.length ? gbp(sum(sales) / sales.length) + " average order" : "none yet"} />
+              <HeroStat label="Orders this month" value={sales.length.toLocaleString("en-GB")} sub={!money ? "this month" : sales.length ? gbp(sum(sales) / sales.length) + " average order" : "none yet"} />
             </ListHero>
           );
         })()}
@@ -163,7 +163,7 @@ export default function InvoicesScreen({ newFollowUp, crm, updateCrm, askConfirm
             {filterCust && <Chip tone="red">{filterCust.name || "Customer"}</Chip>}
             {filter.outstanding && <Chip tone="red">Outstanding only</Chip>}
             <span style={{ fontSize: 13, fontWeight: 700 }}>
-              {matches.length} invoice{matches.length === 1 ? "" : "s"} · {gbp(filteredTotal)}{filter.outstanding ? " outstanding" : ""}
+              {matches.length} invoice{matches.length === 1 ? "" : "s"}{money ? " · " + gbp(filteredTotal) : ""}{filter.outstanding ? " outstanding" : ""}
             </span>
             <span style={{ flex: 1 }} />
             <button style={{ ...btn, padding: "5px 11px", fontSize: 12.5 }} onClick={() => setFilter(null)}>
@@ -538,7 +538,7 @@ export default function InvoicesScreen({ newFollowUp, crm, updateCrm, askConfirm
           return (
             <div style={{ background: "#f8f9fb", border: "1px solid #e6e9ef", borderRadius: 12, padding: "12px 14px", marginTop: 16 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                <p style={{ ...sect, margin: 0 }}>Loading &amp; job cost</p>
+                <p style={{ ...sect, margin: 0 }}>{money ? "Loading & job cost" : "Loading"}</p>
                 <span style={{ flex: 1 }} />
                 {inv.picks && inv.picks.length > 0 && (
                   <button
@@ -560,7 +560,7 @@ export default function InvoicesScreen({ newFollowUp, crm, updateCrm, askConfirm
                 <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginTop: 10 }}>
                   <span style={{ fontSize: 12.5, color: "#5a6a85", fontWeight: 600, flex: 1, minWidth: 220 }}>
                     Build the pick list from the lines (kits pull their parts through). The warehouse then records which
-                    shipment or batch each SKU was loaded from, and the real landed cost flows into the job cost.
+                    shipment or batch each SKU was loaded from{money ? ", and the real landed cost flows into the job cost" : ""}.
                   </span>
                   <button style={goldBtn} onClick={() => setInv((x) => (x.picks = buildPicks(x, crm)))}>
                     <Icon name="box" stroke={NAVY} />Build pick list
@@ -572,7 +572,7 @@ export default function InvoicesScreen({ newFollowUp, crm, updateCrm, askConfirm
                     <table className="dk-t" style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, minWidth: 760 }}>
                       <thead>
                         <tr>
-                          {["SKU", "Description", "Qty", "Stock from (batch)", "Landed £/pc", "Line £", "Picked", ""].map((h, i) => (
+                          {["SKU", "Description", "Qty", "Stock from (batch)", "Landed £/pc", "Line £", "Picked", ""].map((h, i) => (!money && (i === 4 || i === 5)) ? null : (
                             <th key={i} style={{ textAlign: i >= 2 && i <= 5 && i !== 3 ? "right" : "left", fontSize: 10.5, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", padding: "7px 6px", borderBottom: "2px solid #e6e9ef", whiteSpace: "nowrap" }}>{h}</th>
                           ))}
                         </tr>
@@ -598,7 +598,7 @@ export default function InvoicesScreen({ newFollowUp, crm, updateCrm, askConfirm
                                   <input style={{ ...inp, padding: "4px 7px", fontSize: 12.5, width: 76 }} placeholder="or ref" title="Free-text batch ref for stock that didn't come from an import shipment" value={p.batchRef} onChange={(e) => setPick(p.id, "batchRef", e.target.value)} />
                                 </div>
                               </td>
-                              <td style={{ padding: "6px 6px", borderBottom: "1px solid #eef0f4", textAlign: "right", whiteSpace: "nowrap" }}>
+                              {money && <td style={{ padding: "6px 6px", borderBottom: "1px solid #eef0f4", textAlign: "right", whiteSpace: "nowrap" }}>
                                 {lc.perPc === null ? (
                                   <Chip tone="red" style={{ fontSize: 10, padding: "1px 7px" }}>no cost</Chip>
                                 ) : (
@@ -610,10 +610,10 @@ export default function InvoicesScreen({ newFollowUp, crm, updateCrm, askConfirm
                                     </Chip>
                                   </>
                                 )}
-                              </td>
-                              <td style={{ padding: "6px 6px", borderBottom: "1px solid #eef0f4", textAlign: "right", fontWeight: 700, whiteSpace: "nowrap" }}>
+                              </td>}
+                              {money && <td style={{ padding: "6px 6px", borderBottom: "1px solid #eef0f4", textAlign: "right", fontWeight: 700, whiteSpace: "nowrap" }}>
                                 {lc.perPc === null ? "—" : ((Number(p.qty) || 0) * lc.perPc).toFixed(2)}
-                              </td>
+                              </td>}
                               <td style={{ padding: "6px 6px", borderBottom: "1px solid #eef0f4", textAlign: "center", width: 48 }}>
                                 <input type="checkbox" checked={p.picked} onChange={(e) => setPick(p.id, "picked", e.target.checked)} />
                               </td>
@@ -636,7 +636,7 @@ export default function InvoicesScreen({ newFollowUp, crm, updateCrm, askConfirm
                       </tbody>
                     </table>
                   </div>
-                  <div style={{ display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap", marginTop: 10, fontSize: 12.5, fontWeight: 700 }}>
+                  {money && <div style={{ display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap", marginTop: 10, fontSize: 12.5, fontWeight: 700 }}>
                     <span>Actual job cost: <span style={{ background: "#fff", border: "1px solid #e6e9ef", borderRadius: 8, padding: "3px 9px" }}>{gbp(jc.total)}</span></span>
                     <span style={{ color: t.net > 0 && jc.costed > 0 ? (t.net - jc.total > 0 ? "#28713e" : RED) : "#8593a8" }}>
                       Margin: {t.net > 0 && jc.costed > 0 ? gbp(t.net - jc.total) + " (" + (((t.net - jc.total) / t.net) * 100).toFixed(0) + "% of net)" : "—"}
@@ -644,7 +644,7 @@ export default function InvoicesScreen({ newFollowUp, crm, updateCrm, askConfirm
                     <span style={{ color: "#8593a8", fontWeight: 600 }}>
                       {jc.landedLines} of {jc.of} lines at batch landed cost{jc.costed < jc.of ? " · " + (jc.of - jc.costed) + " uncosted" : ""}
                     </span>
-                  </div>
+                  </div>}
                 </>
               )}
             </div>
@@ -700,7 +700,7 @@ export default function InvoicesScreen({ newFollowUp, crm, updateCrm, askConfirm
               <span style={{ fontWeight: 700, letterSpacing: 0.5 }}>TOTAL</span>
               <span style={{ fontSize: 20, fontWeight: 700, background: GOLD, color: NAVY, borderRadius: 8, padding: "4px 14px" }}>{gbp(t.total)}</span>
             </div>
-            {estCost.matched > 0 && (
+            {money && estCost.matched > 0 && (
               <div style={{ fontSize: 11, color: "#8fa0c0", fontWeight: 600, textAlign: "right", paddingTop: 7 }}>
                 Est. cost {gbp(estCost.cost)} · margin {t.net > 0 ? (((t.net - estCost.cost) / t.net) * 100).toFixed(0) + "%" : "—"}
                 {estCost.matched < estCost.of ? " (" + estCost.matched + " of " + estCost.of + " lines costed)" : ""}
@@ -709,7 +709,7 @@ export default function InvoicesScreen({ newFollowUp, crm, updateCrm, askConfirm
           </div>
           </div>
         </div>
-        <StockCheck inv={inv} crm={crm} planner={planner} updatePlanner={updatePlanner} updateCrm={updateCrm} me={me} openCollection={openCollection}
+        <StockCheck money={money} inv={inv} crm={crm} planner={planner} updatePlanner={updatePlanner} updateCrm={updateCrm} me={me} openCollection={openCollection}
           onRaised={(names) => setNotice((names.length > 1 ? "Collection notes raised with " : "Collection note raised with ") + names.join(" and ") + " — linked to this job and added to its pick list. It's on the Collections screen ready to book a van.")} />
       </div>
     </div>

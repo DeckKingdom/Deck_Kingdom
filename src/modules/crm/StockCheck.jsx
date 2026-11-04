@@ -12,7 +12,7 @@ const td = { padding: "6px 6px", borderBottom: "1px solid #eef0f4", fontSize: 12
 const num = { ...td, textAlign: "right", whiteSpace: "nowrap" };
 
 // placeNew(made, crm): optional — lets the caller set up the new collection notes (e.g. put them in the job's run)
-export default function StockCheck({ inv, crm, planner, updatePlanner, updateCrm, me, onRaised, openCollection, placeNew, modalZ, compact }) {
+export default function StockCheck({ money = true, inv, crm, planner, updatePlanner, updateCrm, me, onRaised, openCollection, placeNew, modalZ, compact }) {
   const [choices, setChoices] = useState(null); // modal state
   const rows = stockCheck(inv, crm);
   if (!rows.length) return null;
@@ -140,20 +140,20 @@ export default function StockCheck({ inv, crm, planner, updatePlanner, updateCrm
               {c.alts.length ? (
                 <select style={{ ...inp, fontSize: 13 }} value={c.pick} onChange={(e) => setChoices((x) => x.map((y, j) => (j === i ? { ...y, pick: e.target.value } : y)))}>
                   {c.alts.map((a) => (
-                    <option key={a.row.id} value={a.row.id}>{(a.supplier || "Supplier") + " — " + (a.cost === null ? "no cost set" : gbp(a.cost) + " each") + (a.addColour ? " · adds " + a.addColour + " to their version" : " · " + a.row.sku)}</option>
+                    <option key={a.row.id} value={a.row.id}>{(a.supplier || "Supplier") + (money ? " — " + (a.cost === null ? "no cost set" : gbp(a.cost) + " each") : "") + (a.addColour ? " · adds " + a.addColour + " to their version" : " · " + a.row.sku)}</option>
                   ))}
                   <option value="">Don't collect this one</option>
                 </select>
               ) : (
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 76px", gap: 6 }}>
+                <div style={{ display: "grid", gridTemplateColumns: money ? "1fr 76px" : "1fr", gap: 6 }}>
                   <select style={{ ...inp, fontSize: 13, borderColor: c.pick ? "#d5d9e0" : "#E8912D" }} value={c.pick}
                     title="No other supplier's version is on Products — pick who you're collecting it from"
                     onChange={(e) => setChoices((x) => x.map((y, j) => (j === i ? { ...y, pick: e.target.value } : y)))}>
                     <option value="">{suppliers.length ? "Collect from… (no other version on Products)" : "No product suppliers set up"}</option>
                     {suppliers.map((sp) => <option key={sp.id} value={"sup:" + sp.id}>{sp.name}</option>)}
                   </select>
-                  <input type="number" min="0" step="0.01" placeholder="£ each" style={{ ...inp, textAlign: "right" }} value={c.cost}
-                    onChange={(e) => setChoices((x) => x.map((y, j) => (j === i ? { ...y, cost: e.target.value } : y)))} />
+                  {money && <input type="number" min="0" step="0.01" placeholder="£ each" style={{ ...inp, textAlign: "right" }} value={c.cost}
+                    onChange={(e) => setChoices((x) => x.map((y, j) => (j === i ? { ...y, cost: e.target.value } : y)))} />}
                 </div>
               )}
               <input type="number" min="0" style={{ ...inp, textAlign: "right" }} value={c.qty}

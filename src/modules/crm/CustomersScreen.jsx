@@ -98,7 +98,7 @@ const NoteBox = ({ children }) => (
   </div>
 );
 
-export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, setSelId, openInvoice, newInvoiceFor, newFollowUp, openQuote, newQuoteFor, openSample, newSampleFor, onOutstanding, me, newSignal, onNewHandled, onEmailSetup }) {
+export default function CustomersScreen({ money = true, crm, updateCrm, askConfirm, selId, setSelId, openInvoice, newInvoiceFor, newFollowUp, openQuote, newQuoteFor, openSample, newSampleFor, onOutstanding, me, newSignal, onNewHandled, onEmailSetup }) {
   const [search, setSearch] = useState("");
   const [custDraft, setCustDraft] = useState(null);
   const [siteDraft, setSiteDraft] = useState(null);
@@ -611,7 +611,7 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
                 </div>
               </div>
               <div style={{ marginLeft: "auto", display: "flex", background: "#ffffff14", border: "1px solid #ffffff22", borderRadius: 12, overflow: "hidden", flexWrap: "wrap" }}>
-                {[[invs.length, "Invoices"], [gbp(lifetime), "Lifetime"], [lastOrder ? prettyDate(lastOrder) : "—", "Last order"]].map(([v, l], i) => (
+                {[[invs.length, "Invoices"], ...(money ? [[gbp(lifetime), "Lifetime"]] : []), [lastOrder ? prettyDate(lastOrder) : "—", "Last order"]].map(([v, l], i) => (
                   <div key={l} style={{ padding: "10px 18px", textAlign: "center", borderLeft: i ? "1px solid #ffffff22" : "none" }}>
                     <b style={{ display: "block", fontSize: 16, color: GOLD }}>{v}</b>
                     <span style={{ fontSize: 10.5, fontWeight: 700, color: "#aeb9cf", letterSpacing: 0.5, textTransform: "uppercase" }}>{l}</span>
@@ -622,9 +622,9 @@ export default function CustomersScreen({ crm, updateCrm, askConfirm, selId, set
                   title={owing.length ? "Show this customer's outstanding invoices" : "Nothing outstanding"}
                   style={{ padding: "10px 18px", textAlign: "center", borderLeft: "1px solid #ffffff22", background: owing.length ? "#C8102E33" : "transparent", border: "none", borderLeftStyle: "solid", borderLeftWidth: 1, borderLeftColor: "#ffffff22", cursor: owing.length ? "pointer" : "default", fontFamily: "inherit" }}
                 >
-                  <b style={{ display: "block", fontSize: 16, color: owing.length ? "#f2a6b1" : GOLD }}>{gbp(owed)}</b>
+                  <b style={{ display: "block", fontSize: 16, color: owing.length ? "#f2a6b1" : GOLD }}>{money ? gbp(owed) : owing.length}</b>
                   <span style={{ fontSize: 10.5, fontWeight: 700, color: "#aeb9cf", letterSpacing: 0.5, textTransform: "uppercase" }}>
-                    Outstanding{owing.length ? " · " + owing.length + " inv" + (owing.length > 1 ? "s" : "") : ""}
+                    Outstanding{money && owing.length ? " · " + owing.length + " inv" + (owing.length > 1 ? "s" : "") : !money ? " invoices" : ""}
                   </span>
                 </button>
               </div>
