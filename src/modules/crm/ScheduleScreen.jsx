@@ -12,7 +12,7 @@ import { printJobDocs, DOC_KINDS, printPendingList } from "./printDocs.js";
 import LinesEditor from "./LinesEditor.jsx";
 import { JOB_TYPES, skuIndex, PAYMENT_TYPES, stockCheck, partKey, isColPick, blankPick, blankCollectionItem } from "../../lib/crmCore.js";
 import StockCheck from "./StockCheck.jsx";
-import { Icon, Chip, Tg, sect, lbl, card, abtn, inp, btn, goldBtn, RiskChip, WebStatusChip, Soon, usePhone } from "./ui.jsx";
+import { Icon, Chip, Tg, sect, lbl, card, abtn, inp, btn, goldBtn, RiskChip, WebStatusChip, Soon, usePhone, DateInput, CalendarPop } from "./ui.jsx";
 
 const RANGE_OPTS = [
   ["upcoming", "Upcoming + last 7 days"],
@@ -32,7 +32,28 @@ const COLLECTION_BLUE = "#185FA5";
 const short16 = (t) => (String(t).length > 16 ? String(t).slice(0, 15).trimEnd() + "…" : String(t));
 // stripe · done · customer · postcode · source · job type · driver · run · drop · van · weight · date+time · payment · [prep · follow-up] · update · days
 // sized to fit a ~1300px board without scrolling; spare width is shared out between the columns
-const dsCols = (prep) => "4px 48px 130px 60px 70px 100px 72px 72px 44px 80px 72px 120px 176px " + (prep ? "162px 162px " : "") + "126px 38px";
+// stripe · done · customer · postcode · source · job type tab · driver · run · drop · van · weight · date+time · payment · (prep · follow-up) · update · days
+const dsCols = (prep) => "4px 46px 122px 60px 52px 56px 86px 62px 44px 78px 72px 120px 192px " + (prep ? "162px 162px " : "") + "136px 38px";
+// short labels so the job type is a small tab (it's normally set on the invoice already)
+const JOB_SHORT = { Pending: "PEND", Delivery: "DEL", "Customer Collection": "COLL", Evri: "EVRI", "Post Office": "PO", "Courier TG": "TG", Returns: "RTN" };
+const jobShort = (t) => JOB_SHORT[t] || (/^deliver/i.test(t || "") ? "DEL" : /collect/i.test(t || "") ? "COLL" : String(t || "").replace(/[^A-Za-z]/g, "").slice(0, 4).toUpperCase());
+// source pill, abbreviated (full name on hover)
+const sourceShort = (s) => {
+  const t = String(s || "").trim(), l = t.toLowerCase();
+  if (!t) return "";
+  if (/web.*enq/.test(l)) return "Enq";
+  if (/^web/.test(l)) return "Web";
+  if (/direct/.test(l)) return "Direct";
+  if (/market ?place|ebay|amazon/.test(l)) return /ebay/.test(l) ? "eBay" : /amazon/.test(l) ? "Amazon" : "Mkt pl";
+  if (/facebook/.test(l)) return "FB";
+  if (/insta/.test(l)) return "Insta";
+  if (/google/.test(l)) return "Google";
+  if (/refer|recommend/.test(l)) return "Referral";
+  if (/repeat|return/.test(l)) return "Repeat";
+  if (/walk|showroom/.test(l)) return "Walk-in";
+  if (/phone|call/.test(l)) return "Phone";
+  return t.split(/\s+/)[0].slice(0, 8);
+};
 // a thin divider at the start of each section (job · weight · when · payment · contact)
 const sep = { boxShadow: "inset 1px 0 0 #e3e7ee", alignSelf: "stretch", display: "flex", alignItems: "center", margin: "-8px 0", padding: "8px 0 8px 6px", minWidth: 0 };
 const DROP_NOS = Array.from({ length: 20 }, (_, n) => String(n + 1));
@@ -119,18 +140,17 @@ const PrintMenu = ({ onPick, label, dark, title = "Print or save as PDF" }) => {
 // date pill showing just the day ("21st"); click opens the calendar
 const ordinal = (n) => n + (n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] || "th");
 const DayPill = ({ value, onChange, placeholder = "Date", paid, what = "", full }) => {
-  const ref = useRef(null);
+  const [cal, setCal] = useState(null);
   const d = value ? new Date(value + "T00:00:00") : null;
   const ok = d && !isNaN(d.getTime());
   return (
     <span style={{ position: "relative", flex: "none" }}>
       <button type="button" title={ok ? what + d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" }) + " — click to change" : what ? what.trim() + " — not yet" : "Set a date"}
-        onClick={() => { const el = ref.current; if (!el) return; try { el.showPicker(); } catch { el.focus(); el.click(); } }}
+        onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setCal((c) => (c ? null : r)); }}
         style={{ ...pill, width: full ? 74 : 46, padding: "3px 6px", textAlign: "center", color: ok ? (paid ? "#28713e" : NAVY) : "#5a6a85", background: ok ? (paid ? "#eef8f1" : "#fff") : "#f3f5f9", borderColor: ok && paid ? "#bfe3ca" : "#c9d0db" }}>
         {ok ? (full ? d.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "2-digit" }) : ordinal(d.getDate())) : placeholder}
       </button>
-      <input ref={ref} type="date" value={value || ""} onChange={(e) => onChange(e.target.value)} tabIndex={-1}
-        style={{ position: "absolute", left: 0, bottom: 0, width: 1, height: 1, opacity: 0, pointerEvents: "none", border: 0, padding: 0 }} />
+      {cal && <CalendarPop value={value} anchor={cal} onPick={(v) => onChange(v)} onClose={() => setCal(null)} />}
     </span>
   );
 };
@@ -192,7 +212,7 @@ const Stamp = ({ lines }) => {
 };
 
 // an editable pill: a small rounded drop-down; the list shows 10 at a time and scrolls
-const PillSelect = ({ value, options, placeholder, onChange, tone, labelOf = (o) => o }) => {
+const PillSelect = ({ value, options, placeholder, onChange, tone, labelOf = (o) => o, short, listWidth = 120 }) => {
   const [box, setBox] = useState(null);
   const ref = useRef(null);
   useEffect(() => {
@@ -207,10 +227,10 @@ const PillSelect = ({ value, options, placeholder, onChange, tone, labelOf = (o)
   return (
     <>
       <button ref={ref} type="button" title={placeholder}
-        onClick={() => { if (box) return setBox(null); const r = ref.current.getBoundingClientRect(); setBox({ left: r.left, top: r.bottom + 4, width: Math.max(r.width, 120) }); }}
-        style={{ ...pill, width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4, color: value ? tone || NAVY : "#5a6a85", background: value ? "#fff" : "#f3f5f9", borderColor: box ? NAVY : "#c9d0db" }}>
-        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{value ? labelOf(value) : placeholder}</span>
-        <span style={{ fontSize: 9, color: "#5a6a85" }}>▾</span>
+        onClick={() => { if (box) return setBox(null); const r = ref.current.getBoundingClientRect(); setBox({ left: r.left, top: r.bottom + 4, width: Math.max(r.width, listWidth) }); }}
+        style={{ ...pill, width: "100%", display: "flex", alignItems: "center", justifyContent: short ? "center" : "space-between", gap: 4, ...(short ? { padding: "3px 5px", fontSize: 11 } : {}), color: value ? tone || NAVY : "#5a6a85", background: value ? "#fff" : "#f3f5f9", borderColor: box ? NAVY : "#c9d0db" }}>
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{value ? (short ? short(value) : labelOf(value)) : placeholder}</span>
+        {!short && <span style={{ fontSize: 9, color: "#5a6a85" }}>▾</span>}
       </button>
       {box && (
         <div data-pill-list style={{ position: "fixed", left: Math.min(box.left, window.innerWidth - box.width - 8), top: Math.min(box.top, window.innerHeight - 10 * 30 - 20), width: box.width, zIndex: 80,
@@ -569,14 +589,16 @@ export default function ScheduleScreen({ money = true, crm, updateCrm, openInvoi
           </div>
         </div>
         <span style={{ fontSize: 12.5, color: "#5a6a85", fontWeight: 700, whiteSpace: "nowrap" }}>{(s && s.postcode) || (c && c.postcode) || "—"}</span>
-        <span style={{ minWidth: 0, overflow: "hidden" }}>{c && c.source ? <Chip style={{ fontSize: 10.5, padding: "1px 8px", whiteSpace: "nowrap", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis" }}>{c.source}</Chip> : <span style={{ color: "#aab3c2" }}>—</span>}</span>
-        <span style={sep}><span style={{ width: "100%", minWidth: 0 }}><PillSelect value={i.jobType || ""} options={JOB_TYPES} placeholder="Job type" tone={isCollectionJob(i) ? "#9a7408" : NAVY} onChange={(v) => setInv(i.id, (t) => (t.jobType = v))} /></span></span>
+        <span style={{ minWidth: 0, overflow: "hidden" }} title={c && c.source ? "Source: " + c.source : ""}>{c && c.source ? <Chip style={{ fontSize: 10.5, padding: "1px 7px", whiteSpace: "nowrap", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis" }}>{sourceShort(c.source)}</Chip> : <span style={{ color: "#aab3c2" }}>—</span>}</span>
+        <span style={sep} title={"Job type: " + (i.jobType || "not set") + " — click to change"}><span style={{ width: "100%", minWidth: 0 }}>
+          <PillSelect value={i.jobType || ""} options={JOB_TYPES} placeholder="Type" short={jobShort} listWidth={170} tone={isCollectionJob(i) ? "#9a7408" : NAVY} onChange={(v) => setInv(i.id, (t) => (t.jobType = v))} />
+        </span></span>
         {isCollectionJob(i) ? (
           // customer collects from the warehouse: no driver, run, drop or van
           <span style={{ gridColumn: "span 4", fontSize: 12, fontWeight: 700, color: "#9a7408", paddingLeft: 8 }}>Collecting from the warehouse</span>
         ) : <>
           <PillSelect value={i.driver || ""} options={DRIVERS} placeholder="Driver" onChange={(v) => pickDriver("inv", i, v)} />
-          <PillSelect value={i.runNo || ""} options={RUN_NOS} placeholder="Run" labelOf={(o) => "Run " + o} onChange={(v) => setInv(i.id, (t) => (t.runNo = v))} />
+          <PillSelect value={i.runNo || ""} options={RUN_NOS} placeholder="Run" labelOf={(o) => "Run " + o} short={phone ? undefined : (o) => "Run " + o} onChange={(v) => setInv(i.id, (t) => (t.runNo = v))} />
           <PillSelect value={i.dropNo || ""} options={DROP_NOS} placeholder="#" onChange={(v) => setInv(i.id, (t) => (t.dropNo = v))} />
           <PillSelect value={i.van || ""} options={vanOptions(crm)} placeholder="Van" onChange={(v) => setInv(i.id, (t) => (t.van = v))} />
         </>}
@@ -591,7 +613,7 @@ export default function ScheduleScreen({ money = true, crm, updateCrm, openInvoi
           <PillSelect value={i.deliveryTime || ""} options={TIME_SLOTS} placeholder="Time" onChange={(v) => guard(i.id, () => setInv(i.id, (t) => (t.deliveryTime = v)))} />
         </div>
         <div style={{ ...sep, gap: 4 }}>
-          <span style={{ width: 90, flex: "none" }}>
+          <span style={{ width: 104, flex: "none" }}>
             <PillSelect value={i.paymentType || ""} options={PAYMENT_TYPES} placeholder="Payment" tone={isPaid(i) ? "#28713e" : NAVY} onChange={(v) => setInv(i.id, (t) => (t.paymentType = v))} />
           </span>
           <DayPill value={i.paymentDate} placeholder="Paid" paid full what="Paid " onChange={(v) => setInv(i.id, (t) => (t.paymentDate = v))} />
@@ -669,7 +691,7 @@ export default function ScheduleScreen({ money = true, crm, updateCrm, openInvoi
           {!isCollectionJob(i) && (
             <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr 0.8fr 1.1fr", gap: 5, marginBottom: 8 }}>
               <PillSelect value={i.driver || ""} options={DRIVERS} placeholder="Driver" onChange={(v) => pickDriver("inv", i, v)} />
-              <PillSelect value={i.runNo || ""} options={RUN_NOS} placeholder="Run" labelOf={(o) => "Run " + o} onChange={(v) => setInv(i.id, (t) => (t.runNo = v))} />
+              <PillSelect value={i.runNo || ""} options={RUN_NOS} placeholder="Run" labelOf={(o) => "Run " + o} short={phone ? undefined : (o) => "Run " + o} onChange={(v) => setInv(i.id, (t) => (t.runNo = v))} />
               <PillSelect value={i.dropNo || ""} options={DROP_NOS} placeholder="#" onChange={(v) => setInv(i.id, (t) => (t.dropNo = v))} />
               <PillSelect value={i.van || ""} options={vanOptions(crm)} placeholder="Van" onChange={(v) => setInv(i.id, (t) => (t.van = v))} />
             </div>
@@ -711,7 +733,7 @@ export default function ScheduleScreen({ money = true, crm, updateCrm, openInvoi
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr 0.8fr 1.1fr", gap: 5, marginBottom: 8 }}>
             <PillSelect value={c.driver || ""} options={DRIVERS} placeholder="Driver" onChange={(v) => pickDriver("col", c, v)} />
-            <PillSelect value={c.runNo || ""} options={RUN_NOS} placeholder="Run" labelOf={(o) => "Run " + o} onChange={(v) => setColl(c.id, (t) => (t.runNo = v))} />
+            <PillSelect value={c.runNo || ""} options={RUN_NOS} placeholder="Run" labelOf={(o) => "Run " + o} short={phone ? undefined : (o) => "Run " + o} onChange={(v) => setColl(c.id, (t) => (t.runNo = v))} />
             <PillSelect value={c.dropNo || ""} options={DROP_NOS} placeholder="#" onChange={(v) => setColl(c.id, (t) => (t.dropNo = v))} />
             <PillSelect value={c.van || ""} options={vanOptions(crm)} placeholder="Van" onChange={(v) => setColl(c.id, (t) => (t.van = v))} />
           </div>
@@ -758,9 +780,9 @@ export default function ScheduleScreen({ money = true, crm, updateCrm, openInvoi
         </div>
         <span style={{ fontSize: 12.5, color: "#5a6a85", fontWeight: 700, whiteSpace: "nowrap" }}>{c.postcode || "—"}</span>
         <span style={{ fontSize: 11.5, fontWeight: 700, color: COLLECTION_BLUE }}>COL-{c.collectionNo || "—"}</span>
-        <span style={{ ...sep, fontSize: 11.5, fontWeight: 700, color: COLLECTION_BLUE, paddingLeft: 8, whiteSpace: "nowrap" }}>Supplier pick-up</span>
+        <span title="Supplier pick-up" style={{ ...sep, fontSize: 11.5, fontWeight: 800, color: COLLECTION_BLUE, justifyContent: "center", whiteSpace: "nowrap", letterSpacing: 0.3 }}>PICK</span>
         <PillSelect value={c.driver || ""} options={DRIVERS} placeholder="Driver" onChange={(v) => pickDriver("col", c, v)} />
-        <PillSelect value={c.runNo || ""} options={RUN_NOS} placeholder="Run" labelOf={(o) => "Run " + o} onChange={(v) => setColl(c.id, (t) => (t.runNo = v))} />
+        <PillSelect value={c.runNo || ""} options={RUN_NOS} placeholder="Run" labelOf={(o) => "Run " + o} short={phone ? undefined : (o) => "Run " + o} onChange={(v) => setColl(c.id, (t) => (t.runNo = v))} />
         <PillSelect value={c.dropNo || ""} options={DROP_NOS} placeholder="#" onChange={(v) => setColl(c.id, (t) => (t.dropNo = v))} />
         <PillSelect value={c.van || ""} options={vanOptions(crm)} placeholder="Van" onChange={(v) => setColl(c.id, (t) => (t.van = v))} />
         <div style={{ ...sep, justifyContent: "flex-end", paddingRight: 2, fontSize: 12.5, fontWeight: 700, whiteSpace: "nowrap" }} title={items + " pcs"}>{kg !== null ? Math.round(kg).toLocaleString("en-GB") + " kg" : items ? items + " pcs" : "—"}</div>
@@ -1197,7 +1219,7 @@ export default function ScheduleScreen({ money = true, crm, updateCrm, openInvoi
               <Stamp lines={[col.date ? "Raised " + prettyDate(col.date) + (col.raisedBy ? " by " + String(col.raisedBy).split("@")[0] : "") : ""]} />
               <div style={{ display: "flex", gap: 8, alignItems: "center", background: col.collectDate ? "#f7f9fc" : "#fff8e6", border: "1px solid " + (col.collectDate ? "#e6e9ef" : "#f4d78f"), borderRadius: 10, padding: "6px 10px", marginBottom: 10 }}>
                 <span style={{ ...lbl, marginBottom: 0 }}>Collection date</span>
-                <input type="date" value={col.collectDate || ""} style={{ ...pill, width: 130, padding: "3px 8px" }} onChange={(e) => { const v = e.target.value; setColl(col.id, (t) => (t.collectDate = v)); }} />
+                <DateInput value={col.collectDate || ""} style={{ ...pill, width: 130, padding: "3px 8px" }} onChange={(e) => { const v = e.target.value; setColl(col.id, (t) => (t.collectDate = v)); }} />
                 <span style={{ flex: 1 }} />
                 {!col.collectDate && <span style={{ fontSize: 11.5, fontWeight: 700, color: "#a05f10" }}>not booked</span>}
               </div>
@@ -1371,7 +1393,7 @@ export default function ScheduleScreen({ money = true, crm, updateCrm, openInvoi
               ]} />
               <div style={{ display: "flex", gap: 8, alignItems: "center", background: i.deliveryDate ? "#f7f9fc" : "#fff8e6", border: "1px solid " + (i.deliveryDate ? "#e6e9ef" : "#f4d78f"), borderRadius: 10, padding: "6px 10px", marginBottom: 10 }}>
                 <span style={{ ...lbl, marginBottom: 0, whiteSpace: "nowrap", minWidth: 96 }}>{isCollectionJob(i) ? "Collection date" : "Delivery date"}</span>
-                <input type="date" value={i.deliveryDate || ""} style={{ ...pill, width: 130, padding: "3px 8px" }}
+                <DateInput value={i.deliveryDate || ""} style={{ ...pill, width: 130, padding: "3px 8px" }}
                   onChange={(e) => { const v = e.target.value; guard(i.id, () => setInv(i.id, (t) => { t.deliveryDate = v; if (v && (!t.jobType || t.jobType === "Pending")) t.jobType = "Delivery"; })); }} />
                 <span style={{ flex: 1 }} />
                 {!i.deliveryDate && <span style={{ fontSize: 11.5, fontWeight: 700, color: "#a05f10" }}>not booked</span>}
@@ -1382,7 +1404,7 @@ export default function ScheduleScreen({ money = true, crm, updateCrm, openInvoi
                   <PillSelect value={i.paymentType || ""} options={PAYMENT_TYPES} placeholder="Type" tone={isPaid(i) ? "#28713e" : NAVY} onChange={(v) => setInv(i.id, (t) => (t.paymentType = v))} />
                 </span>
                 <span style={{ ...lbl, marginBottom: 0, marginLeft: 6 }}>Paid</span>
-                <input type="date" value={i.paymentDate || ""} title="Date paid — leave blank while it's still owed" style={{ ...pill, width: 130, padding: "3px 8px", color: i.paymentDate ? "#28713e" : "#5a6a85" }}
+                <DateInput value={i.paymentDate || ""} title="Date paid — leave blank while it's still owed" style={{ ...pill, width: 130, padding: "3px 8px", color: i.paymentDate ? "#28713e" : "#5a6a85" }}
                   onChange={(e) => { const v = e.target.value; setInv(i.id, (t) => (t.paymentDate = v)); }} />
                 <span style={{ flex: 1 }} />
                 <span style={{ fontSize: 11.5, fontWeight: 700, color: isPaid(i) ? "#28713e" : "#a05f10" }}>{isPaid(i) ? "paid" : "owed"}</span>

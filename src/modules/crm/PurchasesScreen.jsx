@@ -9,7 +9,7 @@ import {
   PURCHASE_CATEGORIES, PAYMENT_METHODS, VAT_RATES, vanOptions, staffList, staffName,
 } from "../../lib/crmCore.js";
 import { purchasesAvailable } from "../../data/crmStorage.js";
-import { Icon, Chip, SuggestInput, selectAllProps, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
+import { Icon, Chip, SuggestInput, selectAllProps, sect, lbl, card, abtn, inp, btn, goldBtn, DateInput, CalendarPop } from "./ui.jsx";
 import { SupplierModal, PurchasesSchemaNotice } from "./SuppliersScreen.jsx";
 
 const th = { fontSize: 11, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", padding: "8px 8px", borderBottom: "2px solid #e6e9ef", whiteSpace: "nowrap", textAlign: "left" };
@@ -239,7 +239,9 @@ export default function PurchasesScreen({ crm, updateCrm, askConfirm, selId, set
 
   const L = ({ children }) => <span style={{ ...lbl, marginBottom: 4 }}>{children}</span>;
   const text = (k, props = {}, style = {}) => (
-    <input style={{ ...inp, ...style }} value={p[k] === null ? "" : p[k]} {...selectAllProps} {...props} onChange={(e) => setP((x) => (x[k] = e.target.value))} />
+    props.type === "date"
+      ? <DateInput style={{ ...inp, ...style }} value={p[k] || ""} onChange={(e) => setP((x) => (x[k] = e.target.value))} />
+      : <input style={{ ...inp, ...style }} value={p[k] === null ? "" : p[k]} {...selectAllProps} {...props} onChange={(e) => setP((x) => (x[k] = e.target.value))} />
   );
 
   return (

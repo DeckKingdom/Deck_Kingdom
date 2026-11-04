@@ -368,3 +368,114 @@ export const usePhone = (max = 760) => {
   }, [q]);
   return on;
 };
+
+// ===== date picking (FileMaker-style calendar instead of the browser's own) =====
+const pad2 = (n) => String(n).padStart(2, "0");
+const ymd = (d) => d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate());
+const parseYmd = (s) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s || "")); if (!m) return null; const d = new Date(+m[1], +m[2] - 1, +m[3]); return isNaN(d.getTime()) ? null : d; };
+export const ukDate = (s) => { const d = parseYmd(s); return d ? pad2(d.getDate()) + "/" + pad2(d.getMonth() + 1) + "/" + d.getFullYear() : ""; };
+// "4/11/26", "04/11/2026", "4.11.2026", "4 11" (this year) -> yyyy-mm-dd
+export const parseUkDate = (t) => {
+  const m = /^\s*(\d{1,2})[\/.\-\s](\d{1,2})(?:[\/.\-\s](\d{2,4}))?\s*$/.exec(String(t || ""));
+  if (!m) return null;
+  let y = m[3] ? Number(m[3]) : new Date().getFullYear();
+  if (y < 100) y += 2000;
+  const d = new Date(y, Number(m[2]) - 1, Number(m[1]));
+  return d.getDate() === Number(m[1]) && d.getMonth() === Number(m[2]) - 1 ? ymd(d) : null;
+};
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+// the calendar itself, floating next to whatever opened it (anchor = getBoundingClientRect())
+export function CalendarPop({ value, anchor, onPick, onClose, clear = true }) {
+  const sel = parseYmd(value);
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const [view, setView] = useState(() => { const b = sel || today; return new Date(b.getFullYear(), b.getMonth(), 1); });
+  const box = useRef(null);
+  useEffect(() => {
+    const down = (e) => { if (box.current && !box.current.contains(e.target)) onClose(); };
+    const key = (e) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("mousedown", down, true);
+    document.addEventListener("touchstart", down, true);
+    document.addEventListener("keydown", key);
+    return () => { document.removeEventListener("mousedown", down, true); document.removeEventListener("touchstart", down, true); document.removeEventListener("keydown", key); };
+  }, [onClose]);
+  const W = 252, H = 286;
+  const vw = window.innerWidth, vh = window.innerHeight;
+  const r = anchor || { left: vw / 2 - W / 2, right: vw / 2 + W / 2, top: vh / 2 - H / 2, bottom: vh / 2 - H / 2 };
+  const left = Math.max(8, Math.min(r.left, vw - W - 8));
+  const top = r.bottom + 4 + H < vh ? r.bottom + 4 : Math.max(8, r.top - H - 4);
+  // 6 weeks, Monday first
+  const first = new Date(view);
+  const start = new Date(first); start.setDate(1 - ((first.getDay() + 6) % 7));
+  const days = Array.from({ length: 42 }, (_, k) => { const d = new Date(start); d.setDate(start.getDate() + k); return d; });
+  const step = (n) => setView((v) => new Date(v.getFullYear(), v.getMonth() + n, 1));
+  const pick = (d) => { onPick(ymd(d)); onClose(); };
+  const navB = { width: 28, height: 28, border: "none", background: "transparent", cursor: "pointer", borderRadius: 7, color: NAVY, fontSize: 15, fontWeight: 800, padding: 0, fontFamily: "inherit" };
+  return (
+    <div ref={box} onMouseDown={(e) => e.stopPropagation()}
+      style={{ position: "fixed", left, top, width: W, zIndex: 400, background: "#fff", border: "1px solid #d5d9e0", borderRadius: 12, boxShadow: "0 12px 32px rgba(11,31,63,.25)", padding: "8px 10px 10px", fontFamily: "Quicksand, sans-serif", color: NAVY, boxSizing: "border-box" }}>
+      <div style={{ display: "flex", alignItems: "center", marginBottom: 4 }}>
+        <button type="button" style={navB} onClick={() => step(-1)} title="Previous month">◀</button>
+        <b style={{ flex: 1, textAlign: "center", fontSize: 14 }}>{MONTHS[view.getMonth()]} {view.getFullYear()}</b>
+        <button type="button" style={navB} onClick={() => step(1)} title="Next month">▶</button>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2, textAlign: "center" }}>
+        {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
+          <span key={d} style={{ fontSize: 11, fontWeight: 700, color: "#8593a8", padding: "3px 0" }}>{d}</span>
+        ))}
+        {days.map((d) => {
+          const other = d.getMonth() !== view.getMonth();
+          const isSel = sel && d.getTime() === sel.getTime();
+          const isToday = d.getTime() === today.getTime();
+          return (
+            <button key={d.getTime()} type="button" onClick={() => pick(d)}
+              style={{ height: 30, border: isToday && !isSel ? "1.5px solid " + NAVY : "1.5px solid transparent", borderRadius: 7, cursor: "pointer", padding: 0, fontFamily: "inherit",
+                fontSize: 13, fontWeight: isSel || isToday ? 800 : 600, background: isSel ? GOLD : "transparent", color: isSel ? NAVY : other ? "#b8c0cc" : NAVY }}
+              onMouseEnter={(e) => { if (!isSel) e.currentTarget.style.background = "#eef1f6"; }} onMouseLeave={(e) => { if (!isSel) e.currentTarget.style.background = "transparent"; }}>
+              {d.getDate()}
+            </button>
+          );
+        })}
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6, borderTop: "1px solid #eef0f4", paddingTop: 7 }}>
+        <button type="button" onClick={() => pick(today)} style={{ ...navB, width: "auto", fontSize: 12.5, fontWeight: 700, padding: "0 6px", display: "inline-flex", alignItems: "center", gap: 6 }}>
+          <span style={{ width: 12, height: 12, border: "1.5px solid " + NAVY, borderRadius: 3, display: "inline-block" }} />Today: {pad2(today.getDate())}/{pad2(today.getMonth() + 1)}/{today.getFullYear()}
+        </button>
+        <span style={{ flex: 1 }} />
+        {clear && value && <button type="button" onClick={() => { onPick(""); onClose(); }} style={{ ...navB, width: "auto", fontSize: 12.5, fontWeight: 700, color: "#8593a8", padding: "0 6px" }}>Clear</button>}
+      </div>
+    </div>
+  );
+}
+
+// drop-in for <input type="date">: same value (yyyy-mm-dd) and onChange(e) with e.target.value,
+// shows dd/mm/yyyy, opens the calendar when clicked, and you can still type a date
+export function DateInput({ value, onChange, style, disabled, title, placeholder = "dd/mm/yyyy", clear = true }) {
+  const [open, setOpen] = useState(null); // anchor rect
+  const [text, setText] = useState(null); // while typing
+  const wrap = useRef(null);
+  const emit = (v) => onChange && onChange({ target: { value: v }, currentTarget: { value: v } });
+  const commit = () => {
+    if (text === null) return;
+    const t = text.trim();
+    if (!t) emit("");
+    else { const v = parseUkDate(t); if (v) emit(v); }
+    setText(null);
+  };
+  const st = style || {};
+  return (
+    <span ref={wrap} style={{ position: "relative", display: st.width === "100%" || !st.width ? "block" : "inline-block", width: st.width, maxWidth: st.maxWidth, flex: st.flex }}>
+      <input type="text" inputMode="numeric" value={text !== null ? text : ukDate(value)} placeholder={placeholder} disabled={disabled} title={title}
+        onChange={(e) => setText(e.target.value)}
+        onFocus={() => !disabled && wrap.current && setOpen(wrap.current.getBoundingClientRect())}
+        onBlur={commit}
+        onKeyDown={(e) => { if (e.key === "Enter") { commit(); setOpen(null); e.currentTarget.blur(); } if (e.key === "Escape") { setText(null); setOpen(null); } }}
+        style={{ ...st, width: "100%", boxSizing: "border-box", paddingRight: 30, cursor: disabled ? "default" : "text" }} />
+      <span onMouseDown={(e) => { e.preventDefault(); if (!disabled && wrap.current) setOpen((o) => (o ? null : wrap.current.getBoundingClientRect())); }}
+        style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", display: "inline-flex", cursor: disabled ? "default" : "pointer", opacity: disabled ? 0.4 : 1 }}>
+        <Icon name="cal" size={15} stroke={NAVY} />
+      </span>
+      {open && !disabled && <CalendarPop value={value} anchor={open} clear={clear} onPick={(v) => { setText(null); emit(v); }} onClose={() => setOpen(null)} />}
+    </span>
+  );
+}

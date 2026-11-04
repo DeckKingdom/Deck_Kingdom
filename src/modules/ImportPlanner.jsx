@@ -44,7 +44,7 @@ import UsersScreen from "./crm/UsersScreen.jsx";
 import StockScreen from "./crm/StockScreen.jsx";
 import CollectionsScreen from "./crm/CollectionsScreen.jsx";
 import VansScreen from "./crm/VansScreen.jsx";
-import { Icon, SuggestInput, abtn } from "./crm/ui.jsx";
+import { Icon, SuggestInput, abtn, DateInput, CalendarPop } from "./crm/ui.jsx";
 import { EmailSettings } from "./crm/EmailPanels.jsx";
 import { emailReady } from "../data/email.js";
 
@@ -815,7 +815,7 @@ export default function ImportPlanner() {
     const manual = !!s.balanceDue;
     return (
       <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-        <input type="date" value={balanceDate(s) || ""} onChange={(e) => setShipmentField(s.id, "balanceDue", e.target.value)}
+        <DateInput value={balanceDate(s) || ""} onChange={(e) => setShipmentField(s.id, "balanceDue", e.target.value)}
           title={manual ? "Set by hand — the automatic date would be " + prettyDate(autoBalanceDate(s)) : balanceFromArrival(s) ? "Automatic: 30 days after it arrived. Change it to set your own." : "Automatic: 30 days after expected delivery. Change it to set your own."}
           style={{ ...inp, width: "auto", fontSize: big ? 14 : 12, padding: big ? undefined : "6px 6px", fontWeight: manual || balanceFromArrival(s) ? 700 : 400,
             ...(manual ? { borderColor: GOLD, background: "#fff8e6" } : {}) }} />
@@ -1550,7 +1550,7 @@ export default function ImportPlanner() {
                         </select>
                       </td>
                       <td style={td}>
-                        <input type="date" value={s.orderDate || ""} onChange={(e) => setShipmentField(s.id, "orderDate", e.target.value)} style={{ ...inp, fontSize: 12, padding: "6px 6px" }} />
+                        <DateInput value={s.orderDate || ""} onChange={(e) => setShipmentField(s.id, "orderDate", e.target.value)} style={{ ...inp, fontSize: 12, padding: "6px 6px" }} />
                       </td>
                       <td style={{ ...td, whiteSpace: "nowrap", fontSize: 12 }}>{prettyDate(addMonths(s.orderDate, 3))}</td>
                       <td style={{ ...td, whiteSpace: "nowrap", fontSize: 12, fontWeight: s.arrivedDate ? 700 : 400, color: s.arrivedDate ? undefined : "#9aa5b1" }}>
@@ -1845,8 +1845,8 @@ export default function ImportPlanner() {
                 </div>
                 <div>
                   <span style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#5a6a85", marginBottom: 4 }}>Order date</span>
-                  <input
-                    type="date"
+                  <DateInput
+ 
                     value={active.orderDate || ""}
                     onChange={(e) => setShipmentField(active.id, "orderDate", e.target.value)}
                     style={{ ...inp, width: "auto" }}
@@ -2135,7 +2135,7 @@ export default function ImportPlanner() {
                           </div>
                           <div>
                             <span style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#8593a8", marginBottom: 3 }}>Date</span>
-                            <input type="date" value={active[field] || ""} onChange={(e) => setShipmentField(active.id, field, e.target.value)} style={{ ...inp, width: 160, maxWidth: "100%" }} />
+                            <DateInput value={active[field] || ""} onChange={(e) => setShipmentField(active.id, field, e.target.value)} style={{ ...inp, width: 160, maxWidth: "100%" }} />
                           </div>
                           {field === "arrivedDate" && daysBetween(active.orderDate, active.arrivedDate) !== null && (
                             <div style={{ paddingTop: 23 }}>

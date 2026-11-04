@@ -9,7 +9,7 @@ import {
   TRADE_COUNTER, TRADE_COUNTER_LABEL,
 } from "../../lib/crmCore.js";
 import { quotesAvailable } from "../../data/crmStorage.js";
-import { ListHero, HeroStat, HeroAdd, SearchBox, FilterPills } from "./ui.jsx";
+import { ListHero, HeroStat, HeroAdd, SearchBox, FilterPills, DateInput, CalendarPop } from "./ui.jsx";
 import { Icon, Chip, selectAllProps, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
 import { printQuote } from "./printDocs.js";
 import LinesEditor from "./LinesEditor.jsx";
@@ -323,15 +323,15 @@ export default function QuotesScreen({ money = true, crm, updateCrm, askConfirm,
           </div>
           <div>
             <span style={lbl}>Quote date</span>
-            <input style={inp} type="date" value={q.date} disabled={locked} onChange={(e) => setQuote((x) => (x.date = e.target.value))} />
+            <DateInput style={inp} value={q.date} disabled={locked} onChange={(e) => setQuote((x) => (x.date = e.target.value))} />
           </div>
           <div>
             <span style={lbl}>Valid until</span>
-            <input style={{ ...inp, borderColor: st === "Expired" ? RED : "#d5d9e0" }} type="date" value={q.validUntil} disabled={locked} onChange={(e) => setQuote((x) => (x.validUntil = e.target.value))} />
+            <DateInput style={{ ...inp, borderColor: st === "Expired" ? RED : "#d5d9e0" }} value={q.validUntil} disabled={locked} onChange={(e) => setQuote((x) => (x.validUntil = e.target.value))} />
           </div>
           <div>
             <span style={lbl}>Sent to customer</span>
-            <input style={inp} type="date" value={q.sentDate} disabled={locked} onChange={(e) => setQuote((x) => (x.sentDate = e.target.value))} />
+            <DateInput style={inp} value={q.sentDate} disabled={locked} onChange={(e) => setQuote((x) => (x.sentDate = e.target.value))} />
           </div>
           {st === "Expired" && (
             <button style={{ ...btn, justifyContent: "center" }} onClick={() => setQuote((x) => (x.validUntil = addDays(today(), QUOTE_VALID_DAYS)))}>

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { NAVY, GOLD, RED, prettyDate } from "../../lib/core.js";
 import { blankVan, blankVanCheck, VAN_CHECK_ITEMS, daysUntil, FIELD_FORMATS } from "../../lib/crmCore.js";
-import { Icon, Chip, Modal, selectAllProps, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
+import { Icon, Chip, Modal, selectAllProps, sect, lbl, card, abtn, inp, btn, goldBtn, DateInput, CalendarPop } from "./ui.jsx";
 
 const DUE_FIELDS = [
   ["insuranceRenewal", "Insurance"],
@@ -67,8 +67,10 @@ export default function VansScreen({ crm, updateCrm, askConfirm, me }) {
   const field = (k, label, props = {}, wrap = {}) => (
     <div style={wrap}>
       <span style={lbl}>{label}</span>
-      <input style={inp} value={draft[k] === null ? "" : draft[k]} {...props} {...selectAllProps}
-        onChange={(e) => setDraft({ ...draft, [k]: e.target.value })} />
+      {props.type === "date"
+        ? <DateInput style={inp} value={draft[k] || ""} onChange={(e) => setDraft({ ...draft, [k]: e.target.value })} />
+        : <input style={inp} value={draft[k] === null ? "" : draft[k]} {...props} {...selectAllProps}
+          onChange={(e) => setDraft({ ...draft, [k]: e.target.value })} />}
     </div>
   );
 
@@ -191,7 +193,7 @@ export default function VansScreen({ crm, updateCrm, askConfirm, me }) {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
             <div>
               <span style={lbl}>Date</span>
-              <input style={inp} type="date" value={checkDraft.check.date}
+              <DateInput style={inp} value={checkDraft.check.date}
                 onChange={(e) => setCheckDraft({ ...checkDraft, check: { ...checkDraft.check, date: e.target.value } })} />
             </div>
             <div>

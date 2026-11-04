@@ -11,7 +11,7 @@ import {
 } from "../../lib/crmCore.js";
 import { SupplierModal } from "./SuppliersScreen.jsx";
 import { purchasesAvailable } from "../../data/crmStorage.js";
-import { Icon, Chip, Modal, selectAllProps, SuggestInput, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
+import { Icon, Chip, Modal, selectAllProps, SuggestInput, sect, lbl, card, abtn, inp, btn, goldBtn, DateInput, CalendarPop } from "./ui.jsx";
 import { printCollectionNote } from "./printDocs.js";
 import { skuOption, SKU_COLS, SKU_LIST_W } from "./LinesEditor.jsx";
 
@@ -203,8 +203,10 @@ export default function CollectionsScreen({ money = true, crm, updateCrm, askCon
   const field = (k, label, props = {}, style = {}) => (
     <div>
       <span style={lbl}>{label}</span>
-      <input style={{ ...inp, ...style }} value={coll[k] === null ? "" : coll[k]} {...props} {...selectAllProps}
-        onChange={(e) => setColl((t) => (t[k] = e.target.value))} />
+      {props.type === "date"
+        ? <DateInput style={{ ...inp, ...style }} value={coll[k] || ""} onChange={(e) => setColl((t) => (t[k] = e.target.value))} />
+        : <input style={{ ...inp, ...style }} value={coll[k] === null ? "" : coll[k]} {...props} {...selectAllProps}
+          onChange={(e) => setColl((t) => (t[k] = e.target.value))} />}
     </div>
   );
 

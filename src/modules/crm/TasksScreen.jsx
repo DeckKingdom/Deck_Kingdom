@@ -7,7 +7,7 @@ import {
   scheduledOccurrence, nextScheduled, occurrenceAssignees, describeSchedule, staffName, staffList, isOccurrenceDone,
 } from "../../lib/crmCore.js";
 import { tasksAvailable } from "../../data/crmStorage.js";
-import { Icon, Chip, Modal, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
+import { Icon, Chip, Modal, sect, lbl, card, abtn, inp, btn, goldBtn, DateInput, CalendarPop } from "./ui.jsx";
 
 const th = { fontSize: 11, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", padding: "8px 8px", borderBottom: "2px solid #e6e9ef", whiteSpace: "nowrap", textAlign: "left" };
 const tdc = { padding: "9px 8px", borderBottom: "1px solid #f0f2f6", verticalAlign: "top" };
@@ -132,7 +132,7 @@ export function TaskModal({ crm, updateCrm, me, draft, onClose, askConfirm }) {
           {t.repeat === "once" && (
             <div>
               <span style={lbl}>On</span>
-              <input style={inp} type="date" value={t.onDate} onChange={(e) => set("onDate", e.target.value)} />
+              <DateInput style={inp} value={t.onDate} onChange={(e) => set("onDate", e.target.value)} />
             </div>
           )}
         </div>
@@ -150,7 +150,7 @@ export function TaskModal({ crm, updateCrm, me, draft, onClose, askConfirm }) {
           </div>
           <div>
             <span style={lbl}>Aim to finish by</span>
-            <input style={inp} type="date" value={t.dueDate} onChange={(e) => set("dueDate", e.target.value)} />
+            <DateInput style={inp} value={t.dueDate} onChange={(e) => set("dueDate", e.target.value)} />
           </div>
         </div>
       )}
@@ -180,7 +180,7 @@ export function TaskModal({ crm, updateCrm, me, draft, onClose, askConfirm }) {
           )}
           <div>
             <span style={lbl}>Starting from</span>
-            <input style={inp} type="date" value={t.startDate} onChange={(e) => set("startDate", e.target.value)} />
+            <DateInput style={inp} value={t.startDate} onChange={(e) => set("startDate", e.target.value)} />
           </div>
         </div>
       )}

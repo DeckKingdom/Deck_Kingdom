@@ -9,7 +9,7 @@ import {
   originText, userInitials, sampleEmailSettings, SAMPLE_EMAIL_DEFAULTS, SAMPLE_FOLLOWUP2_DAYS, SAMPLE_SOURCES, SAMPLE_DISPATCH, SAMPLE_SIZES, SAMPLE_WINDOW_DAYS, SAMPLE_FOLLOWUP_DAYS, SOURCES, FIELD_FORMATS,
 } from "../../lib/crmCore.js";
 import { samplesAvailable } from "../../data/crmStorage.js";
-import { ListHero, HeroStat, HeroAdd, SearchBox, FilterPills } from "./ui.jsx";
+import { ListHero, HeroStat, HeroAdd, SearchBox, FilterPills, DateInput, CalendarPop } from "./ui.jsx";
 import { Icon, Chip, Modal, SuggestInput, selectAllProps, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
 import { ColourSelect } from "./LinesEditor.jsx";
 import { printSampleSlip } from "./printDocs.js";
@@ -75,10 +75,9 @@ const plainVal = { fontSize: 14, fontWeight: 700, color: NAVY, padding: "8px 0",
 // a step you tick off: gold "do it" button -> green button showing the date.
 // Clicking the green button changes the date; the × undoes it. plain = just the date as text (click to change).
 function StepDate({ value, onDate, todo, done, icon, plain }) {
-  const ref = useRef(null);
-  const pick = () => { const el = ref.current; if (!el) return; try { el.showPicker(); } catch { el.focus(); el.click(); } };
-  const hidden = <input ref={ref} type="date" value={value || ""} onChange={(e) => e.target.value && onDate(e.target.value)}
-    style={{ position: "absolute", opacity: 0, pointerEvents: "none", width: 1, height: 1, left: 0, bottom: 0 }} tabIndex={-1} />;
+  const [cal, setCal] = useState(null);
+  const pick = (e) => { const r = e.currentTarget.getBoundingClientRect(); setCal((c) => (c ? null : r)); };
+  const hidden = cal ? <CalendarPop value={value} anchor={cal} clear={false} onPick={(v) => v && onDate(v)} onClose={() => setCal(null)} /> : null;
   if (plain) return (
     <div style={{ position: "relative" }}>
       <button type="button" onClick={pick} title="Change the date" className="dk-title-link" style={{ ...plainVal, display: "block" }}>{value ? prettyDate(value) : "—"}</button>

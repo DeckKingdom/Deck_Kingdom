@@ -8,7 +8,7 @@ import {
   skuIndex, invoiceCost, buildPicks, pickLandedCost, jobCost, blankPick, invoiceLoadKg, applyInvoiceStockDeduction,
   TRADE_COUNTER, TRADE_COUNTER_LABEL, quoteRef, sampleRef, isSaleInvoice, riskOf, staffName, isVoidInvoice, onSchedule, userInitials,
 } from "../../lib/crmCore.js";
-import { ListHero, HeroStat, HeroAdd, SearchBox, RiskChip, WebStatusChip, Soon } from "./ui.jsx";
+import { ListHero, HeroStat, HeroAdd, SearchBox, RiskChip, WebStatusChip, Soon, DateInput, CalendarPop } from "./ui.jsx";
 import { Icon, Chip, Tg, Modal, selectAllProps, SuggestInput, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
 import { printInvoice, printJobSheet, printLoadingBill } from "./printDocs.js";
 import { readableFor } from "./LinesEditor.jsx";
@@ -248,8 +248,10 @@ export default function InvoicesScreen({ money = true, newFollowUp, crm, updateC
   const field = (label, k, props = {}, style = {}) => (
     <div>
       <span style={lbl}>{label}</span>
-      <input style={{ ...inp, ...style }} value={inv[k] === null ? "" : inv[k]} {...props} {...selectAllProps}
-        onChange={(e) => setInv((x) => (x[k] = e.target.value))} />
+      {props.type === "date"
+        ? <DateInput style={{ ...inp, ...style }} value={inv[k] || ""} onChange={(e) => setInv((x) => (x[k] = e.target.value))} />
+        : <input style={{ ...inp, ...style }} value={inv[k] === null ? "" : inv[k]} {...props} {...selectAllProps}
+          onChange={(e) => setInv((x) => (x[k] = e.target.value))} />}
     </div>
   );
 
@@ -477,7 +479,7 @@ export default function InvoicesScreen({ money = true, newFollowUp, crm, updateC
           </div>
           <div>
             <span style={{ ...lbl, display: "flex", alignItems: "center", gap: 6 }}>Delivery date <Soon label="" icon="warn" note={"Changing the delivery date or time here doesn't yet warn that the customer was already told. Planned: the same 'Customer already notified — change and re-notify?' check the Delivery Schedule has. Until then the schedule shows the job amber so it gets re-sent."} style={{ padding: "0 5px", borderWidth: 1 }} /></span>
-            <input style={inp} type="date" value={inv.deliveryDate || ""} {...selectAllProps} onChange={(e) => setInv((x) => (x.deliveryDate = e.target.value))} />
+            <DateInput style={inp} value={inv.deliveryDate || ""} {...selectAllProps} onChange={(e) => setInv((x) => (x.deliveryDate = e.target.value))} />
           </div>
           <div>
             <span style={lbl}>Time</span>
