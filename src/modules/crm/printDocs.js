@@ -293,3 +293,38 @@ export function printJobDocs(jobs, kinds, { custOf, siteOf, crm, planner, title 
   const body = pages.map((p, i) => `<div style="${i < pages.length - 1 ? "page-break-after:always;break-after:page;" : ""}">${p}</div>`).join("");
   return openDoc(shell(title || "Paperwork", body));
 }
+
+// ===== pending deliveries waiting longer than N days (Delivery Schedule › Pending › Print) =====
+export function printPendingList(jobs, { days, custOf, siteOf, isPaid, daysOf }) {
+  const rows = [...jobs].sort((a, b) => (daysOf(b) || 0) - (daysOf(a) || 0));
+  const today = pretty(new Date().toISOString().slice(0, 10));
+  const body = `
+<div class="top">
+  <div class="logo">DK</div>
+  <div><h1>Pending deliveries</h1><div class="sub">No delivery date yet · waiting over ${esc(days)} days</div></div>
+  <div class="doc"><b>${rows.length} job${rows.length === 1 ? "" : "s"}</b><div class="sub">${esc(today)}</div></div>
+</div>
+${rows.length ? `<table>
+  <thead><tr><th class="r">Days</th><th>Inv / ref</th><th>Ordered</th><th>Customer</th><th>Phone</th><th>Deliver to</th><th>Items</th><th>Paid</th><th>Notes</th></tr></thead>
+  <tbody>${rows.map((i) => {
+    const c = custOf(i) || {}, s = siteOf(i) || {};
+    const lines = (i.lines || []).filter((l) => l.description || l.code);
+    const items = lines.slice(0, 4).map((l) => esc((l.qty ? l.qty + " × " : "") + (l.description || l.code) + (l.colour ? " · " + l.colour : ""))).join("<br>") + (lines.length > 4 ? "<br><i>+" + (lines.length - 4) + " more</i>" : "");
+    const note = String(i.jobNotes || "").trim();
+    return `<tr>
+      <td class="r big">${esc(daysOf(i) ?? "—")}</td>
+      <td style="white-space:nowrap"><b>${i.invNo ? "#" + esc(i.invNo) : "—"}</b>${i.orderRef ? `<div class="sub">${esc(i.orderRef)}</div>` : ""}</td>
+      <td style="white-space:nowrap">${esc(pretty(i.date))}</td>
+      <td><b>${esc(c.name || "—")}</b>${c.contact && c.contact !== c.name ? `<div class="sub">${esc(c.contact)}</div>` : ""}</td>
+      <td style="white-space:nowrap">${esc(c.mobile || s.mobile || c.landline || s.landline || "—")}</td>
+      <td>${esc([s.address || c.address, s.town || c.town].filter(Boolean).join(", ") || "—")}<div><b>${esc(s.postcode || c.postcode || "")}</b></div></td>
+      <td style="font-size:11.5px">${items || "—"}</td>
+      <td>${isPaid(i) ? "Paid" : "<b>Not paid</b>"}</td>
+      <td style="font-size:11.5px;max-width:200px">${esc(note.length > 160 ? note.slice(0, 160) + "…" : note)}</td>
+    </tr>`;
+  }).join("")}</tbody>
+</table>` : `<div class="note">Nothing has been waiting that long.</div>`}
+<div class="foot">${esc(COMPANY.name)} · printed ${esc(today)}</div>
+<style>@page { size: A4 landscape; margin: 12mm; }</style>`;
+  return openDoc(shell("Pending deliveries over " + days + " days", body));
+}

@@ -8,7 +8,7 @@ import {
   PREP_FLAGS, FOLLOWUP_FLAGS, today,
   isVoidInvoice, onSchedule, applyInvoiceStockDeduction,
 } from "../../lib/crmCore.js";
-import { printJobDocs, DOC_KINDS } from "./printDocs.js";
+import { printJobDocs, DOC_KINDS, printPendingList } from "./printDocs.js";
 import LinesEditor from "./LinesEditor.jsx";
 import { JOB_TYPES, skuIndex, PAYMENT_TYPES, stockCheck, partKey, isColPick, blankPick, blankCollectionItem } from "../../lib/crmCore.js";
 import StockCheck from "./StockCheck.jsx";
@@ -317,6 +317,8 @@ export default function ScheduleScreen({ money = true, crm, updateCrm, openInvoi
     setAsk({ id, n: ns.n, apply });
   };
   const [dragId, setDragId] = useState(null); // pending job being dragged onto a day
+  const [oldDays, setOldDays] = useState(() => { try { return Number(localStorage.getItem("dk-pending-days")) || 34; } catch (e) { return 34; } });
+  const [oldOpen, setOldOpen] = useState(false);
   const [runDrag, setRunDrag] = useState(null); // { date, key }: a whole run being dragged into a new order
   const [overRun, setOverRun] = useState(null);
   const [overDate, setOverDate] = useState(null);
@@ -931,8 +933,30 @@ export default function ScheduleScreen({ money = true, crm, updateCrm, openInvoi
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
           <p style={{ ...sect, margin: 0, color: pending.length ? RED : "#8593a8" }}>Pending — no date</p>
           <span style={{ flex: 1 }} />
+          <button title="Print a list of pending deliveries waiting a long time" onClick={() => setOldOpen((o) => !o)}
+            style={{ fontFamily: "inherit", border: "1px solid " + (oldOpen ? GOLD : "#d5d9e0"), background: oldOpen ? "#fff8e6" : "#fff", borderRadius: 8, padding: "3px 7px", cursor: "pointer", display: "inline-flex", alignItems: "center" }}>
+            <Icon name="print" size={13} />
+          </button>
           <b style={{ fontSize: 15, color: pending.length ? RED : "#aab3c2" }}>{pending.length}</b>
         </div>
+        {oldOpen && (() => {
+          // deliveries only: no supplier collections, no customers collecting from the warehouse
+          const old = pending.filter((e) => e.kind === "inv" && !isCollectionJob(e.obj) && (daysSinceRaised(e.obj) || 0) > oldDays).map((e) => e.obj);
+          return (
+            <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", background: "#f8f9fb", border: "1px solid #e6e9ef", borderRadius: 8, padding: "7px 9px", margin: "4px 0 8px", fontSize: 12.5, fontWeight: 700 }}>
+              Waiting over
+              <input type="number" min="0" value={oldDays} onChange={(ev) => { const n = Math.max(0, Number(ev.target.value) || 0); setOldDays(n); try { localStorage.setItem("dk-pending-days", String(n)); } catch (x) { /* ignore */ } }}
+                style={{ ...inp, width: 56, padding: "3px 6px", textAlign: "right" }} />
+              days
+              <span style={{ flex: 1 }} />
+              <button disabled={!old.length}
+                onClick={() => { const ok = printPendingList(old, { days: oldDays, custOf: (x) => custById[x.customerId], siteOf: (x) => siteById[x.siteId], isPaid, daysOf: daysSinceRaised }); setPrintMsg(ok ? "" : "Printing is blocked here — allow pop-ups for ops.deckkingdom.co.uk and try again."); }}
+                style={{ ...goldBtn, padding: "4px 10px", fontSize: 12.5 }}>
+                <Icon name="print" size={13} stroke={NAVY} />Print {old.length}
+              </button>
+            </div>
+          );
+        })()}
         <div style={{ fontSize: 11.5, color: "#8593a8", fontWeight: 600, marginBottom: 4 }}>Oldest first · days since the order came in</div>
         {pending.length === 0 ? (
           <div style={{ fontSize: 13, color: "#8593a8", fontWeight: 600, padding: "6px 0" }}>Everything's booked in.</div>
