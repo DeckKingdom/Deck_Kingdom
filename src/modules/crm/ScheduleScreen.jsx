@@ -1415,7 +1415,7 @@ export default function ScheduleScreen({ money = true, crm, updateCrm, openInvoi
         const addr = s ? [s.name !== s.address ? s.name : "", s.address, s.town, s.postcode] : c ? [c.address, c.town, c.postcode] : [];
         const contact = [(s && s.contact) || (c && c.contact), (s && (s.mobile || s.landline)) || (c && (c.mobile || c.landline))].filter(Boolean).join(" · ");
         // wide enough for the line editor (code · qty · description · colour · price)
-        const PW = Math.min(900, window.innerWidth - 40), PH = Math.min(window.innerHeight - 20, 760);
+        const PW = Math.min(1120, window.innerWidth - 40), PH = Math.min(window.innerHeight - 20, 780);
         const top = Math.min(pop.rect.bottom + 6, window.innerHeight - PH - 10);
         return (
           <>

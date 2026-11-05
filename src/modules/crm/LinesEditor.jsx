@@ -37,10 +37,10 @@ const td = { padding: "6px 6px", borderBottom: "1px solid #f0f2f6" };
 
 // grass rolls: length x width (m) under the description; filling both sets the qty to the m2
 const sizeBox = { ...inp, width: 58, padding: "4px 6px", fontSize: 12.5, textAlign: "right" };
-export function SizeRow({ line, onSize }) {
+export function SizeRow({ line, onSize, inline }) {
   const m2 = sqmOf(line.lenM, line.widM);
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 5, fontSize: 12, fontWeight: 700, color: "#5a6a85", flexWrap: "wrap" }}
+    <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: inline ? 0 : 5, fontSize: 12, fontWeight: 700, color: "#5a6a85", flexWrap: inline ? "nowrap" : "wrap", whiteSpace: "nowrap", flex: "none" }}
       title="Roll size: length × width in metres — the qty becomes the square metres">
       <span>L</span>
       <input style={sizeBox} inputMode="decimal" placeholder="0.00" value={line.lenM ?? ""} {...selectAllProps} onChange={(e) => onSize("lenM", e.target.value)} />
@@ -178,10 +178,13 @@ export default function LinesEditor({ doc, edit, crm, readOnly, toolbar }) {
                       )}
                     </td>
                     <td style={{ ...td, minWidth: 200 }}>
-                      <input style={inp} value={l.description} {...selectAllProps} onChange={(e) => setLine(l.id, "description", e.target.value)} />
-                      {(isGrassRoll(bySku[String(l.code || "").trim().toLowerCase()]) || sizeLabel(l)) && (
-                        <SizeRow line={l} onSize={(k, v) => edit((x) => { const y = x.lines.find((z) => z.id === l.id); if (y) applySize(y, k, v); })} />
-                      )}
+                      {/* grass rolls: length x width sit in line, to the right of the description */}
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <input style={{ ...inp, flex: 1, minWidth: 210 }} value={l.description} {...selectAllProps} onChange={(e) => setLine(l.id, "description", e.target.value)} />
+                        {(isGrassRoll(bySku[String(l.code || "").trim().toLowerCase()]) || sizeLabel(l)) && (
+                          <SizeRow inline line={l} onSize={(k, v) => edit((x) => { const y = x.lines.find((z) => z.id === l.id); if (y) applySize(y, k, v); })} />
+                        )}
+                      </div>
                     </td>
                     <td style={{ ...td, width: 130 }}>
                       <ColourSelect line={l} crm={crm} bySku={bySku} onPick={(colour, sku) => edit((x) => {

@@ -257,7 +257,7 @@ export default function QuotesScreen({ money = true, crm, updateCrm, askConfirm,
   const darkInp = { width: 92, textAlign: "right", fontFamily: "inherit", fontSize: 13.5, fontWeight: 700, padding: "5px 8px", border: "1px solid #3a4f78", borderRadius: 8, background: "#ffffff12", color: "#fff" };
 
   return (
-    <div style={{ maxWidth: 1140, margin: "0 auto", padding: "18px 22px" }}>
+    <div style={{ maxWidth: 1320, margin: "0 auto", padding: "18px 22px" }}>
       <button style={{ ...btn, marginBottom: 12 }} onClick={() => setSelId(null)}><Icon name="back" stroke={NAVY} />All quotes</button>
       {!ready && <SchemaNotice />}
 

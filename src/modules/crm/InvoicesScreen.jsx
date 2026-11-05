@@ -260,7 +260,7 @@ export default function InvoicesScreen({ money = true, newFollowUp, crm, updateC
   const cardX = inv.deliveryCompleted ? { ...card, background: "#e9f6ee", border: "1px solid #a9dbb8" } : card;
 
   return (
-    <div style={{ maxWidth: 1140, margin: "0 auto", padding: "18px 22px" }}>
+    <div style={{ maxWidth: 1320, margin: "0 auto", padding: "18px 22px" }}>
       <datalist id="dk-paytypes">{PAYMENT_TYPES.map((s) => <option key={s} value={s} />)}</datalist>
 
       {(() => {
@@ -541,7 +541,7 @@ export default function InvoicesScreen({ money = true, newFollowUp, crm, updateC
           return (
             <div style={{ background: "#f8f9fb", border: "1px solid #e6e9ef", borderRadius: 12, padding: "12px 14px", marginTop: 16 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                <p style={{ ...sect, margin: 0 }}>{money ? "Loading & job cost" : "Loading"}</p>
+                <p style={{ ...sect, margin: 0 }}>Loading</p>
                 <span style={{ flex: 1 }} />
                 {inv.picks && inv.picks.length > 0 && (
                   <button
@@ -639,15 +639,7 @@ export default function InvoicesScreen({ money = true, newFollowUp, crm, updateC
                       </tbody>
                     </table>
                   </div>
-                  {money && <div style={{ display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap", marginTop: 10, fontSize: 12.5, fontWeight: 700 }}>
-                    <span>Actual job cost: <span style={{ background: "#fff", border: "1px solid #e6e9ef", borderRadius: 8, padding: "3px 9px" }}>{gbp(jc.total)}</span></span>
-                    <span style={{ color: t.net > 0 && jc.costed > 0 ? (t.net - jc.total > 0 ? "#28713e" : RED) : "#8593a8" }}>
-                      Margin: {t.net > 0 && jc.costed > 0 ? gbp(t.net - jc.total) + " (" + (((t.net - jc.total) / t.net) * 100).toFixed(0) + "% of net)" : "—"}
-                    </span>
-                    <span style={{ color: "#8593a8", fontWeight: 600 }}>
-                      {jc.landedLines} of {jc.of} lines at batch landed cost{jc.costed < jc.of ? " · " + (jc.of - jc.costed) + " uncosted" : ""}
-                    </span>
-                  </div>}
+
                 </>
               )}
             </div>
@@ -703,17 +695,100 @@ export default function InvoicesScreen({ money = true, newFollowUp, crm, updateC
               <span style={{ fontWeight: 700, letterSpacing: 0.5 }}>TOTAL</span>
               <span style={{ fontSize: 20, fontWeight: 700, background: GOLD, color: NAVY, borderRadius: 8, padding: "4px 14px" }}>{gbp(t.total)}</span>
             </div>
-            {money && estCost.matched > 0 && (
-              <div style={{ fontSize: 11, color: "#8fa0c0", fontWeight: 600, textAlign: "right", paddingTop: 7 }}>
-                Est. cost {gbp(estCost.cost)} · margin {t.net > 0 ? (((t.net - estCost.cost) / t.net) * 100).toFixed(0) + "%" : "—"}
-                {estCost.matched < estCost.of ? " (" + estCost.matched + " of " + estCost.of + " lines costed)" : ""}
-              </div>
-            )}
+
           </div>
           </div>
         </div>
         <StockCheck money={money} inv={inv} crm={crm} planner={planner} updatePlanner={updatePlanner} updateCrm={updateCrm} me={me} openCollection={openCollection}
           onRaised={(names) => setNotice((names.length > 1 ? "Collection notes raised with " : "Collection note raised with ") + names.join(" and ") + " — linked to this job and added to its pick list. It's on the Collections screen ready to book a van.")} />
+      </div>
+      {money && <JobTotals inv={inv} crm={crm} planner={planner} />}
+    </div>
+  );
+}
+
+// ===== job totals: what the customer pays, what it cost us, what's left =====
+function JobTotals({ inv, crm, planner }) {
+  const t = invoiceTotals(inv);
+  const rate = isFinite(Number(inv.vatRate)) ? Number(inv.vatRate) : 20;
+  const exVat = (n) => n / (1 + rate / 100);
+  const bySku = skuIndex(crm);
+  // cost: the pick list's batch / landed costs once there is one, otherwise the products' own costs
+  const fromPicks = (inv.picks || []).length > 0;
+  const rows = fromPicks
+    ? inv.picks.map((p) => { const c = pickLandedCost(p, crm, planner); return { id: p.id, desc: p.description || p.sku, colour: p.colour, qty: Number(p.qty) || 0, unit: c.perPc, source: c.source }; })
+    : (inv.lines || []).filter((l) => l.description || l.code).map((l) => {
+        const mp = bySku[String(l.code || "").trim().toLowerCase()];
+        const unit = mp && mp.costGbp !== "" && mp.costGbp !== null && mp.costGbp !== undefined ? Number(mp.costGbp) : null;
+        return { id: l.id, desc: l.description || l.code, colour: l.colour, qty: Number(l.qty) || 0, unit, source: unit === null ? "none" : "product" };
+      });
+  const cost = rows.reduce((a, r) => a + (r.unit === null ? 0 : r.qty * r.unit), 0);
+  const uncosted = rows.filter((r) => r.unit === null).length;
+  const goodsNet = exVat(t.goods - t.discount), delNet = exVat(t.delivery);
+  const goodsMargin = goodsNet - cost, margin = t.net - cost;
+  const pct = (a, b) => (b > 0 ? Math.round((a / b) * 1000) / 10 + "%" : "—");
+  const good = margin >= 0;
+  const SRC = { batch: ["batch", "gold"], landed: ["landed", "gold"], master: ["stock", "grey"], product: ["product", "grey"], none: ["no cost", "red"] };
+  const box = { background: "#f8f9fb", border: "1px solid #e6e9ef", borderRadius: 12, padding: "12px 14px" };
+  const row = (k, v, o = {}) => (
+    <div style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "5px 0", fontSize: 13, borderTop: o.rule ? "1px solid #e1e5ec" : "none", marginTop: o.rule ? 4 : 0, paddingTop: o.rule ? 8 : 5 }}>
+      <span style={{ color: o.strong ? NAVY : "#5a6a85", fontWeight: o.strong ? 800 : 600 }}>{k}</span>
+      <span style={{ fontWeight: o.strong ? 800 : 700, color: o.tone || NAVY, whiteSpace: "nowrap" }}>{v}</span>
+    </div>
+  );
+  // where the money goes: cost · margin · VAT, as shares of the total
+  const parts = t.total > 0 ? [["Cost", Math.max(0, cost), "#8593a8"], ["Margin", Math.max(0, margin), good ? "#3FA55C" : RED], ["VAT", t.vat, "#c9d0db"]] : [];
+  const partSum = parts.reduce((a, p) => a + p[1], 0) || 1;
+  return (
+    <div style={{ ...card, marginTop: 14 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
+        <p style={{ ...sect, margin: 0 }}>Job totals</p>
+        <Chip tone={fromPicks ? "gold" : "grey"} style={{ fontSize: 10.5 }}>{fromPicks ? "costs from the pick list" : "costs estimated from the products"}</Chip>
+        {uncosted > 0 && <Chip tone="red" style={{ fontSize: 10.5 }}>{uncosted} line{uncosted === 1 ? "" : "s"} with no cost</Chip>}
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 14 }}>
+        <div style={box}>
+          <div style={{ ...lbl, marginBottom: 6 }}>Customer pays</div>
+          {row("Goods", gbp(t.goods))}
+          {t.discount > 0 && row("Discount " + t.discountPct + "%", "−" + gbp(t.discount), { tone: RED })}
+          {row("Delivery", t.delivery ? gbp(t.delivery) : "—")}
+          {row("Total inc VAT", gbp(t.total), { strong: true, rule: true })}
+          {row("VAT " + rate + "%", gbp(t.vat))}
+          {row("Net (ex VAT)", gbp(t.net), { strong: true })}
+        </div>
+        <div style={box}>
+          <div style={{ ...lbl, marginBottom: 6 }}>What it cost us (ex VAT)</div>
+          <div style={{ maxHeight: 180, overflowY: "auto" }}>
+            {rows.length === 0 ? <div style={{ fontSize: 13, color: "#8593a8", fontWeight: 600, padding: "5px 0" }}>No lines yet</div> : rows.map((r) => (
+              <div key={r.id} style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "0 10px", padding: "5px 0", fontSize: 12.5, borderBottom: "1px solid #eef0f4" }}>
+                <span style={{ fontWeight: 700, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={r.desc}>{r.desc}{r.colour ? <span style={{ color: "#8593a8" }}> · {r.colour}</span> : null}</span>
+                <b style={{ whiteSpace: "nowrap" }}>{r.unit === null ? "—" : gbp(r.qty * r.unit)}</b>
+                <span style={{ color: "#8593a8", fontWeight: 600, fontSize: 11.5 }}>
+                  {r.qty} × {r.unit === null ? "no cost" : gbp(r.unit)} <Chip tone={SRC[r.source][1]} style={{ fontSize: 9.5, padding: "0 6px", marginLeft: 4 }}>{SRC[r.source][0]}</Chip>
+                </span>
+                <span />
+              </div>
+            ))}
+          </div>
+          {row("Goods cost", gbp(cost), { strong: true, rule: true })}
+        </div>
+        <div style={{ ...box, background: good ? "#eef8f1" : "#C8102E0d", borderColor: good ? "#bfe3ca" : "#ecc4cb" }}>
+          <div style={{ ...lbl, marginBottom: 6 }}>Margin</div>
+          <div style={{ fontSize: 28, fontWeight: 800, color: good ? "#28713e" : RED, lineHeight: 1.1 }}>{gbp(margin)}</div>
+          <div style={{ fontSize: 12.5, fontWeight: 700, color: "#5a6a85", marginBottom: 8 }}>{pct(margin, t.net)} of net · markup {pct(margin, cost)}</div>
+          {row("On the goods", gbp(goodsMargin) + " · " + pct(goodsMargin, goodsNet), { tone: goodsMargin >= 0 ? "#28713e" : RED })}
+          {row("Delivery income", delNet ? gbp(delNet) : "—")}
+          {parts.length > 0 && (
+            <div style={{ marginTop: 10 }}>
+              <div style={{ display: "flex", height: 10, borderRadius: 999, overflow: "hidden", background: "#e6e9ef" }}>
+                {parts.map(([k, v, c]) => <span key={k} title={k + " " + gbp(v)} style={{ width: (v / partSum) * 100 + "%", background: c }} />)}
+              </div>
+              <div style={{ display: "flex", gap: 12, marginTop: 6, fontSize: 11.5, fontWeight: 700, color: "#5a6a85", flexWrap: "wrap" }}>
+                {parts.map(([k, v, c]) => <span key={k} style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><span style={{ width: 9, height: 9, borderRadius: 3, background: c }} />{k} {Math.round((v / partSum) * 100)}%</span>)}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

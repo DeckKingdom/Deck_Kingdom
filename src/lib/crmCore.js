@@ -1801,6 +1801,14 @@ export const pickLandedCost = (pick, crm, planner) => {
   if (pick.unitCost !== "" && pick.unitCost !== null && pick.unitCost !== undefined && isFinite(Number(pick.unitCost))) {
     return { perPc: Number(pick.unitCost), source: "batch" };
   }
+  // part coming on (or collected by) a collection note: what that collection line cost
+  const ref = String(pick.batchRef || "").trim().toUpperCase();
+  if (/^COL-\d+$/.test(ref)) {
+    const col = (crm.collections || []).find((c) => "COL-" + c.collectionNo === ref);
+    const sk = String(pick.sku || "").trim().toLowerCase();
+    const it = col && (col.items || []).find((x) => String(x.sku || "").trim().toLowerCase() === sk && x.unitCost !== "" && x.unitCost !== null && x.unitCost !== undefined && isFinite(Number(x.unitCost)));
+    if (it) return { perPc: Number(it.unitCost), source: "batch" };
+  }
   const mp = skuIndex(crm)[(pick.sku || "").trim().toLowerCase()];
   if (mp && pick.shipmentId && planner) {
     const s = (planner.shipments || []).find((x) => x.id === pick.shipmentId);
