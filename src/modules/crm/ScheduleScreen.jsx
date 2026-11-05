@@ -255,7 +255,7 @@ const SlaChip = ({ days, done }) => (
   </span>
 );
 
-export default function ScheduleScreen({ openProduct, money = true, crm, updateCrm, openInvoice, openCollection, me, planner, goCustomer, newFollowUp }) {
+export default function ScheduleScreen({ headerH = 0, openProduct, money = true, crm, updateCrm, openInvoice, openCollection, me, planner, goCustomer, newFollowUp }) {
   const [printMsg, setPrintMsg] = useState("");
   const phone = usePhone();
   const printJobs = (jobs, kinds, title) => {
@@ -340,6 +340,16 @@ export default function ScheduleScreen({ openProduct, money = true, crm, updateC
   const [dragId, setDragId] = useState(null); // pending job being dragged onto a day
   const [oldDays, setOldDays] = useState(() => { try { return Number(localStorage.getItem("dk-pending-days")) || 34; } catch (e) { return 34; } });
   const [oldOpen, setOldOpen] = useState(false);
+  // height of the sticky search bar + key, so the pending list sticks just below it
+  const topRef = useRef(null);
+  const [topH, setTopH] = useState(0);
+  useEffect(() => {
+    const el = topRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => setTopH(el.offsetHeight));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   const [runDrag, setRunDrag] = useState(null); // { date, key }: a whole run being dragged into a new order
   const [overRun, setOverRun] = useState(null);
   const [overDate, setOverDate] = useState(null);
@@ -901,7 +911,8 @@ export default function ScheduleScreen({ openProduct, money = true, crm, updateC
 
   return (
     <div style={{ padding: "16px 20px" }}>
-      {/* filters */}
+      {/* filters + colour key: stay at the top while the days scroll (not on a phone — too much screen) */}
+      <div ref={topRef} style={phone ? {} : { position: "sticky", top: headerH, zIndex: 20, background: "#f3f5f8", margin: "-16px -20px 0", padding: "16px 20px 6px", boxShadow: "0 8px 8px -8px rgba(11,31,63,.18)" }}>
       <div style={{ ...card, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "10px 14px", marginBottom: 10 }}>
         <div style={{ position: "relative", flex: 1, minWidth: 180, maxWidth: 300 }}>
           <span style={{ position: "absolute", left: 11, top: 10 }}><Icon name="search" /></span>
@@ -931,6 +942,7 @@ export default function ScheduleScreen({ openProduct, money = true, crm, updateC
         ))}
         <span style={{ marginLeft: 10 }}>Prep: booked · courier · parts ordered · parts ready · payment link</span>
         <span>Follow-up: review asked · review in · photos · social · sample</span>
+      </div>
       </div>
 
       {printMsg && (
@@ -1048,7 +1060,7 @@ export default function ScheduleScreen({ openProduct, money = true, crm, updateC
       </div>
 
       {/* pending: always in view on the right */}
-      <div style={{ ...card, marginBottom: 0, position: phone ? "static" : "sticky", top: 70, maxHeight: phone ? "none" : "calc(100vh - 90px)", overflowY: phone ? "visible" : "auto", padding: "12px 16px",
+      <div style={{ ...card, marginBottom: 0, position: phone ? "static" : "sticky", top: headerH + topH + 8, maxHeight: phone ? "none" : "calc(100vh - " + (headerH + topH + 24) + "px)", overflowY: phone ? "visible" : "auto", padding: "12px 16px",
           outline: overPending ? "2px dashed " + GOLD : "none", outlineOffset: 3, background: overPending ? "#fff8e6" : "#fff" }}
         onDragOver={(ev) => {
           const it = dragId && (isColDrag(dragId) ? (crm.collections || []).find((x) => "col:" + x.id === dragId) : crm.invoices.find((x) => x.id === dragId));
