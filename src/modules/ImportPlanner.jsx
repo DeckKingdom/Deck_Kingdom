@@ -1443,7 +1443,7 @@ export default function ImportPlanner() {
             setFilter={setQuoteFilter}
           />
         ) : tab === "invoices" ? (
-          <InvoicesScreen openProduct={openProduct} money={access.money}
+          <InvoicesScreen headerH={headerH} openProduct={openProduct} money={access.money}
             newFollowUp={newFollowUp}
             crm={crm}
             updateCrm={updateCrm}

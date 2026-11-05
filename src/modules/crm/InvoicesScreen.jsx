@@ -1,14 +1,14 @@
 // Invoices tab: searchable list -> invoice entry screen per the approved
 // mockup. Prices are entered inc VAT; VAT is backed out of the total.
 import { useState, useMemo } from "react";
-import { NAVY, GOLD, RED, uid, prettyDate, prettyDateTime, addMonths, addDays } from "../../lib/core.js";
+import { NAVY, GOLD, RED, uid, prettyDate, prettyDateTime, addMonths, addDays, daysBetween } from "../../lib/core.js";
 import {
   recordOrigin, blankInvoice, blankLine, nextNumber, invoiceTotals, gbp, isPaid,
   JOB_TYPES, PAYMENT_TYPES, PREP_FLAGS, FOLLOWUP_FLAGS, today, TIME_SLOTS, vanOptions,
   skuIndex, invoiceCost, buildPicks, pickLandedCost, jobCost, blankPick, invoiceLoadKg, applyInvoiceStockDeduction, releaseInvoiceLinks,
   TRADE_COUNTER, TRADE_COUNTER_LABEL, quoteRef, sampleRef, isSaleInvoice, riskOf, staffName, isVoidInvoice, onSchedule, userInitials,
 } from "../../lib/crmCore.js";
-import { ListHero, HeroStat, HeroAdd, SearchBox, RiskChip, WebStatusChip, Soon, DateInput, CalendarPop } from "./ui.jsx";
+import { ListHero, HeroStat, HeroAdd, SearchBox, RiskChip, WebStatusChip, Soon, DateInput, CalendarPop, usePhone } from "./ui.jsx";
 import { Icon, Chip, Tg, Modal, selectAllProps, SuggestInput, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
 import { printInvoice, printJobSheet, printLoadingBill } from "./printDocs.js";
 import { readableFor } from "./LinesEditor.jsx";
@@ -26,8 +26,35 @@ const NoteBox = ({ children }) => (
   </div>
 );
 
-export default function InvoicesScreen({ openProduct, money = true, newFollowUp, crm, updateCrm, askConfirm, selId, setSelId, goCustomer, openQuote, openSample, openCollection, me, planner, updatePlanner, filter, setFilter }) {
+// the sales summary's date range: [from, to] plus the period before it to compare against
+export const SALES_RANGES = [
+  ["month", "This month"], ["lastMonth", "Last month"], ["7", "Last 7 days"], ["30", "Last 30 days"],
+  ["quarter", "This quarter"], ["lastQuarter", "Last quarter"], ["year", "This year"], ["lastYear", "Last year"], ["custom", "Custom range…"],
+];
+export const salesRange = (key, custom, tod) => {
+  const y = Number(tod.slice(0, 4)), m = Number(tod.slice(5, 7)), mStart = tod.slice(0, 8) + "01";
+  const qStart = y + "-" + String(Math.floor((m - 1) / 3) * 3 + 1).padStart(2, "0") + "-01";
+  const toDate = (start, upto) => addDays(start, daysBetween(upto[0], upto[1])); // same number of days in
+  let from, to, pFrom, pTo, vs;
+  if (key === "lastMonth") { from = addMonths(mStart, -1); to = addDays(mStart, -1); pFrom = addMonths(mStart, -2); pTo = addDays(from, -1); vs = "the month before"; }
+  else if (key === "7" || key === "30") { const n = Number(key); from = addDays(tod, -(n - 1)); to = tod; pFrom = addDays(from, -n); pTo = addDays(from, -1); vs = "the " + n + " days before"; }
+  else if (key === "quarter") { from = qStart; to = tod; pFrom = addMonths(qStart, -3); pTo = toDate(pFrom, [from, to]); vs = "last quarter to date"; }
+  else if (key === "lastQuarter") { from = addMonths(qStart, -3); to = addDays(qStart, -1); pFrom = addMonths(qStart, -6); pTo = addDays(from, -1); vs = "the quarter before"; }
+  else if (key === "year") { from = y + "-01-01"; to = tod; pFrom = (y - 1) + "-01-01"; pTo = (y - 1) + tod.slice(4); vs = "last year to date"; }
+  else if (key === "lastYear") { from = (y - 1) + "-01-01"; to = (y - 1) + "-12-31"; pFrom = (y - 2) + "-01-01"; pTo = (y - 2) + "-12-31"; vs = "the year before"; }
+  else if (key === "custom" && custom && custom.from && custom.to && custom.from <= custom.to) {
+    from = custom.from; to = custom.to; const n = daysBetween(from, to) + 1; pFrom = addDays(from, -n); pTo = addDays(from, -1); vs = "the " + n + " days before";
+  } else { from = mStart; to = tod; pFrom = addMonths(mStart, -1); pTo = toDate(pFrom, [from, to]); vs = "last month to date"; }
+  return { from, to, pFrom, pTo, vs };
+};
+const loadRange = () => { try { return JSON.parse(localStorage.getItem("dk-sales-range") || "null") || { key: "month" }; } catch (e) { return { key: "month" }; } };
+
+export default function InvoicesScreen({ headerH = 0, openProduct, money = true, newFollowUp, crm, updateCrm, askConfirm, selId, setSelId, goCustomer, openQuote, openSample, openCollection, me, planner, updatePlanner, filter, setFilter }) {
   const [search, setSearch] = useState("");
+  const phone = usePhone();
+  const [range, setRangeState] = useState(loadRange); // the sales summary's period (remembered on this computer)
+  const setRange = (r) => { setRangeState(r); try { localStorage.setItem("dk-sales-range", JSON.stringify(r)); } catch (e) { /* not kept */ } };
+  const stick = (top, z) => (phone ? {} : { position: "sticky", top: headerH + top, zIndex: z });
   const [custQuery, setCustQuery] = useState("");
   const [notice, setNotice] = useState("");
 
@@ -113,16 +140,33 @@ export default function InvoicesScreen({ openProduct, money = true, newFollowUp,
   if (!inv)
     return (
       <div style={{ maxWidth: 1140, margin: "0 auto", padding: "18px 22px" }}>
+        <div style={{ ...stick(0, 15), background: "#f3f5f8", margin: "-18px -6px 0", padding: "18px 6px 2px" }}>
         {(() => {
           // headline numbers (inc VAT), same sums as the Home reports
           const tod = today();
-          const monthKey = tod.slice(0, 7);
-          const lastKey = addMonths(tod.slice(0, 8) + "01", -1).slice(0, 7);
-          const dom = Number(tod.slice(8, 10));
+          const rg = salesRange(range.key, range, tod);
           const live = crm.invoices.filter((i) => !isVoidInvoice(i)); // refunded / cancelled on the website don't count
-          const inMonth = (key, upto) => live.filter((i) => (i.date || "").slice(0, 7) === key && (!upto || Number((i.date || "").slice(8, 10)) <= upto));
+          const between = (a, b) => live.filter((i) => (i.date || "") >= a && (i.date || "") <= b);
           const sum = (l) => l.reduce((t, i) => t + invoiceTotals(i).total, 0);
-          const thisM = inMonth(monthKey), salesNow = sum(thisM), salesLast = sum(inMonth(lastKey, dom));
+          const thisM = between(rg.from, rg.to), salesNow = sum(thisM), salesLast = sum(between(rg.pFrom, rg.pTo));
+          const rangeName = range.key === "custom" ? prettyDate(rg.from) + " – " + prettyDate(rg.to) : (SALES_RANGES.find(([k]) => k === range.key) || SALES_RANGES[0])[1];
+          const dark = { fontFamily: "inherit", fontSize: 12.5, fontWeight: 700, color: "#fff", background: "rgba(255,255,255,.08)", border: "1px solid rgba(255,255,255,.22)", borderRadius: 9, padding: "7px 10px" };
+          const rangePick = (
+            <span style={{ display: "inline-flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+              <select value={range.key} onChange={(e) => setRange({ ...range, key: e.target.value, from: range.from || addDays(tod, -29), to: range.to || tod })} style={{ ...dark, cursor: "pointer" }}
+                title="The period the sales and order figures cover">
+                {SALES_RANGES.map(([k, l]) => <option key={k} value={k} style={{ color: NAVY }}>{l}</option>)}
+              </select>
+              {range.key === "custom" && (
+                <>
+                  <DateInput value={range.from || ""} onChange={(e) => setRange({ ...range, from: e.target.value })} title="From" style={{ ...dark, width: 128 }} />
+                  <span style={{ color: "#aeb9cf", fontWeight: 700 }}>to</span>
+                  <DateInput value={range.to || ""} onChange={(e) => setRange({ ...range, to: e.target.value })} title="To" style={{ ...dark, width: 128 }} />
+                </>
+              )}
+              <HeroAdd title="New invoice" onClick={newInvoice} />
+            </span>
+          );
           const awaiting = live.filter((i) => !isPaid(i));
           const owed = sum(awaiting);
           const weekEnd = addDays(tod, 6);
@@ -147,14 +191,14 @@ export default function InvoicesScreen({ openProduct, money = true, newFollowUp,
                   );
                 })}
               </span>}
-              action={<HeroAdd title="New invoice" onClick={newInvoice} />}>
-              {money && <HeroStat label="Sales this month" value={gbp(salesNow)}
-                sub={salesLast ? (salesNow >= salesLast ? "▲ " : "▼ ") + gbp(Math.abs(salesNow - salesLast)) + " vs last month to date" : "inc VAT"} />}
+              action={rangePick}>
+              {money && <HeroStat label={"Sales · " + rangeName} value={gbp(salesNow)}
+                sub={salesLast ? (salesNow >= salesLast ? "▲ " : "▼ ") + gbp(Math.abs(salesNow - salesLast)) + " vs " + rg.vs : "inc VAT"} />}
               <HeroStat label="Awaiting payment" value={money ? gbp(owed) : awaiting.length.toLocaleString("en-GB")} tone={awaiting.length ? "#f6c48a" : undefined}
                 sub={awaiting.length + " invoice" + (awaiting.length === 1 ? "" : "s") + (awaiting.length ? " · click to list" : "")}
                 onClick={awaiting.length ? () => setFilter({ outstanding: true }) : undefined} />
               <HeroStat label="Deliveries" value={today_ + " today"} tone={toBook ? "#f2a6b1" : undefined} sub={week + " this week · " + toBook + " to book in"} />
-              <HeroStat label="Orders this month" value={sales.length.toLocaleString("en-GB")} sub={!money ? "this month" : sales.length ? gbp(sum(sales) / sales.length) + " average order" : "none yet"} />
+              <HeroStat label={"Orders · " + rangeName} value={sales.length.toLocaleString("en-GB")} sub={!money ? rangeName.toLowerCase() : sales.length ? gbp(sum(sales) / sales.length) + " average order" : "none yet"} />
             </ListHero>
           );
         })()}
@@ -174,10 +218,12 @@ export default function InvoicesScreen({ openProduct, money = true, newFollowUp,
           </div>
         )}
 
+        <div style={{ ...card, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "10px 14px", marginBottom: 10 }}>
+          <SearchBox value={search} onChange={setSearch} placeholder="Search inv #, customer, order ref…" />
+        </div>
+        </div>
+
         <div style={card}>
-          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 6 }}>
-            <SearchBox value={search} onChange={setSearch} placeholder="Search inv #, customer, order ref…" />
-          </div>
           {crm.invoices.length === 0 ? (
             <div style={{ textAlign: "center", padding: "30px 10px", color: "#5a6a85", fontWeight: 600 }}>No invoices yet.</div>
           ) : (
@@ -276,7 +322,7 @@ export default function InvoicesScreen({ openProduct, money = true, newFollowUp,
           </button>
         );
         return (
-          <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12 }}>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", ...stick(0, 16), background: "#f3f5f8", margin: "-18px -6px 0", padding: "18px 6px 10px" }}>
             <button style={btn} onClick={() => setSelId(null)}><Icon name="back" stroke={NAVY} />All invoices</button>
             {arrow(prev, true)}
             {arrow(next, false)}
@@ -293,7 +339,7 @@ export default function InvoicesScreen({ openProduct, money = true, newFollowUp,
       )}
 
       {/* header band */}
-      <div style={{ background: inv.deliveryCompleted ? "linear-gradient(135deg,#1f6b3a 0%,#2f8a4c 100%)" : "linear-gradient(135deg,#0B1F3F 0%,#13294f 100%)", borderRadius: 12, padding: "16px 22px", color: "#fff", marginBottom: 14, display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
+      <div style={{ background: inv.deliveryCompleted ? "linear-gradient(135deg,#1f6b3a 0%,#2f8a4c 100%)" : "linear-gradient(135deg,#0B1F3F 0%,#13294f 100%)", borderRadius: 12, padding: "16px 22px", color: "#fff", marginBottom: 14, display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap", ...stick(64, 15), boxShadow: phone ? undefined : "0 0 0 8px #f3f5f8, 0 10px 14px -10px rgba(11,31,63,.35)" }}>
         <div>
           <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
             <span style={{ position: "relative", display: "inline-block" }} onMouseEnter={() => setStampOpen(true)} onMouseLeave={() => setStampOpen(false)}>
