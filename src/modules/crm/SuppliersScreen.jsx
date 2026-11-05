@@ -1,13 +1,14 @@
 // Suppliers: one record per supplier, feeding Purchases and Collections.
 // List -> supplier view (details, spend, purchase history, collections).
 import { useState, useEffect } from "react";
-import { NAVY, GOLD, RED, prettyDate } from "../../lib/core.js";
+import { NAVY, GOLD, RED, prettyDate, prettyDateTime } from "../../lib/core.js";
 import {
   blankSupplier, supplierStats, purchaseTotals, purchaseIsPaid, poRef, gbp, findSupplierByName,
   PURCHASE_CATEGORIES, PAYMENT_METHODS, FIELD_FORMATS, nextSupplierAccount,
 } from "../../lib/crmCore.js";
 import { purchasesAvailable } from "../../data/crmStorage.js";
-import { Icon, Chip, Modal, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
+import { collectionStatus } from "../../lib/crmCore.js";
+import { Icon, Chip, Modal, sect, lbl, card, abtn, inp, btn, goldBtn, RecordNav, BandDelete, HoverStamp, ListHero, HeroStat, HeroAdd, SearchBox } from "./ui.jsx";
 
 const th = { fontSize: 11, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", padding: "8px 8px", borderBottom: "2px solid #e6e9ef", whiteSpace: "nowrap", textAlign: "left" };
 const tdc = { padding: "9px 8px", borderBottom: "1px solid #f0f2f6" };
@@ -140,16 +141,22 @@ export default function SuppliersScreen({ crm, updateCrm, askConfirm, selId, set
     return (
       <div style={{ maxWidth: 1140, margin: "0 auto", padding: "18px 22px" }}>
         {!ready && <PurchasesSchemaNotice />}
-        <div style={{ ...card, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "10px 14px" }}>
-          <div style={{ position: "relative", flex: 1, minWidth: 200, maxWidth: 340 }}>
-            <span style={{ position: "absolute", left: 11, top: 10 }}><Icon name="search" /></span>
-            <input style={{ ...inp, paddingLeft: 34 }} placeholder="Search name, account #, town…" value={search} onChange={(e) => setSearch(e.target.value)} />
-          </div>
-          <span style={{ fontSize: 12, color: "#5a6a85", fontWeight: 700 }}>{suppliers.length} suppliers</span>
-          <span style={{ flex: 1 }} />
-          <button style={{ ...goldBtn, opacity: ready ? 1 : 0.5 }} disabled={!ready} onClick={() => setDraft(blankSupplier())}><Icon name="plus" stroke={NAVY} />New supplier</button>
-        </div>
+        {(() => {
+          const all = suppliers.map((x) => supplierStats(crm, x.id));
+          const spend = all.reduce((t, x) => t + x.spend, 0), unpaid = all.reduce((t, x) => t + x.unpaid, 0);
+          return (
+            <ListHero title="Suppliers" sub={suppliers.length.toLocaleString("en-GB") + " supplier" + (suppliers.length === 1 ? "" : "s") + " · biggest spend first"}
+              action={<HeroAdd title="New supplier" onClick={() => setDraft(blankSupplier())} disabled={!ready} />}>
+              <HeroStat label="In use" value={suppliers.filter((x) => x.active !== false).length.toLocaleString("en-GB")} sub="active suppliers" />
+              <HeroStat label="Total spend" value={gbp(spend)} sub="all purchases, inc VAT" />
+              <HeroStat label="Unpaid" value={gbp(unpaid)} tone={unpaid ? "#f6c48a" : undefined} sub="purchase invoices not paid yet" />
+            </ListHero>
+          );
+        })()}
         <div style={card}>
+          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 6 }}>
+            <SearchBox value={search} onChange={setSearch} placeholder="Search name, account #, town…" width={300} />
+          </div>
           {rows.length === 0 ? (
             <div style={{ textAlign: "center", padding: "30px 10px", color: "#5a6a85", fontWeight: 600 }}>{suppliers.length ? "No suppliers match." : "No suppliers yet."}</div>
           ) : (
@@ -193,12 +200,15 @@ export default function SuppliersScreen({ crm, updateCrm, askConfirm, selId, set
   );
 
   return (
-    <div style={{ maxWidth: 1140, margin: "0 auto", padding: "18px 22px" }}>
-      <button style={{ ...btn, marginBottom: 12 }} onClick={() => setSelId(null)}><Icon name="back" stroke={NAVY} />All suppliers</button>
+    <div style={{ maxWidth: 1320, margin: "0 auto", padding: "18px 22px" }}>
+      <RecordNav backLabel="All suppliers" onBack={() => setSelId(null)} onGo={setSelId} noun="supplier" label={(x) => x.name || "Unnamed"}
+        order={suppliers.map((x) => ({ x, st: supplierStats(crm, x.id) })).sort((a, b) => (a.x.active === false) - (b.x.active === false) || b.st.spend - a.st.spend || (a.x.name || "").localeCompare(b.x.name || "")).map((r) => r.x)} cur={sel.id} />
       {!ready && <PurchasesSchemaNotice />}
-      <div style={{ background: "linear-gradient(135deg,#0B1F3F 0%,#13294f 100%)", borderRadius: 12, padding: "18px 22px", color: "#fff", marginBottom: 14, display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
+      <div style={{ background: "linear-gradient(135deg,#0B1F3F 0%,#13294f 100%)", borderRadius: 12, padding: "16px 22px", color: "#fff", marginBottom: 14, display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
         <div style={{ minWidth: 180 }}>
-          <h2 style={{ margin: 0, fontSize: 20 }}>{sel.name}</h2>
+          <HoverStamp lines={[sel.createdAt ? "Added " + prettyDateTime(sel.createdAt) + (sel.createdBy ? " by " + String(sel.createdBy).split("@")[0] : "") : "", sel.updatedAt ? "Updated " + prettyDateTime(sel.updatedAt) + (sel.modifiedBy ? " by " + String(sel.modifiedBy).split("@")[0] : "") : ""]}>
+            <h2 style={{ margin: 0, fontSize: 19, cursor: "default" }}>{sel.name}</h2>
+          </HoverStamp>
           <div style={{ display: "flex", gap: 8, marginTop: 7, flexWrap: "wrap" }}>
             {sel.accountNo && <Chip tone="navy">{"Account #" + sel.accountNo}</Chip>}
             {sel.category && <Chip tone="navy">{sel.category}</Chip>}
@@ -217,7 +227,7 @@ export default function SuppliersScreen({ crm, updateCrm, askConfirm, selId, set
           <button style={navyBtn} onClick={() => setDraft({ ...sel })}><Icon name="pen" stroke="#fff" />Edit supplier</button>
           <button style={{ ...navyBtn, borderColor: GOLD, color: GOLD, opacity: ready ? 1 : 0.5 }} disabled={!ready} onClick={() => newPurchase(sel.id)}><Icon name="plus" stroke={GOLD} />New purchase</button>
           <span style={{ flex: 1 }} />
-          <button style={{ ...navyBtn, border: "1px dashed #3a4f78", color: "#8fa0c0" }} onClick={() => remove(sel)}><Icon name="bin" stroke="#8fa0c0" />Delete</button>
+          <BandDelete title="Delete this supplier" onClick={() => remove(sel)} />
         </div>
       </div>
 
@@ -238,11 +248,11 @@ export default function SuppliersScreen({ crm, updateCrm, askConfirm, selId, set
             <div style={{ fontSize: 13, color: "#8593a8", fontWeight: 600 }}>No collections from this supplier yet.</div>
           ) : (
             colls.slice(0, 12).map((c) => (
-              <button key={c.id} onClick={() => openCollection(c.id)}
+              <button key={c.id} onClick={() => openCollection(c.id)} title="Open the collection"
                 style={{ display: "flex", gap: 10, width: "100%", padding: "8px 0", background: "none", border: "none", borderBottom: "1px solid #f0f2f6", cursor: "pointer", fontFamily: "inherit", fontSize: 13, textAlign: "left", color: NAVY }}>
                 <b style={{ color: "#185FA5" }}>COL-{c.collectionNo || "—"}</b>
                 <span style={{ color: "#5a6a85", fontWeight: 600 }}>{prettyDate(c.collectDate || c.date)}</span>
-                <span style={{ marginLeft: "auto" }}><Chip tone={c.collected ? "green" : "amber"}>{c.collected ? "Collected" : "To collect"}</Chip></span>
+                <span style={{ marginLeft: "auto" }}>{(() => { const [l, t] = collectionStatus(c); return <Chip tone={t}>{l}</Chip>; })()}</span>
               </button>
             ))
           )}

@@ -20,6 +20,18 @@ const TABLE_LABELS = {
   shipments: "Shipment",
   shipment_lines: "Shipment line",
   crm_settings: "Settings",
+  collections: "Collection",
+  collection_items: "Collection line",
+  invoice_picks: "Pick list line",
+  stock_movements: "Stock movement",
+  master_products: "Stock item",
+  product_components: "Kit part",
+  tasks: "Task",
+  task_log: "Task note",
+  vans: "Van",
+  van_checks: "Van check",
+  profiles: "User",
+  staff_invites: "User access",
 };
 const ACTION_TONES = { created: "green", updated: "gold", deleted: "red" };
 
@@ -31,8 +43,15 @@ const fmtVal = (v) => {
   if (v === true) return "yes";
   if (v === false) return "no";
   if (typeof v === "object") return JSON.stringify(v);
-  return String(v);
+  const t = String(v);
+  // dates and timestamps read dd/mm/yyyy (timestamps in UK time)
+  if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t.slice(8, 10) + "/" + t.slice(5, 7) + "/" + t.slice(0, 4);
+  if (/^\d{4}-\d{2}-\d{2}T/.test(t)) return prettyDateTime(t);
+  return t;
 };
+// the audit log stores UTC; show and group by the time in the UK
+const localDay = (at) => { const d = new Date(at); return isNaN(d) ? "" : d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
+const localTime = (at) => { const d = new Date(at); return isNaN(d) ? "" : String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"); };
 
 // "updated" changes are {field: {from, to}}; created/deleted hold a row snapshot
 const pick = (changes, key) => {
@@ -111,7 +130,7 @@ export default function ActivityScreen({ crm, data, storageMode }) {
   // group by day
   const groups = [];
   filtered.forEach((e) => {
-    const day = (e.at || "").slice(0, 10);
+    const day = localDay(e.at || "");
     const g = groups[groups.length - 1];
     if (g && g.day === day) g.rows.push(e);
     else groups.push({ day, rows: [e] });
@@ -179,7 +198,7 @@ export default function ActivityScreen({ crm, data, storageMode }) {
             return (
               <div key={e.id} style={{ background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, padding: "9px 13px", marginBottom: 5 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap", cursor: "pointer" }} onClick={() => setOpen(isOpen ? null : e.id)}>
-                  <span style={{ fontSize: 11.5, fontWeight: 700, color: "#8593a8", width: 42 }}>{(e.at || "").slice(11, 16)}</span>
+                  <span style={{ fontSize: 11.5, fontWeight: 700, color: "#8593a8", width: 42 }}>{localTime(e.at || "")}</span>
                   <Chip>{(e.actor || "system").split("@")[0]}</Chip>
                   <Chip tone={ACTION_TONES[e.action] || "grey"}>{e.action}</Chip>
                   <span style={{ fontSize: 13, fontWeight: 600, color: "#5a6a85" }}>{TABLE_LABELS[e.table_name] || e.table_name}</span>

@@ -316,9 +316,9 @@ export default function TasksScreen({ crm, updateCrm, askConfirm, me, goHome }) 
                   return (
                     <tr key={t.id} style={{ opacity: t.active === false ? 0.5 : 1, cursor: "pointer" }} onClick={() => setDraft(t)}>
                       <td style={tdc}>
-                        <b>{t.title}</b>
+                        <b title={t.notes || undefined}>{t.title}</b>
+                        {t.notes && <span title={t.notes} style={{ marginLeft: 6, display: "inline-flex", verticalAlign: "middle" }}><Icon name="note" size={13} stroke="#8593a8" /></span>}
                         {t.active === false && <Chip style={{ marginLeft: 6, fontSize: 10, padding: "1px 7px" }}>paused</Chip>}
-                        {t.notes && <div style={{ fontSize: 12, color: "#8593a8", fontWeight: 600, marginTop: 2 }}>{t.notes.slice(0, 90)}{t.notes.length > 90 ? "…" : ""}</div>}
                       </td>
                       <td style={{ ...tdc, fontWeight: 600 }}>{assigneeLabel(crm, t)}</td>
                       <td style={tdc}>

@@ -44,7 +44,7 @@ import UsersScreen from "./crm/UsersScreen.jsx";
 import StockScreen from "./crm/StockScreen.jsx";
 import CollectionsScreen from "./crm/CollectionsScreen.jsx";
 import VansScreen from "./crm/VansScreen.jsx";
-import { Icon, SuggestInput, abtn, DateInput, CalendarPop } from "./crm/ui.jsx";
+import { Icon, SuggestInput, abtn, DateInput, CalendarPop, selectAllProps } from "./crm/ui.jsx";
 import { EmailSettings } from "./crm/EmailPanels.jsx";
 import { emailReady } from "../data/email.js";
 
@@ -299,6 +299,7 @@ export default function ImportPlanner() {
     setTab("purchases");
   };
   // "+" buttons in the side menu
+  const [newVanSignal, setNewVanSignal] = useState(0);
   const sideNew = (t) => {
     if (t === "customers") {
       setSelCustomerId(null);
@@ -322,6 +323,8 @@ export default function ImportPlanner() {
       setTab("collections");
       return;
     }
+    if (t === "overview") { addShipment(); return; }
+    if (t === "vans") { setNewVanSignal((n) => n + 1); setTab("vans"); return; }
     if (t === "purchases") newPurchase("");
     else if (t === "invoices") newInvoiceFor("", "");
     else if (t === "quotes") newQuoteFor("", "");
@@ -826,7 +829,26 @@ export default function ImportPlanner() {
   // balance falls due 30 days after the goods land: the real arrived date once entered, else the expected delivery.
   // Shipments already marked Paid keep the date they had.
   const balanceFromArrival = (s) => !!s.arrivedDate && s.status !== "Paid";
-  const autoBalanceDate = (s) => addDays(balanceFromArrival(s) ? s.arrivedDate : addMonths(s.orderDate, 3), 30);
+  // expected delivery: typed in (etaDate, also the Completion tab's "Expected in"), else order date + 3 months
+  const autoEta = (s) => (s.orderDate ? addMonths(s.orderDate, 3) : "");
+  const etaOf = (s) => s.etaDate || autoEta(s);
+  const etaInput = (s, big) => {
+    const manual = !!s.etaDate;
+    return (
+      <span style={{ display: big ? "inline-flex" : "flex", alignItems: "center", gap: 4 }}>
+        <DateInput value={etaOf(s) || ""} onChange={(e) => setShipmentField(s.id, "etaDate", e.target.value)}
+          title={manual ? "Set by hand — the automatic date would be " + (prettyDate(autoEta(s)) || "—") : "Automatic: 3 months after the order date. Change it to set your own."}
+          style={{ ...inp, width: big ? 160 : "100%", minWidth: 0, fontSize: big ? 14 : 11.5, padding: big ? undefined : "6px 5px", fontWeight: manual ? 700 : 400,
+            ...(manual ? { borderColor: GOLD, background: "#fff8e6" } : {}) }} />
+        {manual && (
+          <button type="button" onClick={() => setShipmentField(s.id, "etaDate", "")} title={"Back to automatic (" + (prettyDate(autoEta(s)) || "—") + ")"}
+            style={{ fontFamily: "inherit", border: "none", background: "none", cursor: "pointer", color: "#8593a8", fontSize: 15, padding: 2, lineHeight: 1 }}>↺</button>
+        )}
+      </span>
+    );
+  };
+  // (paid shipments keep the date they always had)
+  const autoBalanceDate = (s) => addDays(balanceFromArrival(s) ? s.arrivedDate : s.status === "Paid" ? addMonths(s.orderDate, 3) : etaOf(s), 30);
   // a date typed in (balanceDue) wins; clear it to go back to the automatic one
   const balanceDate = (s) => s.balanceDue || autoBalanceDate(s);
   const balanceInput = (s, big) => {
@@ -877,7 +899,7 @@ export default function ImportPlanner() {
       ["Supplier invoice no.", active.invoiceNo || "—"],
       ["Status", active.status],
       ["Planned order date", active.orderDate ? prettyDate(active.orderDate) : "—"],
-      ["Expected delivery", active.orderDate ? prettyDate(addMonths(active.orderDate, 3)) : "—"],
+      ["Expected delivery", etaOf(active) ? prettyDate(etaOf(active)) : "—"],
       [],
       ["Product", "Colour", "Pallets / Cartons", "Qty per Pallet / Carton", "Total pieces", "Weight per piece (kg)", "Line weight (kg)", "Cost per piece (USD)", "Line total (USD)"],
     ];
@@ -1265,7 +1287,7 @@ export default function ImportPlanner() {
         );
       })()}
       <div style={{ display: "flex", alignItems: "stretch" }}>
-      <Sidebar phone={isPhone} tab={tab} setTab={navTo} open={sideOpen} footer={sideFooter} onNew={access.canEdit ? (t) => { if (isPhone) setSideOpen(false); sideNew(t); } : null} onToggle={() => setSideOpen((o) => !o)} allow={access.canTab} />
+      <Sidebar phone={isPhone} tab={tab} setTab={navTo} open={sideOpen} footer={sideFooter} onNew={access.canEdit ? (t) => { if (isPhone) setSideOpen(false); sideNew(t); } : null} canNew={(t) => (["overview", "vans", "purchases", "suppliers"].includes(t) ? access.canManage : access.canEdit)} onToggle={() => setSideOpen((o) => !o)} allow={access.canTab} />
       <div style={{ flex: 1, minWidth: 0 }}>
 
       <div ref={headerRef} className="no-print" style={{ background: NAVY, padding: isPhone ? "8px 10px" : "10px 16px", display: "flex", alignItems: "center", gap: isPhone ? 6 : 10, position: "sticky", top: 0, zIndex: 25, boxShadow: "0 2px 8px rgba(11,31,63,0.25)" }}>
@@ -1333,7 +1355,7 @@ export default function ImportPlanner() {
               </div>
             </div>
           )}
-          <HomeScreen money={access.money} canTab={access.canTab} data={data} crm={crm} updateCrm={updateCrm} me={me} askConfirm={setConfirmBox} setTab={setTab} openInvoice={openInvoice} openCollection={openCollection} addShipment={addShipment} newInvoice={() => (crm ? newInvoiceFor("", "") : setTab("invoices"))} />
+          <HomeScreen money={access.money} canTab={access.canTab} data={data} crm={crm} updateCrm={updateCrm} me={me} askConfirm={setConfirmBox} setTab={setTab} openInvoice={openInvoice} openCollection={openCollection} openShipment={(id) => { setActiveId(id); setTab("shipments"); }} addShipment={addShipment} newInvoice={() => (crm ? newInvoiceFor("", "") : setTab("invoices"))} />
         </>
       )}
 
@@ -1364,7 +1386,7 @@ export default function ImportPlanner() {
         (!crm ? (
           <div style={{ padding: 40, textAlign: "center", color: "#5a6a85", fontWeight: 600 }}>Loading vans…</div>
         ) : (
-          <VansScreen crm={crm} updateCrm={updateCrm} askConfirm={setConfirmBox} me={me} />
+          <VansScreen crm={crm} updateCrm={updateCrm} askConfirm={setConfirmBox} me={me} newSignal={newVanSignal} />
         ))}
 
       {CRM_TABS.includes(tab) &&
@@ -1448,7 +1470,7 @@ export default function ImportPlanner() {
         ) : tab === "stock" ? (
           <StockScreen crm={crm} updateCrm={updateCrm} planner={data} updatePlanner={update} askConfirm={setConfirmBox} me={me} />
         ) : (
-          <CollectionsScreen money={access.money} crm={crm} updateCrm={updateCrm} askConfirm={setConfirmBox} selId={selCollectionId} setSelId={setSelCollectionId} openInvoice={openInvoice} me={me} goSupplier={goSupplier} planner={data} newSignal={newCollectionSignal} />
+          <CollectionsScreen money={access.money} crm={crm} updateCrm={updateCrm} askConfirm={setConfirmBox} selId={selCollectionId} setSelId={setSelCollectionId} openInvoice={openInvoice} me={me} goSupplier={access.canTab("suppliers") ? goSupplier : null} planner={data} newSignal={newCollectionSignal} />
         ))}
 
       {tab === "overview" && (
@@ -1463,7 +1485,7 @@ export default function ImportPlanner() {
                   <th style={{ ...th, width: 78, textAlign: "right" }}>Weight</th>
                   <th style={{ ...th, width: 116 }}>Status</th>
                   {[["Planned order"], ["Confirmed"], ["In production"], ["Shipped"], ["Expected delivery", true], ["Arrived"], ["Expected balance"], ["Balance paid"]].map(([h, calc]) => (
-                    <th key={h} style={{ ...th, width: calc ? 84 : 104, fontSize: 11.5, whiteSpace: "normal", padding: "10px 4px" }}>{h}</th>
+                    <th key={h} style={{ ...th, width: 104, fontSize: 11.5, whiteSpace: "normal", padding: "10px 4px" }}>{h}</th>
                   ))}
                   <th style={{ ...th, width: 36 }}></th>
                 </tr>
@@ -1497,7 +1519,8 @@ export default function ImportPlanner() {
                             setActiveId(s.id);
                             setTab("shipments");
                           }}
-                          style={{ ...btn, border: "none", background: "transparent", padding: 0, textDecoration: "underline", textUnderlineOffset: 3 }}
+                          className="dk-title-link" title={"Open " + s.name}
+                          style={{ fontSize: 14, fontWeight: 700, color: NAVY }}
                         >
                           {s.name}
                         </button>
@@ -1579,7 +1602,7 @@ export default function ImportPlanner() {
                           {dateCell("confirmedDate")}
                           {dateCell("productionDate")}
                           {dateCell("shippedDate")}
-                          <td style={{ ...td, padding: "6px 4px", whiteSpace: "nowrap", fontSize: 11.5 }}>{prettyDate(addMonths(s.orderDate, 3))}</td>
+                          <td style={{ ...td, padding: "6px 4px", whiteSpace: "nowrap" }}>{etaInput(s, false)}</td>
                           {dateCell("arrivedDate")}
                           <td style={{ ...td, padding: "6px 4px", whiteSpace: "nowrap" }}>{balanceInput(s, false)}</td>
                           {dateCell("balancePaidDate")}
@@ -1608,7 +1631,7 @@ export default function ImportPlanner() {
             </table>
           </div>
           <p style={{ fontSize: 12.5, color: "#5a6a85", marginTop: 10 }}>
-            Expected delivery is the planned order date plus a 3 month turnaround; expected balance is 30 days after delivery — or 30 days after the arrived date once that's entered (paid shipments keep their original date). Type your own balance date to override it; ↺ puts it back. Click a shipment name to open it.
+            Expected delivery is the planned order date plus a 3 month turnaround (or the date you type in); expected balance is 30 days after delivery — or 30 days after the arrived date once that's entered (paid shipments keep their original date). Type your own expected delivery or balance date to override it; ↺ puts it back. Click a shipment name to open it.
           </p>
           {pop &&
             (() => {
@@ -1709,9 +1732,9 @@ export default function ImportPlanner() {
               <span style={l_}>Colours</span>
               <input style={f} value={dft.colours || ""} placeholder="Black, Grey, Teak" onChange={(e) => setD("colours", e.target.value)} />
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
-                <div><span style={l_}>Qty / pallet</span><input type="number" min="0" step="any" style={{ ...f, textAlign: "right" }} value={dft.qty || ""} onChange={(e) => setD("qty", e.target.value)} /></div>
-                <div><span style={l_}>$ / piece</span><input type="number" min="0" step="any" style={{ ...f, textAlign: "right" }} value={dft.cost || ""} onChange={(e) => setD("cost", e.target.value)} /></div>
-                <div><span style={l_}>kg / piece</span><input type="number" min="0" step="any" style={{ ...f, textAlign: "right" }} value={dft.weight || ""} onChange={(e) => setD("weight", e.target.value)} /></div>
+                <div><span style={l_}>Qty / pallet</span><input {...selectAllProps} type="number" min="0" step="any" style={{ ...f, textAlign: "right" }} value={dft.qty || ""} onChange={(e) => setD("qty", e.target.value)} /></div>
+                <div><span style={l_}>$ / piece</span><input {...selectAllProps} type="number" min="0" step="any" style={{ ...f, textAlign: "right" }} value={dft.cost || ""} onChange={(e) => setD("cost", e.target.value)} /></div>
+                <div><span style={l_}>kg / piece</span><input {...selectAllProps} type="number" min="0" step="any" style={{ ...f, textAlign: "right" }} value={dft.weight || ""} onChange={(e) => setD("weight", e.target.value)} /></div>
               </div>
               <div style={{ fontSize: 11.5, fontWeight: 600, color: "#8593a8", marginTop: 10 }}>Category, size and sale price can be filled in later on Products.</div>
               <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 12 }}>
@@ -1735,7 +1758,7 @@ export default function ImportPlanner() {
         const lineNum = (label, field) => (
           <div style={{ width: 130 }}>
             <span style={l_}>{label}</span>
-            <input type="number" min="0" step="any" style={f} value={line ? line[field] : p[field] === undefined || p[field] === null ? "" : p[field]}
+            <input {...selectAllProps} type="number" min="0" step="any" style={f} value={line ? line[field] : p[field] === undefined || p[field] === null ? "" : p[field]}
               onChange={(e) => { const v = e.target.value === "" ? "" : Number(e.target.value); setProduct(p.id, field, v); if (line) setLine(line.id, field, v); }} />
           </div>
         );
@@ -1883,7 +1906,7 @@ export default function ImportPlanner() {
                 <div style={{ flex: 1 }} />
                 <div style={{ textAlign: "right" }}>
                   <span style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#5a6a85", marginBottom: 2 }}>Expected delivery</span>
-                  <span style={{ fontSize: 15, fontWeight: 700, whiteSpace: "nowrap" }}>{prettyDate(addMonths(active.orderDate, 3))}</span>
+                  {etaInput(active, true)}
                 </div>
                 <div style={{ textAlign: "right" }}>
                   <span style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#5a6a85", marginBottom: 2 }}>Expected balance</span>
@@ -1896,7 +1919,7 @@ export default function ImportPlanner() {
                   ["Pallets / Cartons", int(totals.pallets)],
                   ["Total pieces", int(totals.pieces)],
                   ["Total weight", int(Math.round(totals.kg)) + " kg"],
-                  ["Total volume", (Math.round(totals.cbm * 10) / 10).toLocaleString("en-US") + " m³"],
+                  ["Total volume", (Math.round(totals.cbm * 10) / 10).toLocaleString("en-GB") + " m³"],
                 ].map(([label, value]) => (
                   <div key={label} style={{ background: "#fff", borderRadius: 12, padding: "14px 16px", border: "1px solid #e6e9ef" }}>
                     <div style={{ fontSize: 12.5, color: "#5a6a85", fontWeight: 600 }}>{label}</div>
@@ -2005,7 +2028,7 @@ export default function ImportPlanner() {
                           </td>
                           <td style={td}>
                             <div style={{ position: "relative" }}>
-                              <input
+                              <input {...selectAllProps}
                                 type="number"
                                 min="0"
                                 step="any"
@@ -2036,15 +2059,15 @@ export default function ImportPlanner() {
                             </div>
                           </td>
                           <td style={td}>
-                            <input type="number" min="0" step="1" value={l.qty} onChange={(e) => setLine(l.id, "qty", e.target.value)} style={num} />
+                            <input {...selectAllProps} type="number" min="0" step="1" value={l.qty} onChange={(e) => setLine(l.id, "qty", e.target.value)} style={num} />
                           </td>
                           <td style={{ ...td, textAlign: "right", color: "#5a6a85" }}>{int(c.pieces)}</td>
                           <td style={td}>
-                            <input type="number" min="0" step="0.1" value={l.weight} onChange={(e) => setLine(l.id, "weight", e.target.value)} style={num} />
+                            <input {...selectAllProps} type="number" min="0" step="0.1" value={l.weight} onChange={(e) => setLine(l.id, "weight", e.target.value)} style={num} />
                           </td>
                           <td style={{ ...td, textAlign: "right", color: "#5a6a85", whiteSpace: "nowrap" }}>{int(Math.round(c.kg))} kg</td>
                           <td style={td}>
-                            <input type="number" min="0" step="0.01" value={l.cost} onChange={(e) => setLine(l.id, "cost", e.target.value)} style={num} />
+                            <input {...selectAllProps} type="number" min="0" step="0.01" value={l.cost} onChange={(e) => setLine(l.id, "cost", e.target.value)} style={num} />
                           </td>
                           <td style={{ ...td, textAlign: "right", fontWeight: 700 }}>{money(c.total)}</td>
                           <td style={{ ...td, textAlign: "center", whiteSpace: "nowrap" }}>
@@ -2179,7 +2202,7 @@ export default function ImportPlanner() {
                             <>
                               <div>
                                 <span style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#8593a8", marginBottom: 3 }}>Value ($)</span>
-                                <input
+                                <input {...selectAllProps}
                                   type="number"
                                   min="0"
                                   step="0.01"
@@ -2203,7 +2226,7 @@ export default function ImportPlanner() {
                               </div>
                               <div>
                                 <span style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#8593a8", marginBottom: 3 }}>Exchange rate ($/£)</span>
-                                <input
+                                <input {...selectAllProps}
                                   type="number"
                                   min="0"
                                   step="0.0001"
@@ -2269,7 +2292,7 @@ export default function ImportPlanner() {
                         Duty (£)
                       </label>
                       {dutyOn ? (
-                        <input
+                        <input {...selectAllProps}
                           type="number"
                           min="0"
                           step="0.01"
@@ -2283,7 +2306,7 @@ export default function ImportPlanner() {
                     </div>
                     <div style={sumRow}>
                       <span style={sumLbl}>Shipping costs (£)</span>
-                      <input
+                      <input {...selectAllProps}
                         type="number"
                         min="0"
                         step="0.01"

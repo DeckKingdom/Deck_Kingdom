@@ -163,7 +163,7 @@ export default function MasterProductsScreen({ crm, updateCrm, askConfirm, plann
                       <td style={{ ...td, ...numCell, color: m === null ? "#aab3c2" : m < 20 ? RED : "#28713e" }}>{m === null ? "—" : m.toFixed(0) + "%"}</td>
                       <td style={{ ...td, ...numCell }}>{p.weightKg === "" || p.weightKg === null ? "—" : Number(p.weightKg)}</td>
                       <td style={{ ...td, textAlign: "right", width: 76 }}>
-                        <input
+                        <input {...selectAllProps}
                           style={{ ...inp, width: 70, textAlign: "right", fontWeight: 700, padding: "4px 7px", borderColor: si.low ? RED : "#d5d9e0", background: si.low ? "#C8102E10" : "#fff" }}
                           inputMode="decimal"
                           value={p.stock === null ? "" : p.stock}
@@ -247,7 +247,7 @@ export default function MasterProductsScreen({ crm, updateCrm, askConfirm, plann
                       <option key={p.id} value={p.id}>{(p.sku || "?") + " — " + p.name + (p.colour ? " · " + p.colour : "")}</option>
                     ))}
                   </select>
-                  <input style={{ ...inp, width: 70, textAlign: "right" }} inputMode="decimal" title="Qty per kit" value={c.qty}
+                  <input {...selectAllProps} style={{ ...inp, width: 70, textAlign: "right" }} inputMode="decimal" title="Qty per kit" value={c.qty}
                     onChange={(e) => setDraft({ ...draft, components: draft.components.map((x) => (x.id === c.id ? { ...x, qty: e.target.value === "" ? "" : Number(e.target.value) } : x)) })} />
                   <button style={abtn} title="Remove" onClick={() => setDraft({ ...draft, components: draft.components.filter((x) => x.id !== c.id) })}>
                     <Icon name="x" stroke={RED} />

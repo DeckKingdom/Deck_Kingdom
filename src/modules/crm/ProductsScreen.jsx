@@ -10,7 +10,7 @@ import {
   DEFAULT_SKU_LISTS, gbp, kitPartsFor, supplierKey,
   tidyDescription, suggestDescription, codeFollowsName, suggestCode, usesStyles,
 } from "../../lib/crmCore.js";
-import { Icon, Chip, Modal, lbl, card, inp, btn, goldBtn, abtn } from "./ui.jsx";
+import { Icon, Chip, Modal, lbl, card, inp, btn, goldBtn, abtn, selectAllProps } from "./ui.jsx";
 import { tidyPlan, applyTidy } from "../../lib/productTidy.js";
 
 const sel = { ...inp, padding: "5px 6px", fontSize: 12.5 };
@@ -610,7 +610,7 @@ function CostPanel({ p, isImport, rows, products, rowsByProduct, shipments, setP
       <span style={{ flex: 1, color: "#5a6a85", fontWeight: 600 }}>{label}</span>
       <span style={{ position: "relative", width: 100 }}>
         {prefix && <span style={{ position: "absolute", left: 7, top: "50%", transform: "translateY(-50%)", color: "#8593a8", fontSize: 12 }}>{prefix}</span>}
-        <input type="number" style={{ ...numI, padding: "4px 7px", paddingLeft: prefix ? 18 : 7 }} value={p[key] === undefined || p[key] === null ? "" : p[key]} onChange={(e) => setP(p.id, key, e.target.value)} />
+        <input {...selectAllProps} type="number" style={{ ...numI, padding: "4px 7px", paddingLeft: prefix ? 18 : 7 }} value={p[key] === undefined || p[key] === null ? "" : p[key]} onChange={(e) => setP(p.id, key, e.target.value)} />
       </span>
     </div>
   );
@@ -818,7 +818,7 @@ function Version({ p, lists, rows, rowsByProduct, products, setP, removeProduct,
   const num = (label, field) => (
     <div style={{ width: 112 }}>
       <span style={{ ...lbl, fontSize: 10 }}>{label}</span>
-      <input type="number" style={numI} value={p[field] === undefined || p[field] === null ? "" : p[field]} onChange={(e) => setP(p.id, field, e.target.value)} />
+      <input {...selectAllProps} type="number" style={numI} value={p[field] === undefined || p[field] === null ? "" : p[field]} onChange={(e) => setP(p.id, field, e.target.value)} />
     </div>
   );
   const unknownColours = (p.colours || []).filter((c) => colourSeg(lists, c) === null);
@@ -877,7 +877,7 @@ function Version({ p, lists, rows, rowsByProduct, products, setP, removeProduct,
         </div>
         <div>
           <span style={{ ...lbl, fontSize: 10 }}>Retail £ inc VAT</span>
-          <input type="number" style={numI} value={p.salePrice === undefined || p.salePrice === null ? "" : p.salePrice} onChange={(e) => setP(p.id, "salePrice", e.target.value)} />
+          <input {...selectAllProps} type="number" style={numI} value={p.salePrice === undefined || p.salePrice === null ? "" : p.salePrice} onChange={(e) => setP(p.id, "salePrice", e.target.value)} />
         </div>
         <button style={{ ...abtn, color: RED, border: "none" }} title="Remove this version" onClick={() => removeProduct(p.id)}><Icon name="x" stroke={RED} /></button>
       </div>
@@ -953,7 +953,7 @@ function KitEditor({ p, products, rowsByProduct, lists, setP }) {
               {!part && l.productId && <option value={l.productId}>(removed product)</option>}
               {choices.map((x) => <option key={x.id} value={x.id}>{(x.code || "no code") + " — " + (x.name || "unnamed")}</option>)}
             </select>
-            <input type="number" min="0" step="1" style={numI} value={l.qty} title="How many in one kit"
+            <input {...selectAllProps} type="number" min="0" step="1" style={numI} value={l.qty} title="How many in one kit"
               onChange={(e) => setLines((x) => { x[i].qty = e.target.value === "" ? "" : Number(e.target.value); return x; })} />
             <select style={sel} value={l.colour || ""} onChange={(e) => setLines((x) => { x[i].colour = e.target.value; return x; })}
               title="Same as the kit, or always one colour (e.g. galvanised inserts)">

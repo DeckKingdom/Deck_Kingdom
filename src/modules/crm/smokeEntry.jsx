@@ -253,7 +253,7 @@ export default function run(React, renderToString) {
     assert(html.includes("Q-101") && html.includes("Convert to invoice") && html.includes("Old Stone Trough Pub"), "quote entry renders");
     const conv2 = convertQuoteToInvoice(qc, qt.id, "jon", "inv-2");
     html = renderToString(React.createElement(QuotesScreen, { ...qprops, selId: qt.id }));
-    assert(html.includes("Open invoice #") && html.includes("locked"), "converted quote locks");
+    assert(html.includes("Open job #") && html.includes("locked"), "converted quote locks");
     html = renderToString(React.createElement(InvoicesScreen, { crm: qc, updateCrm: noop, askConfirm: noop, selId: conv2.id, setSelId: noop, goCustomer: noop, openQuote: noop, me: "x", planner: { products: [], shipments: [] }, filter: null, setFilter: noop }));
     assert(html.includes("From quote Q-101"), "invoice links back to its quote");
     html = renderToString(React.createElement(CustomersScreen, { crm: qc, updateCrm: noop, askConfirm: noop, selId: cust.id, setSelId: noop, openInvoice: noop, newInvoiceFor: noop, openQuote: noop, newQuoteFor: noop, me: "x" }));

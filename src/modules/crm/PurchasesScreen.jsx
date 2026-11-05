@@ -9,7 +9,7 @@ import {
   PURCHASE_CATEGORIES, PAYMENT_METHODS, VAT_RATES, vanOptions, staffList, staffName,
 } from "../../lib/crmCore.js";
 import { purchasesAvailable } from "../../data/crmStorage.js";
-import { Icon, Chip, SuggestInput, selectAllProps, sect, lbl, card, abtn, inp, btn, goldBtn, DateInput, CalendarPop } from "./ui.jsx";
+import { Icon, Chip, SuggestInput, selectAllProps, sect, lbl, card, abtn, inp, btn, goldBtn, DateInput, CalendarPop, RecordNav, BandDelete, HoverStamp, ListHero, HeroStat, HeroAdd, SearchBox, FilterPills } from "./ui.jsx";
 import { SupplierModal, PurchasesSchemaNotice } from "./SuppliersScreen.jsx";
 
 const th = { fontSize: 11, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", padding: "8px 8px", borderBottom: "2px solid #e6e9ef", whiteSpace: "nowrap", textAlign: "left" };
@@ -107,44 +107,31 @@ export default function PurchasesScreen({ crm, updateCrm, askConfirm, selId, set
     };
 
     return (
-      <div style={{ maxWidth: 1180, margin: "0 auto", padding: "18px 22px" }}>
+      <div style={{ maxWidth: 1140, margin: "0 auto", padding: "18px 22px" }}>
         {!ready && <PurchasesSchemaNotice />}
-        {notice && <div style={{ ...card, borderColor: GOLD, background: "#fff8e6", fontWeight: 600, fontSize: 13 }}>{notice}</div>}
+        {notice && (
+          <div style={{ ...card, borderColor: GOLD, background: "#fff8e6", display: "flex", gap: 10, alignItems: "center", fontWeight: 600, fontSize: 13 }}>
+            <span style={{ flex: 1 }}>{notice}</span>
+            <button style={abtn} onClick={() => setNotice("")}><Icon name="x" /></button>
+          </div>
+        )}
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginBottom: 14 }}>
-          {[
-            ["Spent this month", gbp(monthTot.total), monthRows.length + " purchase" + (monthRows.length === 1 ? "" : "s") + " · inc VAT", null],
-            ["VAT this month", gbp(monthTot.vat), "on purchase invoices", null],
-            ["Unpaid", gbp(unpaidTotal), unpaid.length + " invoice" + (unpaid.length === 1 ? "" : "s"), unpaid.length ? "#a05f10" : null],
-          ].map(([k, v, sub, tone]) => (
-            <div key={k} style={{ ...card, marginBottom: 0, padding: "12px 16px" }}>
-              <span style={lbl}>{k}</span>
-              <b style={{ fontSize: 20, color: tone || NAVY }}>{v}</b>
-              <div style={{ fontSize: 11.5, color: "#8593a8", fontWeight: 600, marginTop: 2 }}>{sub}</div>
-            </div>
-          ))}
-        </div>
+        <ListHero title="Purchases" sub={purchases.length.toLocaleString("en-GB") + " purchase" + (purchases.length === 1 ? "" : "s") + " · newest first"}
+          action={<HeroAdd title="New purchase" onClick={create} disabled={!ready} />}>
+          <HeroStat label="Spent this month" value={gbp(monthTot.total)} sub={monthRows.length + " purchase" + (monthRows.length === 1 ? "" : "s") + " · inc VAT"} />
+          <HeroStat label="VAT this month" value={gbp(monthTot.vat)} sub="on purchase invoices" />
+          <HeroStat label="Unpaid" value={gbp(unpaidTotal)} tone={unpaid.length ? "#f6c48a" : undefined} sub={unpaid.length + " invoice" + (unpaid.length === 1 ? "" : "s") + (unpaid.length ? " · click to list" : "")} onClick={unpaid.length ? () => setWhen("Unpaid") : undefined} />
+        </ListHero>
 
         <div style={{ ...card, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "10px 14px" }}>
-          <div style={{ position: "relative", flex: 1, minWidth: 180, maxWidth: 280 }}>
-            <span style={{ position: "absolute", left: 11, top: 10 }}><Icon name="search" /></span>
-            <input style={{ ...inp, paddingLeft: 34 }} placeholder="PO, inv #, supplier, detail…" value={search} onChange={(e) => setSearch(e.target.value)} />
-          </div>
-          <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-            {FILTERS.map((f) => (
-              <button key={f} onClick={() => setWhen(f)}
-                style={{ fontFamily: "inherit", fontSize: 12.5, fontWeight: 700, padding: "6px 11px", borderRadius: 999, cursor: "pointer", border: "1px solid " + (when === f ? NAVY : "#d5d9e0"), background: when === f ? NAVY : "#fff", color: when === f ? "#fff" : "#5a6a85" }}>
-                {f}
-              </button>
-            ))}
-          </div>
+          <SearchBox value={search} onChange={setSearch} placeholder="PO, inv #, supplier, detail…" width={280} />
+          <FilterPills options={FILTERS} value={when} onPick={setWhen} />
           <select style={{ ...inp, width: "auto", fontSize: 13, fontWeight: 700 }} value={cat} onChange={(e) => setCat(e.target.value)}>
             <option value="">All categories</option>
             {categories.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
           <span style={{ flex: 1 }} />
           <button style={btn} onClick={exportXlsx} disabled={!rows.length} title="Download the rows shown as an Excel file"><Icon name="doc" />Export</button>
-          <button style={{ ...goldBtn, opacity: ready ? 1 : 0.5 }} disabled={!ready} onClick={create}><Icon name="plus" stroke={NAVY} />New purchase</button>
         </div>
 
         {filterSup && (
@@ -175,7 +162,7 @@ export default function PurchasesScreen({ crm, updateCrm, askConfirm, selId, set
                           onMouseEnter={(e) => (e.currentTarget.style.background = "#f6f8fb")} onMouseLeave={(e) => (e.currentTarget.style.background = "")}>
                           <td style={{ ...tdc, fontWeight: 700, color: "#185FA5" }}>{x.poNo || "—"}</td>
                           <td style={{ ...tdc, whiteSpace: "nowrap" }}>{x.invDate ? prettyDate(x.invDate) : <span style={{ color: "#aab3c2" }}>—</span>}</td>
-                          <td style={{ ...tdc, fontWeight: 700 }}>{s ? s.name : <span style={{ color: RED }}>No supplier</span>}</td>
+                          <td style={{ ...tdc, fontWeight: 700 }}>{s ? (goSupplier ? <button type="button" className="dk-title-link" title="Open the supplier" onClick={(e) => { e.stopPropagation(); goSupplier(s.id); }} style={{ fontSize: 13, fontWeight: 700, color: NAVY }}>{s.name}</button> : s.name) : <span style={{ color: RED }}>No supplier</span>}</td>
                           <td style={tdc}>{x.invNo || "—"}</td>
                           <td style={{ ...tdc, color: "#5a6a85", fontWeight: 600, maxWidth: 230, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{(x.invDetail || "").split("\n").filter(Boolean).join(" · ") || "—"}</td>
                           <td style={tdc}>{x.category || "—"}</td>
@@ -245,30 +232,29 @@ export default function PurchasesScreen({ crm, updateCrm, askConfirm, selId, set
   );
 
   return (
-    <div style={{ maxWidth: 980, margin: "0 auto", padding: "18px 22px" }}>
+    <div style={{ maxWidth: 1320, margin: "0 auto", padding: "18px 22px" }}>
       <datalist id="dk-pcats2">{categories.map((x) => <option key={x} value={x} />)}</datalist>
       <datalist id="dk-pmethods2">{methods.map((x) => <option key={x} value={x} />)}</datalist>
       <datalist id="dk-people">{people.map((x) => <option key={x} value={x} />)}</datalist>
-      <button style={{ ...btn, marginBottom: 12 }} onClick={() => setSelId(null)}><Icon name="back" stroke={NAVY} />All purchases</button>
+      <RecordNav backLabel="All purchases" onBack={() => setSelId(null)} onGo={setSelId} noun="purchase" label={(x) => "PO-" + (x.poNo || "—") + ((supById[x.supplierId] || {}).name ? " · " + supById[x.supplierId].name : "")}
+        order={[...purchases].sort((a, b) => pDate(b).localeCompare(pDate(a)) || (Number(b.poNo) || 0) - (Number(a.poNo) || 0))} cur={p.id} />
       {!ready && <PurchasesSchemaNotice />}
 
       <div style={{ background: "linear-gradient(135deg,#0B1F3F 0%,#13294f 100%)", borderRadius: 12, padding: "16px 22px", color: "#fff", marginBottom: 14, display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
         <div>
           <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-            <h2 style={{ margin: 0, fontSize: 19 }}>{"PO# " + (p.poNo || "—")}</h2>
+            <HoverStamp lines={["Created " + (p.createdAt ? prettyDateTime(p.createdAt) : "—") + (p.createdBy ? " by " + staffName(crm, p.createdBy) : ""), p.updatedAt ? "Modified " + prettyDateTime(p.updatedAt) + (p.modifiedBy ? " by " + staffName(crm, p.modifiedBy) : "") : ""]}>
+              <h2 style={{ margin: 0, fontSize: 19, cursor: "default" }}>{"PO# " + (p.poNo || "—")}</h2>
+            </HoverStamp>
             <Chip tone={purchaseIsPaid(p) ? "green" : "amber"} style={purchaseIsPaid(p) ? { background: "#3FA55C", color: "#fff", border: "none" } : undefined}>
               {purchaseIsPaid(p) ? "Paid " + prettyDate(p.datePaid) : "Unpaid"}
             </Chip>
           </div>
-          <div style={{ fontSize: 12.5, color: "#aeb9cf", fontWeight: 600, marginTop: 5 }}>
-            Created {p.createdAt ? prettyDateTime(p.createdAt) : "—"}{p.createdBy ? " by " + staffName(crm, p.createdBy) : ""}
-            {p.updatedAt ? " · Modified " + prettyDateTime(p.updatedAt) + (p.modifiedBy ? " by " + staffName(crm, p.modifiedBy) : "") : ""}
-          </div>
         </div>
         <span style={{ flex: 1 }} />
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button style={navyBtn} onClick={create} disabled={!ready}><Icon name="plus" stroke="#fff" />Create new entry</button>
-          <button style={{ ...navyBtn, border: "1px dashed #3a4f78", color: "#8fa0c0" }} onClick={remove}><Icon name="bin" stroke="#8fa0c0" />Delete</button>
+          <button style={navyBtn} onClick={create} disabled={!ready}><Icon name="plus" stroke="#fff" />New purchase</button>
+          <BandDelete title="Delete this purchase" onClick={remove} />
         </div>
       </div>
 

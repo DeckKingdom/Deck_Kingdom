@@ -9,7 +9,7 @@ import {
   TRADE_COUNTER, TRADE_COUNTER_LABEL,
 } from "../../lib/crmCore.js";
 import { quotesAvailable } from "../../data/crmStorage.js";
-import { ListHero, HeroStat, HeroAdd, SearchBox, FilterPills, DateInput, CalendarPop } from "./ui.jsx";
+import { ListHero, HeroStat, HeroAdd, SearchBox, FilterPills, DateInput, CalendarPop, RecordNav, BandDelete, HoverStamp } from "./ui.jsx";
 import { Icon, Chip, selectAllProps, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
 import { printQuote } from "./printDocs.js";
 import LinesEditor from "./LinesEditor.jsx";
@@ -159,14 +159,14 @@ export default function QuotesScreen({ openProduct, money = true, crm, updateCrm
                           onMouseLeave={(e) => (e.currentTarget.style.background = "")}>
                           <td style={{ ...tdc, fontWeight: 700, color: "#185FA5", whiteSpace: "nowrap" }}>{quoteRef(x)}</td>
                           <td style={{ ...tdc, whiteSpace: "nowrap" }}>{prettyDate(x.date)}</td>
-                          <td style={{ ...tdc, fontWeight: 700 }}>{c ? c.name : <span style={{ color: RED }}>No customer</span>}</td>
+                          <td style={{ ...tdc, fontWeight: 700 }}>{c ? (goCustomer ? <button type="button" className="dk-title-link" title="Open account" onClick={(e) => { e.stopPropagation(); goCustomer(c.id); }} style={{ fontSize: 13, fontWeight: 700, color: NAVY }}>{c.name || "Unnamed"}</button> : c.name) : <span style={{ color: RED }}>No customer</span>}</td>
                           <td style={{ ...tdc, whiteSpace: "nowrap", color: st === "Expired" ? RED : undefined, fontWeight: st === "Expired" ? 700 : 400 }}>{x.validUntil ? prettyDate(x.validUntil) : "—"}</td>
                           <td style={{ ...tdc, textAlign: "right", fontWeight: 700 }}>{quoteTotals(x).total.toLocaleString("en-GB", { minimumFractionDigits: 2 })}</td>
                           <td style={tdc}><Chip tone={QUOTE_TONES[st]}>{st}</Chip></td>
                           <td style={tdc}>
                             {inv ? (
-                              <button onClick={(e) => { e.stopPropagation(); openInvoice(inv.id); }}
-                                style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontWeight: 700, color: "#185FA5", fontSize: 13, padding: 0 }}>
+                              <button type="button" className="dk-title-link" title={"Open job #" + (inv.invNo || "—")} onClick={(e) => { e.stopPropagation(); openInvoice(inv.id); }}
+                                style={{ fontWeight: 700, color: "#185FA5", fontSize: 13 }}>
                                 #{inv.invNo || "—"}
                               </button>
                             ) : <span style={{ color: "#aab3c2" }}>—</span>}
@@ -258,7 +258,8 @@ export default function QuotesScreen({ openProduct, money = true, crm, updateCrm
 
   return (
     <div style={{ maxWidth: 1320, margin: "0 auto", padding: "18px 22px" }}>
-      <button style={{ ...btn, marginBottom: 12 }} onClick={() => setSelId(null)}><Icon name="back" stroke={NAVY} />All quotes</button>
+      <RecordNav backLabel="All quotes" onBack={() => setSelId(null)} onGo={setSelId} noun="quote" label={(x) => quoteRef(x) + ((custById[x.customerId] || {}).name ? " · " + custById[x.customerId].name : "")}
+        order={[...quotes].sort((a, b) => (b.date || "").localeCompare(a.date || "") || (Number(b.quoteNo) || 0) - (Number(a.quoteNo) || 0))} cur={q.id} />
       {!ready && <SchemaNotice />}
 
       {notice && (
@@ -272,29 +273,27 @@ export default function QuotesScreen({ openProduct, money = true, crm, updateCrm
       <div style={{ background: "linear-gradient(135deg,#0B1F3F 0%,#13294f 100%)", borderRadius: 12, padding: "16px 22px", color: "#fff", marginBottom: 14, display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
         <div>
           <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-            <h2 style={{ margin: 0, fontSize: 19 }}>
-              Quote {quoteRef(q)}
-              <span style={{ color: "#aeb9cf", fontWeight: 600, fontSize: 14, marginLeft: 12 }}>{prettyDate(q.date)}</span>
-            </h2>
+            <HoverStamp lines={["Raised " + prettyDate(q.created) + (q.raisedBy ? " by " + q.raisedBy.split("@")[0] : ""), q.updatedAt ? "Updated " + prettyDateTime(q.updatedAt) + (q.modifiedBy ? " by " + q.modifiedBy.split("@")[0] : "") : ""]}>
+              <h2 style={{ margin: 0, fontSize: 19, cursor: "default" }}>
+                Quote {quoteRef(q)}
+                <span style={{ color: "#aeb9cf", fontWeight: 600, fontSize: 14, marginLeft: 12 }}>{prettyDate(q.date)}</span>
+              </h2>
+            </HoverStamp>
             <Chip tone={QUOTE_TONES[st]} style={st === "Converted" ? { background: "#3FA55C", color: "#fff", border: "none" } : st === "Draft" || st === "Expired" ? { background: "#ffffff18", color: "#cfd6e4", border: "1px solid #ffffff2e" } : undefined}>{st}</Chip>
-          </div>
-          <div style={{ fontSize: 12.5, color: "#aeb9cf", fontWeight: 600, marginTop: 5 }}>
-            Raised {prettyDate(q.created)}{q.raisedBy ? " by " + q.raisedBy.split("@")[0] : ""}
-            {q.updatedAt ? " · Updated " + prettyDateTime(q.updatedAt) + (q.modifiedBy ? " by " + q.modifiedBy.split("@")[0] : "") : ""}
           </div>
         </div>
         <span style={{ flex: 1 }} />
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <button style={navyBtn} onClick={tryPrint}><Icon name="doc" stroke="#fff" />Quote PDF</button>
           <button style={navyBtn} onClick={duplicate} title="Copy into a new draft quote — for a revised price or option"><Icon name="layers" stroke="#fff" />Duplicate</button>
-          <button style={{ ...navyBtn, border: "1px dashed #3a4f78", color: "#8fa0c0" }} onClick={remove}><Icon name="bin" stroke="#8fa0c0" />Delete</button>
           {inv ? (
-            <button style={goldBtn} onClick={() => openInvoice(inv.id)}><Icon name="doc" stroke={NAVY} />Open invoice #{inv.invNo || "—"}</button>
+            <button style={goldBtn} onClick={() => openInvoice(inv.id)}><Icon name="doc" stroke={NAVY} />Open job #{inv.invNo || "—"}</button>
           ) : (
             <button style={{ ...goldBtn, opacity: st === "Declined" ? 0.6 : 1 }} onClick={convert} title="Raise the sale: creates an invoice with these lines">
               <Icon name="pound" stroke={NAVY} />Convert to invoice
             </button>
           )}
+          <BandDelete title="Delete this quote" onClick={remove} />
         </div>
       </div>
 
@@ -420,11 +419,11 @@ export default function QuotesScreen({ openProduct, money = true, crm, updateCrm
             <div>
               <span style={lbl}>Notes for the customer (printed on the quote)</span>
               <textarea style={{ ...inp, resize: "vertical" }} rows={3} disabled={locked} placeholder="e.g. Includes fixings and trims for a 4m x 3m deck. Delivery within 5 working days of order."
-                value={q.notes} {...selectAllProps} onChange={(e) => setQuote((x) => (x.notes = e.target.value))} />
+                value={q.notes} onChange={(e) => setQuote((x) => (x.notes = e.target.value))} />
             </div>
             <div>
               <span style={lbl}>Internal notes (office only)</span>
-              <textarea style={{ ...inp, resize: "vertical", background: "#fbfcfd" }} rows={2} placeholder="Chased by phone, competitor price, follow-up plans…"
+              <textarea style={{ ...inp, resize: "vertical", background: "#fbfcfd" }} rows={2} disabled={locked} placeholder="Chased by phone, competitor price, follow-up plans…"
                 value={q.internalNotes} onChange={(e) => setQuote((x) => (x.internalNotes = e.target.value))} />
             </div>
           </div>
@@ -438,14 +437,14 @@ export default function QuotesScreen({ openProduct, money = true, crm, updateCrm
                   Discount
                   <input style={{ ...darkInp, width: 46, fontSize: 12.5, padding: "3px 6px", borderRadius: 8 }} inputMode="decimal" placeholder="0" disabled={locked}
                     title="Taken from the customer account; editable per quote"
-                    value={q.discountPct === null ? "" : q.discountPct} onChange={(e) => setQuote((x) => (x.discountPct = e.target.value))} />
+                    value={q.discountPct === null ? "" : q.discountPct} {...selectAllProps} onChange={(e) => setQuote((x) => (x.discountPct = e.target.value))} />
                   <span style={{ fontSize: 11.5 }}>%</span>
                 </span>
                 <b style={{ color: t.discount > 0 ? "#f2a6b1" : "#aeb9cf" }}>{t.discount > 0 ? "−" + gbp(t.discount) : "—"}</b>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 0", borderBottom: "1px solid #ffffff1c", fontSize: 13.5 }}>
                 <span style={{ color: "#aeb9cf", fontWeight: 600 }}>Delivery charge</span>
-                <input style={darkInp} inputMode="decimal" value={q.deliveryCharge} placeholder="0.00" disabled={locked} onChange={(e) => setQuote((x) => (x.deliveryCharge = e.target.value))} />
+                <input style={darkInp} inputMode="decimal" value={q.deliveryCharge} placeholder="0.00" disabled={locked} {...selectAllProps} onChange={(e) => setQuote((x) => (x.deliveryCharge = e.target.value))} />
               </div>
               {[["of which VAT (" + (Number(q.vatRate) || 20) + "%)", gbp(t.vat)], ["Net", gbp(t.net)]].map(([k, v]) => (
                 <div key={k} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 0", borderBottom: "1px solid #ffffff1c", fontSize: 13.5 }}>

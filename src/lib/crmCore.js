@@ -247,6 +247,16 @@ export const blankCollectionItem = () => ({ id: uid(), sku: "", description: "",
 
 export const itemPending = (it) => !it.postedAt && !it.assignedInvoiceId;
 
+// collection note status: Not booked → Booked → Collected → Part processed → Processed
+export const collectionStatus = (c) => {
+  const { total, done } = collectionProgress(c);
+  if (total > 0 && done === total) return ["Processed", "green"];
+  if (done > 0) return ["Part processed", "gold"];
+  if (c.collected) return ["Collected", "gold"];
+  if (c.collectDate) return ["Booked", "grey"];
+  return ["Not booked", "red"];
+};
+
 export const collectionProgress = (c) => {
   const items = c.items || [];
   const done = items.filter((it) => !itemPending(it)).length;
@@ -2725,6 +2735,23 @@ export const raiseShortfallCollections = (c, invId, choices, actor) => {
   return made;
 };
 
+// A collection note raised for a job rides with it: when the job moves (day, driver, run or van),
+// any note that isn't collected yet, is only for that job and was riding with it moves too,
+// staying the stop just before the job. Called with the state before and after an edit.
+export const carryRidingCollections = (prev, next) => {
+  if (!prev || !next || !(next.collections || []).length) return;
+  const before = new Map((prev.invoices || []).map((i) => [i.id, i]));
+  const key = (x, date) => [date || "", x.driver || "", x.runNo || ""].join("|");
+  (next.invoices || []).forEach((job) => {
+    const was = before.get(job.id);
+    if (!was || was === job) return;
+    if ((was.deliveryDate || "") === (job.deliveryDate || "") && (was.driver || "") === (job.driver || "") && (was.runNo || "") === (job.runNo || "") && (was.van || "") === (job.van || "")) return;
+    const wasKey = key(was, was.deliveryDate);
+    const riders = next.collections.filter((col) => !col.collected && (col.items || []).length && col.items.every((it) => it.assignedInvoiceId === job.id) && key(col, col.collectDate) === wasKey);
+    if (riders.length) placeCollectionsBeforeJob(next, job.id, riders);
+  });
+};
+
 // New collection notes for a job go on the delivery schedule with it: same day, driver,
 // run and van, slotted in as the stop just before the job (stops renumbered).
 export const placeCollectionsBeforeJob = (c, invId, made) => {
@@ -2741,6 +2768,39 @@ export const placeCollectionsBeforeJob = (c, invId, made) => {
   const at = stops.indexOf(job);
   stops.splice(at < 0 ? stops.length : at, 0, ...made);
   stops.forEach((x, n) => (x.dropNo = String(n + 1)));
+};
+
+// A collection line can be changed while it's waiting, or while it's raised for a job and the
+// note isn't collected yet. Changes to a job's line carry onto that job's pick list.
+export const collectionLineOpen = (coll, it) => itemPending(it) || (!!it.assignedInvoiceId && !it.postedAt && !coll.collected);
+const colLinePick = (c, coll, it) => {
+  const job = it.assignedInvoiceId && (c.invoices || []).find((i) => i.id === it.assignedInvoiceId);
+  const ref = "COL-" + (coll.collectionNo || "");
+  return [job || null, job ? (job.picks || []).find((p) => String(p.batchRef).toUpperCase() === ref && p.sku === it.sku) || null : null];
+};
+export const editCollectionLine = (c, coll, itemId, fn) => {
+  const it = (coll.items || []).find((y) => y.id === itemId);
+  if (!it || !collectionLineOpen(coll, it)) return;
+  const [, pk] = colLinePick(c, coll, it);
+  fn(it);
+  if (pk) ["sku", "description", "colour", "qty", "unitCost", "lenM", "widM"].forEach((f) => { if (it[f] !== undefined) pk[f] = it[f]; });
+};
+export const removeCollectionLine = (c, coll, itemId) => {
+  const it = (coll.items || []).find((y) => y.id === itemId);
+  if (!it || !collectionLineOpen(coll, it)) return;
+  const [job, pk] = colLinePick(c, coll, it);
+  if (job && pk) { job.picks = job.picks.filter((p) => p !== pk); reconcilePicks(job, c); }
+  coll.items = coll.items.filter((y) => y.id !== itemId);
+};
+
+// a job deleted: stock it took goes back on the shelf, and collection lines raised for it are
+// freed up (they can go to stock or another job) instead of pointing at a job that's gone
+export const releaseInvoiceLinks = (c, inv) => {
+  if (!inv) return;
+  if (inv.stockDeducted) applyInvoiceStockDeduction(inv, c, false, "");
+  (c.collections || []).forEach((col) => (col.items || []).forEach((it) => {
+    if (it.assignedInvoiceId === inv.id && !it.postedAt) it.assignedInvoiceId = "";
+  }));
 };
 
 // a collection deleted before it's done: take its lines back off the jobs

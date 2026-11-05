@@ -3,34 +3,28 @@
 // return, EACH LINE is dispositioned on its own: committed to stock or
 // assigned straight to a job — mixed loads are the normal case.
 import { useState, useMemo, useEffect, useRef } from "react";
-import { NAVY, GOLD, RED, prettyDate } from "../../lib/core.js";
+import { NAVY, GOLD, RED, prettyDate, prettyDateTime, addDays } from "../../lib/core.js";
 import {
   blankCollection, blankCollectionItem, nextNumber, skuIndex, gbp, today,
   TIME_SLOTS, vanOptions, itemPending, collectionProgress, commitCollectionItem, assignCollectionItem,
-  blankSupplier, findSupplierByName, supplierKey, skuOptionLabel, releaseCollectionPicks, DRIVERS, isGrassRoll, sizeLabel, purchaseCost
+  blankSupplier, findSupplierByName, supplierKey, skuOptionLabel, releaseCollectionPicks, collectionStatus, collectionLineOpen, editCollectionLine, removeCollectionLine, DRIVERS, isGrassRoll, sizeLabel, purchaseCost
 } from "../../lib/crmCore.js";
 import { SupplierModal } from "./SuppliersScreen.jsx";
 import { purchasesAvailable } from "../../data/crmStorage.js";
-import { Icon, Chip, Modal, selectAllProps, SuggestInput, sect, lbl, card, abtn, inp, btn, goldBtn, DateInput, CalendarPop } from "./ui.jsx";
+import { Icon, Chip, Modal, selectAllProps, SuggestInput, sect, lbl, card, abtn, inp, btn, goldBtn, DateInput, CalendarPop, BandDelete, HoverStamp, ListHero, HeroStat, HeroAdd, SearchBox, FilterPills } from "./ui.jsx";
 import { printCollectionNote } from "./printDocs.js";
 import { skuOption, SKU_COLS, SKU_LIST_W, SizeRow, applySize } from "./LinesEditor.jsx";
 
 const navyBtn = { ...btn, background: "transparent", border: "1px solid #3a4f78", color: "#fff" };
 const td = { padding: "6px 6px", borderBottom: "1px solid #f0f2f6", fontSize: 13 };
 
-export const collectionStatus = (c) => {
-  const { total, done } = collectionProgress(c);
-  if (total > 0 && done === total) return ["Processed", "green"];
-  if (done > 0) return ["Part processed", "gold"];
-  if (c.collected) return ["Collected", "gold"];
-  if (c.collectDate) return ["Booked", "grey"];
-  return ["Not booked", "red"];
-};
+export { collectionStatus };
 
 export default function CollectionsScreen({ money = true, crm, updateCrm, askConfirm, selId, setSelId, openInvoice, me, goSupplier, planner, newSignal = 0 }) {
   const [allProducts, setAllProducts] = useState(false);
   const [supDraft, setSupDraft] = useState(null);
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("Open");
   const [assignFor, setAssignFor] = useState(null); // item id, or "ALL" for every pending line
   const [assignQuery, setAssignQuery] = useState("");
   const [notice, setNotice] = useState("");
@@ -150,22 +144,37 @@ export default function CollectionsScreen({ money = true, crm, updateCrm, askCon
   if (!coll) {
     const q = search.trim().toLowerCase();
     const sorted = [...(crm.collections || [])].sort((a, b) => (Number(b.collectionNo) || 0) - (Number(a.collectionNo) || 0));
-    const rows = q ? sorted.filter((c) => [String(c.collectionNo || ""), c.supplier, c.postcode, c.van].some((v) => String(v || "").toLowerCase().includes(q))) : sorted;
+    const STATUS_FILTERS = ["Open", "Not booked", "Booked", "Collected", "Processed", "All"];
+    const isOpenColl = (c) => collectionStatus(c)[0] !== "Processed";
+    const counts = { "Not booked": sorted.filter((c) => collectionStatus(c)[0] === "Not booked").length };
+    const rows = sorted.filter((c) => {
+      const st = collectionStatus(c)[0];
+      if (statusFilter === "Open" && !isOpenColl(c)) return false;
+      if (statusFilter === "Collected" && !(st === "Collected" || st === "Part processed")) return false;
+      if (!["Open", "All", "Collected"].includes(statusFilter) && st !== statusFilter) return false;
+      return !q || [String(c.collectionNo || ""), c.supplier, c.postcode, c.van].some((v) => String(v || "").toLowerCase().includes(q));
+    });
+    const tod = today();
+    const dueThisWeek = sorted.filter((c) => !c.collected && c.collectDate && c.collectDate >= tod && c.collectDate <= addDays(tod, 7)).length;
+    const toProcess = sorted.filter((c) => c.collected && collectionProgress(c).pending > 0).length;
+    const openValue = sorted.filter(isOpenColl).reduce((t, c) => t + itemsValue(c), 0);
     return (
-      <div style={{ maxWidth: 1040, margin: "0 auto", padding: "18px 22px" }}>
-        <div style={{ ...card, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "10px 14px" }}>
-          <div style={{ position: "relative", flex: 1, minWidth: 180, maxWidth: 320 }}>
-            <span style={{ position: "absolute", left: 11, top: 10 }}><Icon name="search" /></span>
-            <input style={{ ...inp, paddingLeft: 34 }} placeholder="Search supplier, COL #, postcode…" value={search} onChange={(e) => setSearch(e.target.value)} />
-          </div>
-          <span style={{ fontSize: 12, color: "#5a6a85", fontWeight: 700 }}>{(crm.collections || []).length} collections</span>
-          <span style={{ flex: 1 }} />
-          <button style={goldBtn} onClick={newCollection}><Icon name="plus" stroke={NAVY} />New collection</button>
-        </div>
+      <div style={{ maxWidth: 1140, margin: "0 auto", padding: "18px 22px" }}>
+        <ListHero title="Collections" sub={(crm.collections || []).length.toLocaleString("en-GB") + " collection note" + ((crm.collections || []).length === 1 ? "" : "s") + " · newest first"}
+          action={<HeroAdd title="New collection" onClick={newCollection} />}>
+          <HeroStat label="Not booked" value={counts["Not booked"].toLocaleString("en-GB")} tone={counts["Not booked"] ? "#f2a6b1" : undefined} sub="no collection date yet" onClick={counts["Not booked"] ? () => setStatusFilter("Not booked") : undefined} />
+          <HeroStat label="Due this week" value={dueThisWeek.toLocaleString("en-GB")} sub="booked to collect" />
+          <HeroStat label="To process" value={toProcess.toLocaleString("en-GB")} tone={toProcess ? "#f6c48a" : undefined} sub="collected — lines not in stock or on a job" onClick={toProcess ? () => setStatusFilter("Collected") : undefined} />
+          {money && <HeroStat label="Open value" value={gbp(openValue)} sub="ex VAT, at cost" />}
+        </ListHero>
         <div style={card}>
+          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 6 }}>
+            <SearchBox value={search} onChange={setSearch} placeholder="Search supplier, COL #, postcode…" width={300} />
+            <FilterPills options={STATUS_FILTERS} value={statusFilter} onPick={setStatusFilter} counts={counts} badge={() => RED} />
+          </div>
           {rows.length === 0 ? (
             <div style={{ textAlign: "center", padding: "30px 10px", color: "#5a6a85", fontWeight: 600 }}>
-              No collections yet — raise one when a van needs to pick goods up from a UK supplier.
+              {(crm.collections || []).length ? "No " + (statusFilter === "All" || statusFilter === "Open" ? "" : statusFilter.toLowerCase() + " ") + "collections match." : "No collections yet — raise one when a van needs to pick goods up from a UK supplier."}
             </div>
           ) : (
             <table className="dk-t dk-bleed" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
@@ -189,7 +198,7 @@ export default function CollectionsScreen({ money = true, crm, updateCrm, askCon
                       <td style={{ ...td, textAlign: "right", fontWeight: 700, color: prog.done ? "#28713e" : "#aab3c2" }}>{prog.done}</td>
                       {money && <td style={{ ...td, textAlign: "right", fontWeight: 700 }}>{itemsValue(c) ? itemsValue(c).toLocaleString("en-GB", { minimumFractionDigits: 2 }) : "—"}</td>}
                       <td style={td}><Chip tone={tone}>{label}</Chip></td>
-                      <td style={{ ...td, textAlign: "right" }}><button style={abtn} onClick={(e) => { e.stopPropagation(); setSelId(c.id); }}><Icon name="pen" /></button></td>
+                      <td style={{ ...td, textAlign: "right" }}><button style={abtn} title="Open" onClick={(e) => { e.stopPropagation(); setSelId(c.id); }}><Icon name="pen" /></button></td>
                     </tr>
                   );
                 })}
@@ -219,10 +228,10 @@ export default function CollectionsScreen({ money = true, crm, updateCrm, askCon
     </div>
   );
 
+  const lineOpen = (it) => collectionLineOpen(coll, it);
+  const removeItem = (iid) => setColl((t, c) => removeCollectionLine(c, t, iid));
   const setItem = (iid, k, v) =>
-    setColl((t) => {
-      const it = t.items.find((y) => y.id === iid);
-      if (!it || !itemPending(it)) return;
+    setColl((t, c) => editCollectionLine(c, t, iid, (it) => {
       it[k] = v;
       if (k === "sku") {
         const mp = bySku[String(v || "").trim().toLowerCase()];
@@ -232,7 +241,7 @@ export default function CollectionsScreen({ money = true, crm, updateCrm, askCon
           { const pc = purchaseCost(mp, planner); if (pc !== "") it.unitCost = pc; }
         }
       }
-    });
+    }));
 
   const aq = assignQuery.trim().toLowerCase();
   const assignable = crm.invoices
@@ -275,12 +284,11 @@ export default function CollectionsScreen({ money = true, crm, updateCrm, askCon
       <div style={{ background: "linear-gradient(135deg,#0B1F3F 0%,#13294f 100%)", borderRadius: 12, padding: "16px 22px", color: "#fff", marginBottom: 14, display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
         <div>
           <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-            <h2 style={{ margin: 0, fontSize: 19 }}>Collection COL-{coll.collectionNo || "—"}</h2>
+            <HoverStamp lines={["Raised " + prettyDate(coll.date) + (coll.raisedBy ? " by " + coll.raisedBy.split("@")[0] : ""), coll.updatedAt ? "Updated " + prettyDateTime(coll.updatedAt) + (coll.modifiedBy ? " by " + String(coll.modifiedBy).split("@")[0] : "") : ""]}>
+              <h2 style={{ margin: 0, fontSize: 19, cursor: "default" }}>Collection COL-{coll.collectionNo || "—"}</h2>
+            </HoverStamp>
             <Chip tone={statusTone}>{statusLabel}</Chip>
             {prog.total > 0 && <span style={{ fontSize: 12.5, fontWeight: 700, color: "#aeb9cf" }}>{prog.done} of {prog.total} lines processed</span>}
-          </div>
-          <div style={{ fontSize: 12.5, color: "#aeb9cf", fontWeight: 600, marginTop: 5 }}>
-            Raised {prettyDate(coll.date)}{coll.raisedBy ? " by " + coll.raisedBy.split("@")[0] : ""}
           </div>
         </div>
         <span style={{ flex: 1 }} />
@@ -289,10 +297,10 @@ export default function CollectionsScreen({ money = true, crm, updateCrm, askCon
           {prog.pending > 0 && (
             <>
               <button style={goldBtn} onClick={stockAllPending}><Icon name="box" stroke={NAVY} />Remaining to stock</button>
-              <button style={navyBtn} onClick={() => { setAssignQuery(""); setAssignFor("ALL"); }}><Icon name="doc" stroke="#fff" />Remaining to a job</button>
+              <button style={navyBtn} onClick={() => { setAssignQuery(""); setAssignFor("ALL"); }}><Icon name="truck" stroke="#fff" />Remaining to a job</button>
             </>
           )}
-          <button style={{ ...navyBtn, border: "1px dashed #3a4f78", color: "#8fa0c0" }} onClick={() => removeCollection(coll)}><Icon name="bin" stroke="#8fa0c0" />Delete</button>
+          <BandDelete title="Delete this collection" onClick={() => removeCollection(coll)} />
         </div>
       </div>
 
@@ -390,7 +398,8 @@ export default function CollectionsScreen({ money = true, crm, updateCrm, askCon
             ))}</tr></thead>
             <tbody>
               {(coll.items || []).map((it) => {
-                const pending = itemPending(it);
+                const pending = lineOpen(it); // editable
+                const free = itemPending(it); // not gone to stock or a job yet
                 const needs = needsSize(it);
                 return (
                   <tr key={it.id} style={{ opacity: pending ? 1 : 0.85 }}>
@@ -409,7 +418,7 @@ export default function CollectionsScreen({ money = true, crm, updateCrm, askCon
                     </td>
                     {sized && (
                       <td style={{ ...td, width: 150, whiteSpace: "nowrap", fontWeight: 700, color: "#5a6a85" }}>
-                        {pending && needs ? <SizeRow inline compact line={it} onSize={(k, v) => setColl((t) => { const y = t.items.find((z) => z.id === it.id); if (y && itemPending(y)) applySize(y, k, v); })} /> : sizeLabel(it)}
+                        {pending && needs ? <SizeRow inline compact line={it} onSize={(k, v) => setColl((t, c) => editCollectionLine(c, t, it.id, (y) => applySize(y, k, v)))} /> : sizeLabel(it)}
                       </td>
                     )}
                     <td style={{ ...td, width: 64, textAlign: "right" }}>
@@ -425,7 +434,7 @@ export default function CollectionsScreen({ money = true, crm, updateCrm, askCon
                       {it.postedAt ? (
                         <Chip tone="green">In stock · {prettyDate(it.postedAt)}</Chip>
                       ) : it.assignedInvoiceId ? (
-                        <button onClick={() => openInvoice(it.assignedInvoiceId)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit" }}>
+                        <button onClick={() => openInvoice(it.assignedInvoiceId)} title={"Open job " + invNoFor(it.assignedInvoiceId)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit" }}>
                           <Chip tone="gold">Job {invNoFor(it.assignedInvoiceId)} →</Chip>
                         </button>
                       ) : (
@@ -435,9 +444,9 @@ export default function CollectionsScreen({ money = true, crm, updateCrm, askCon
                     <td style={{ ...td, width: 100, textAlign: "right", whiteSpace: "nowrap" }}>
                       {pending && (
                         <>
-                          <button style={abtn} title="Commit this line to stock" onClick={() => stockOneItem(it.id)}><Icon name="box" /></button>{" "}
-                          <button style={abtn} title="Assign this line to a job" onClick={() => { setAssignQuery(""); setAssignFor(it.id); }}><Icon name="doc" /></button>{" "}
-                          <button style={{ ...abtn, border: "none" }} title="Remove line" onClick={() => setColl((t) => (t.items = t.items.filter((y) => y.id !== it.id)))}>
+                          {free && <><button style={abtn} title="Commit this line to stock" onClick={() => stockOneItem(it.id)}><Icon name="box" /></button>{" "}
+                          <button style={abtn} title="Assign this line to a job" onClick={() => { setAssignQuery(""); setAssignFor(it.id); }}><Icon name="doc" /></button>{" "}</>}
+                          <button style={{ ...abtn, border: "none" }} title={free ? "Remove line" : "Remove line (also comes off the job's pick list)"} onClick={() => removeItem(it.id)}>
                             <Icon name="x" stroke={RED} />
                           </button>
                         </>

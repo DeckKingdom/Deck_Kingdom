@@ -74,7 +74,7 @@ export const Tg = ({ on, title, icon, onClick, na }) => (
   </button>
 );
 
-export const Chip = ({ tone = "grey", children, style }) => {
+export const Chip = ({ tone = "grey", children, style, title }) => {
   const tones = {
     grey: { background: "#f0f2f6", border: "1px solid #e6e9ef", color: "#5a6a85" },
     green: { background: "#3FA55C22", border: "1px solid #bfe3ca", color: "#28713e" },
@@ -85,7 +85,7 @@ export const Chip = ({ tone = "grey", children, style }) => {
     navy: { background: "#ffffff18", border: "1px solid #ffffff2e", color: "#cfd6e4" },
   };
   return (
-    <span style={{ fontSize: 11.5, fontWeight: 700, padding: "3px 10px", borderRadius: 999, whiteSpace: "nowrap", ...tones[tone], ...style }}>
+    <span title={title} style={{ fontSize: 11.5, fontWeight: 700, padding: "3px 10px", borderRadius: 999, whiteSpace: "nowrap", ...tones[tone], ...style }}>
       {children}
     </span>
   );
@@ -479,3 +479,50 @@ export function DateInput({ value, onChange, style, disabled, title, placeholder
     </span>
   );
 }
+
+// Record layouts: "back to the list" + up/down arrows through the list (in its current order) + "N of M".
+// order: the records in list order · cur: the open one's id · label(x): how a record is named in the tooltip
+// noun: e.g. "invoice" (tooltips say "First invoice" / "Last invoice") · children: extra controls on the right
+export function RecordNav({ backLabel, onBack, order, cur, onGo, label, noun, children }) {
+  const at = order.findIndex((x) => x.id === cur);
+  const prev = at > 0 ? order[at - 1] : null, next = at >= 0 && at < order.length - 1 ? order[at + 1] : null;
+  const arrow = (x, up) => (
+    <button type="button" style={{ ...abtn, width: 36, height: 36, opacity: x ? 1 : 0.4, cursor: x ? "pointer" : "default" }} disabled={!x} onClick={() => x && onGo(x.id)}
+      title={x ? (up ? "Previous: " : "Next: ") + label(x) : (up ? "First " : "Last ") + noun}>
+      <span style={{ display: "inline-flex", transform: up ? "rotate(90deg)" : "rotate(-90deg)" }}><Icon name="back" stroke={NAVY} /></span>
+    </button>
+  );
+  return (
+    <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
+      <button type="button" style={btn} onClick={onBack}><Icon name="back" stroke={NAVY} />{backLabel}</button>
+      {arrow(prev, true)}
+      {arrow(next, false)}
+      {at >= 0 && <span style={{ fontSize: 12, fontWeight: 700, color: "#8593a8" }}>{(at + 1).toLocaleString("en-GB")} of {order.length.toLocaleString("en-GB")}</span>}
+      {children}
+    </div>
+  );
+}
+
+// Record header title with the "raised / updated by" details tucked into a hover stamp (like the invoice record)
+export function HoverStamp({ lines, children }) {
+  const [open, setOpen] = useState(false);
+  const shown = (lines || []).filter(Boolean);
+  return (
+    <span style={{ position: "relative", display: "inline-block" }} onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
+      {children}
+      {open && shown.length > 0 && (
+        <span style={{ position: "absolute", left: 0, top: "calc(100% + 6px)", zIndex: 20, background: "#fff", color: NAVY, border: "1px solid #e6e9ef", borderRadius: 12, padding: "8px 12px", boxShadow: "0 8px 24px rgba(0,0,0,.28)", whiteSpace: "nowrap", fontSize: 12, fontWeight: 600, lineHeight: 1.6 }}>
+          {shown.map((l, i) => <span key={i} style={{ display: "block" }}>{l}</span>)}
+        </span>
+      )}
+    </span>
+  );
+}
+
+// the small dashed bin on a record's navy header band (same on every record)
+export const BandDelete = ({ title, onClick }) => (
+  <button type="button" title={title} onClick={onClick}
+    style={{ width: 28, height: 28, borderRadius: 8, border: "1px dashed #3a4f78", background: "transparent", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0, flex: "none", alignSelf: "center" }}>
+    <Icon name="bin" stroke="#8fa0c0" size={13} />
+  </button>
+);

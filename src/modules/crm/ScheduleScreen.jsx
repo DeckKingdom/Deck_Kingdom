@@ -10,7 +10,7 @@ import {
 } from "../../lib/crmCore.js";
 import { printJobDocs, DOC_KINDS, printPendingList } from "./printDocs.js";
 import LinesEditor, { SizeRow, applySize, skuOption, SKU_COLS, SKU_LIST_W } from "./LinesEditor.jsx";
-import { JOB_TYPES, skuIndex, PAYMENT_TYPES, stockCheck, partKey, isColPick, blankPick, blankCollectionItem, itemPending, isGrassRoll, sizeLabel, purchaseCost } from "../../lib/crmCore.js";
+import { JOB_TYPES, skuIndex, PAYMENT_TYPES, stockCheck, partKey, isColPick, blankPick, blankCollectionItem, itemPending, collectionLineOpen, editCollectionLine, removeCollectionLine, isGrassRoll, sizeLabel, purchaseCost } from "../../lib/crmCore.js";
 import StockCheck from "./StockCheck.jsx";
 import { Icon, Chip, Tg, sect, lbl, card, abtn, inp, btn, goldBtn, RiskChip, WebStatusChip, Soon, usePhone, DateInput, CalendarPop, SuggestInput, selectAllProps } from "./ui.jsx";
 
@@ -1070,7 +1070,7 @@ export default function ScheduleScreen({ openProduct, money = true, crm, updateC
           return (
             <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", background: "#f8f9fb", border: "1px solid #e6e9ef", borderRadius: 8, padding: "7px 9px", margin: "4px 0 8px", fontSize: 12.5, fontWeight: 700 }}>
               Waiting over
-              <input type="number" min="0" value={oldDays} onChange={(ev) => { const n = Math.max(0, Number(ev.target.value) || 0); setOldDays(n); try { localStorage.setItem("dk-pending-days", String(n)); } catch (x) { /* ignore */ } }}
+              <input {...selectAllProps} type="number" min="0" value={oldDays} onChange={(ev) => { const n = Math.max(0, Number(ev.target.value) || 0); setOldDays(n); try { localStorage.setItem("dk-pending-days", String(n)); } catch (x) { /* ignore */ } }}
                 style={{ ...inp, width: 56, padding: "3px 6px", textAlign: "right" }} />
               days
               <span style={{ flex: 1 }} />
@@ -1203,7 +1203,7 @@ export default function ScheduleScreen({ openProduct, money = true, crm, updateC
         const top = Math.min(pop.rect.bottom + 6, window.innerHeight - PH - 10);
         const by = skuIndex(crm);
         const skuOpts = (crm.masterProducts || []).filter((p) => p.active !== false && p.sku).map((p) => skuOption(p, crm));
-        const setIt = (iid, fn) => setColl(col.id, (t) => { const it = (t.items || []).find((y) => y.id === iid); if (it && itemPending(it)) fn(it); });
+        const setIt = (iid, fn) => updateCrm((c) => { const t = (c.collections || []).find((x) => x.id === col.id); if (t) editCollectionLine(c, t, iid, fn); return c; });
         const goCol = () => { setPop(null); openCollection && openCollection(col.id); };
         const colSized = (col.items || []).some((it) => isGrassRoll(by[String(it.sku || "").trim().toLowerCase()]) || !!sizeLabel(it));
         const kgAll = collKg(col);
@@ -1233,7 +1233,7 @@ export default function ScheduleScreen({ openProduct, money = true, crm, updateC
                 {(col.contact || col.phone) && <div style={{ color: "#5a6a85" }}>{[col.contact, col.phone].filter(Boolean).join(" · ")}</div>}
                 {(col.driver || col.runNo || col.van) && <div style={{ color: "#5a6a85" }}>{[col.runNo ? "Run " + col.runNo : "", col.driver, col.dropNo ? "stop " + col.dropNo : "", col.van].filter(Boolean).join(" · ")}</div>}
               </div>
-              {/* the collection note's lines, editable while they're still waiting (not yet in stock or sent to a job) */}
+              {/* the collection note's lines, editable until they're in stock or the note's collected (a job's lines carry onto its pick list) */}
               <div style={{ overflowX: "auto", marginTop: 12 }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, minWidth: 640 }}>
                   <thead><tr>{["SKU", "Description", "Colour", ...(colSized ? ["Length × width (m)"] : []), "Qty", ""].map((h, k) => (
@@ -1241,7 +1241,7 @@ export default function ScheduleScreen({ openProduct, money = true, crm, updateC
                   ))}</tr></thead>
                   <tbody>
                     {(col.items || []).map((it) => {
-                      const open = itemPending(it);
+                      const open = collectionLineOpen(col, it);
                       const mp = by[String(it.sku || "").trim().toLowerCase()];
                       const cell = { padding: "5px 5px", borderBottom: "1px solid #f3f5f9", verticalAlign: "top" };
                       const box = { ...inp, padding: "5px 8px", fontSize: 12.5 };
@@ -1273,7 +1273,7 @@ export default function ScheduleScreen({ openProduct, money = true, crm, updateC
                           </td>
                           <td style={{ ...cell, width: 74, textAlign: "right", whiteSpace: "nowrap" }}>
                             {open ? (
-                              <button type="button" title="Remove this line" onClick={() => setColl(col.id, (t) => (t.items = (t.items || []).filter((y) => y.id !== it.id)))}
+                              <button type="button" title={it.assignedInvoiceId ? "Remove this line (also comes off the job's pick list)" : "Remove this line"} onClick={() => updateCrm((c) => { const t = (c.collections || []).find((x) => x.id === col.id); if (t) removeCollectionLine(c, t, it.id); return c; })}
                                 style={{ ...abtn, border: "none" }}><Icon name="x" stroke={RED} /></button>
                             ) : <Chip tone={it.postedAt ? "green" : "gold"} style={{ fontSize: 10, padding: "1px 7px" }}>{it.postedAt ? "In stock" : "On a job"}</Chip>}
                           </td>
@@ -1379,7 +1379,7 @@ export default function ScheduleScreen({ openProduct, money = true, crm, updateC
                               : sizeLabel(it)}
                           </span>
                         )}
-                        <input type="number" min="0" disabled={locked} value={it.qty} style={inp_}
+                        <input {...selectAllProps} type="number" min="0" disabled={locked} value={it.qty} style={inp_}
                           onChange={(e) => { const v = e.target.value; editColl(col.id, (cl, job, r) => { const t = cl.items.find((x) => x.id === it.id); if (!t) return; t.qty = v === "" ? "" : Number(v); const p = pickFor(job, r, t.sku); if (p) p.qty = t.qty; }); }} />
                         {!locked ? <button type="button" title="Remove this line from the note" style={{ ...abtn, border: "none", width: 26, height: 26 }}
                           onClick={() => editColl(col.id, (cl, job, r) => { const t = cl.items.find((x) => x.id === it.id); cl.items = cl.items.filter((x) => x.id !== it.id); if (t) job.picks = job.picks.filter((p) => !(String(p.batchRef).toUpperCase() === r && p.sku === t.sku)); })}><Icon name="x" stroke={RED} size={13} /></button> : <span />}

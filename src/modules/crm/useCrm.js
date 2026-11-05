@@ -6,7 +6,7 @@
 import { useState, useEffect, useRef } from "react";
 import { crmStorage, latestChange } from "../../data/crmStorage.js";
 import { getSessionEmail } from "../../data/auth.js";
-import { emptyCrm, normaliseCrm } from "../../lib/crmCore.js";
+import { emptyCrm, normaliseCrm, carryRidingCollections } from "../../lib/crmCore.js";
 
 const CHECK_MS = 10_000; // how often to look for changes made elsewhere
 const QUIET_MS = 8_000; // wait this long after the last edit here before reloading
@@ -115,7 +115,11 @@ export function useCrm(enabled) {
     dirty.current = true;
     pending.current = true;
     lastEdit.current = Date.now();
-    setCrm((d) => fn(JSON.parse(JSON.stringify(d))));
+    setCrm((d) => {
+      const next = fn(JSON.parse(JSON.stringify(d)));
+      carryRidingCollections(d, next); // collection notes follow their job round the schedule
+      return next;
+    });
   };
 
   // Used by restore: replace everything and mark dirty so it persists.

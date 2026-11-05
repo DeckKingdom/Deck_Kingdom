@@ -217,7 +217,7 @@ export default function SamplesScreen({ money = true, crm, updateCrm, askConfirm
         <div className="dk-bleed" style={{ overflowX: "auto" }}>
           <table className="dk-t" style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
             <thead>
-              <tr>{["", "Requests", "Orders", "Rate", "Sales £"].map((h, i) => <th key={i} style={{ ...th, textAlign: i ? "right" : "left", padding: "6px 6px" }}>{h}</th>)}</tr>
+              <tr>{["", "Requests", "Orders", "Rate", ...(money ? ["Sales £"] : [])].map((h, i) => <th key={i} style={{ ...th, textAlign: i ? "right" : "left", padding: "6px 6px" }}>{h}</th>)}</tr>
             </thead>
             <tbody>
               {rows.map((r) => (
@@ -226,7 +226,7 @@ export default function SamplesScreen({ money = true, crm, updateCrm, askConfirm
                   <td style={{ ...tdc, padding: "7px 6px", textAlign: "right" }}>{r.requests || "—"}</td>
                   <td style={{ ...tdc, padding: "7px 6px", textAlign: "right" }}>{r.requests ? r.converted : "—"}</td>
                   <td style={{ ...tdc, padding: "7px 6px", textAlign: "right", fontWeight: 700, color: r.rate ? "#28713e" : "#8593a8" }}>{r.requests ? pct(r.rate) : "—"}</td>
-                  <td style={{ ...tdc, padding: "7px 6px", textAlign: "right" }}>{r.revenue ? r.revenue.toLocaleString("en-GB", { maximumFractionDigits: 0 }) : "—"}</td>
+                  {money && <td style={{ ...tdc, padding: "7px 6px", textAlign: "right" }}>{r.revenue ? r.revenue.toLocaleString("en-GB", { maximumFractionDigits: 0 }) : "—"}</td>}
                 </tr>
               ))}
             </tbody>
@@ -328,7 +328,7 @@ export default function SamplesScreen({ money = true, crm, updateCrm, askConfirm
                           <td style={tdc}><Chip tone={SAMPLE_TONES[st]}>{st}</Chip></td>
                           <td style={{ ...tdc, whiteSpace: "nowrap" }}>
                             {inv ? (
-                              <button onClick={(e) => { e.stopPropagation(); openInvoice(inv.id); }}
+                              <button className="dk-title-link" title="Open the job" onClick={(e) => { e.stopPropagation(); openInvoice(inv.id); }}
                                 style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontWeight: 700, color: "#185FA5", fontSize: 13, padding: 0 }}>
                                 {(inv.invNo ? "#" + inv.invNo : inv.orderRef || "#—") + " · " + gbp(invoiceTotals(inv).total)}
                               </button>
@@ -429,7 +429,7 @@ export default function SamplesScreen({ money = true, crm, updateCrm, askConfirm
   const statusChipStyle = st === "Converted" ? { background: "#3FA55C", color: "#fff", border: "none" } : st === "To send" ? { background: RED, color: "#fff", border: "none" } : { background: "#ffffff18", color: "#cfd6e4", border: "1px solid #ffffff2e" };
 
   return (
-    <div style={{ maxWidth: 1140, margin: "0 auto", padding: "18px 22px" }}>
+    <div style={{ maxWidth: 1320, margin: "0 auto", padding: "18px 22px" }}>
       {(() => {
         // step through every sample, newest first (same order as the list)
         const order = [...samples].sort((a, b) => (b.date || "").localeCompare(a.date || "") || (Number(b.sampleNo) || 0) - (Number(a.sampleNo) || 0));

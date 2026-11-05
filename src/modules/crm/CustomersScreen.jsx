@@ -380,7 +380,7 @@ export default function CustomersScreen({ money = true, crm, updateCrm, askConfi
   );
 
   return (
-    <div style={{ maxWidth: 1140, margin: "0 auto", padding: "18px 22px" }}>
+    <div style={{ maxWidth: sel ? 1320 : 1140, margin: "0 auto", padding: "18px 22px" }}>
 
       {/* summary */}
       {!sel && crm.customers.length > 0 && (() => {
@@ -431,7 +431,7 @@ export default function CustomersScreen({ money = true, crm, updateCrm, askConfi
               {topUpOpen && (
                 <div style={{ ...sub, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
                   Retail orders under £
-                  <input type="number" min="0" step="10" value={topUp}
+                  <input {...selectAllProps} type="number" min="0" step="10" value={topUp}
                     onChange={(e) => { const v = Math.max(0, Number(e.target.value) || 0); setTopUp(v); try { localStorage.setItem("dk-topup", String(v)); } catch (err) {} }}
                     style={{ ...inp, width: 64, padding: "2px 6px", fontSize: 12, textAlign: "right" }} />
                   are top-ups (an extra board, trim, clips), not a new purchase{rt.topUps ? " · " + rt.topUps + " set aside so far" : ""}
@@ -571,7 +571,7 @@ export default function CustomersScreen({ money = true, crm, updateCrm, askConfi
             })()}
 
             {/* hero */}
-            <div style={{ background: "linear-gradient(135deg,#0B1F3F 0%,#13294f 100%)", borderRadius: 12, padding: "20px 22px", color: "#fff", marginBottom: 14, display: "flex", gap: 18, alignItems: "center", flexWrap: "wrap" }}>
+            <div style={{ background: "linear-gradient(135deg,#0B1F3F 0%,#13294f 100%)", borderRadius: 12, padding: "16px 22px", color: "#fff", marginBottom: 14, display: "flex", gap: 18, alignItems: "center", flexWrap: "wrap" }}>
               <div style={{ width: 54, height: 54, borderRadius: 12, background: GOLD, color: NAVY, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, fontWeight: 700, flex: "none" }}>
                 {(sel.name || "?").trim().charAt(0).toUpperCase() || "?"}
               </div>
@@ -587,7 +587,7 @@ export default function CustomersScreen({ money = true, crm, updateCrm, askConfi
                   ].filter(Boolean);
                   return (
                     <div style={{ position: "relative", display: "inline-block" }} onMouseEnter={() => setStampOpen(true)} onMouseLeave={() => setStampOpen(false)}>
-                      <h2 style={{ margin: 0, fontSize: 21, cursor: "default" }}>{sel.name || "Unnamed account"}</h2>
+                      <h2 style={{ margin: 0, fontSize: 19, cursor: "default" }}>{sel.name || "Unnamed account"}</h2>
                       {stampOpen && (
                         <div style={{ position: "absolute", left: 0, top: "calc(100% + 6px)", zIndex: 20, background: "#fff", color: NAVY, borderRadius: 12, padding: "8px 12px", boxShadow: "0 8px 24px rgba(0,0,0,.28)", whiteSpace: "nowrap", fontSize: 12, fontWeight: 600, lineHeight: 1.6 }}>
                           <span style={{ display: "inline-block", fontSize: 10, fontWeight: 800, letterSpacing: 0.4, padding: "1px 7px", borderRadius: 999, marginBottom: 3,
@@ -715,14 +715,14 @@ export default function CustomersScreen({ money = true, crm, updateCrm, askConfi
                           <tr key={x.id}>
                             <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", whiteSpace: "nowrap" }}>{prettyDate(x.date)}</td>
                             <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", cursor: "pointer" }} onClick={() => openSample(x.id)}>
-                              <button onClick={(e) => { e.stopPropagation(); openSample(x.id); }} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontWeight: 700, color: "#185FA5", fontSize: 13, padding: 0 }}>{sampleRef(x)}</button>
+                              <button className="dk-title-link" title="Open the sample request" onClick={(e) => { e.stopPropagation(); openSample(x.id); }} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontWeight: 700, color: "#185FA5", fontSize: 13, padding: 0 }}>{sampleRef(x)}</button>
                             </td>
                             <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", color: "#5a6a85", fontWeight: 600, cursor: "pointer" }} onClick={() => openSample(x.id)} title="Open sample request">
                               {(x.items || []).map((it) => [it.colour, it.description].filter(Boolean).join(" ")).filter(Boolean).join(", ") || "—"}
                             </td>
                             <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6" }}><Chip tone={SAMPLE_TONES[st]}>{st}</Chip></td>
                             <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6" }}>
-                              {si ? <button onClick={() => openInvoice(si.id)} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontWeight: 700, color: "#185FA5", fontSize: 13, padding: 0 }}>{"#" + (si.invNo || "—")}</button> : <span style={{ color: "#aab3c2" }}>—</span>}
+                              {si ? <button className="dk-title-link" title="Open the job" onClick={() => openInvoice(si.id)} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontWeight: 700, color: "#185FA5", fontSize: 13, padding: 0 }}>{"#" + (si.invNo || "—")}</button> : <span style={{ color: "#aab3c2" }}>—</span>}
                             </td>
                             <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", textAlign: "right" }}>
                               <span style={{ display: "inline-flex", gap: 5 }}>
@@ -772,7 +772,7 @@ export default function CustomersScreen({ money = true, crm, updateCrm, askConfi
                               <tr key={q.id}>
                                 <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", whiteSpace: "nowrap" }}>{prettyDate(q.date)}</td>
                                 <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6" }}>
-                                  <button onClick={() => openQuote(q.id)} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontWeight: 700, color: "#185FA5", fontSize: 13, padding: 0 }}>{quoteRef(q)}</button>
+                                  <button className="dk-title-link" title="Open the quote" onClick={() => openQuote(q.id)} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontWeight: 700, color: "#185FA5", fontSize: 13, padding: 0 }}>{quoteRef(q)}</button>
                                 </td>
                                 <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", fontWeight: 600 }}>{q.siteId === TRADE_COUNTER ? "Trade counter" : siteName(q.siteId) || "Invoice address"}</td>
                                 <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", textAlign: "right", fontWeight: 700 }}>{quoteTotals(q).total.toLocaleString("en-GB", { minimumFractionDigits: 2 })}</td>
@@ -815,7 +815,7 @@ export default function CustomersScreen({ money = true, crm, updateCrm, askConfi
                           <tr key={i.id}>
                             <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", whiteSpace: "nowrap" }}>{prettyDate(i.date)}</td>
                             <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6" }}>
-                              <button onClick={() => openInvoice(i.id)} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontWeight: 700, color: "#185FA5", fontSize: 13, padding: 0 }}>{i.invNo || "—"}</button>
+                              <button className="dk-title-link" title="Open the job" onClick={() => openInvoice(i.id)} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontWeight: 700, color: "#185FA5", fontSize: 13, padding: 0 }}>{"#" + (i.invNo || "—")}</button>
                             </td>
                             <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6" }}>
                               <b>{siteName(i.siteId) || "Invoice address"}</b> <span style={{ color: "#5a6a85", fontWeight: 600 }}>· {i.jobType}</span><RiskChip inv={i} style={{ marginLeft: 8 }} /><WebStatusChip inv={i} style={{ marginLeft: 8 }} />
@@ -835,7 +835,7 @@ export default function CustomersScreen({ money = true, crm, updateCrm, askConfi
                             <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", textAlign: "right" }}>
                               <span style={{ display: "inline-flex", gap: 6 }}>
                                 {newFollowUp && <button style={abtn} title="Follow-up job — something missing or broken that needs posting or delivering" onClick={() => newFollowUp(i.id)}><Icon name="wrench" /></button>}
-                                <button style={abtn} title="Open invoice" onClick={() => openInvoice(i.id)}><Icon name="pen" /></button>
+                                <button style={abtn} title="Open the job" onClick={() => openInvoice(i.id)}><Icon name="pen" /></button>
                               </span>
                             </td>
                           </tr>
@@ -863,7 +863,7 @@ export default function CustomersScreen({ money = true, crm, updateCrm, askConfi
             <span style={{ display: "inline-flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
               {custDraft._new ? "New customer" : "Edit customer"}
               {noEdit ? (
-                <input
+                <input {...selectAllProps}
                   style={{ ...inp, width: 100, fontWeight: 700 }}
                   inputMode="numeric"
                   value={custDraft.accountNo === null ? "" : custDraft.accountNo}
@@ -931,7 +931,7 @@ export default function CustomersScreen({ money = true, crm, updateCrm, askConfi
             </div>
             <div>
               <span style={lbl}>Discount rate %</span>
-              <input style={{ ...inp, textAlign: "right" }} inputMode="decimal" placeholder="0"
+              <input {...selectAllProps} style={{ ...inp, textAlign: "right" }} inputMode="decimal" placeholder="0"
                 title="Pulled through onto every new invoice for this customer"
                 value={custDraft.discountPct === null ? "" : custDraft.discountPct}
                 onChange={(e) => setCustDraft({ ...custDraft, discountPct: e.target.value })} />
@@ -955,7 +955,7 @@ export default function CustomersScreen({ money = true, crm, updateCrm, askConfi
             <span style={{ display: "inline-flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
               {siteDraft._new ? "New site for " + (sel.name || "account") : "Edit site"}
               {siteNoEdit ? (
-                <input
+                <input {...selectAllProps}
                   style={{ ...inp, width: 100, fontWeight: 700 }}
                   inputMode="numeric"
                   value={siteDraft.siteNo === null ? "" : siteDraft.siteNo}
@@ -1015,7 +1015,7 @@ export default function CustomersScreen({ money = true, crm, updateCrm, askConfi
           {[["account", "Next account #"], ["site", "Next site #"], ["sample", "Next sample # (S-)"], ["quote", "Next quote # (Q-)"], ["purchase", "Next purchase PO#"], ["supplier", "Next supplier account #"], ["invoice", "Next invoice #"], ["collection", "Next collection #"]].map(([k, label]) => (
             <div key={k} style={{ marginBottom: 10 }}>
               <span style={lbl}>{label}</span>
-              <input style={inp} inputMode="numeric" value={numDraft[k]}
+              <input {...selectAllProps} style={inp} inputMode="numeric" value={numDraft[k]}
                 onChange={(e) => setNumDraft({ ...numDraft, [k]: e.target.value.replace(/[^0-9]/g, "") })} />
             </div>
           ))}

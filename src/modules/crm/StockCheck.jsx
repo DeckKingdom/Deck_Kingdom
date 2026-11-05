@@ -5,7 +5,7 @@
 import { useState } from "react";
 import { NAVY, GOLD, RED } from "../../lib/core.js";
 import { stockCheck, partSuppliers, raiseShortfallCollections, supplierKey, skuLists, segLabel, gbp, purchaseCost } from "../../lib/crmCore.js";
-import { Icon, Chip, Modal, card, inp, btn, goldBtn } from "./ui.jsx";
+import { Icon, Chip, Modal, card, inp, btn, goldBtn, selectAllProps } from "./ui.jsx";
 
 const th = { textAlign: "left", fontSize: 10.5, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", padding: "6px 6px", borderBottom: "2px solid #e6e9ef", whiteSpace: "nowrap" };
 const td = { padding: "6px 6px", borderBottom: "1px solid #eef0f4", fontSize: 12.5 };
@@ -155,11 +155,11 @@ export default function StockCheck({ money = true, inv, crm, planner, updatePlan
                     <option value="">{suppliers.length ? "Collect from… (no other version on Products)" : "No product suppliers set up"}</option>
                     {suppliers.map((sp) => <option key={sp.id} value={"sup:" + sp.id}>{sp.name}</option>)}
                   </select>
-                  {money && <input type="number" min="0" step="0.01" placeholder="£ each" style={{ ...inp, textAlign: "right" }} value={c.cost}
+                  {money && <input {...selectAllProps} type="number" min="0" step="0.01" placeholder="£ each" style={{ ...inp, textAlign: "right" }} value={c.cost}
                     onChange={(e) => setChoices((x) => x.map((y, j) => (j === i ? { ...y, cost: e.target.value } : y)))} />}
                 </div>
               )}
-              <input type="number" min="0" style={{ ...inp, textAlign: "right" }} value={c.qty}
+              <input {...selectAllProps} type="number" min="0" style={{ ...inp, textAlign: "right" }} value={c.qty}
                 onChange={(e) => setChoices((x) => x.map((y, j) => (j === i ? { ...y, qty: e.target.value } : y)))} />
             </div>
           ))}

@@ -28,7 +28,7 @@ export const NAV_SECTIONS = [
   {
     title: "Imports",
     items: [
-      ["overview", "Overview", "grid"],
+      ["overview", "Overview", "grid", "shipment"],
       ["landed", "Landed Costs", "pound"],
       ["completion", "Completion", "flag"],
     ],
@@ -40,13 +40,14 @@ export const NAV_SECTIONS = [
       ["products", "Products", "box"],
     ],
   },
-  { title: "Fleet", items: [["vans", "Vans", "truck"]] },
+  { title: "Fleet", items: [["vans", "Vans", "truck", true]] },
   { title: "System", items: [["activity", "Activity", "clock"], ["users", "Users & access", "lock"]] },
 ];
 
 export const TAB_LABELS = { ...Object.fromEntries(NAV_SECTIONS.flatMap((s) => s.items.map(([t, l]) => [t, l]))), shipments: "Shipment", tasks: "Tasks" };
 
-export default function Sidebar({ tab, setTab, open, footer, onNew, onToggle, allow, phone }) {
+// canNew(t): optional — whether this login can add that kind of record (some need a manager)
+export default function Sidebar({ tab, setTab, open, footer, onNew, canNew, onToggle, allow, phone }) {
   const ok = allow || (() => true);
   const sections = NAV_SECTIONS.map((s) => ({ ...s, items: s.items.filter(([t]) => ok(t)) })).filter((s) => s.items.length);
   const [shut, setShut] = useState({});
@@ -159,10 +160,10 @@ export default function Sidebar({ tab, setTab, open, footer, onNew, onToggle, al
                   <Icon name={icon} size={17} stroke={on ? NAVY : "#8fa0c0"} />
                   {open && <span style={{ whiteSpace: "nowrap" }}>{label}</span>}
                 </button>
-                {open && canAdd && onNew && (
+                {open && canAdd && onNew && (!canNew || canNew(t)) && (
                   <button
                     onClick={() => onNew(t)}
-                    title={"New " + label.replace(/s$/, "").toLowerCase()}
+                    title={"New " + (typeof canAdd === "string" ? canAdd : label.replace(/s$/, "").toLowerCase())}
                     style={{
                       position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)",
                       width: 24, height: 24, borderRadius: 8, padding: 0, cursor: "pointer",

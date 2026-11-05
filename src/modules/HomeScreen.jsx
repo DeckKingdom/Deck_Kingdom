@@ -37,7 +37,7 @@ const Report = ({ label, value, sub, tone, onClick }) => (
 
 const rowStyle = { display: "flex", gap: 11, alignItems: "flex-start", padding: "9px 0", borderBottom: "1px solid #f0f2f6" };
 
-export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTab, addShipment, newInvoice, openInvoice, openCollection, money = true, canTab = () => true }) {
+export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTab, addShipment, newInvoice, openInvoice, openCollection, openShipment, money = true, canTab = () => true }) {
   const tod = today();
   const [viewAs, setViewAs] = useState(me || "");
   const [draft, setDraft] = useState(null);
@@ -201,7 +201,7 @@ export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTa
                           </div>
                           <div style={sub}>Drops</div>
                           {drops.length === 0 ? <div style={{ fontSize: 12, color: "#aab3c2", fontWeight: 600 }}>None</div> : drops.slice(0, 5).map((i) => (
-                            <button key={i.id} onClick={() => openInvoice && openInvoice(i.id)} className="dk-title-link"
+                            <button key={i.id} onClick={() => openInvoice && openInvoice(i.id)} className="dk-title-link" title={"Open job #" + (i.invNo || "—")}
                               style={{ display: "flex", gap: 6, alignItems: "center", width: "100%", fontSize: 12.5, fontWeight: 700, color: NAVY, padding: "2px 0" }}>
                               <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>{custName(i.customerId)}</span>
                               <RiskChip inv={i} />
@@ -217,7 +217,7 @@ export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTa
                           ))}
                           <div style={sub}>Collections</div>
                           {colls.length === 0 ? <div style={{ fontSize: 12, color: "#aab3c2", fontWeight: 600 }}>None due</div> : colls.map((c) => (
-                            <button key={c.id} onClick={() => setTab("collections")} className="dk-title-link"
+                            <button key={c.id} onClick={() => (openCollection ? openCollection(c.id) : setTab("collections"))} className="dk-title-link" title="Open the collection"
                               style={{ display: "flex", gap: 6, width: "100%", fontSize: 12.5, fontWeight: 600, color: NAVY, padding: "1px 0" }}>
                               <Icon name="box" size={13} stroke="#5a6a85" />
                               <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>{c.supplier || "Supplier"}</span>
@@ -288,8 +288,9 @@ export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTa
                   {rows.length === 0 ? (
                     <div style={{ color: "#8593a8", fontWeight: 600, fontSize: 13, padding: "4px 0" }}>Nothing due in this week.</div>
                   ) : rows.map((r) => (
-                    <button key={r.kind + r.id} className="dk-title-link"
-                      onClick={() => (r.kind === "coll" && openCollection ? openCollection(r.id) : setTab(r.kind === "coll" ? "collections" : "overview"))}
+                    <button key={r.kind + r.id} className="dk-title-link" disabled={r.kind === "ship" && !canTab("shipments")}
+                      title={r.kind === "ship" ? (canTab("shipments") ? "Open the shipment" : undefined) : "Open the collection"}
+                      onClick={() => (r.kind === "coll" ? (openCollection ? openCollection(r.id) : setTab("collections")) : canTab("shipments") && (openShipment ? openShipment(r.id) : setTab("overview")))}
                       style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "7px 0", borderBottom: "1px solid #f0f2f6", fontSize: 13, fontWeight: 700, color: NAVY }}>
                       <span style={{ width: 92, flex: "none", fontSize: 12.5, color: r.date < tod ? RED : r.date === tod ? "#a05f10" : "#5a6a85" }}>{r.date < tod ? "Late · " + prettyDate(r.date).slice(0, 6) : dayLabel(r.date)}</span>
                       <Icon name={r.kind === "ship" ? "ship" : "box"} size={14} stroke="#5a6a85" />

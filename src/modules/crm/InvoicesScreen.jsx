@@ -5,7 +5,7 @@ import { NAVY, GOLD, RED, uid, prettyDate, prettyDateTime, addMonths, addDays } 
 import {
   recordOrigin, blankInvoice, blankLine, nextNumber, invoiceTotals, gbp, isPaid,
   JOB_TYPES, PAYMENT_TYPES, PREP_FLAGS, FOLLOWUP_FLAGS, today, TIME_SLOTS, vanOptions,
-  skuIndex, invoiceCost, buildPicks, pickLandedCost, jobCost, blankPick, invoiceLoadKg, applyInvoiceStockDeduction,
+  skuIndex, invoiceCost, buildPicks, pickLandedCost, jobCost, blankPick, invoiceLoadKg, applyInvoiceStockDeduction, releaseInvoiceLinks,
   TRADE_COUNTER, TRADE_COUNTER_LABEL, quoteRef, sampleRef, isSaleInvoice, riskOf, staffName, isVoidInvoice, onSchedule, userInitials,
 } from "../../lib/crmCore.js";
 import { ListHero, HeroStat, HeroAdd, SearchBox, RiskChip, WebStatusChip, Soon, DateInput, CalendarPop } from "./ui.jsx";
@@ -74,6 +74,7 @@ export default function InvoicesScreen({ openProduct, money = true, newFollowUp,
       danger: true,
       action: () => {
         updateCrm((c) => {
+          releaseInvoiceLinks(c, c.invoices.find((x) => x.id === i.id));
           c.invoices = c.invoices.filter((x) => x.id !== i.id);
           return c;
         });
@@ -588,7 +589,7 @@ export default function InvoicesScreen({ openProduct, money = true, newFollowUp,
                               <td style={{ padding: "6px 6px", borderBottom: "1px solid #eef0f4", fontWeight: 700, whiteSpace: "nowrap" }}>{p.sku || "—"}{readableFor(bySkuAll, p.sku) && <div style={{ fontSize: 11, color: "#5a6a85" }}>{readableFor(bySkuAll, p.sku)}</div>}</td>
                               <td style={{ padding: "6px 6px", borderBottom: "1px solid #eef0f4" }}>{p.description}{p.colour ? " · " + p.colour : ""}</td>
                               <td style={{ padding: "6px 6px", borderBottom: "1px solid #eef0f4", width: 64 }}>
-                                <input style={{ ...numInp, padding: "4px 7px" }} inputMode="decimal" value={p.qty} onChange={(e) => setPick(p.id, "qty", e.target.value)} />
+                                <input {...selectAllProps} style={{ ...numInp, padding: "4px 7px" }} inputMode="decimal" value={p.qty} onChange={(e) => setPick(p.id, "qty", e.target.value)} />
                               </td>
                               <td style={{ padding: "6px 6px", borderBottom: "1px solid #eef0f4", minWidth: 190 }}>
                                 <div style={{ display: "flex", gap: 5 }}>
@@ -672,7 +673,7 @@ export default function InvoicesScreen({ openProduct, money = true, newFollowUp,
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 0", borderBottom: "1px solid #ffffff1c", fontSize: 13.5 }}>
               <span style={{ color: "#aeb9cf", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 6 }}>
                 Discount
-                <input style={{ width: 46, textAlign: "right", fontFamily: "inherit", fontSize: 12.5, fontWeight: 700, padding: "3px 6px", border: "1px solid #3a4f78", borderRadius: 8, background: "#ffffff12", color: "#fff" }}
+                <input {...selectAllProps} style={{ width: 46, textAlign: "right", fontFamily: "inherit", fontSize: 12.5, fontWeight: 700, padding: "3px 6px", border: "1px solid #3a4f78", borderRadius: 8, background: "#ffffff12", color: "#fff" }}
                   inputMode="decimal" placeholder="0" title="Set on the customer account; editable per invoice"
                   value={inv.discountPct === null ? "" : inv.discountPct}
                   onChange={(e) => setInv((x) => (x.discountPct = e.target.value))} />
@@ -682,7 +683,7 @@ export default function InvoicesScreen({ openProduct, money = true, newFollowUp,
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 0", borderBottom: "1px solid #ffffff1c", fontSize: 13.5 }}>
               <span style={{ color: "#aeb9cf", fontWeight: 600 }}>Delivery charge</span>
-              <input style={{ width: 92, textAlign: "right", fontFamily: "inherit", fontSize: 13.5, fontWeight: 700, padding: "5px 8px", border: "1px solid #3a4f78", borderRadius: 8, background: "#ffffff12", color: "#fff" }}
+              <input {...selectAllProps} style={{ width: 92, textAlign: "right", fontFamily: "inherit", fontSize: 13.5, fontWeight: 700, padding: "5px 8px", border: "1px solid #3a4f78", borderRadius: 8, background: "#ffffff12", color: "#fff" }}
                 inputMode="decimal" value={inv.deliveryCharge} placeholder="0.00"
                 onChange={(e) => setInv((x) => (x.deliveryCharge = e.target.value))} />
             </div>

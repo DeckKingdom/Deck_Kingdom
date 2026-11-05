@@ -1,6 +1,6 @@
 // Vans: the fleet — registration and insurance details, renewal/MOT/tax/service
 // countdowns, and the weekly van check log.
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { NAVY, GOLD, RED, prettyDate } from "../../lib/core.js";
 import { blankVan, blankVanCheck, VAN_CHECK_ITEMS, daysUntil, FIELD_FORMATS } from "../../lib/crmCore.js";
 import { Icon, Chip, Modal, selectAllProps, sect, lbl, card, abtn, inp, btn, goldBtn, DateInput, CalendarPop } from "./ui.jsx";
@@ -20,10 +20,15 @@ const DueChip = ({ label, date }) => {
   return <Chip tone={tone} title={prettyDate(date)}>{label} · {text}</Chip>;
 };
 
-export default function VansScreen({ crm, updateCrm, askConfirm, me }) {
+export default function VansScreen({ crm, updateCrm, askConfirm, me, newSignal }) {
   const [draft, setDraft] = useState(null);
   const [checkDraft, setCheckDraft] = useState(null); // { vanId, check }
   const [historyFor, setHistoryFor] = useState(null);
+  // "+" in the side menu
+  const lastSignal = useRef(newSignal);
+  useEffect(() => {
+    if (newSignal && newSignal !== lastSignal.current) { lastSignal.current = newSignal; setDraft({ ...blankVan(), _new: true }); }
+  }, [newSignal]);
 
   const vans = crm.vans || [];
 
@@ -100,7 +105,7 @@ export default function VansScreen({ crm, updateCrm, askConfirm, me }) {
                 <Icon name="truck" size={20} stroke={GOLD} />
               </div>
               <div style={{ minWidth: 150 }}>
-                <b style={{ fontSize: 16 }}>{v.name || "Unnamed van"}</b>
+                <b style={{ fontSize: 16 }} title={(v.insurer || v.policyNo) ? "Insurance: " + [v.insurer, v.policyNo ? "policy " + v.policyNo : "", v.insuranceRenewal ? "renews " + prettyDate(v.insuranceRenewal) : ""].filter(Boolean).join(" · ") : undefined}>{v.name || "Unnamed van"}</b>
                 <div style={{ fontSize: 12.5, color: "#5a6a85", fontWeight: 600 }}>
                   {[v.reg, v.makeModel, v.active === false ? "off the road" : ""].filter(Boolean).join(" · ") || "—"}
                 </div>
@@ -118,14 +123,9 @@ export default function VansScreen({ crm, updateCrm, askConfirm, me }) {
                 </button>
                 <button style={abtn} title="Check history" onClick={() => setHistoryFor(historyFor === v.id ? null : v.id)}><Icon name="clock" /></button>
                 <button style={abtn} title="Edit van" onClick={() => setDraft(JSON.parse(JSON.stringify(v)))}><Icon name="pen" /></button>
-                <button style={abtn} title="Delete van" onClick={() => remove(v)}><Icon name="bin" /></button>
+                <button style={{ ...abtn, border: "none" }} title="Delete van" onClick={() => remove(v)}><Icon name="bin" stroke={RED} /></button>
               </div>
             </div>
-            {(v.insurer || v.policyNo) && (
-              <div style={{ fontSize: 12, color: "#5a6a85", fontWeight: 600, marginTop: 8 }}>
-                Insurance: {[v.insurer, v.policyNo ? "policy " + v.policyNo : "", v.insuranceRenewal ? "renews " + prettyDate(v.insuranceRenewal) : ""].filter(Boolean).join(" · ")}
-              </div>
-            )}
             {v.notes && <div style={{ fontSize: 12.5, fontWeight: 600, color: "#6b5305", background: "#fff8e6", border: "1px solid #f4d78f", borderRadius: 8, padding: "6px 10px", marginTop: 8 }}>{v.notes}</div>}
 
             {historyFor === v.id && (

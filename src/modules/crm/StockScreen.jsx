@@ -6,7 +6,7 @@ import {
   stockValuation, allocatedBySku, matchShipmentToStock, blankMovement, gbp, TRADE_DISCOUNT, today, weightedCost, batchBreakdown,
   GRADES, gradeOf, moveStockGrade, customerReturn, explodeInvoiceLines, baseSku,
 } from "../../lib/crmCore.js";
-import { Icon, Chip, Modal, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
+import { Icon, Chip, Modal, sect, lbl, card, abtn, inp, btn, goldBtn, selectAllProps } from "./ui.jsx";
 
 const td = { padding: "7px 7px", borderBottom: "1px solid #f0f2f6", fontSize: 12.5 };
 const num = { textAlign: "right", fontWeight: 700, whiteSpace: "nowrap" };
@@ -208,7 +208,7 @@ export default function StockScreen({ crm, updateCrm, planner, updatePlanner, as
                     <td style={{ ...td, ...num }}>{cost === null ? "—" : money(stock * cost)}</td>
                     <td style={{ ...td, ...num }}>
                       {p.grade ? (
-                        <input type="number" step="0.01" title="This grade's own selling price inc VAT"
+                        <input {...selectAllProps} type="number" step="0.01" title="This grade's own selling price inc VAT"
                           style={{ ...inp, width: 78, padding: "3px 6px", textAlign: "right", fontSize: 12.5, fontWeight: 700 }}
                           value={p.priceIncVat === null ? "" : p.priceIncVat}
                           onChange={(e) => updateCrm((c) => { const t = c.masterProducts.find((x) => x.id === p.id); if (t) t.priceIncVat = e.target.value === "" ? "" : Number(e.target.value); return c; })} />
@@ -239,7 +239,7 @@ export default function StockScreen({ crm, updateCrm, planner, updatePlanner, as
                                 {batches.map((b, i) => (
                                   <tr key={i}>
                                     <td style={{ padding: "3px 14px 3px 0", fontWeight: 700 }}>{b.ref}</td>
-                                    <td style={{ padding: "3px 14px 3px 0" }}>{b.date || "—"}</td>
+                                    <td style={{ padding: "3px 14px 3px 0" }}>{b.date ? prettyDate(b.date) : "—"}</td>
                                     <td style={{ padding: "3px 10px 3px 0", textAlign: "right", fontWeight: 700 }}>{b.unitCost === "" ? "—" : Number(b.unitCost).toFixed(2)}</td>
                                     <td style={{ padding: "3px 10px 3px 0", textAlign: "right" }}>{b.qtyIn.toLocaleString("en-GB")}</td>
                                     <td style={{ padding: "3px 10px 3px 0", textAlign: "right", color: b.picked ? "#a05f10" : "#aab3c2" }}>{b.picked || "—"}</td>
@@ -380,7 +380,7 @@ function MoveModal({ row, onClose, onMove }) {
       <div style={{ display: "grid", gridTemplateColumns: "110px 1fr", gap: 10, alignItems: "end", marginBottom: 12 }}>
         <div>
           <span style={lbl}>How many</span>
-          <input type="number" min="1" max={stock} style={{ ...inp, textAlign: "right", borderColor: bad ? RED : "#d5d9e0" }} value={qty} onChange={(e) => setQty(e.target.value)} />
+          <input {...selectAllProps} type="number" min="1" max={stock} style={{ ...inp, textAlign: "right", borderColor: bad ? RED : "#d5d9e0" }} value={qty} onChange={(e) => setQty(e.target.value)} />
         </div>
         <div>
           <span style={lbl}>Why (optional)</span>
@@ -395,7 +395,7 @@ function MoveModal({ row, onClose, onMove }) {
         <div style={{ marginTop: 12, display: "flex", gap: 10, alignItems: "flex-end" }}>
           <div style={{ width: 130 }}>
             <span style={lbl}>Sell at £ inc VAT</span>
-            <input type="number" step="0.01" style={{ ...inp, textAlign: "right" }} value={price} placeholder="keep" onChange={(e) => setPrice(e.target.value)} />
+            <input {...selectAllProps} type="number" step="0.01" style={{ ...inp, textAlign: "right" }} value={price} placeholder="keep" onChange={(e) => setPrice(e.target.value)} />
           </div>
           <span style={{ fontSize: 12, fontWeight: 600, color: "#8593a8", paddingBottom: 9 }}>
             {GRADES.find((g) => g.key === to).label} stock is its own line (SKU …-{GRADES.find((g) => g.key === to).suffix}) with its own price — pick it on an invoice like any product.
@@ -474,7 +474,7 @@ function ReturnModal({ crm, onClose, onReturn }) {
               <div style={{ display: "grid", gridTemplateColumns: "110px 1fr", gap: 10, alignItems: "end", margin: "12px 0" }}>
                 <div>
                   <span style={lbl}>How many</span>
-                  <input type="number" min="1" max={item.qty} style={{ ...inp, textAlign: "right" }} value={qty} onChange={(e) => setQty(e.target.value)} />
+                  <input {...selectAllProps} type="number" min="1" max={item.qty} style={{ ...inp, textAlign: "right" }} value={qty} onChange={(e) => setQty(e.target.value)} />
                 </div>
                 <div>
                   <span style={lbl}>Why (optional)</span>
