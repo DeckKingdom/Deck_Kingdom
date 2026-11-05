@@ -1336,6 +1336,11 @@ export default function ScheduleScreen({ money = true, crm, updateCrm, openInvoi
           stops.forEach((x, n) => (x.dropNo = String(n + 1)));
         };
         const inp_ = { ...pill, width: 60, padding: "3px 8px", textAlign: "right", cursor: "text" };
+        // grass: the roll size(s) from the job's lines for each part, and length x width on the note's lines
+        const bySkuP = skuIndex(crm);
+        const partSize = (p) => [...new Set((i.lines || []).filter((l) => sizeLabel(l) && partKey(l.code) === p.key).map((l) => sizeLabel(l)))].join(", ");
+        const anyPartSize = info.parts.some((p) => partSize(p));
+        const itemNeedsSize = (it) => isGrassRoll(bySkuP[String(it.sku || "").trim().toLowerCase()]) || !!sizeLabel(it);
         return (
           <>
             {!pop.peek && <div onMouseDown={() => setPop(null)} style={{ position: "fixed", inset: 0, zIndex: 70 }} />}
@@ -1351,9 +1356,10 @@ export default function ScheduleScreen({ money = true, crm, updateCrm, openInvoi
               </div>
               <Stamp lines={[(i.runNo ? "Run " + i.runNo : "No run") + (i.driver ? " · " + i.driver : "") + (i.deliveryDate ? " · " + prettyDate(i.deliveryDate) : "")]} />
               {info.parts.map((p) => (
-                <div key={p.key} style={{ display: "grid", gridTemplateColumns: "10px 40px 1fr", gap: 8, alignItems: "baseline", padding: "5px 0", borderTop: "1px solid #f0f2f6", fontSize: 12.5, fontWeight: 600, color: NAVY }}>
+                <div key={p.key} style={{ display: "grid", gridTemplateColumns: anyPartSize ? "10px 40px 110px 1fr" : "10px 40px 1fr", gap: 8, alignItems: "baseline", padding: "5px 0", borderTop: "1px solid #f0f2f6", fontSize: 12.5, fontWeight: 600, color: NAVY }}>
                   <span style={{ width: 8, height: 8, borderRadius: 999, background: PARTS_LOOK[p.st].fg, alignSelf: "center" }} />
                   <b>{p.need}</b>
+                  {anyPartSize && <span style={{ color: "#5a6a85", fontWeight: 700, whiteSpace: "nowrap" }}>{partSize(p)}</span>}
                   <span>{p.description || p.sku}{p.colour ? <span style={{ color: "#5a6a85" }}>{" · " + p.colour}</span> : null}
                     <span style={{ display: "block", fontSize: 11.5, color: PARTS_LOOK[p.st].fg }}>{p.note}</span></span>
                 </div>
@@ -1366,6 +1372,7 @@ export default function ScheduleScreen({ money = true, crm, updateCrm, openInvoi
               {notes.map(({ ref, col }) => {
                 const mine = (col.items || []).filter((it) => it.assignedInvoiceId === i.id);
                 const locked = !!col.collected;
+                const sizedNote = mine.some(itemNeedsSize);
                 return (
                   <div key={col.id} style={{ marginTop: 12, border: "1px solid #dfe6f2", borderRadius: 10, padding: "8px 12px", background: "#f7f9fc" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
@@ -1379,8 +1386,15 @@ export default function ScheduleScreen({ money = true, crm, updateCrm, openInvoi
                     </div>
                     {mine.length === 0 && <div style={{ fontSize: 12, color: "#8593a8", fontWeight: 600 }}>No lines for this job on this note.</div>}
                     {mine.map((it) => (
-                      <div key={it.id} style={{ display: "grid", gridTemplateColumns: "1fr 70px 30px", gap: 8, alignItems: "center", padding: "4px 0", borderTop: "1px solid #e9edf3", fontSize: 12.5, fontWeight: 600, color: NAVY }}>
+                      <div key={it.id} style={{ display: "grid", gridTemplateColumns: sizedNote ? "1fr 140px 70px 30px" : "1fr 70px 30px", gap: 8, alignItems: "center", padding: "4px 0", borderTop: "1px solid #e9edf3", fontSize: 12.5, fontWeight: 600, color: NAVY }}>
                         <span>{it.description || it.sku}{it.colour ? <span style={{ color: "#5a6a85" }}>{" · " + it.colour}</span> : null}<span style={{ color: "#8593a8" }}>{" · " + (it.sku || "")}</span></span>
+                        {sizedNote && (
+                          <span style={{ whiteSpace: "nowrap", fontWeight: 700, color: "#5a6a85" }}>
+                            {!locked && itemNeedsSize(it)
+                              ? <SizeRow inline compact line={it} onSize={(k, v) => editColl(col.id, (cl, job, r) => { const t = cl.items.find((x) => x.id === it.id); if (!t) return; applySize(t, k, v); const p = pickFor(job, r, t.sku); if (p) p.qty = t.qty; })} />
+                              : sizeLabel(it)}
+                          </span>
+                        )}
                         <input type="number" min="0" disabled={locked} value={it.qty} style={inp_}
                           onChange={(e) => { const v = e.target.value; editColl(col.id, (cl, job, r) => { const t = cl.items.find((x) => x.id === it.id); if (!t) return; t.qty = v === "" ? "" : Number(v); const p = pickFor(job, r, t.sku); if (p) p.qty = t.qty; }); }} />
                         {!locked ? <button type="button" title="Remove this line from the note" style={{ ...abtn, border: "none", width: 26, height: 26 }}
