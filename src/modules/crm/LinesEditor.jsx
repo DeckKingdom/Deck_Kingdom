@@ -37,18 +37,18 @@ const td = { padding: "6px 6px", borderBottom: "1px solid #f0f2f6" };
 
 // grass rolls: length x width (m) under the description; filling both sets the qty to the m2
 const sizeBox = { ...inp, width: 58, padding: "4px 6px", fontSize: 12.5, textAlign: "right" };
-export function SizeRow({ line, onSize, inline }) {
+export function SizeRow({ line, onSize, inline, compact }) {
   const m2 = sqmOf(line.lenM, line.widM);
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: inline ? 0 : 5, fontSize: 12, fontWeight: 700, color: "#5a6a85", flexWrap: inline ? "nowrap" : "wrap", whiteSpace: "nowrap", flex: "none" }}
       title="Roll size: length × width in metres — the qty becomes the square metres">
-      <span>L</span>
+      {!compact && <span>L</span>}
       <input style={sizeBox} inputMode="decimal" placeholder="0.00" value={line.lenM ?? ""} {...selectAllProps} onChange={(e) => onSize("lenM", e.target.value)} />
-      <span>m ×</span>
-      <span>W</span>
+      <span>{compact ? "×" : "m ×"}</span>
+      {!compact && <span>W</span>}
       <input style={sizeBox} inputMode="decimal" placeholder="0.00" value={line.widM ?? ""} {...selectAllProps} onChange={(e) => onSize("widM", e.target.value)} />
-      <span>m</span>
-      <span style={{ color: m2 ? NAVY : "#aab3c2" }}>= {m2 ? m2.toLocaleString("en-GB", { maximumFractionDigits: 2 }) + " m²" : "— m²"}</span>
+      {!compact && <span>m</span>}
+      {!compact && <span style={{ color: m2 ? NAVY : "#aab3c2" }}>= {m2 ? m2.toLocaleString("en-GB", { maximumFractionDigits: 2 }) + " m²" : "— m²"}</span>}
     </div>
   );
 }
@@ -78,6 +78,9 @@ export default function LinesEditor({ doc, edit, crm, readOnly, toolbar }) {
   }, [allSkuOpts]);
   const skuOpts = src ? allSkuOpts.filter((o) => o.src === src) : allSkuOpts;
   const bySku = skuIndex(crm);
+  // grass rolls get length x width (m) before the qty; the column only shows when a line needs it
+  const needsSize = (l) => isGrassRoll(bySku[String(l.code || "").trim().toLowerCase()]) || !!sizeLabel(l);
+  const sized = (doc.lines || []).some(needsSize);
 
   const setLine = (lid, k, v) =>
     edit((x) => {
@@ -115,8 +118,8 @@ export default function LinesEditor({ doc, edit, crm, readOnly, toolbar }) {
         <table className="dk-t" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 700 }}>
           <thead>
             <tr>
-              {["Code", "Qty", "Description", "Colour", "Price £ inc VAT", "Line £", ""].map((h, i) => (
-                <th key={i} style={{ textAlign: i === 4 || i === 5 ? "right" : "left", fontSize: 11, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", padding: "8px 6px", borderBottom: "2px solid #e6e9ef", whiteSpace: "nowrap" }}>{h}</th>
+              {["Code", ...(sized ? ["Length × width (m)"] : []), "Qty", "Description", "Colour", "Price £ inc VAT", "Line £", ""].map((h, i, all) => (
+                <th key={i} style={{ textAlign: h.startsWith("Price") || h === "Line £" ? "right" : "left", fontSize: 11, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", padding: "8px 6px", borderBottom: "2px solid #e6e9ef", whiteSpace: "nowrap" }}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -125,8 +128,9 @@ export default function LinesEditor({ doc, edit, crm, readOnly, toolbar }) {
               ? doc.lines.map((l) => (
                   <tr key={l.id}>
                     <td style={{ ...td, fontWeight: 700, padding: "9px 6px" }}>{readableFor(bySku, l.code) || l.code || "—"}</td>
+                    {sized && <td style={{ ...td, fontWeight: 700, color: "#5a6a85", whiteSpace: "nowrap" }}>{sizeLabel(l) || ""}</td>}
                     <td style={td}>{l.qty}</td>
-                    <td style={td}>{l.description}{sizeLabel(l) && <div style={{ fontSize: 11.5, color: "#5a6a85", fontWeight: 700 }}>{sizeLabel(l)} = {l.qty} m²</div>}</td>
+                    <td style={td}>{l.description}</td>
                     <td style={td}>{l.colour}</td>
                     <td style={{ ...td, textAlign: "right" }}>{(Number(l.price) || 0).toFixed(2)}</td>
                     <td style={{ ...td, textAlign: "right", fontWeight: 700 }}>{lineTotal(l)}</td>
@@ -153,6 +157,11 @@ export default function LinesEditor({ doc, edit, crm, readOnly, toolbar }) {
                         }} />
                       {l.code && !bySku[String(l.code).trim().toLowerCase()] && <div style={{ fontSize: 10.5, fontWeight: 700, color: "#a05f10", marginTop: 3 }}>not a product code</div>}
                     </td>
+                    {sized && (
+                      <td style={{ ...td, width: 150, whiteSpace: "nowrap" }}>
+                        {needsSize(l) ? <SizeRow inline compact line={l} onSize={(k, v) => edit((x) => { const y = x.lines.find((z) => z.id === l.id); if (y) applySize(y, k, v); })} /> : null}
+                      </td>
+                    )}
                     <td style={{ ...td, width: 74 }}>
                       {Number(l.qty) > 100 || freeQty.has(l.id) ? (
                         <div style={{ position: "relative" }}>
@@ -179,12 +188,7 @@ export default function LinesEditor({ doc, edit, crm, readOnly, toolbar }) {
                     </td>
                     <td style={{ ...td, minWidth: 200 }}>
                       {/* grass rolls: length x width sit in line, to the right of the description */}
-                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <input style={{ ...inp, flex: 1, minWidth: 210 }} value={l.description} {...selectAllProps} onChange={(e) => setLine(l.id, "description", e.target.value)} />
-                        {(isGrassRoll(bySku[String(l.code || "").trim().toLowerCase()]) || sizeLabel(l)) && (
-                          <SizeRow inline line={l} onSize={(k, v) => edit((x) => { const y = x.lines.find((z) => z.id === l.id); if (y) applySize(y, k, v); })} />
-                        )}
-                      </div>
+                      <input style={inp} value={l.description} {...selectAllProps} onChange={(e) => setLine(l.id, "description", e.target.value)} />
                     </td>
                     <td style={{ ...td, width: 130 }}>
                       <ColourSelect line={l} crm={crm} bySku={bySku} onPick={(colour, sku) => edit((x) => {
