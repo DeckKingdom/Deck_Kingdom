@@ -51,6 +51,9 @@ import { emailReady } from "../data/email.js";
 const CRM_TABS = ["customers", "samples", "quotes", "invoices", "schedule"];
 
 // shipment lines left blank ($ / pc, qty, kg at 0) take the product's current figure; never overwrites a typed one
+// the date each shipment stage was reached (Planning uses the planned order date)
+const STAGE_DATE = { Confirmed: "confirmedDate", "In production": "productionDate", Shipped: "shippedDate", Arrived: "arrivedDate", Paid: "balancePaidDate" };
+
 const fillBlankLines = (d) => {
   let n = 0;
   d.shipments.forEach((s) => (s.lines || []).forEach((l) => {
@@ -193,6 +196,7 @@ export default function ImportPlanner() {
         if (s.depositDate === undefined) s.depositDate = "";
         if (s.balancePaidDate === undefined) s.balancePaidDate = "";
         if (s.balanceDue === undefined) s.balanceDue = "";
+        ["confirmedDate", "productionDate", "shippedDate"].forEach((k) => { if (s[k] === undefined) s[k] = ""; });
         if (s.surchargeOn === undefined) s.surchargeOn = true;
         if (s.arrivedDate === undefined) s.arrivedDate = "";
         if (s.etaDate === undefined) s.etaDate = "";
@@ -680,6 +684,7 @@ export default function ImportPlanner() {
     copy.depositDate = "";
     copy.balancePaidDate = "";
     copy.balanceDue = "";
+    copy.confirmedDate = ""; copy.productionDate = ""; copy.shippedDate = "";
     copy.arrivedDate = "";
     copy.etaDate = "";
     copy.valueUsd = "";
@@ -808,7 +813,11 @@ export default function ImportPlanner() {
   const setShipmentField = (sid, field, value) =>
     update((d) => {
       const s = d.shipments.find((x) => x.id === sid);
-      if (s) s[field] = value;
+      if (s) {
+        s[field] = value;
+        // moving to a stage stamps that stage's date (if it hasn't one already)
+        if (field === "status" && STAGE_DATE[value] && !s[STAGE_DATE[value]]) s[STAGE_DATE[value]] = todayStr();
+      }
       return d;
     });
 
@@ -824,7 +833,7 @@ export default function ImportPlanner() {
       <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
         <DateInput value={balanceDate(s) || ""} onChange={(e) => setShipmentField(s.id, "balanceDue", e.target.value)}
           title={manual ? "Set by hand — the automatic date would be " + prettyDate(autoBalanceDate(s)) : balanceFromArrival(s) ? "Automatic: 30 days after it arrived. Change it to set your own." : "Automatic: 30 days after expected delivery. Change it to set your own."}
-          style={{ ...inp, width: "auto", fontSize: big ? 14 : 12, padding: big ? undefined : "6px 6px", fontWeight: manual || balanceFromArrival(s) ? 700 : 400,
+          style={{ ...inp, width: big ? 160 : manual ? 84 : 104, fontSize: big ? 14 : 11.5, padding: big ? undefined : "6px 5px", fontWeight: manual || balanceFromArrival(s) ? 700 : 400,
             ...(manual ? { borderColor: GOLD, background: "#fff8e6" } : {}) }} />
         {manual && (
           <button type="button" onClick={() => setShipmentField(s.id, "balanceDue", "")} title={"Back to automatic (" + prettyDate(autoBalanceDate(s)) + ")"}
@@ -1441,21 +1450,20 @@ export default function ImportPlanner() {
         ))}
 
       {tab === "overview" && (
-        <div style={{ padding: "18px 22px", maxWidth: 1100, margin: "0 auto" }}>
+        <div style={{ padding: "18px 22px", maxWidth: 1760, margin: "0 auto" }}>
           <h2 style={{ fontSize: 19, fontWeight: 700, margin: "0 0 14px" }}>All shipments</h2>
           <div style={{ background: "#fff", borderRadius: 12, border: "1px solid #e6e9ef", padding: "4px 12px 12px", overflowX: "auto", overflowY: "auto", maxHeight: "max(320px, calc(100vh - " + (headerH + 130) + "px))" }}>
-            <table className="dk-sticky-table" style={{ width: "100%", borderCollapse: "collapse", minWidth: 920 }}>
+            <table className="dk-sticky-table" style={{ width: "100%", borderCollapse: "collapse", minWidth: 1460, tableLayout: "fixed" }}>
               <thead>
                 <tr>
-                  <th style={{ ...th, width: "13%" }}>Shipment</th>
-                  <th style={{ ...th, width: "27%" }}>Products</th>
-                  <th style={{ ...th, width: "8%", textAlign: "right" }}>Weight</th>
-                  <th style={{ ...th, width: "12%" }}>Status</th>
-                  <th style={{ ...th, width: "11%", fontSize: 11.5 }}>Planned order</th>
-                  <th style={{ ...th, width: "10%", fontSize: 11.5 }}>Expected delivery</th>
-                  <th style={{ ...th, width: "9%", fontSize: 11.5 }}>Arrived</th>
-                  <th style={{ ...th, width: "10%", fontSize: 11.5 }}>Expected balance</th>
-                  <th style={{ ...th, width: 40 }}></th>
+                  <th style={{ ...th, width: 108 }}>Shipment</th>
+                  <th style={{ ...th }}>Products</th>
+                  <th style={{ ...th, width: 78, textAlign: "right" }}>Weight</th>
+                  <th style={{ ...th, width: 116 }}>Status</th>
+                  {[["Planned order"], ["Confirmed"], ["In production"], ["Shipped"], ["Expected delivery", true], ["Arrived"], ["Expected balance"], ["Balance paid"]].map(([h, calc]) => (
+                    <th key={h} style={{ ...th, width: calc ? 84 : 104, fontSize: 11.5, whiteSpace: "normal", padding: "10px 4px" }}>{h}</th>
+                  ))}
+                  <th style={{ ...th, width: 36 }}></th>
                 </tr>
               </thead>
               <tbody>
@@ -1556,14 +1564,25 @@ export default function ImportPlanner() {
                           ))}
                         </select>
                       </td>
-                      <td style={td}>
-                        <DateInput value={s.orderDate || ""} onChange={(e) => setShipmentField(s.id, "orderDate", e.target.value)} style={{ ...inp, fontSize: 12, padding: "6px 6px" }} />
-                      </td>
-                      <td style={{ ...td, whiteSpace: "nowrap", fontSize: 12 }}>{prettyDate(addMonths(s.orderDate, 3))}</td>
-                      <td style={{ ...td, whiteSpace: "nowrap", fontSize: 12, fontWeight: s.arrivedDate ? 700 : 400, color: s.arrivedDate ? undefined : "#9aa5b1" }}>
-                        {prettyDate(s.arrivedDate)}
-                      </td>
-                      <td style={{ ...td, whiteSpace: "nowrap" }}>{balanceInput(s, false)}</td>
+                      {(() => {
+                        // one date per stage: filled in when the status moves on, editable by hand
+                        const dateCell = (k) => (
+                          <td style={{ ...td, padding: "6px 4px" }}>
+                            <DateInput value={s[k] || ""} placeholder="—" onChange={(e) => setShipmentField(s.id, k, e.target.value)}
+                              style={{ ...inp, width: "100%", fontSize: 11.5, padding: "6px 5px", fontWeight: s[k] ? 700 : 400, ...(s[k] ? { background: "#fff" } : { background: "#ffffffaa", color: "#8593a8" }) }} />
+                          </td>
+                        );
+                        return <>
+                          {dateCell("orderDate")}
+                          {dateCell("confirmedDate")}
+                          {dateCell("productionDate")}
+                          {dateCell("shippedDate")}
+                          <td style={{ ...td, padding: "6px 4px", whiteSpace: "nowrap", fontSize: 11.5 }}>{prettyDate(addMonths(s.orderDate, 3))}</td>
+                          {dateCell("arrivedDate")}
+                          <td style={{ ...td, padding: "6px 4px", whiteSpace: "nowrap" }}>{balanceInput(s, false)}</td>
+                          {dateCell("balancePaidDate")}
+                        </>;
+                      })()}
                       <td style={{ ...td, textAlign: "center" }}>
                         <button
                           onClick={() => duplicateShipment(s.id)}
@@ -1578,7 +1597,7 @@ export default function ImportPlanner() {
                 })}
                 {!data.shipments.length && (
                   <tr>
-                    <td colSpan={9} style={{ ...td, textAlign: "center", color: "#5a6a85", padding: 24 }}>
+                    <td colSpan={14} style={{ ...td, textAlign: "center", color: "#5a6a85", padding: 24 }}>
                       No shipments yet — create one from the Shipments tab.
                     </td>
                   </tr>
@@ -2399,7 +2418,7 @@ export default function ImportPlanner() {
                         })}
                         {!active.lines.length && (
                           <tr>
-                            <td colSpan={9} style={{ ...td, textAlign: "center", color: "#5a6a85", padding: 24 }}>
+                            <td colSpan={14} style={{ ...td, textAlign: "center", color: "#5a6a85", padding: 24 }}>
                               No lines on this shipment yet.
                             </td>
                           </tr>

@@ -38,12 +38,14 @@ const productToRow = (p, i) => ({
 });
 
 let etaReady = false; // shipments.eta_date (migration 031)
+let stagesReady = false; // shipments.confirmed_date / production_date / shipped_date / balance_due (migration 040)
 const shipToRow = (s, i) => {
   const row = { id: s.id, position: i };
   for (const [key, col] of Object.entries(SHIP_FIELDS)) {
     row[col] = NUM_SHIP.has(key) ? num(s[key]) : BOOL_SHIP.has(key) ? s[key] !== false : str(s[key]);
   }
   if (etaReady) row.eta_date = str(s.etaDate);
+  if (stagesReady) { row.confirmed_date = str(s.confirmedDate); row.production_date = str(s.productionDate); row.shipped_date = str(s.shippedDate); row.balance_due = str(s.balanceDue); }
   return row;
 };
 
@@ -97,9 +99,11 @@ async function loadAll() {
     });
   });
   etaReady = s.data.length ? Object.prototype.hasOwnProperty.call(s.data[0], "eta_date") : etaReady;
+  stagesReady = s.data.length ? Object.prototype.hasOwnProperty.call(s.data[0], "shipped_date") : stagesReady;
   const shipments = s.data.map((r) => ({
     id: r.id, name: r.name, status: r.status, supplier: r.supplier, created: r.created,
     orderDate: r.order_date, depositDate: r.deposit_date, arrivedDate: r.arrived_date, etaDate: nv(r.eta_date),
+    confirmedDate: nv(r.confirmed_date), productionDate: nv(r.production_date), shippedDate: nv(r.shipped_date), balanceDue: nv(r.balance_due),
     balancePaidDate: r.balance_paid_date, invoiceNo: r.invoice_no,
     surchargeOn: r.surcharge_on, dutyOn: r.duty_on, postedToStock: nv(r.posted_to_stock),
     dutyGbp: nv(r.duty_gbp), shippingGbp: nv(r.shipping_gbp),

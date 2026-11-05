@@ -470,10 +470,10 @@ export function DateInput({ value, onChange, style, disabled, title, placeholder
         onFocus={() => !disabled && wrap.current && setOpen(wrap.current.getBoundingClientRect())}
         onBlur={commit}
         onKeyDown={(e) => { if (e.key === "Enter") { commit(); setOpen(null); e.currentTarget.blur(); } if (e.key === "Escape") { setText(null); setOpen(null); } }}
-        style={{ ...st, width: "100%", boxSizing: "border-box", paddingRight: 30, cursor: disabled ? "default" : "text" }} />
+        style={{ ...st, width: "100%", boxSizing: "border-box", paddingRight: Number(st.fontSize) && Number(st.fontSize) < 12.5 ? 24 : 30, cursor: disabled ? "default" : "text" }} />
       <span onMouseDown={(e) => { e.preventDefault(); if (!disabled && wrap.current) setOpen((o) => (o ? null : wrap.current.getBoundingClientRect())); }}
-        style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", display: "inline-flex", cursor: disabled ? "default" : "pointer", opacity: disabled ? 0.4 : 1 }}>
-        <Icon name="cal" size={15} stroke={NAVY} />
+        style={{ position: "absolute", right: Number(st.fontSize) && Number(st.fontSize) < 12.5 ? 5 : 8, top: "50%", transform: "translateY(-50%)", display: "inline-flex", cursor: disabled ? "default" : "pointer", opacity: disabled ? 0.4 : 1 }}>
+        <Icon name="cal" size={Number(st.fontSize) && Number(st.fontSize) < 12.5 ? 13 : 15} stroke={NAVY} />
       </span>
       {open && !disabled && <CalendarPop value={value} anchor={open} clear={clear} onPick={(v) => { setText(null); emit(v); }} onClose={() => setOpen(null)} />}
     </span>
