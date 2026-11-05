@@ -1,7 +1,7 @@
 <?php
 /**
- * DK Ops Sample History — a one-off: sends past free-sample orders (and sample-form requests)
- * to ops, so the samples screen can show the long-term conversion rate.
+ * DK Ops Sample History — a one-off: sends past free-sample orders, /sample-request/ form requests
+ * and WPForms sample-form entries to ops, so the samples screen can show the long-term conversion rate.
  *
  * Code Snippets: add as a NEW snippet, paste WITHOUT the opening php tag, "Run snippet everywhere".
  * Needs the "DK Ops Feed" snippet to be active (it uses its settings and how it reads orders).
@@ -42,7 +42,7 @@ function dk_sh_send( $payload ) {
 
 // one batch per click-through so it never times out: orders page by page, then the form log
 function dk_sh_batch( $from, $page ) {
-	$out = array( 'orders' => 0, 'samples' => 0, 'added' => 0, 'done' => false, 'error' => '' );
+	$out = array( 'orders' => 0, 'samples' => 0, 'added' => 0, 'done' => false, 'error' => '', 'wpf' => 0 );
 	if ( $page > 0 ) {
 		$orders = wc_get_orders( array(
 			'type'         => 'shop_order',
@@ -106,7 +106,79 @@ function dk_sh_batch( $from, $page ) {
 			$out['added']   += isset( $res['added'] ) ? (int) $res['added'] : 0;
 		}
 	}
+	dk_sh_wpforms( $from, $out );
 	return $out;
+}
+
+// a stored WPForms entry -> a sample request (same mapping and id as the live feed, so no doubles)
+function dk_sh_wpf_request( $entry_id, $date, $fields ) {
+	$r = array( 'srId' => 'wpf' . $entry_id, 'date' => substr( (string) $date, 0, 10 ),
+		'first' => '', 'last' => '', 'email' => '', 'phone' => '', 'house' => '', 'street' => '', 'town' => '', 'postcode' => '', 'samples' => array(), 'notes' => '' );
+	foreach ( (array) $fields as $f ) {
+		$label = strtolower( isset( $f['name'] ) ? $f['name'] : '' );
+		$type  = isset( $f['type'] ) ? $f['type'] : '';
+		$val   = isset( $f['value'] ) ? trim( (string) $f['value'] ) : '';
+		if ( 'name' === $type ) {
+			$r['first'] = isset( $f['first'] ) && '' !== $f['first'] ? $f['first'] : $val;
+			$r['last']  = isset( $f['last'] ) ? $f['last'] : '';
+		} elseif ( 'email' === $type ) {
+			$r['email'] = $val;
+		} elseif ( 'phone' === $type || false !== strpos( $label, 'phone' ) ) {
+			$r['phone'] = $val;
+		} elseif ( 'address' === $type ) {
+			$r['street']   = trim( ( isset( $f['address1'] ) ? $f['address1'] : '' ) . ' ' . ( isset( $f['address2'] ) ? $f['address2'] : '' ) );
+			$r['town']     = isset( $f['city'] ) ? $f['city'] : '';
+			$r['postcode'] = isset( $f['postal'] ) ? $f['postal'] : '';
+		} elseif ( false !== strpos( $label, 'postcode' ) || false !== strpos( $label, 'post code' ) ) {
+			$r['postcode'] = $val;
+		} elseif ( in_array( $type, array( 'checkbox', 'select', 'radio' ), true ) && '' !== $val ) {
+			foreach ( preg_split( '/\r?\n/', $val ) as $choice ) {
+				if ( '' !== trim( $choice ) ) {
+					$r['samples'][] = trim( $f['name'] ) . ' — ' . trim( $choice );
+				}
+			}
+		} elseif ( 'textarea' === $type ) {
+			$r['notes'] = $val;
+		}
+	}
+	return $r;
+}
+
+// WPForms entries from forms with "sample" in the title (needs WPForms Pro, which keeps entries)
+function dk_sh_wpforms( $from, &$out ) {
+	global $wpdb;
+	$t = $wpdb->prefix . 'wpforms_entries';
+	if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $t ) ) !== $t ) {
+		$out['wpf'] = 'none';
+		return true;
+	}
+	$forms = get_posts( array( 'post_type' => 'wpforms', 'post_status' => 'any', 'numberposts' => -1 ) );
+	$ids   = array();
+	foreach ( $forms as $f ) {
+		if ( false !== stripos( $f->post_title, 'sample' ) ) {
+			$ids[] = (int) $f->ID;
+		}
+	}
+	$out['wpf'] = 0;
+	if ( ! $ids ) {
+		return true;
+	}
+	$rows = $wpdb->get_results( $wpdb->prepare( "SELECT entry_id, date, fields FROM $t WHERE form_id IN (" . implode( ',', $ids ) . ") AND date >= %s AND status NOT IN ('spam','trash') ORDER BY entry_id ASC LIMIT 3000", $from . ' 00:00:00' ), ARRAY_A );
+	foreach ( array_chunk( $rows, 100 ) as $chunk ) {
+		$reqs = array();
+		foreach ( $chunk as $e ) {
+			$reqs[] = dk_sh_wpf_request( $e['entry_id'], $e['date'], json_decode( (string) $e['fields'], true ) );
+		}
+		$res = dk_sh_send( array( 'sampleRequests' => $reqs ) );
+		if ( is_wp_error( $res ) ) {
+			$out['error'] = $res->get_error_message();
+			return false;
+		}
+		$out['wpf']     += count( $reqs );
+		$out['samples'] += count( $reqs );
+		$out['added']   += isset( $res['added'] ) ? (int) $res['added'] : 0;
+	}
+	return true;
 }
 
 function dk_sh_page() {
@@ -122,10 +194,14 @@ function dk_sh_page() {
 		$tot   = isset( $_GET['tot'] ) ? json_decode( base64_decode( sanitize_text_field( wp_unslash( $_GET['tot'] ) ) ), true ) : array();
 		$tot   = is_array( $tot ) ? $tot : array( 'orders' => 0, 'samples' => 0, 'added' => 0 );
 		$r     = dk_sh_batch( $from, $page );
+		if ( 0 === $page ) {
+			$tot['wpf'] = isset( $r['wpf'] ) ? $r['wpf'] : 0;
+		}
 		foreach ( array( 'orders', 'samples', 'added' ) as $k ) {
 			$tot[ $k ] = ( isset( $tot[ $k ] ) ? (int) $tot[ $k ] : 0 ) + $r[ $k ];
 		}
-		$summary = 'Orders checked: <b>' . (int) $tot['orders'] . '</b> · samples sent: <b>' . (int) $tot['samples'] . '</b> · new in ops: <b>' . (int) $tot['added'] . '</b>';
+		$summary = 'Orders checked: <b>' . (int) $tot['orders'] . '</b> · samples sent: <b>' . (int) $tot['samples'] . '</b> · new in ops: <b>' . (int) $tot['added'] . '</b>'
+			. ( isset( $tot['wpf'] ) ? ( 'none' === $tot['wpf'] ? ' · WPForms: <b>no saved entries on this site</b> (WPForms Lite doesn\'t keep them)' : ' · WPForms entries: <b>' . (int) $tot['wpf'] . '</b>' ) : '' );
 		if ( $r['error'] ) {
 			echo '<div class="notice notice-error"><p><b>Stopped:</b> ' . esc_html( $r['error'] ) . '</p><p>' . $summary . '</p><p>Press Send again to carry on — nothing is duplicated.</p></div>';
 		} elseif ( $page > 0 && $r['orders'] < 100 ) {
@@ -137,7 +213,7 @@ function dk_sh_page() {
 		}
 	}
 	$def = wp_date( 'Y-m-d', strtotime( '-9 months' ) );
-	echo '<p>Sends every free-sample order (and /sample-request/ form request) since the date below to ops. Only the samples go across — no jobs are made, so FileMaker\'s jobs aren\'t touched.</p>';
+	echo '<p>Sends every free-sample order, /sample-request/ form request and WPForms sample-form entry since the date below to ops. Only the samples go across — no jobs are made, so FileMaker\'s jobs aren\'t touched.</p>';
 	echo '<form method="get" action="' . esc_url( admin_url( 'admin.php' ) ) . '">';
 	echo '<input type="hidden" name="page" value="dk-sample-history"><input type="hidden" name="pg" value="0">';
 	echo '<input type="hidden" name="_wpnonce" value="' . esc_attr( wp_create_nonce( 'dk_sh' ) ) . '">';
