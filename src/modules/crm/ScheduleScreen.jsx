@@ -10,7 +10,7 @@ import {
 } from "../../lib/crmCore.js";
 import { printJobDocs, DOC_KINDS, printPendingList } from "./printDocs.js";
 import LinesEditor, { SizeRow, applySize, skuOption, SKU_COLS, SKU_LIST_W } from "./LinesEditor.jsx";
-import { JOB_TYPES, skuIndex, PAYMENT_TYPES, stockCheck, partKey, isColPick, blankPick, blankCollectionItem, itemPending, isGrassRoll, sizeLabel } from "../../lib/crmCore.js";
+import { JOB_TYPES, skuIndex, PAYMENT_TYPES, stockCheck, partKey, isColPick, blankPick, blankCollectionItem, itemPending, isGrassRoll, sizeLabel, purchaseCost } from "../../lib/crmCore.js";
 import StockCheck from "./StockCheck.jsx";
 import { Icon, Chip, Tg, sect, lbl, card, abtn, inp, btn, goldBtn, RiskChip, WebStatusChip, Soon, usePhone, DateInput, CalendarPop, SuggestInput, selectAllProps } from "./ui.jsx";
 
@@ -1252,7 +1252,7 @@ export default function ScheduleScreen({ money = true, crm, updateCrm, openInvoi
                                 onChange={(v) => setIt(it.id, (x) => {
                                   x.sku = v;
                                   const m = by[String(v || "").trim().toLowerCase()];
-                                  if (m) { x.description = m.name; x.colour = m.colour || x.colour; if (m.costGbp !== "" && m.costGbp !== null && m.costGbp !== undefined) x.unitCost = Number(m.costGbp); }
+                                  if (m) { x.description = m.name; x.colour = m.colour || x.colour; const pc = purchaseCost(m, planner); if (pc !== "") x.unitCost = pc; }
                                 })} />
                             ) : <b>{it.sku || "—"}</b>}
                           </td>

@@ -1455,8 +1455,9 @@ export const syncCatalogue = (crm, planner) => {
             changed = true;
           }
         });
-        // a bought-in product's £ cost seeds the row until real batch costs arrive
-        if ((cur.costGbp === "" || cur.costGbp === null) && p.costGbp !== "" && p.costGbp !== null && p.costGbp !== undefined && isFinite(Number(p.costGbp)) && Number(p.costGbp) > 0) {
+        // a bought-in product's £ cost seeds the row until real batch costs arrive, and follows the product's
+        // purchase cost whenever there's nothing on the shelf to average against
+        if ((cur.costGbp === "" || cur.costGbp === null || !(Number(cur.stock) > 0)) && p.costGbp !== "" && p.costGbp !== null && p.costGbp !== undefined && isFinite(Number(p.costGbp)) && Number(p.costGbp) > 0 && Number(cur.costGbp) !== Number(p.costGbp)) {
           cur.costGbp = Number(p.costGbp);
           changed = true;
         }
@@ -2138,6 +2139,14 @@ const GRASS_EXTRAS = /adhesive|glue|tape|pin|nail|staple|sand|membrane|join|infi
 export const isGrassRoll = (p) => !!p && /grass/i.test([p.category, p.family, p.name].join(" ")) && /grass/i.test(String(p.category || "") + " " + String(p.name || "")) && !GRASS_EXTRAS.test(String(p.name || ""));
 export const sqmOf = (l, w) => { const a = Number(l), b = Number(w); return a > 0 && b > 0 ? Math.round(a * b * 100) / 100 : ""; };
 export const sizeLabel = (x) => (Number(x && x.lenM) > 0 && Number(x && x.widM) > 0 ? Number(x.lenM) + "m × " + Number(x.widM) + "m" : "");
+// what we'd pay a UK supplier for one of these now: the product's purchase cost (Products › UK purchase cost),
+// falling back to the stock row's own cost. (The stock row's cost is the weighted average of what's on the shelf.)
+export const purchaseCost = (row, planner) => {
+  const p = row && row.importProductId && planner && (planner.products || []).find((x) => x.id === row.importProductId);
+  const listed = p && p.costGbp !== "" && p.costGbp !== null && p.costGbp !== undefined && Number(p.costGbp) > 0 ? Number(p.costGbp) : null;
+  if (listed !== null) return listed;
+  return row && row.costGbp !== "" && row.costGbp !== null && row.costGbp !== undefined ? Number(row.costGbp) : "";
+};
 export const isVoidInvoice = (inv) => ["refunded", "cancelled", "failed", "trash"].includes((inv && inv.webStatus) || "");
 export const isSaleInvoice = (inv) =>
   !isVoidInvoice(inv) && invoiceTotals(inv).total > 0 && !/sample/i.test(inv.paymentType || "") && !/sample/i.test(inv.jobType || "");

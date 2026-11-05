@@ -7,7 +7,7 @@ import { NAVY, GOLD, RED, prettyDate } from "../../lib/core.js";
 import {
   blankCollection, blankCollectionItem, nextNumber, skuIndex, gbp, today,
   TIME_SLOTS, vanOptions, itemPending, collectionProgress, commitCollectionItem, assignCollectionItem,
-  blankSupplier, findSupplierByName, supplierKey, skuOptionLabel, releaseCollectionPicks, DRIVERS, isGrassRoll, sizeLabel
+  blankSupplier, findSupplierByName, supplierKey, skuOptionLabel, releaseCollectionPicks, DRIVERS, isGrassRoll, sizeLabel, purchaseCost
 } from "../../lib/crmCore.js";
 import { SupplierModal } from "./SuppliersScreen.jsx";
 import { purchasesAvailable } from "../../data/crmStorage.js";
@@ -226,7 +226,7 @@ export default function CollectionsScreen({ money = true, crm, updateCrm, askCon
         if (mp) {
           it.description = mp.name;
           if (mp.colour) it.colour = mp.colour;
-          if (mp.costGbp !== "" && mp.costGbp !== null) it.unitCost = Number(mp.costGbp);
+          { const pc = purchaseCost(mp, planner); if (pc !== "") it.unitCost = pc; }
         }
       }
     });

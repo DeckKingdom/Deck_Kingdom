@@ -4,7 +4,7 @@
 // supplier SKUs, linked to the job, on its pick list at the price paid.
 import { useState } from "react";
 import { NAVY, GOLD, RED } from "../../lib/core.js";
-import { stockCheck, partSuppliers, raiseShortfallCollections, supplierKey, skuLists, segLabel, gbp } from "../../lib/crmCore.js";
+import { stockCheck, partSuppliers, raiseShortfallCollections, supplierKey, skuLists, segLabel, gbp, purchaseCost } from "../../lib/crmCore.js";
 import { Icon, Chip, Modal, card, inp, btn, goldBtn } from "./ui.jsx";
 
 const th = { textAlign: "left", fontSize: 10.5, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", padding: "6px 6px", borderBottom: "2px solid #e6e9ef", whiteSpace: "nowrap" };
@@ -44,7 +44,7 @@ export default function StockCheck({ money = true, inv, crm, planner, updatePlan
     setChoices(
       short.map((r) => {
         const alts = partSuppliers(crm, planner, r.sku, r.description, r.colour)
-          .map((x) => ({ ...x, supplier: supplierOf(x.row), cost: x.row.costGbp === "" || x.row.costGbp === null || x.row.costGbp === undefined ? null : Number(x.row.costGbp) }))
+          .map((x) => { const pc = purchaseCost(x.row, planner); return { ...x, row: { ...x.row, costGbp: pc }, supplier: supplierOf(x.row), cost: pc === "" ? null : pc }; })
           .sort((a, b) => (a.cost === null) - (b.cost === null) || (a.cost || 0) - (b.cost || 0));
         return { part: r, alts, pick: alts.length ? alts[0].row.id : "", qty: r.short, cost: "" };
       })
