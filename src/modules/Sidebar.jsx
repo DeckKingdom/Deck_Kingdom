@@ -20,7 +20,7 @@ export const NAV_SECTIONS = [
   {
     title: "Purchasing",
     items: [
-      ["collections", "Collections", "truck"],
+      ["collections", "Collections", "truck", true],
       ["suppliers", "Suppliers", "box", true],
       ["purchases", "Purchases", "pound", true],
     ],

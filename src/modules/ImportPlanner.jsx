@@ -246,6 +246,7 @@ export default function ImportPlanner() {
   const [purchaseFilter, setPurchaseFilter] = useState(null); // { supplierId }
   const [selSupplierId, setSelSupplierId] = useState(null);
   const [newSupplierSignal, setNewSupplierSignal] = useState(0);
+  const [newCollectionSignal, setNewCollectionSignal] = useState(0);
   // menu and header buttons always land on the list, never on the last record that was open
   // where the header's back arrow goes: an open record → its list; a shipment → Imports
   const goBackTarget = () => {
@@ -307,6 +308,12 @@ export default function ImportPlanner() {
       setSelSupplierId(null);
       setNewSupplierSignal((n) => n + 1);
       setTab("suppliers");
+      return;
+    }
+    if (t === "collections") {
+      setSelCollectionId(null);
+      setNewCollectionSignal((n) => n + 1);
+      setTab("collections");
       return;
     }
     if (t === "purchases") newPurchase("");
@@ -1430,7 +1437,7 @@ export default function ImportPlanner() {
         ) : tab === "stock" ? (
           <StockScreen crm={crm} updateCrm={updateCrm} planner={data} updatePlanner={update} askConfirm={setConfirmBox} me={me} />
         ) : (
-          <CollectionsScreen money={access.money} crm={crm} updateCrm={updateCrm} askConfirm={setConfirmBox} selId={selCollectionId} setSelId={setSelCollectionId} openInvoice={openInvoice} me={me} goSupplier={goSupplier} planner={data} />
+          <CollectionsScreen money={access.money} crm={crm} updateCrm={updateCrm} askConfirm={setConfirmBox} selId={selCollectionId} setSelId={setSelCollectionId} openInvoice={openInvoice} me={me} goSupplier={goSupplier} planner={data} newSignal={newCollectionSignal} />
         ))}
 
       {tab === "overview" && (

@@ -2,12 +2,12 @@
 // note prints for the driver and the job rides the delivery schedule. On
 // return, EACH LINE is dispositioned on its own: committed to stock or
 // assigned straight to a job — mixed loads are the normal case.
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { NAVY, GOLD, RED, prettyDate } from "../../lib/core.js";
 import {
   blankCollection, blankCollectionItem, nextNumber, skuIndex, gbp, today,
   TIME_SLOTS, vanOptions, itemPending, collectionProgress, commitCollectionItem, assignCollectionItem,
-  blankSupplier, findSupplierByName, supplierKey, skuOptionLabel, releaseCollectionPicks,
+  blankSupplier, findSupplierByName, supplierKey, skuOptionLabel, releaseCollectionPicks, DRIVERS
 } from "../../lib/crmCore.js";
 import { SupplierModal } from "./SuppliersScreen.jsx";
 import { purchasesAvailable } from "../../data/crmStorage.js";
@@ -27,7 +27,7 @@ export const collectionStatus = (c) => {
   return ["Not booked", "red"];
 };
 
-export default function CollectionsScreen({ money = true, crm, updateCrm, askConfirm, selId, setSelId, openInvoice, me, goSupplier, planner }) {
+export default function CollectionsScreen({ money = true, crm, updateCrm, askConfirm, selId, setSelId, openInvoice, me, goSupplier, planner, newSignal = 0 }) {
   const [allProducts, setAllProducts] = useState(false);
   const [supDraft, setSupDraft] = useState(null);
   const [search, setSearch] = useState("");
@@ -78,6 +78,12 @@ export default function CollectionsScreen({ money = true, crm, updateCrm, askCon
     });
     setSelId(n.id);
   };
+
+  // the side menu's "+" raises a new collection
+  const lastSignal = useRef(newSignal);
+  useEffect(() => {
+    if (newSignal && newSignal !== lastSignal.current) { lastSignal.current = newSignal; newCollection(); }
+  }, [newSignal]);
 
   const removeCollection = (c) =>
     askConfirm({
@@ -232,7 +238,29 @@ export default function CollectionsScreen({ money = true, crm, updateCrm, askCon
 
   return (
     <div style={{ maxWidth: 1040, margin: "0 auto", padding: "18px 22px" }}>
-      <button style={{ ...btn, marginBottom: 12 }} onClick={() => setSelId(null)}><Icon name="back" stroke={NAVY} />All collections</button>
+      {(() => {
+        // step through the list in its order (newest first; the current search applied)
+        const q = search.trim().toLowerCase();
+        const sorted = [...(crm.collections || [])].sort((a, b) => (Number(b.collectionNo) || 0) - (Number(a.collectionNo) || 0));
+        const matches = q ? sorted.filter((c) => [String(c.collectionNo || ""), c.supplier, c.postcode, c.van].some((v) => String(v || "").toLowerCase().includes(q))) : sorted;
+        const order = matches.some((x) => x.id === coll.id) ? matches : sorted;
+        const at = order.findIndex((x) => x.id === coll.id);
+        const prev = at > 0 ? order[at - 1] : null, next = at >= 0 && at < order.length - 1 ? order[at + 1] : null;
+        const arrow = (x, up) => (
+          <button style={{ ...abtn, width: 36, height: 36, opacity: x ? 1 : 0.4, cursor: x ? "pointer" : "default" }} disabled={!x} onClick={() => x && setSelId(x.id)}
+            title={x ? (up ? "Previous: COL-" : "Next: COL-") + (x.collectionNo || "—") + (x.supplier ? " · " + x.supplier : "") : up ? "First collection" : "Last collection"}>
+            <span style={{ display: "inline-flex", transform: up ? "rotate(90deg)" : "rotate(-90deg)" }}><Icon name="back" stroke={NAVY} /></span>
+          </button>
+        );
+        return (
+          <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12 }}>
+            <button style={btn} onClick={() => setSelId(null)}><Icon name="back" stroke={NAVY} />All collections</button>
+            {arrow(prev, true)}
+            {arrow(next, false)}
+            {at >= 0 && <span style={{ fontSize: 12, fontWeight: 700, color: "#8593a8" }}>{at + 1} of {order.length}</span>}
+          </div>
+        );
+      })()}
 
       {notice && (
         <div style={{ ...card, borderColor: GOLD, background: "#fff8e6", display: "flex", gap: 10, alignItems: "center", fontWeight: 600, fontSize: 13 }}>
@@ -313,6 +341,14 @@ export default function CollectionsScreen({ money = true, crm, updateCrm, askCon
               <option value="">—</option>
               {coll.collectTime && !TIME_SLOTS.includes(coll.collectTime) && <option value={coll.collectTime}>{coll.collectTime}</option>}
               {TIME_SLOTS.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+          <div>
+            <span style={lbl}>Driver</span>
+            <select style={inp} value={coll.driver || ""} onChange={(e) => setColl((t) => (t.driver = e.target.value))}>
+              <option value="">—</option>
+              {coll.driver && !DRIVERS.includes(coll.driver) && <option value={coll.driver}>{coll.driver}</option>}
+              {DRIVERS.map((d) => <option key={d} value={d}>{d}</option>)}
             </select>
           </div>
           <div>
