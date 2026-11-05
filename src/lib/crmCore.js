@@ -2177,15 +2177,27 @@ export const sampleInvoice = (s, crm) =>
 export const syncSampleConversions = (crm) => {
   const samples = crm.samples || [];
   if (!samples.length) return null;
+  // the same person can be on more than one account (e.g. a website account for the sample and a
+  // FileMaker account for the order): accounts sharing an email or phone number count as one
+  const person = {};
+  const root = (x) => { while (person[x] && person[x] !== x) x = person[x] = person[person[x]] || person[x]; return x; };
+  const owner = {};
+  (crm.customers || []).forEach((c) => {
+    person[c.id] = person[c.id] || c.id;
+    const keys = [String(c.email || "").trim().toLowerCase()].filter((e) => e.includes("@"));
+    [c.mobile, c.landline].forEach((ph) => { const d = String(ph || "").replace(/\D/g, "").replace(/^44/, "0"); if (d.length >= 10) keys.push("t" + d.slice(-10)); });
+    keys.forEach((k) => { if (owner[k]) { const a = root(owner[k]), b = root(c.id); if (a !== b) person[b] = a; } else owner[k] = c.id; });
+  });
+  const who = (cid) => (cid && person[cid] ? root(cid) : cid);
   const invById = {};
   const invsByCust = {};
   (crm.invoices || []).forEach((i) => {
     invById[i.id] = i;
-    if (isSaleInvoice(i)) (invsByCust[i.customerId] = invsByCust[i.customerId] || []).push(i);
+    if (isSaleInvoice(i)) (invsByCust[who(i.customerId)] = invsByCust[who(i.customerId)] || []).push(i);
   });
   Object.values(invsByCust).forEach((l) => l.sort((a, b) => (a.date || "").localeCompare(b.date || "") || (Number(a.invNo) || 0) - (Number(b.invNo) || 0)));
   const byCust = {};
-  samples.forEach((s) => (byCust[s.customerId] = byCust[s.customerId] || []).push(s));
+  samples.forEach((s) => (byCust[who(s.customerId)] = byCust[who(s.customerId)] || []).push(s));
   Object.values(byCust).forEach((l) => l.sort((a, b) => (a.date || "").localeCompare(b.date || "") || (Number(a.sampleNo) || 0) - (Number(b.sampleNo) || 0)));
 
   const want = {};
@@ -2196,13 +2208,13 @@ export const syncSampleConversions = (crm) => {
       return;
     }
     if (s.outcome === "lost" || !s.customerId || !s.date) return (want[s.id] = { id: "", at: "" });
-    const list = byCust[s.customerId];
+    const list = byCust[who(s.customerId)];
     const next = list[list.indexOf(s) + 1];
     let end = addDays(s.date, SAMPLE_WINDOW_DAYS);
     if (next && next.date && next.date > s.date && next.date < end) end = next.date;
     // samples sent out with an order (web-s-o<order>) don't count as converting into that same order
     const sameOrder = String(s.id || "").startsWith("web-s-o") ? "web-i-" + String(s.id).slice(7) : "";
-    const hit = (invsByCust[s.customerId] || []).find((i) => i.id !== sameOrder && (i.date || "") >= s.date && (i.date || "") < end);
+    const hit = (invsByCust[who(s.customerId)] || []).find((i) => i.id !== sameOrder && (i.date || "") >= s.date && (i.date || "") < end);
     want[s.id] = hit ? { id: hit.id, at: hit.date || "" } : { id: "", at: "" };
   });
   let changed = false;
