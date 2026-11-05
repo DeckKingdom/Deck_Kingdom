@@ -1199,12 +1199,13 @@ export default function ScheduleScreen({ money = true, crm, updateCrm, openInvoi
       {pop && pop.kind === "col" && (() => {
         const col = (crm.collections || []).find((x) => x.id === pop.id);
         if (!col) return null;
-        const PW = Math.min(820, window.innerWidth - 40), PH = Math.min(window.innerHeight - 20, 700);
+        const PW = Math.min(960, window.innerWidth - 40), PH = Math.min(window.innerHeight - 20, 700);
         const top = Math.min(pop.rect.bottom + 6, window.innerHeight - PH - 10);
         const by = skuIndex(crm);
         const skuOpts = (crm.masterProducts || []).filter((p) => p.active !== false && p.sku).map((p) => skuOption(p, crm));
         const setIt = (iid, fn) => setColl(col.id, (t) => { const it = (t.items || []).find((y) => y.id === iid); if (it && itemPending(it)) fn(it); });
         const goCol = () => { setPop(null); openCollection && openCollection(col.id); };
+        const colSized = (col.items || []).some((it) => isGrassRoll(by[String(it.sku || "").trim().toLowerCase()]) || !!sizeLabel(it));
         const kgAll = collKg(col);
         const items = (col.items || []).reduce((t, it) => t + (Number(it.qty) || 0), 0);
         return (
@@ -1235,8 +1236,8 @@ export default function ScheduleScreen({ money = true, crm, updateCrm, openInvoi
               {/* the collection note's lines, editable while they're still waiting (not yet in stock or sent to a job) */}
               <div style={{ overflowX: "auto", marginTop: 12 }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, minWidth: 640 }}>
-                  <thead><tr>{["SKU", "Description", "Colour", "Qty", ""].map((h, k) => (
-                    <th key={k} style={{ ...lbl, display: "table-cell", marginBottom: 0, textAlign: k === 3 ? "right" : "left", padding: "4px 5px", borderBottom: "1px solid #e6e9ef" }}>{h}</th>
+                  <thead><tr>{["SKU", "Description", "Colour", ...(colSized ? ["Length × width (m)"] : []), "Qty", ""].map((h, k) => (
+                    <th key={k} style={{ ...lbl, display: "table-cell", marginBottom: 0, textAlign: h === "Qty" ? "right" : "left", padding: "4px 5px", borderBottom: "1px solid #e6e9ef" }}>{h}</th>
                   ))}</tr></thead>
                   <tbody>
                     {(col.items || []).map((it) => {
@@ -1258,12 +1259,15 @@ export default function ScheduleScreen({ money = true, crm, updateCrm, openInvoi
                           </td>
                           <td style={cell}>
                             {open ? <input style={box} value={it.description} {...selectAllProps} onChange={(e) => { const v = e.target.value; setIt(it.id, (x) => (x.description = v)); }} /> : it.description || "—"}
-                            {open && (isGrassRoll(mp) || sizeLabel(it)) && <SizeRow line={it} onSize={(k, v) => setIt(it.id, (x) => applySize(x, k, v))} />}
-                            {!open && sizeLabel(it) && <div style={{ fontSize: 11.5, color: "#5a6a85", fontWeight: 700 }}>{sizeLabel(it)}</div>}
                           </td>
                           <td style={{ ...cell, width: 110 }}>
                             {open ? <input style={box} value={it.colour} {...selectAllProps} onChange={(e) => { const v = e.target.value; setIt(it.id, (x) => (x.colour = v)); }} /> : it.colour || "—"}
                           </td>
+                          {colSized && (
+                            <td style={{ ...cell, width: 140, whiteSpace: "nowrap", fontWeight: 700, color: "#5a6a85" }}>
+                              {open && (isGrassRoll(mp) || sizeLabel(it)) ? <SizeRow inline compact line={it} onSize={(k, v) => setIt(it.id, (x) => applySize(x, k, v))} /> : sizeLabel(it)}
+                            </td>
+                          )}
                           <td style={{ ...cell, width: 70, textAlign: "right" }}>
                             {open ? <input style={{ ...box, textAlign: "right" }} inputMode="decimal" value={it.qty} {...selectAllProps} onChange={(e) => { const v = e.target.value; setIt(it.id, (x) => (x.qty = v === "" ? "" : Number(v))); }} /> : <b>{it.qty}</b>}
                           </td>

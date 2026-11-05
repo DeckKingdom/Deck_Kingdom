@@ -37,6 +37,9 @@ export default function CollectionsScreen({ money = true, crm, updateCrm, askCon
 
   const coll = (crm.collections || []).find((c) => c.id === selId) || null;
   const bySku = skuIndex(crm);
+  // grass rolls: length x width (m) column before the qty, only when a line needs it
+  const needsSize = (it) => isGrassRoll(bySku[String(it.sku || "").trim().toLowerCase()]) || !!sizeLabel(it);
+  const sized = !!coll && (coll.items || []).some(needsSize);
   const custById = useMemo(() => Object.fromEntries(crm.customers.map((c) => [c.id, c])), [crm.customers]);
 
   // the supplier each stock row is bought from (via its catalogue product)
@@ -237,7 +240,7 @@ export default function CollectionsScreen({ money = true, crm, updateCrm, askCon
     .slice(0, 12);
 
   return (
-    <div style={{ maxWidth: 1040, margin: "0 auto", padding: "18px 22px" }}>
+    <div style={{ maxWidth: 1320, margin: "0 auto", padding: "18px 22px" }}>
       {(() => {
         // step through the list in its order (newest first; the current search applied)
         const q = search.trim().toLowerCase();
@@ -382,12 +385,13 @@ export default function CollectionsScreen({ money = true, crm, updateCrm, askCon
         </div>
         <div className="dk-bleed" style={{ overflowX: "auto" }}>
           <table className="dk-t" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 780 }}>
-            <thead><tr>{["SKU", "Description", "Colour", "Qty", "Unit cost £", "Line £", "Where it went", ""].map((h, i) => (!money && (i === 4 || i === 5)) ? null : (
-              <th key={i} style={{ textAlign: i >= 3 && i <= 5 ? "right" : "left", fontSize: 10.5, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", padding: "7px 6px", borderBottom: "2px solid #e6e9ef", whiteSpace: "nowrap" }}>{h}</th>
+            <thead><tr>{["SKU", "Description", "Colour", ...(sized ? ["Length × width (m)"] : []), "Qty", "Unit cost £", "Line £", "Where it went", ""].map((h, i) => (!money && (h === "Unit cost £" || h === "Line £")) ? null : (
+              <th key={i} style={{ textAlign: h === "Qty" || h === "Unit cost £" || h === "Line £" ? "right" : "left", fontSize: 10.5, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", padding: "7px 6px", borderBottom: "2px solid #e6e9ef", whiteSpace: "nowrap" }}>{h}</th>
             ))}</tr></thead>
             <tbody>
               {(coll.items || []).map((it) => {
                 const pending = itemPending(it);
+                const needs = needsSize(it);
                 return (
                   <tr key={it.id} style={{ opacity: pending ? 1 : 0.85 }}>
                     <td style={{ ...td, width: 150 }}>
@@ -399,14 +403,15 @@ export default function CollectionsScreen({ money = true, crm, updateCrm, askCon
                     </td>
                     <td style={{ ...td, minWidth: 170 }}>
                       {pending ? <input style={inp} {...selectAllProps} value={it.description} onChange={(e) => setItem(it.id, "description", e.target.value)} /> : it.description}
-                      {pending && (isGrassRoll(bySku[String(it.sku || "").trim().toLowerCase()]) || sizeLabel(it)) && (
-                        <SizeRow line={it} onSize={(k, v) => setColl((t) => { const y = t.items.find((z) => z.id === it.id); if (y && itemPending(y)) applySize(y, k, v); })} />
-                      )}
-                      {!pending && sizeLabel(it) && <div style={{ fontSize: 11.5, color: "#5a6a85", fontWeight: 700 }}>{sizeLabel(it)} = {it.qty} m²</div>}
                     </td>
                     <td style={{ ...td, width: 100 }}>
                       {pending ? <input style={inp} {...selectAllProps} value={it.colour} onChange={(e) => setItem(it.id, "colour", e.target.value)} /> : it.colour || "—"}
                     </td>
+                    {sized && (
+                      <td style={{ ...td, width: 150, whiteSpace: "nowrap", fontWeight: 700, color: "#5a6a85" }}>
+                        {pending && needs ? <SizeRow inline compact line={it} onSize={(k, v) => setColl((t) => { const y = t.items.find((z) => z.id === it.id); if (y && itemPending(y)) applySize(y, k, v); })} /> : sizeLabel(it)}
+                      </td>
+                    )}
                     <td style={{ ...td, width: 64, textAlign: "right" }}>
                       {pending ? <input style={{ ...inp, textAlign: "right" }} inputMode="decimal" {...selectAllProps} value={it.qty} onChange={(e) => setItem(it.id, "qty", e.target.value)} /> : <b>{it.qty}</b>}
                     </td>
