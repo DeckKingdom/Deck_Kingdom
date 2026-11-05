@@ -700,7 +700,7 @@ export default function InvoicesScreen({ money = true, newFollowUp, crm, updateC
           </div>
         </div>
         <StockCheck money={money} inv={inv} crm={crm} planner={planner} updatePlanner={updatePlanner} updateCrm={updateCrm} me={me} openCollection={openCollection}
-          onRaised={(names) => setNotice((names.length > 1 ? "Collection notes raised with " : "Collection note raised with ") + names.join(" and ") + " — linked to this job and added to its pick list. It's on the Collections screen ready to book a van.")} />
+          onRaised={(names) => setNotice((names.length > 1 ? "Collection notes raised with " : "Collection note raised with ") + names.join(" and ") + " — linked to this job and added to its pick list." + (inv.deliveryDate ? " It's on the delivery schedule as the stop before this job." : " This job has no delivery date yet, so give the note a date on the Collections screen."))} />
       </div>
       {money && <JobTotals inv={inv} crm={crm} planner={planner} />}
     </div>

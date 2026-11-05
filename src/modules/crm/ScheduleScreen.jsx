@@ -1319,22 +1319,6 @@ export default function ScheduleScreen({ money = true, crm, updateCrm, openInvoi
           return cc;
         });
         const pickFor = (job, ref, sku) => job.picks.find((p) => String(p.batchRef).toUpperCase() === ref && p.sku === sku);
-        // new notes raised from here ride in this job's run, just before its drop
-        const placeNew = (made, cc) => {
-          const job = cc.invoices.find((x) => x.id === i.id);
-          if (!job || !made.length) return;
-          made.forEach((col) => { col.collectDate = job.deliveryDate || ""; col.driver = job.driver || ""; col.runNo = job.runNo || ""; col.van = job.van || ""; });
-          if (!job.deliveryDate || !(job.driver || job.runNo)) return;
-          const same = (x) => (x.driver || "") === (job.driver || "") && (x.runNo || "") === (job.runNo || "");
-          const madeIds = new Set(made.map((x) => x.id));
-          const stops = [
-            ...cc.invoices.filter((x) => !isVoidInvoice(x) && onSchedule(x, cc) && !isCollectionJob(x) && x.deliveryDate === job.deliveryDate && same(x)),
-            ...(cc.collections || []).filter((x) => !madeIds.has(x.id) && x.collectDate === job.deliveryDate && same(x)),
-          ].sort((p, q) => (Number(p.dropNo) || 999) - (Number(q.dropNo) || 999));
-          const at = stops.indexOf(job);
-          stops.splice(at < 0 ? stops.length : at, 0, ...made);
-          stops.forEach((x, n) => (x.dropNo = String(n + 1)));
-        };
         const inp_ = { ...pill, width: 60, padding: "3px 8px", textAlign: "right", cursor: "text" };
         // grass: the roll size(s) from the job's lines for each part, and length x width on the note's lines
         const bySkuP = skuIndex(crm);
@@ -1364,9 +1348,9 @@ export default function ScheduleScreen({ money = true, crm, updateCrm, openInvoi
                     <span style={{ display: "block", fontSize: 11.5, color: PARTS_LOOK[p.st].fg }}>{p.note}</span></span>
                 </div>
               ))}
-              {info.parts.some((p) => p.short > 0) && (
+              {!i.deliveryCompleted && (
                 <div style={{ marginTop: 10, borderTop: "1px solid #e6e9ef", paddingTop: 8 }}>
-                  <StockCheck money={money} compact inv={i} crm={crm} planner={planner} updateCrm={updateCrm} me={me} openCollection={openCollection} placeNew={placeNew} modalZ={95} />
+                  <StockCheck money={money} compact inv={i} crm={crm} planner={planner} updateCrm={updateCrm} me={me} openCollection={openCollection} modalZ={95} />
                 </div>
               )}
               {notes.map(({ ref, col }) => {

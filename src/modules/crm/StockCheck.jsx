@@ -11,8 +11,8 @@ const th = { textAlign: "left", fontSize: 10.5, fontWeight: 700, color: "#8593a8
 const td = { padding: "6px 6px", borderBottom: "1px solid #eef0f4", fontSize: 12.5 };
 const num = { ...td, textAlign: "right", whiteSpace: "nowrap" };
 
-// placeNew(made, crm): optional — lets the caller set up the new collection notes (e.g. put them in the job's run)
-export default function StockCheck({ money = true, inv, crm, planner, updatePlanner, updateCrm, me, onRaised, openCollection, placeNew, modalZ, compact }) {
+// New notes are linked to the job, put on its pick list and placed on the delivery schedule just before it.
+export default function StockCheck({ money = true, inv, crm, planner, updatePlanner, updateCrm, me, onRaised, openCollection, modalZ, compact }) {
   const [choices, setChoices] = useState(null); // modal state
   const rows = stockCheck(inv, crm);
   if (!rows.length) return null;
@@ -42,11 +42,12 @@ export default function StockCheck({ money = true, inv, crm, planner, updatePlan
     .sort((a, b) => a.name.localeCompare(b.name));
   const openModal = () =>
     setChoices(
-      short.map((r) => {
+      // every part is listed: short ones are ticked to collect, the rest can be added (e.g. a part being swapped)
+      [...short, ...rows.filter((r) => !(r.short > 0))].map((r) => {
         const alts = partSuppliers(crm, planner, r.sku, r.description, r.colour)
           .map((x) => { const pc = purchaseCost(x.row, planner); return { ...x, row: { ...x.row, costGbp: pc }, supplier: supplierOf(x.row), cost: pc === "" ? null : pc }; })
           .sort((a, b) => (a.cost === null) - (b.cost === null) || (a.cost || 0) - (b.cost || 0));
-        return { part: r, alts, pick: alts.length ? alts[0].row.id : "", qty: r.short, cost: "" };
+        return { part: r, alts, pick: r.short > 0 && alts.length ? alts[0].row.id : "", qty: r.short > 0 ? r.short : r.need, cost: "" };
       })
     );
 
@@ -75,8 +76,7 @@ export default function StockCheck({ money = true, inv, crm, planner, updatePlan
         return d;
       });
     updateCrm((c) => {
-      const made = raiseShortfallCollections(c, inv.id, picked, me);
-      if (placeNew) placeNew(made || [], c);
+      raiseShortfallCollections(c, inv.id, picked, me);
       return c;
     });
     setChoices(null);
@@ -97,9 +97,10 @@ export default function StockCheck({ money = true, inv, crm, planner, updatePlan
           </button>
         ))}
         <span style={{ flex: 1 }} />
-        {short.length > 0 && (
-          <button style={{ ...goldBtn, padding: "6px 12px", fontSize: 12.5 }} onClick={openModal}>
-            <Icon name="truck" stroke={NAVY} />Collect the shortfall
+        {!inv.deliveryCompleted && (
+          <button style={short.length ? { ...goldBtn, padding: "6px 12px", fontSize: 12.5 } : { ...btn, padding: "6px 12px", fontSize: 12.5 }} onClick={openModal}
+            title="Raise a collection note for this job — it goes on the delivery schedule as the stop just before this job">
+            <Icon name="truck" stroke={NAVY} />{short.length ? "Collect the shortfall" : "Raise collection note"}
           </button>
         )}
       </div>
@@ -127,15 +128,17 @@ export default function StockCheck({ money = true, inv, crm, planner, updatePlan
       </div>}
 
       {choices && (
-        <Modal title="Collect the shortfall" onClose={() => setChoices(null)} width={680} z={modalZ || 60}>
+        <Modal title={short.length ? "Collect the shortfall" : "Raise a collection note"} onClose={() => setChoices(null)} width={680} z={modalZ || 60}>
           <p style={{ fontSize: 13, color: "#5a6a85", fontWeight: 600, marginTop: 0 }}>
-            Pick who to collect each part from — the cheapest is chosen for you. One collection note is raised per supplier, linked to job #{inv.invNo || "—"}.
+            Pick who to collect each part from — the cheapest is chosen for you. One collection note is raised per supplier, linked to job #{inv.invNo || "—"}
+            {inv.deliveryDate && (inv.runNo || inv.driver) ? " and put on the schedule as the stop just before it (" + [inv.runNo ? "Run " + inv.runNo : "", inv.driver].filter(Boolean).join(" · ") + ")." : inv.deliveryDate ? " and put on the schedule for the same day (give the job a run or driver to slot it in front)." : ". This job has no delivery date yet, so the note will need a date on the Collections screen."}
           </p>
           {choices.map((c, i) => (
             <div key={c.part.key} style={{ display: "grid", gridTemplateColumns: "minmax(200px,1.3fr) minmax(220px,1.6fr) 80px", gap: 8, alignItems: "center", padding: "8px 0", borderBottom: "1px solid #f0f2f6" }}>
               <div style={{ fontSize: 13 }}>
                 <b>{c.part.description || c.part.sku}</b>{c.part.colour ? " · " + c.part.colour : ""}
-                <div style={{ fontSize: 11.5, color: RED, fontWeight: 700 }}>{c.part.short} short</div>
+                {c.part.short > 0 ? <div style={{ fontSize: 11.5, color: RED, fontWeight: 700 }}>{c.part.short} short</div>
+                  : <div style={{ fontSize: 11.5, color: "#5a6a85", fontWeight: 700 }}>{c.part.need} needed · in stock</div>}
               </div>
               {c.alts.length ? (
                 <select style={{ ...inp, fontSize: 13 }} value={c.pick} onChange={(e) => setChoices((x) => x.map((y, j) => (j === i ? { ...y, pick: e.target.value } : y)))}>

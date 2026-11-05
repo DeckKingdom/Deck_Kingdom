@@ -2721,7 +2721,26 @@ export const raiseShortfallCollections = (c, invId, choices, actor) => {
     made.push(coll);
   });
   reconcilePicks(inv, c);
+  placeCollectionsBeforeJob(c, inv.id, made);
   return made;
+};
+
+// New collection notes for a job go on the delivery schedule with it: same day, driver,
+// run and van, slotted in as the stop just before the job (stops renumbered).
+export const placeCollectionsBeforeJob = (c, invId, made) => {
+  const job = (c.invoices || []).find((x) => x.id === invId);
+  if (!job || !(made || []).length) return;
+  made.forEach((col) => { col.collectDate = job.deliveryDate || ""; col.driver = job.driver || ""; col.runNo = job.runNo || ""; col.van = job.van || ""; });
+  if (!job.deliveryDate || !(job.driver || job.runNo)) return;
+  const same = (x) => (x.driver || "") === (job.driver || "") && (x.runNo || "") === (job.runNo || "");
+  const madeIds = new Set(made.map((x) => x.id));
+  const stops = [
+    ...(c.invoices || []).filter((x) => !isVoidInvoice(x) && onSchedule(x, c) && !isCollectionJob(x) && x.deliveryDate === job.deliveryDate && same(x)),
+    ...(c.collections || []).filter((x) => !madeIds.has(x.id) && x.collectDate === job.deliveryDate && same(x)),
+  ].sort((p, q) => (Number(p.dropNo) || 999) - (Number(q.dropNo) || 999));
+  const at = stops.indexOf(job);
+  stops.splice(at < 0 ? stops.length : at, 0, ...made);
+  stops.forEach((x, n) => (x.dropNo = String(n + 1)));
 };
 
 // a collection deleted before it's done: take its lines back off the jobs
