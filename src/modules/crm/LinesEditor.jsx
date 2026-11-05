@@ -59,7 +59,8 @@ export const applySize = (line, k, v) => {
   if (m2) line.qty = m2;
 };
 
-export default function LinesEditor({ doc, edit, crm, readOnly, toolbar }) {
+// onOpenProduct(productId, rect): optional — a button by each code opens that product's record to edit
+export default function LinesEditor({ doc, edit, crm, readOnly, toolbar, onOpenProduct }) {
   const [codeDraft, setCodeDraft] = useState({}); // what's being typed in a code box (shown instead of the readable code)
   const [freeQty, setFreeQty] = useState(new Set()); // lines typing a qty directly (double-clicked)
   const [src, setSrc] = useState(""); // offer only one source's codes (DK, TG …)
@@ -156,6 +157,17 @@ export default function LinesEditor({ doc, edit, crm, readOnly, toolbar }) {
                           }
                         }} />
                       {l.code && !bySku[String(l.code).trim().toLowerCase()] && <div style={{ fontSize: 10.5, fontWeight: 700, color: "#a05f10", marginTop: 3 }}>not a product code</div>}
+                      {onOpenProduct && (() => {
+                        const mp = bySku[String(l.code || "").trim().toLowerCase()];
+                        if (!mp || !mp.importProductId) return null;
+                        return (
+                          <button type="button" className="no-print" title="Open this product's record to edit it (name, colours, price, cost, weight…)"
+                            onClick={(e) => onOpenProduct(mp.importProductId, e.currentTarget.getBoundingClientRect())}
+                            style={{ fontFamily: "inherit", fontSize: 11, fontWeight: 700, color: "#185FA5", background: "none", border: "none", padding: "3px 0 0", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                            <Icon name="pen" stroke="#185FA5" size={11} />Edit product
+                          </button>
+                        );
+                      })()}
                     </td>
                     {sized && (
                       <td style={{ ...td, width: 150, whiteSpace: "nowrap" }}>

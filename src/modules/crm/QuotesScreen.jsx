@@ -35,7 +35,7 @@ const SchemaNotice = () => (
 
 const FILTERS = ["Open", "Accepted", "Converted", "Declined", "Expired", "All"];
 
-export default function QuotesScreen({ money = true, crm, updateCrm, askConfirm, selId, setSelId, goCustomer, openInvoice, me, filter, setFilter }) {
+export default function QuotesScreen({ openProduct, money = true, crm, updateCrm, askConfirm, selId, setSelId, goCustomer, openInvoice, me, filter, setFilter }) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("Open");
   const [custQuery, setCustQuery] = useState("");
@@ -413,7 +413,7 @@ export default function QuotesScreen({ money = true, crm, updateCrm, askConfirm,
       {/* lines + totals */}
       <div style={card}>
         <p style={sect}>Lines</p>
-        <LinesEditor doc={q} edit={setQuote} crm={crm} readOnly={locked} />
+        <LinesEditor doc={q} edit={setQuote} crm={crm} readOnly={locked} onOpenProduct={openProduct} />
 
         <div style={{ display: "flex", gap: 16, alignItems: "flex-start", flexWrap: "wrap", marginTop: 16 }}>
           <div style={{ flex: 1, minWidth: 240, display: "grid", gap: 12 }}>

@@ -255,7 +255,7 @@ const SlaChip = ({ days, done }) => (
   </span>
 );
 
-export default function ScheduleScreen({ money = true, crm, updateCrm, openInvoice, openCollection, me, planner, goCustomer, newFollowUp }) {
+export default function ScheduleScreen({ openProduct, money = true, crm, updateCrm, openInvoice, openCollection, me, planner, goCustomer, newFollowUp }) {
   const [printMsg, setPrintMsg] = useState("");
   const phone = usePhone();
   const printJobs = (jobs, kinds, title) => {
@@ -1458,7 +1458,7 @@ export default function ScheduleScreen({ money = true, crm, updateCrm, openInvoi
                 {contact && <div style={{ color: "#5a6a85" }}>{contact}</div>}
               </div>
               <div style={{ marginTop: 12 }}>
-                <LinesEditor doc={i} crm={crm} edit={(fn) => setInv(i.id, (t) => fn(t))} />
+                <LinesEditor doc={i} crm={crm} edit={(fn) => setInv(i.id, (t) => fn(t))} onOpenProduct={openProduct} />
               </div>
               <div style={{ marginTop: 8, fontSize: 12.5, fontWeight: 700, color: NAVY, display: "grid", gridTemplateColumns: "1fr auto", gap: "3px 10px" }}>
                 {Number(i.deliveryCharge) ? <><span style={{ color: "#5a6a85" }}>Delivery</span><span>{gbp(Number(i.deliveryCharge))}</span></> : null}

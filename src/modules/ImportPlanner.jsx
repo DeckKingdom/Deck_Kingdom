@@ -111,6 +111,8 @@ export default function ImportPlanner() {
     });
   };
   const [prodPop, setProdPop] = useState(null);
+  // jobs, quotes and the schedule can open a product's record from its line (managers and admin, who can change products)
+  const openProduct = access && access.canManage ? (productId, rect) => setProdPop({ productId, rect, fromCrm: true }) : null;
   const [prodDraft, setProdDraft] = useState({});
   // "+ New product": a fresh product goes straight onto the line and the full product card opens to fill in
   const newProductOnLine = (lineId, name, rect, codeHint) => {
@@ -1406,7 +1408,7 @@ export default function ImportPlanner() {
             me={me}
           />
         ) : tab === "quotes" ? (
-          <QuotesScreen money={access.money}
+          <QuotesScreen openProduct={openProduct} money={access.money}
             crm={crm}
             updateCrm={updateCrm}
             askConfirm={setConfirmBox}
@@ -1419,7 +1421,7 @@ export default function ImportPlanner() {
             setFilter={setQuoteFilter}
           />
         ) : tab === "invoices" ? (
-          <InvoicesScreen money={access.money}
+          <InvoicesScreen openProduct={openProduct} money={access.money}
             newFollowUp={newFollowUp}
             crm={crm}
             updateCrm={updateCrm}
@@ -1437,7 +1439,7 @@ export default function ImportPlanner() {
             setFilter={setInvFilter}
           />
         ) : (
-          <ScheduleScreen money={access.money} crm={crm} updateCrm={updateCrm} openInvoice={openInvoice} openCollection={openCollection} me={me} planner={data} goCustomer={goCustomer} newFollowUp={newFollowUp} />
+          <ScheduleScreen openProduct={openProduct} money={access.money} crm={crm} updateCrm={updateCrm} openInvoice={openInvoice} openCollection={openCollection} me={me} planner={data} goCustomer={goCustomer} newFollowUp={newFollowUp} />
         ))}
 
       {(tab === "stock" || tab === "collections") &&
@@ -1747,7 +1749,7 @@ export default function ImportPlanner() {
                 <b style={{ fontSize: 15, color: NAVY }}>{p.name || "Product"}</b>
                 <span style={{ fontSize: 12, fontWeight: 600, color: "#8593a8" }}>{[p.code, p.supplier].filter(Boolean).join(" · ")}</span>
                 <span style={{ flex: 1 }} />
-                {prodPop.created ? <span style={{ fontSize: 12, fontWeight: 800, color: "#28713e", background: "#3FA55C22", borderRadius: 999, padding: "2px 10px" }}>New product</span>
+                {prodPop.fromCrm ? null : prodPop.created ? <span style={{ fontSize: 12, fontWeight: 800, color: "#28713e", background: "#3FA55C22", borderRadius: 999, padding: "2px 10px" }}>New product</span>
                   : <button onClick={() => newProductOnLine(prodPop.lineId, "", prodPop.rect, p.code ? String(p.code).split("/").slice(0, -1).join("/") + "/" : "")}
                     style={{ fontFamily: "inherit", fontWeight: 700, fontSize: 12, background: "none", border: "none", color: "#185FA5", cursor: "pointer", padding: 0 }}>+ New product instead</button>}
               </div>

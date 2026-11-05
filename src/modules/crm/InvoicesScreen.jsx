@@ -26,7 +26,7 @@ const NoteBox = ({ children }) => (
   </div>
 );
 
-export default function InvoicesScreen({ money = true, newFollowUp, crm, updateCrm, askConfirm, selId, setSelId, goCustomer, openQuote, openSample, openCollection, me, planner, updatePlanner, filter, setFilter }) {
+export default function InvoicesScreen({ openProduct, money = true, newFollowUp, crm, updateCrm, askConfirm, selId, setSelId, goCustomer, openQuote, openSample, openCollection, me, planner, updatePlanner, filter, setFilter }) {
   const [search, setSearch] = useState("");
   const [custQuery, setCustQuery] = useState("");
   const [notice, setNotice] = useState("");
@@ -507,7 +507,7 @@ export default function InvoicesScreen({ money = true, newFollowUp, crm, updateC
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
           <p style={{ ...sect, margin: 0 }}>Lines</p>
         </div>
-        <LinesEditor doc={inv} edit={setInv} crm={crm} toolbar={<>
+        <LinesEditor doc={inv} edit={setInv} crm={crm} onOpenProduct={openProduct} toolbar={<>
           <label title="Flag this job as high risk — it gets a red warning until someone checks it"
             style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", color: inv.riskFlag && !inv.riskChecked ? "#9b1c2e" : NAVY }}>
             <input type="checkbox" checked={!!inv.riskFlag && !inv.riskChecked}
