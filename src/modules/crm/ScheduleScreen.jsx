@@ -9,10 +9,10 @@ import {
   isVoidInvoice, onSchedule, applyInvoiceStockDeduction,
 } from "../../lib/crmCore.js";
 import { printJobDocs, DOC_KINDS, printPendingList } from "./printDocs.js";
-import LinesEditor from "./LinesEditor.jsx";
-import { JOB_TYPES, skuIndex, PAYMENT_TYPES, stockCheck, partKey, isColPick, blankPick, blankCollectionItem } from "../../lib/crmCore.js";
+import LinesEditor, { SizeRow, applySize, skuOption, SKU_COLS, SKU_LIST_W } from "./LinesEditor.jsx";
+import { JOB_TYPES, skuIndex, PAYMENT_TYPES, stockCheck, partKey, isColPick, blankPick, blankCollectionItem, itemPending, isGrassRoll, sizeLabel } from "../../lib/crmCore.js";
 import StockCheck from "./StockCheck.jsx";
-import { Icon, Chip, Tg, sect, lbl, card, abtn, inp, btn, goldBtn, RiskChip, WebStatusChip, Soon, usePhone, DateInput, CalendarPop } from "./ui.jsx";
+import { Icon, Chip, Tg, sect, lbl, card, abtn, inp, btn, goldBtn, RiskChip, WebStatusChip, Soon, usePhone, DateInput, CalendarPop, SuggestInput, selectAllProps } from "./ui.jsx";
 
 const RANGE_OPTS = [
   ["upcoming", "Upcoming + last 7 days"],
@@ -1199,9 +1199,12 @@ export default function ScheduleScreen({ money = true, crm, updateCrm, openInvoi
       {pop && pop.kind === "col" && (() => {
         const col = (crm.collections || []).find((x) => x.id === pop.id);
         if (!col) return null;
-        const PW = 580, PH = Math.min(window.innerHeight - 20, 640);
+        const PW = Math.min(820, window.innerWidth - 40), PH = Math.min(window.innerHeight - 20, 700);
         const top = Math.min(pop.rect.bottom + 6, window.innerHeight - PH - 10);
         const by = skuIndex(crm);
+        const skuOpts = (crm.masterProducts || []).filter((p) => p.active !== false && p.sku).map((p) => skuOption(p, crm));
+        const setIt = (iid, fn) => setColl(col.id, (t) => { const it = (t.items || []).find((y) => y.id === iid); if (it && itemPending(it)) fn(it); });
+        const goCol = () => { setPop(null); openCollection && openCollection(col.id); };
         const kgAll = collKg(col);
         const items = (col.items || []).reduce((t, it) => t + (Number(it.qty) || 0), 0);
         return (
@@ -1212,8 +1215,8 @@ export default function ScheduleScreen({ money = true, crm, updateCrm, openInvoi
               style={{ position: "fixed", ...(phone ? { left: 8, right: 8, top: 62, width: "auto", maxHeight: "calc(100dvh - 74px)" } : { left: pop.side === "left" ? Math.max(10, pop.rect.left - PW - 24) : Math.min(pop.rect.left, window.innerWidth - PW - 20), top: Math.max(10, pop.side === "left" ? Math.min(pop.rect.top - 60, window.innerHeight - PH - 10) : top), width: PW, maxHeight: PH }), zIndex: 71, overflowY: "auto",
               background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, boxShadow: "0 14px 40px rgba(11,31,63,.28)", padding: "14px 18px", boxSizing: "border-box" }}>
               <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 6 }}>
-                <b style={{ fontSize: 15, color: COLLECTION_BLUE }}>{col.supplier || "Supplier"}</b>
-                <span style={{ fontSize: 12, fontWeight: 700, color: "#185FA5" }}>COL-{col.collectionNo || "—"}</span>
+                <button type="button" className="dk-title-link" onClick={goCol} title="Open the collection" style={{ fontSize: 15, fontWeight: 700, color: COLLECTION_BLUE }}>{col.supplier || "Supplier"}</button>
+                <button type="button" className="dk-title-link" onClick={goCol} title="Open the collection" style={{ fontSize: 12, fontWeight: 700, color: "#185FA5" }}>COL-{col.collectionNo || "—"}</button>
                 <span style={{ fontSize: 11.5, fontWeight: 700, color: "#8593a8" }}>supplier pick-up</span>
               </div>
               <Stamp lines={[col.date ? "Raised " + prettyDate(col.date) + (col.raisedBy ? " by " + String(col.raisedBy).split("@")[0] : "") : ""]} />
@@ -1229,19 +1232,57 @@ export default function ScheduleScreen({ money = true, crm, updateCrm, openInvoi
                 {(col.contact || col.phone) && <div style={{ color: "#5a6a85" }}>{[col.contact, col.phone].filter(Boolean).join(" · ")}</div>}
                 {(col.driver || col.runNo || col.van) && <div style={{ color: "#5a6a85" }}>{[col.runNo ? "Run " + col.runNo : "", col.driver, col.dropNo ? "stop " + col.dropNo : "", col.van].filter(Boolean).join(" · ")}</div>}
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "44px 1fr 120px 76px", gap: "0 10px", marginTop: 12, paddingBottom: 4, borderBottom: "1px solid #e6e9ef" }}>
-                {["Qty", "Product", "Colour", ""].map((h, k) => <span key={k} style={{ ...lbl, marginBottom: 0 }}>{h}</span>)}
+              {/* the collection note's lines, editable while they're still waiting (not yet in stock or sent to a job) */}
+              <div style={{ overflowX: "auto", marginTop: 12 }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, minWidth: 640 }}>
+                  <thead><tr>{["SKU", "Description", "Colour", "Qty", ""].map((h, k) => (
+                    <th key={k} style={{ ...lbl, display: "table-cell", marginBottom: 0, textAlign: k === 3 ? "right" : "left", padding: "4px 5px", borderBottom: "1px solid #e6e9ef" }}>{h}</th>
+                  ))}</tr></thead>
+                  <tbody>
+                    {(col.items || []).map((it) => {
+                      const open = itemPending(it);
+                      const mp = by[String(it.sku || "").trim().toLowerCase()];
+                      const cell = { padding: "5px 5px", borderBottom: "1px solid #f3f5f9", verticalAlign: "top" };
+                      const box = { ...inp, padding: "5px 8px", fontSize: 12.5 };
+                      return (
+                        <tr key={it.id}>
+                          <td style={{ ...cell, width: 170 }}>
+                            {open ? (
+                              <SuggestInput value={it.sku} options={skuOpts} listWidth={SKU_LIST_W} cols={SKU_COLS} inputStyle={{ fontWeight: 700, fontSize: 12.5, padding: "5px 8px" }}
+                                onChange={(v) => setIt(it.id, (x) => {
+                                  x.sku = v;
+                                  const m = by[String(v || "").trim().toLowerCase()];
+                                  if (m) { x.description = m.name; x.colour = m.colour || x.colour; if (m.costGbp !== "" && m.costGbp !== null && m.costGbp !== undefined) x.unitCost = Number(m.costGbp); }
+                                })} />
+                            ) : <b>{it.sku || "—"}</b>}
+                          </td>
+                          <td style={cell}>
+                            {open ? <input style={box} value={it.description} {...selectAllProps} onChange={(e) => { const v = e.target.value; setIt(it.id, (x) => (x.description = v)); }} /> : it.description || "—"}
+                            {open && (isGrassRoll(mp) || sizeLabel(it)) && <SizeRow line={it} onSize={(k, v) => setIt(it.id, (x) => applySize(x, k, v))} />}
+                            {!open && sizeLabel(it) && <div style={{ fontSize: 11.5, color: "#5a6a85", fontWeight: 700 }}>{sizeLabel(it)}</div>}
+                          </td>
+                          <td style={{ ...cell, width: 110 }}>
+                            {open ? <input style={box} value={it.colour} {...selectAllProps} onChange={(e) => { const v = e.target.value; setIt(it.id, (x) => (x.colour = v)); }} /> : it.colour || "—"}
+                          </td>
+                          <td style={{ ...cell, width: 70, textAlign: "right" }}>
+                            {open ? <input style={{ ...box, textAlign: "right" }} inputMode="decimal" value={it.qty} {...selectAllProps} onChange={(e) => { const v = e.target.value; setIt(it.id, (x) => (x.qty = v === "" ? "" : Number(v))); }} /> : <b>{it.qty}</b>}
+                          </td>
+                          <td style={{ ...cell, width: 74, textAlign: "right", whiteSpace: "nowrap" }}>
+                            {open ? (
+                              <button type="button" title="Remove this line" onClick={() => setColl(col.id, (t) => (t.items = (t.items || []).filter((y) => y.id !== it.id)))}
+                                style={{ ...abtn, border: "none" }}><Icon name="x" stroke={RED} /></button>
+                            ) : <Chip tone={it.postedAt ? "green" : "gold"} style={{ fontSize: 10, padding: "1px 7px" }}>{it.postedAt ? "In stock" : "On a job"}</Chip>}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
-              {(col.items || []).length === 0 ? <div style={{ fontSize: 12.5, color: "#8593a8", padding: "6px 0" }}>No items listed</div> : (col.items || []).map((it) => {
-                return (
-                  <div key={it.id} style={{ display: "grid", gridTemplateColumns: "44px 1fr 120px 76px", gap: "0 10px", fontSize: 12.5, fontWeight: 600, padding: "5px 0", color: NAVY, borderBottom: "1px solid #f3f5f9", alignItems: "baseline" }}>
-                    <b>{it.qty}</b>
-                    <span style={{ minWidth: 0 }}>{it.description || it.sku || "—"}{it.sku && it.description ? <span style={{ color: "#8593a8" }}>{" · " + it.sku}</span> : null}</span>
-                    <span style={{ color: "#5a6a85" }}>{it.colour || "—"}</span>
-                    <span />
-                  </div>
-                );
-              })}
+              <button type="button" onClick={() => setColl(col.id, (t) => { t.items = t.items || []; t.items.push(blankCollectionItem()); })}
+                style={{ ...btn, width: "100%", justifyContent: "center", borderStyle: "dashed", color: "#5a6a85", marginTop: 6, padding: "6px 10px", fontSize: 12.5 }}>
+                <Icon name="plus" />Add line
+              </button>
               <div style={{ marginTop: 8, fontSize: 12.5, fontWeight: 700, color: NAVY, display: "grid", gridTemplateColumns: "1fr auto", gap: "3px 10px" }}>
                 <span>Items</span><span>{items} pcs</span>
                 <span style={{ color: col.collected ? "#28713e" : "#a05f10" }}>{col.collected ? "Collected" : "Not collected yet"}</span><span />
@@ -1299,7 +1340,7 @@ export default function ScheduleScreen({ money = true, crm, updateCrm, openInvoi
               style={{ position: "fixed", ...(phone ? { left: 8, right: 8, top: 62, width: "auto", maxHeight: "calc(100dvh - 74px)" } : { left, ...vpos, width: PW, maxHeight: Math.min(PH, (vpos.top ? window.innerHeight - vpos.top : pop.rect.top) - 16) }), zIndex: 71, overflowY: "auto",
                 background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, boxShadow: "0 14px 40px rgba(11,31,63,.28)", padding: "14px 18px", boxSizing: "border-box" }}>
               <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 4 }}>
-                <b style={{ fontSize: 15, color: NAVY }}>Parts · {c ? c.name || "Unnamed" : "No customer"}</b>
+                <b style={{ fontSize: 15, color: NAVY }}>Parts · <button type="button" className="dk-title-link" title="Open the job" onClick={() => { setPop(null); openInvoice(i.id); }} style={{ fontSize: 15, fontWeight: 700, color: NAVY }}>{c ? c.name || "Unnamed" : "No customer"}</button></b>
                 <span style={{ fontSize: 12, fontWeight: 700, color: "#185FA5" }}>#{i.invNo || "—"}</span>
                 <span style={{ flex: 1 }} />
                 <span style={{ fontSize: 12, fontWeight: 800, color: look.fg, background: look.bg, borderRadius: 999, padding: "2px 10px" }}>{look.label}</span>
@@ -1384,8 +1425,8 @@ export default function ScheduleScreen({ money = true, crm, updateCrm, openInvoi
               style={{ position: "fixed", ...(phone ? { left: 8, right: 8, top: 62, width: "auto", maxHeight: "calc(100dvh - 74px)" } : { left: pop.side === "left" ? Math.max(10, pop.rect.left - PW - 24) : Math.min(pop.rect.left, window.innerWidth - PW - 20), top: Math.max(10, pop.side === "left" ? Math.min(pop.rect.top - 60, window.innerHeight - PH - 10) : top), width: PW, maxHeight: PH }), zIndex: 71, overflowY: "auto",
               background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, boxShadow: "0 14px 40px rgba(11,31,63,.28)", padding: "14px 18px", boxSizing: "border-box" }}>
               <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 6 }}>
-                <b style={{ fontSize: 15, color: NAVY }}>{c ? c.name || "Unnamed" : "No customer"}</b>
-                <span style={{ fontSize: 12, fontWeight: 700, color: "#185FA5" }}>#{i.invNo || "—"}</span>
+                <button type="button" className="dk-title-link" title="Open the job" onClick={() => { setPop(null); openInvoice(i.id); }} style={{ fontSize: 15, fontWeight: 700, color: NAVY }}>{c ? c.name || "Unnamed" : "No customer"}</button>
+                <button type="button" className="dk-title-link" title="Open the job" onClick={() => { setPop(null); openInvoice(i.id); }} style={{ fontSize: 12, fontWeight: 700, color: "#185FA5" }}>#{i.invNo || "—"}</button>
               </div>
               <Stamp lines={[
                 i.created || i.date ? "Raised " + prettyDate(i.created || i.date) + (i.raisedBy ? " by " + i.raisedBy.split("@")[0] : "") : "",
