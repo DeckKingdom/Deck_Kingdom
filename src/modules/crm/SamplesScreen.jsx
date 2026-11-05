@@ -31,7 +31,7 @@ const SchemaNotice = () => (
 const PERIODS = [["30", "Last 30 days"], ["90", "Last 90 days"], ["365", "Last 12 months"], ["all", "All time"]];
 const FILTERS = ["To send", "Follow-up due", "2nd follow-up due", "Converted", "All"];
 const FILTER_LABEL = { "2nd follow-up due": "2nd follow-up" };
-const SAMPLE_COST = 3.17; // average cost of one sample sent (product, packaging, postage)
+const SAMPLE_COST = 5; // what one sample request costs to send: Evri delivery, box and labels
 const itemsSummary = (x) => (x.items || []).map((it) => (Number(it.qty) > 1 ? it.qty + "× " : "") + [it.colour, it.description].filter(Boolean).join(" ")).filter(Boolean).join(", ");
 
 // how an invoice is known: its number, else the website order ref
@@ -206,18 +206,22 @@ export default function SamplesScreen({ money = true, crm, updateCrm, askConfirm
         return [sampleRef(x), String(x.sampleNo || ""), c && c.name, c && c.postcode, c && c.email, itemsSummary(x)].some((v) => String(v || "").toLowerCase().includes(q));
       });
     const shown = matches.slice(0, rowLimit);
-    // what the samples in this period cost: every sample item (qty) at the average cost
+    // what the samples in this period cost: each request is one parcel
+    const spent = inPeriod.length * SAMPLE_COST;
     const itemsSent = inPeriod.reduce((t, x) => t + (x.items || []).reduce((a, it) => a + (Number(it.qty) || 1), 0), 0);
-    const spent = itemsSent * SAMPLE_COST;
     const monthLabel = (m) => new Date(m + "-01T00:00:00").toLocaleDateString("en-GB", { month: "short", year: "2-digit" });
 
-    const ReportTable = ({ title, rows, label }) => (
+    const whole = (n) => (n ? n.toLocaleString("en-GB", { maximumFractionDigits: 0 }) : "—");
+    const ReportTable = ({ title, rows, label, totals }) => {
+      const t = rows.reduce((a, r) => ({ requests: a.requests + (r.requests || 0), converted: a.converted + (r.converted || 0), revenue: a.revenue + (r.revenue || 0) }), { requests: 0, converted: 0, revenue: 0 });
+      const tc = { ...tdc, padding: "8px 6px", textAlign: "right", fontWeight: 800, borderTop: "2px solid " + NAVY, borderBottom: "none" };
+      return (
       <div style={{ ...card, marginBottom: 0 }}>
         <p style={sect}>{title}</p>
         <div className="dk-bleed" style={{ overflowX: "auto" }}>
           <table className="dk-t" style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
             <thead>
-              <tr>{["", "Requests", "Orders", "Rate", ...(money ? ["Sales £"] : [])].map((h, i) => <th key={i} style={{ ...th, textAlign: i ? "right" : "left", padding: "6px 6px" }}>{h}</th>)}</tr>
+              <tr>{["", "Requests", "Orders", "Rate", ...(money ? ["Sales £", "Cost £"] : [])].map((h, i) => <th key={i} style={{ ...th, textAlign: i ? "right" : "left", padding: "6px 6px" }}>{h}</th>)}</tr>
             </thead>
             <tbody>
               {rows.map((r) => (
@@ -226,14 +230,28 @@ export default function SamplesScreen({ money = true, crm, updateCrm, askConfirm
                   <td style={{ ...tdc, padding: "7px 6px", textAlign: "right" }}>{r.requests || "—"}</td>
                   <td style={{ ...tdc, padding: "7px 6px", textAlign: "right" }}>{r.requests ? r.converted : "—"}</td>
                   <td style={{ ...tdc, padding: "7px 6px", textAlign: "right", fontWeight: 700, color: r.rate ? "#28713e" : "#8593a8" }}>{r.requests ? pct(r.rate) : "—"}</td>
-                  {money && <td style={{ ...tdc, padding: "7px 6px", textAlign: "right" }}>{r.revenue ? r.revenue.toLocaleString("en-GB", { maximumFractionDigits: 0 }) : "—"}</td>}
+                  {money && <td style={{ ...tdc, padding: "7px 6px", textAlign: "right" }}>{whole(r.revenue)}</td>}
+                  {money && <td style={{ ...tdc, padding: "7px 6px", textAlign: "right", color: "#5a6a85" }} title={r.requests ? r.requests + " × " + gbp(SAMPLE_COST) : undefined}>{whole((r.requests || 0) * SAMPLE_COST)}</td>}
                 </tr>
               ))}
             </tbody>
+            {totals && (
+              <tfoot>
+                <tr>
+                  <td style={{ ...tc, textAlign: "left" }}>Total</td>
+                  <td style={tc}>{t.requests.toLocaleString("en-GB") || "—"}</td>
+                  <td style={tc}>{t.requests ? t.converted.toLocaleString("en-GB") : "—"}</td>
+                  <td style={{ ...tc, color: t.converted ? "#28713e" : "#8593a8" }}>{t.requests ? pct(t.converted / t.requests) : "—"}</td>
+                  {money && <td style={tc}>{whole(t.revenue)}</td>}
+                  {money && <td style={tc} title={t.requests ? t.requests + " × " + gbp(SAMPLE_COST) + (t.revenue ? " · " + gbp(t.revenue / (t.requests * SAMPLE_COST)) + " back per £1" : "") : undefined}>{whole(t.requests * SAMPLE_COST)}</td>}
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
       </div>
-    );
+      );
+    };
 
     return (
       <div style={{ maxWidth: 1140, margin: "0 auto", padding: "18px 22px" }}>
@@ -355,7 +373,7 @@ export default function SamplesScreen({ money = true, crm, updateCrm, askConfirm
 
         {samples.length > 0 && (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 14 }}>
-            <ReportTable title="By month requested (last 12)" rows={[...monthRows].reverse()} label={monthLabel} />
+            <ReportTable title="By month requested (last 12)" rows={[...monthRows].reverse()} label={monthLabel} totals />
             <ReportTable title={"By source · " + PERIODS.find(([v]) => v === period)[1].toLowerCase()} rows={sourceRows} label={(k) => k} />
           </div>
         )}
