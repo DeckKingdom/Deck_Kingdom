@@ -2133,6 +2133,11 @@ export const offScheduleIds = (crm) => {
   return hit;
 };
 export const onSchedule = (inv, crm) => !!inv && !offScheduleIds(crm).has(inv.customerId);
+// artificial grass rolls are sold by the square metre: a line can carry length x width (m) and qty = their product
+const GRASS_EXTRAS = /adhesive|glue|tape|pin|nail|staple|sand|membrane|join|infill|brush|edging|knife/i;
+export const isGrassRoll = (p) => !!p && /grass/i.test([p.category, p.family, p.name].join(" ")) && /grass/i.test(String(p.category || "") + " " + String(p.name || "")) && !GRASS_EXTRAS.test(String(p.name || ""));
+export const sqmOf = (l, w) => { const a = Number(l), b = Number(w); return a > 0 && b > 0 ? Math.round(a * b * 100) / 100 : ""; };
+export const sizeLabel = (x) => (Number(x && x.lenM) > 0 && Number(x && x.widM) > 0 ? Number(x.lenM) + "m × " + Number(x.widM) + "m" : "");
 export const isVoidInvoice = (inv) => ["refunded", "cancelled", "failed", "trash"].includes((inv && inv.webStatus) || "");
 export const isSaleInvoice = (inv) =>
   !isVoidInvoice(inv) && invoiceTotals(inv).total > 0 && !/sample/i.test(inv.paymentType || "") && !/sample/i.test(inv.jobType || "");

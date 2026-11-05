@@ -3,7 +3,7 @@
 // click to type any amount). `edit(fn)` mutates the record that owns `lines`.
 import { useState, useMemo, useRef, useEffect } from "react";
 import { RED, NAVY } from "../../lib/core.js";
-import { blankLine, skuIndex, PRODUCT_SOURCES, skuSource, skuLists, skuOptionLabel, colourSeg, gradeOf } from "../../lib/crmCore.js";
+import { blankLine, skuIndex, PRODUCT_SOURCES, skuSource, skuLists, skuOptionLabel, colourSeg, gradeOf, isGrassRoll, sqmOf, sizeLabel } from "../../lib/crmCore.js";
 import { Icon, SuggestInput, selectAllProps, inp, btn, abtn } from "./ui.jsx";
 
 const numInp = { ...inp, textAlign: "right" };
@@ -34,6 +34,30 @@ export const skuOption = (p, crm) => {
   };
 };
 const td = { padding: "6px 6px", borderBottom: "1px solid #f0f2f6" };
+
+// grass rolls: length x width (m) under the description; filling both sets the qty to the m2
+const sizeBox = { ...inp, width: 58, padding: "4px 6px", fontSize: 12.5, textAlign: "right" };
+export function SizeRow({ line, onSize }) {
+  const m2 = sqmOf(line.lenM, line.widM);
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 5, fontSize: 12, fontWeight: 700, color: "#5a6a85", flexWrap: "wrap" }}
+      title="Roll size: length × width in metres — the qty becomes the square metres">
+      <span>L</span>
+      <input style={sizeBox} inputMode="decimal" placeholder="0.00" value={line.lenM ?? ""} {...selectAllProps} onChange={(e) => onSize("lenM", e.target.value)} />
+      <span>m ×</span>
+      <span>W</span>
+      <input style={sizeBox} inputMode="decimal" placeholder="0.00" value={line.widM ?? ""} {...selectAllProps} onChange={(e) => onSize("widM", e.target.value)} />
+      <span>m</span>
+      <span style={{ color: m2 ? NAVY : "#aab3c2" }}>= {m2 ? m2.toLocaleString("en-GB", { maximumFractionDigits: 2 }) + " m²" : "— m²"}</span>
+    </div>
+  );
+}
+// set length or width on a line; with both filled the qty is the area
+export const applySize = (line, k, v) => {
+  line[k] = v === "" ? "" : v;
+  const m2 = sqmOf(line.lenM, line.widM);
+  if (m2) line.qty = m2;
+};
 
 export default function LinesEditor({ doc, edit, crm, readOnly, toolbar }) {
   const [codeDraft, setCodeDraft] = useState({}); // what's being typed in a code box (shown instead of the readable code)
@@ -102,7 +126,7 @@ export default function LinesEditor({ doc, edit, crm, readOnly, toolbar }) {
                   <tr key={l.id}>
                     <td style={{ ...td, fontWeight: 700, padding: "9px 6px" }}>{readableFor(bySku, l.code) || l.code || "—"}</td>
                     <td style={td}>{l.qty}</td>
-                    <td style={td}>{l.description}</td>
+                    <td style={td}>{l.description}{sizeLabel(l) && <div style={{ fontSize: 11.5, color: "#5a6a85", fontWeight: 700 }}>{sizeLabel(l)} = {l.qty} m²</div>}</td>
                     <td style={td}>{l.colour}</td>
                     <td style={{ ...td, textAlign: "right" }}>{(Number(l.price) || 0).toFixed(2)}</td>
                     <td style={{ ...td, textAlign: "right", fontWeight: 700 }}>{lineTotal(l)}</td>
@@ -155,6 +179,9 @@ export default function LinesEditor({ doc, edit, crm, readOnly, toolbar }) {
                     </td>
                     <td style={{ ...td, minWidth: 200 }}>
                       <input style={inp} value={l.description} {...selectAllProps} onChange={(e) => setLine(l.id, "description", e.target.value)} />
+                      {(isGrassRoll(bySku[String(l.code || "").trim().toLowerCase()]) || sizeLabel(l)) && (
+                        <SizeRow line={l} onSize={(k, v) => edit((x) => { const y = x.lines.find((z) => z.id === l.id); if (y) applySize(y, k, v); })} />
+                      )}
                     </td>
                     <td style={{ ...td, width: 130 }}>
                       <ColourSelect line={l} crm={crm} bySku={bySku} onPick={(colour, sku) => edit((x) => {

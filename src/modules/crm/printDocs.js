@@ -1,7 +1,8 @@
 // Printable documents: customer invoice and warehouse/driver job sheet.
 // Opens a print window (browser's Save as PDF gives the PDF). Returns false
 // when the window can't be opened (e.g. inside the design preview sandbox).
-import { invoiceTotals, explodeInvoiceLines, skuIndex, TRADE_COUNTER } from "../../lib/crmCore.js";
+import { invoiceTotals, explodeInvoiceLines, skuIndex, TRADE_COUNTER, sizeLabel } from "../../lib/crmCore.js";
+const withSize = (x) => (sizeLabel(x) ? ` <span style="color:#5a6a85;font-weight:700">(${sizeLabel(x)})</span>` : "");
 
 const esc = (s) =>
   String(s === null || s === undefined ? "" : s)
@@ -81,7 +82,7 @@ const addrBlock = (title, lines) => `
 const invoiceBody = (inv, cust, site) => {
   const t = invoiceTotals(inv);
   const lines = (inv.lines || []).map((l) => `
-    <tr><td><b>${esc(l.code)}</b></td><td>${esc(l.description)}</td><td>${esc(l.colour)}</td>
+    <tr><td><b>${esc(l.code)}</b></td><td>${esc(l.description)}${withSize(l)}</td><td>${esc(l.colour)}</td>
     <td class="r">${esc(l.qty)}</td><td class="r">${gb(Number(l.price) || 0)}</td>
     <td class="r"><b>${gb((Number(l.qty) || 0) * (Number(l.price) || 0))}</b></td></tr>`).join("");
 
@@ -111,7 +112,7 @@ export function printInvoice(inv, cust, site) {
 export function printQuote(q, cust, site) {
   const t = invoiceTotals(q);
   const lines = (q.lines || []).map((l) => `
-    <tr><td><b>${esc(l.code)}</b></td><td>${esc(l.description)}</td><td>${esc(l.colour)}</td>
+    <tr><td><b>${esc(l.code)}</b></td><td>${esc(l.description)}${withSize(l)}</td><td>${esc(l.colour)}</td>
     <td class="r">${esc(l.qty)}</td><td class="r">${gb(Number(l.price) || 0)}</td>
     <td class="r"><b>${gb((Number(l.qty) || 0) * (Number(l.price) || 0))}</b></td></tr>`).join("");
   const deliverTo = q.siteId === TRADE_COUNTER
@@ -228,7 +229,7 @@ export function printLoadingBill(inv, cust, site, crm, planner) {
 export function printCollectionNote(coll) {
   const items = (coll.items || []).map((it) => `
     <tr><td style="width:26px"><div style="width:16px;height:16px;border:2px solid #0B1F3F;border-radius:4px"></div></td>
-    <td><b>${esc(it.sku)}</b></td><td>${esc(it.description)}${it.colour ? " · " + esc(it.colour) : ""}</td>
+    <td><b>${esc(it.sku)}</b></td><td>${esc(it.description)}${it.colour ? " · " + esc(it.colour) : ""}${withSize(it)}</td>
     <td class="r big">${esc(it.qty)}</td></tr>`).join("");
 
   const body = head("Collection note", "COL-" + (coll.collectionNo || "—"), pretty(coll.collectDate || coll.date)) + `
@@ -254,7 +255,7 @@ const jobSheetBody = (inv, cust, site) => {
   const t = invoiceTotals(inv);
   const lines = (inv.lines || []).map((l) => `
     <tr><td style="width:26px"><div style="width:16px;height:16px;border:2px solid #0B1F3F;border-radius:4px"></div></td>
-    <td><b>${esc(l.code)}</b></td><td>${esc(l.description)}</td><td>${esc(l.colour)}</td>
+    <td><b>${esc(l.code)}</b></td><td>${esc(l.description)}${withSize(l)}</td><td>${esc(l.colour)}</td>
     <td class="r big">${esc(l.qty)}</td></tr>`).join("");
 
   const dest = site || cust || {};

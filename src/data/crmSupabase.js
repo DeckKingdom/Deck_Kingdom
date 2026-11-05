@@ -50,9 +50,14 @@ const quoteToRow = (q, i) => {
   return row;
 };
 
+// length x width on a line (039_line_sizes.sql) - only written once the columns exist
+let sizeReady = false;
+const sizeCols = (l) => (sizeReady ? { len_m: num(l.lenM), width_m: num(l.widM) } : {});
+const sizeOf = (r) => ({ lenM: nv(r.len_m), widM: nv(r.width_m) });
+
 const quoteLineToRow = (l, quoteId, i) => ({
   id: l.id, quote_id: quoteId, code: str(l.code), description: str(l.description), colour: str(l.colour),
-  qty: Number(l.qty) || 0, price: Number(l.price) || 0, position: i,
+  qty: Number(l.qty) || 0, price: Number(l.price) || 0, position: i, ...sizeCols(l),
 });
 
 // Sample requests (017_samples.sql): same tolerance as quotes.
@@ -185,6 +190,7 @@ const lineToRow = (l, invoiceId, i) => ({
   qty: Number(l.qty) || 0,
   price: Number(l.price) || 0,
   position: i,
+  ...sizeCols(l),
 });
 
 const pickToRow = (p, invoiceId, i) => ({
@@ -214,7 +220,7 @@ const collToRow = (c, i) => {
 const collItemToRow = (it, collectionId, i) => ({
   id: it.id, collection_id: collectionId, sku: str(it.sku), description: str(it.description),
   colour: str(it.colour), qty: Number(it.qty) || 0, unit_cost: num(it.unitCost),
-  assigned_invoice_id: str(it.assignedInvoiceId), posted_at: str(it.postedAt), position: i,
+  assigned_invoice_id: str(it.assignedInvoiceId), posted_at: str(it.postedAt), position: i, ...sizeCols(it),
 });
 
 const VAN_TEXT = ["name", "reg", "makeModel", "insurer", "policyNo", "insuranceRenewal", "motDue", "taxDue", "serviceDue", "notes"];
@@ -427,10 +433,11 @@ async function loadAll() {
     });
   });
   const linesByInv = {};
+  sizeReady = ls.length ? Object.prototype.hasOwnProperty.call(ls[0], "len_m") : collItems_.length ? Object.prototype.hasOwnProperty.call(collItems_[0], "len_m") : sizeReady;
   ls.forEach((r) => {
     (linesByInv[r.invoice_id] = linesByInv[r.invoice_id] || []).push({
       id: r.id, code: r.code, description: r.description, colour: r.colour,
-      qty: nv(r.qty) === "" ? "" : Number(r.qty), price: nv(r.price) === "" ? "" : Number(r.price),
+      qty: nv(r.qty) === "" ? "" : Number(r.qty), price: nv(r.price) === "" ? "" : Number(r.price), ...sizeOf(r),
     });
   });
   // which optional invoice columns exist — decided before reading rows so the mapping below can use them
@@ -490,7 +497,7 @@ async function loadAll() {
     (itemsByColl[r.collection_id] = itemsByColl[r.collection_id] || []).push({
       id: r.id, sku: nv(r.sku), description: nv(r.description), colour: nv(r.colour),
       qty: nv(r.qty) === "" ? "" : Number(r.qty), unitCost: nv(r.unit_cost),
-      assignedInvoiceId: nv(r.assigned_invoice_id), postedAt: nv(r.posted_at),
+      assignedInvoiceId: nv(r.assigned_invoice_id), postedAt: nv(r.posted_at), ...sizeOf(r),
     });
   });
   collRunReady = colls_.length ? Object.prototype.hasOwnProperty.call(colls_[0], "run_no") : collRunReady;
@@ -522,7 +529,7 @@ async function loadAll() {
   ((quoteData && quoteData.qi) || []).forEach((r) => {
     (linesByQuote[r.quote_id] = linesByQuote[r.quote_id] || []).push({
       id: r.id, code: nv(r.code), description: nv(r.description), colour: nv(r.colour),
-      qty: nv(r.qty) === "" ? "" : Number(r.qty), price: nv(r.price) === "" ? "" : Number(r.price),
+      qty: nv(r.qty) === "" ? "" : Number(r.qty), price: nv(r.price) === "" ? "" : Number(r.price), ...sizeOf(r),
     });
   });
   const quotes = ((quoteData && quoteData.q) || []).map((r) => {

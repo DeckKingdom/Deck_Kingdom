@@ -7,13 +7,13 @@ import { NAVY, GOLD, RED, prettyDate } from "../../lib/core.js";
 import {
   blankCollection, blankCollectionItem, nextNumber, skuIndex, gbp, today,
   TIME_SLOTS, vanOptions, itemPending, collectionProgress, commitCollectionItem, assignCollectionItem,
-  blankSupplier, findSupplierByName, supplierKey, skuOptionLabel, releaseCollectionPicks, DRIVERS
+  blankSupplier, findSupplierByName, supplierKey, skuOptionLabel, releaseCollectionPicks, DRIVERS, isGrassRoll, sizeLabel
 } from "../../lib/crmCore.js";
 import { SupplierModal } from "./SuppliersScreen.jsx";
 import { purchasesAvailable } from "../../data/crmStorage.js";
 import { Icon, Chip, Modal, selectAllProps, SuggestInput, sect, lbl, card, abtn, inp, btn, goldBtn, DateInput, CalendarPop } from "./ui.jsx";
 import { printCollectionNote } from "./printDocs.js";
-import { skuOption, SKU_COLS, SKU_LIST_W } from "./LinesEditor.jsx";
+import { skuOption, SKU_COLS, SKU_LIST_W, SizeRow, applySize } from "./LinesEditor.jsx";
 
 const navyBtn = { ...btn, background: "transparent", border: "1px solid #3a4f78", color: "#fff" };
 const td = { padding: "6px 6px", borderBottom: "1px solid #f0f2f6", fontSize: 13 };
@@ -399,6 +399,10 @@ export default function CollectionsScreen({ money = true, crm, updateCrm, askCon
                     </td>
                     <td style={{ ...td, minWidth: 170 }}>
                       {pending ? <input style={inp} {...selectAllProps} value={it.description} onChange={(e) => setItem(it.id, "description", e.target.value)} /> : it.description}
+                      {pending && (isGrassRoll(bySku[String(it.sku || "").trim().toLowerCase()]) || sizeLabel(it)) && (
+                        <SizeRow line={it} onSize={(k, v) => setColl((t) => { const y = t.items.find((z) => z.id === it.id); if (y && itemPending(y)) applySize(y, k, v); })} />
+                      )}
+                      {!pending && sizeLabel(it) && <div style={{ fontSize: 11.5, color: "#5a6a85", fontWeight: 700 }}>{sizeLabel(it)} = {it.qty} m²</div>}
                     </td>
                     <td style={{ ...td, width: 100 }}>
                       {pending ? <input style={inp} {...selectAllProps} value={it.colour} onChange={(e) => setItem(it.id, "colour", e.target.value)} /> : it.colour || "—"}
