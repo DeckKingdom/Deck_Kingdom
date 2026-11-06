@@ -428,7 +428,7 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
   const [hideDone, setHideDone] = useState(false);
   const todayRef = useRef(null);
   const [pop, setPop] = useState(null); // { id, rect }: the job whose details are open
-  // hovering a pending job opens its details ("peek"); moving into the pop-over keeps it open; clicking pins it
+  // names open their pop-over on click only; the parts dot still previews on hover ("peek") — moving into it keeps it open, clicking pins it
   const peekT = useRef({});
   const peekCancel = () => { clearTimeout(peekT.current.open); clearTimeout(peekT.current.close); };
   const peekOpen = (p) => { peekCancel(); peekT.current.open = setTimeout(() => setPop((cur) => (cur && !cur.peek ? cur : { ...p, peek: true })), 220); };
@@ -750,8 +750,7 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
             {done && <span style={{ width: 8, height: 8, borderRadius: 999, background: "#3FA55C", flex: "none" }} />}
           </button>
         </div>
-        <div style={{ minWidth: 0, position: "relative" }}
-          onMouseEnter={(ev) => peekOpen({ id: i.id, rect: ev.currentTarget.getBoundingClientRect() })} onMouseLeave={peekClose}>
+        <div style={{ minWidth: 0, position: "relative" }}>
           <div style={{ display: "flex", gap: 7, alignItems: "center", minWidth: 0 }}>
             <button className="dk-title-link" onClick={(e) => { peekCancel(); setPop({ id: i.id, rect: e.currentTarget.parentNode.parentNode.getBoundingClientRect() }); }}
               title={c ? c.name : ""} style={{ fontWeight: 700, fontSize: 13.5, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
@@ -943,8 +942,7 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
             {c.collected && <span style={{ width: 8, height: 8, borderRadius: 999, background: "#3FA55C", flex: "none" }} />}
           </button>
         </div>
-        <div style={{ minWidth: 0, position: "relative" }}
-          onMouseEnter={(ev) => peekOpen({ id: c.id, kind: "col", rect: ev.currentTarget.getBoundingClientRect() })} onMouseLeave={peekClose}>
+        <div style={{ minWidth: 0, position: "relative" }}>
           <button className="dk-title-link" onClick={(e) => { peekCancel(); setPop({ id: c.id, kind: "col", rect: e.currentTarget.parentNode.getBoundingClientRect() }); }}
             title={c.supplier || ""} style={{ fontWeight: 700, fontSize: 13.5, color: COLLECTION_BLUE, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "100%" }}>
             {short16(c.supplier || "Supplier")}
@@ -985,9 +983,7 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
     if (e.kind === "col") {
       const c = e.obj;
       return (
-        <div style={{ position: "relative" }}
-          onMouseEnter={(ev) => peekOpen({ id: c.id, kind: "col", rect: ev.currentTarget.getBoundingClientRect(), side: "left" })}
-          onMouseLeave={peekClose}>
+        <div style={{ position: "relative" }}>
           <button className="dk-title-link" draggable title="Drag onto a day or into a run, or click to keep the details open"
             onClick={(ev) => { peekCancel(); setPop({ id: c.id, kind: "col", rect: ev.currentTarget.parentNode.getBoundingClientRect(), side: "left" }); }}
             onDragStart={(ev) => { ev.dataTransfer.setData("text/plain", "col:" + c.id); ev.dataTransfer.effectAllowed = "move"; setDragId("col:" + c.id); peekCancel(); setPop(null); }}
@@ -1007,9 +1003,7 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
 
 
     return (
-      <div style={{ position: "relative" }}
-        onMouseEnter={(ev) => peekOpen({ id: i.id, rect: ev.currentTarget.getBoundingClientRect(), side: "left" })}
-        onMouseLeave={peekClose}>
+      <div style={{ position: "relative" }}>
         <button className="dk-title-link" draggable title="Drag onto a day to book it, or click to keep the details open"
           onDragStart={(ev) => { ev.dataTransfer.setData("text/plain", i.id); ev.dataTransfer.effectAllowed = "move"; setDragId(i.id); peekCancel(); setPop(null); }}
           onDragEnd={() => { setDragId(null); setOverDate(null); }}
