@@ -9,12 +9,12 @@ import {
   TRADE_COUNTER, TRADE_COUNTER_LABEL,
 } from "../../lib/crmCore.js";
 import { quotesAvailable } from "../../data/crmStorage.js";
-import { ListHero, HeroStat, HeroAdd, SearchBox, FilterPills, DateInput, CalendarPop, RecordNav, BandDelete, HoverStamp } from "./ui.jsx";
+import { ListHero, HeroStat, HeroAdd, SearchBox, FilterPills, DateInput, CalendarPop, RecordNav, BandDelete, HoverStamp, PrintButton, bandBtn } from "./ui.jsx";
 import { Icon, Chip, selectAllProps, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
 import { printQuote } from "./printDocs.js";
 import LinesEditor from "./LinesEditor.jsx";
 
-const navyBtn = { ...btn, background: "transparent", border: "1px solid #3a4f78", color: "#fff" };
+const navyBtn = bandBtn;
 const th = { fontSize: 11, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", padding: "8px 8px", borderBottom: "2px solid #e6e9ef", whiteSpace: "nowrap" };
 const tdc = { padding: "9px 8px", borderBottom: "1px solid #f0f2f6" };
 
@@ -284,7 +284,7 @@ export default function QuotesScreen({ openProduct, money = true, crm, updateCrm
         </div>
         <span style={{ flex: 1 }} />
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button style={navyBtn} onClick={tryPrint}><Icon name="doc" stroke="#fff" />Quote PDF</button>
+          <PrintButton options={[{ key: "quote", label: "Quote", run: tryPrint }]} />
           <button style={navyBtn} onClick={duplicate} title="Copy into a new draft quote — for a revised price or option"><Icon name="layers" stroke="#fff" />Duplicate</button>
           {inv ? (
             <button style={goldBtn} onClick={() => openInvoice(inv.id)}><Icon name="doc" stroke={NAVY} />Open job #{inv.invNo || "—"}</button>

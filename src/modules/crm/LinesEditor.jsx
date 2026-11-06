@@ -38,6 +38,68 @@ const td = { padding: "6px 6px", borderBottom: "1px solid #f0f2f6" };
 
 // grass rolls: length x width (m) under the description; filling both sets the qty to the m2
 const sizeBox = { ...inp, width: 58, padding: "4px 6px", fontSize: 12.5, textAlign: "right" };
+// ===== shared line cells (jobs, quotes, the schedule pop-over and collection notes all use these) =====
+// Product code: type-ahead showing the readable code; a pick stores the SKU. Pencil opens the product.
+export function CodeCell({ code, bySku, options, onCode, onOpenProduct, readOnly }) {
+  const [draft, setDraft] = useState(undefined);
+  const known = !code || !!bySku[String(code).trim().toLowerCase()];
+  const mp = bySku[String(code || "").trim().toLowerCase()];
+  const ok = mp && mp.importProductId;
+  if (readOnly) return <b style={{ fontSize: 12.5 }}>{readableFor(bySku, code) || code || "—"}</b>;
+  return (
+    <>
+      <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <SuggestInput options={options} listWidth={SKU_LIST_W} cols={SKU_COLS}
+            value={draft !== undefined ? draft : readableFor(bySku, code) || code || ""}
+            title={!known ? "Not a product code — pick it from the list so stock, cost and suppliers can be found" : undefined}
+            inputStyle={{ fontWeight: 700, fontSize: 12.5, ...(!known ? { borderColor: "#E8912D", background: "#fff8e6" } : {}) }}
+            onChange={(v) => {
+              // a pick from the list (or a typed readable code) stores the SKU; anything else is kept as typed
+              const t = String(v || "").trim().toLowerCase();
+              const hit = bySku[t] ? bySku[t] : t ? Object.values(bySku).find((p) => p && p.family && p.family.toLowerCase() === t) : null;
+              if (hit) { setDraft(undefined); onCode(hit.sku); } else { setDraft(v); onCode(v); }
+            }} />
+        </div>
+        {onOpenProduct && (
+          <button type="button" className="no-print" disabled={!ok}
+            title={ok ? "Edit this product (name, colours, price, cost, weight…)" : "Not a product in the list — nothing to edit"}
+            onClick={(e) => ok && onOpenProduct(mp.importProductId, e.currentTarget.getBoundingClientRect())}
+            style={{ width: 24, height: 24, flex: "none", border: "none", background: "none", borderRadius: 6, padding: 0, cursor: ok ? "pointer" : "default", display: "inline-flex", alignItems: "center", justifyContent: "center", opacity: ok ? 1 : 0.25 }}>
+            <Icon name="pen" stroke="#185FA5" size={13} />
+          </button>
+        )}
+      </div>
+      {!known && <div style={{ fontSize: 10.5, fontWeight: 700, color: "#a05f10", marginTop: 3 }}>not a product code</div>}
+    </>
+  );
+}
+
+// Qty: a 1–100 drop-down; double-click (or anything over 100) to type any amount
+export function QtyCell({ value, onChange, readOnly }) {
+  const [free, setFree] = useState(false);
+  if (readOnly) return <b>{value === "" || value === null ? "—" : value}</b>;
+  const n = Number(value);
+  if (n > 100 || free || (value !== "" && value !== null && !Number.isInteger(n))) {
+    return (
+      <div style={{ position: "relative" }}>
+        <input style={{ ...numInp, paddingRight: 20 }} inputMode="decimal" autoFocus={free} value={value} {...selectAllProps}
+          onChange={(e) => onChange(e.target.value)}
+          onBlur={(e) => { const m = Number(e.target.value); if (Number.isInteger(m) && m >= 1 && m <= 100) setFree(false); }} />
+        <span style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: "#5a6a85", fontSize: 10 }}>▾</span>
+      </div>
+    );
+  }
+  return (
+    <select style={inp} title="Double-click to type a quantity" value={value === "" || value === null || value === undefined ? "" : String(value)}
+      onDoubleClick={() => setFree(true)}
+      onChange={(e) => onChange(e.target.value === "" ? "" : Number(e.target.value))}>
+      <option value="">—</option>
+      {Array.from({ length: 100 }, (_, i) => String(i + 1)).map((k) => <option key={k} value={k}>{k}</option>)}
+    </select>
+  );
+}
+
 export function SizeRow({ line, onSize, inline, compact }) {
   const m2 = sqmOf(line.lenM, line.widM);
   return (
@@ -216,38 +278,7 @@ export default function LinesEditor({ doc, edit, crm, readOnly, toolbar, onOpenP
                   <Fragment key={l.id}>
                   <tr style={fulfilment ? { boxShadow: "inset 0 -1px 0 transparent" } : undefined}>
                     <td style={{ ...td, width: onOpenProduct ? 218 : 190 }}>
-                      <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                      <SuggestInput options={skuOpts} listWidth={SKU_LIST_W} cols={SKU_COLS}
-                        value={codeDraft[l.id] !== undefined ? codeDraft[l.id] : readableFor(bySku, l.code) || l.code}
-                        title={l.code && !bySku[String(l.code).trim().toLowerCase()] ? "Not a product code — pick it from the list so stock, cost and suppliers can be found" : undefined}
-                        inputStyle={{ fontWeight: 700, fontSize: 12.5, ...(l.code && !bySku[String(l.code).trim().toLowerCase()] ? { borderColor: "#E8912D", background: "#fff8e6" } : {}) }} onChange={(v) => {
-                          // a pick from the list (or a typed readable code) stores the SKU; anything else is kept as typed
-                          const t = String(v || "").trim().toLowerCase();
-                          const hit = bySku[t] ? bySku[t] : t ? Object.values(bySku).find((p) => p && p.family && p.family.toLowerCase() === t) : null;
-                          if (hit) {
-                            setCodeDraft((d) => { const n = { ...d }; delete n[l.id]; return n; });
-                            setLine(l.id, "code", hit.sku);
-                          } else {
-                            setCodeDraft((d) => ({ ...d, [l.id]: v }));
-                            setLine(l.id, "code", v);
-                          }
-                        }} />
-                      </div>
-                      {onOpenProduct && (() => {
-                        const mp = bySku[String(l.code || "").trim().toLowerCase()];
-                        const ok = mp && mp.importProductId;
-                        return (
-                          <button type="button" className="no-print" disabled={!ok}
-                            title={ok ? "Edit this product (name, colours, price, cost, weight…)" : "Not a product in the list — nothing to edit"}
-                            onClick={(e) => ok && onOpenProduct(mp.importProductId, e.currentTarget.getBoundingClientRect())}
-                            style={{ width: 24, height: 24, flex: "none", border: "none", background: "none", borderRadius: 6, padding: 0, cursor: ok ? "pointer" : "default", display: "inline-flex", alignItems: "center", justifyContent: "center", opacity: ok ? 1 : 0.25 }}>
-                            <Icon name="pen" stroke="#185FA5" size={13} />
-                          </button>
-                        );
-                      })()}
-                      </div>
-                      {l.code && !bySku[String(l.code).trim().toLowerCase()] && <div style={{ fontSize: 10.5, fontWeight: 700, color: "#a05f10", marginTop: 3 }}>not a product code</div>}
+                      <CodeCell code={l.code} bySku={bySku} options={skuOpts} onOpenProduct={onOpenProduct} onCode={(v) => setLine(l.id, "code", v)} />
                     </td>
                     {sized && (
                       <td style={{ ...td, width: 150, whiteSpace: "nowrap" }}>
@@ -255,28 +286,7 @@ export default function LinesEditor({ doc, edit, crm, readOnly, toolbar, onOpenP
                       </td>
                     )}
                     <td style={{ ...td, width: 74 }}>
-                      {Number(l.qty) > 100 || freeQty.has(l.id) ? (
-                        <div style={{ position: "relative" }}>
-                          <input style={{ ...numInp, paddingRight: 20 }} inputMode="decimal" autoFocus={freeQty.has(l.id)} value={l.qty} {...selectAllProps}
-                            onChange={(e) => setLine(l.id, "qty", e.target.value)}
-                            onBlur={(e) => {
-                              const n = Number(e.target.value);
-                              if (Number.isInteger(n) && n >= 1 && n <= 100)
-                                setFreeQty((f) => { const x = new Set(f); x.delete(l.id); return x; });
-                            }} />
-                          <span style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: "#5a6a85", fontSize: 10 }}>▾</span>
-                        </div>
-                      ) : (
-                        <select style={inp} title="Double-click to type a quantity" value={l.qty === "" || l.qty === null ? "" : String(l.qty)}
-                          onDoubleClick={() => setFreeQty((f) => new Set(f).add(l.id))}
-                          onChange={(e) => setLine(l.id, "qty", e.target.value === "" ? "" : Number(e.target.value))}>
-                          <option value="">—</option>
-                          {l.qty !== "" && l.qty !== null && !(Number.isInteger(Number(l.qty)) && Number(l.qty) >= 1 && Number(l.qty) <= 100) && (
-                            <option value={String(l.qty)}>{String(l.qty)}</option>
-                          )}
-                          {Array.from({ length: 100 }, (_, i) => String(i + 1)).map((n) => <option key={n} value={n}>{n}</option>)}
-                        </select>
-                      )}
+                      <QtyCell value={l.qty} onChange={(v) => setLine(l.id, "qty", v)} />
                     </td>
                     <td style={{ ...td, minWidth: 200 }}>
                       {/* grass rolls: length x width sit in line, to the right of the description */}

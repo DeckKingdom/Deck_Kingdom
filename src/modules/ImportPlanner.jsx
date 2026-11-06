@@ -1490,7 +1490,7 @@ export default function ImportPlanner() {
         ) : tab === "stock" ? (
           <StockScreen crm={crm} updateCrm={updateCrm} planner={data} updatePlanner={update} askConfirm={setConfirmBox} me={me} />
         ) : (
-          <CollectionsScreen money={access.money} crm={crm} updateCrm={updateCrm} askConfirm={setConfirmBox} selId={selCollectionId} setSelId={setSelCollectionId} openInvoice={openInvoice} me={me} goSupplier={access.canTab("suppliers") ? goSupplier : null} planner={data} newSignal={newCollectionSignal} />
+          <CollectionsScreen openProduct={openProduct} money={access.money} crm={crm} updateCrm={updateCrm} askConfirm={setConfirmBox} selId={selCollectionId} setSelId={setSelCollectionId} openInvoice={openInvoice} me={me} goSupplier={access.canTab("suppliers") ? goSupplier : null} planner={data} newSignal={newCollectionSignal} />
         ))}
 
       {tab === "overview" && (

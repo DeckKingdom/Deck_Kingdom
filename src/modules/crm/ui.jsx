@@ -526,3 +526,40 @@ export const BandDelete = ({ title, onClick }) => (
     <Icon name="bin" stroke="#8fa0c0" size={13} />
   </button>
 );
+
+// Print on a record: one kind → "Print <kind>" button; several → "Print ▾" with each kind (and all).
+// options: [{ key, label, dot?, run }] · dark: on a navy header band
+export function PrintButton({ options, dark = true, allLabel = "Print all", onAll }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return;
+    const off = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", off);
+    return () => document.removeEventListener("mousedown", off);
+  }, [open]);
+  const style = dark ? bandBtn : { ...btn, padding: "6px 11px", fontSize: 12.5 };
+  const ic = dark ? "#fff" : NAVY;
+  if (options.length === 1) {
+    const o = options[0];
+    return <button type="button" style={style} onClick={o.run} title={"Print or save the " + o.label.toLowerCase() + " as a PDF"}><Icon name="print" stroke={ic} size={14} />Print {o.label.toLowerCase()}</button>;
+  }
+  return (
+    <span ref={ref} style={{ position: "relative", display: "inline-flex" }}>
+      <button type="button" style={style} onClick={() => setOpen((v) => !v)} title="Print or save as PDF"><Icon name="print" stroke={ic} size={14} />Print<span style={{ fontSize: 9, opacity: 0.8 }}>▾</span></button>
+      {open && (
+        <div style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 40, background: "#fff", border: "1px solid #d5d9e0", borderRadius: 12, boxShadow: "0 10px 30px rgba(11,31,63,.2)", padding: 4, minWidth: 200 }}>
+          {[...options, { key: "_all", label: allLabel, run: onAll || (() => options.forEach((o) => o.run())), all: true }].map((o) => (
+            <button key={o.key} type="button" onClick={() => { setOpen(false); o.run(); }}
+              style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", height: 32, textAlign: "left", padding: "0 10px", border: "none", borderTop: o.all ? "1px solid #eef1f6" : "none", borderRadius: 8, cursor: "pointer", fontFamily: "inherit", fontSize: 12.5, fontWeight: o.all ? 800 : 600, background: "transparent", color: NAVY }}>
+              {o.dot && <span style={{ width: 10, height: 10, borderRadius: 3, background: o.dot, flex: "none" }} />}{o.all ? o.label : "Print " + o.label.toLowerCase()}
+            </button>
+          ))}
+        </div>
+      )}
+    </span>
+  );
+}
+
+// a button on a record's navy header band (print, duplicate, follow-up…) — gold for the main action
+export const bandBtn = { ...btn, background: "transparent", border: "1px solid #3a4f78", color: "#fff", whiteSpace: "nowrap" };

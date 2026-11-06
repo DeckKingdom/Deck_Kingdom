@@ -12,7 +12,7 @@ import { printJobDocs, DOC_KINDS, printPendingList } from "./printDocs.js";
 import LinesEditor, { SizeRow, applySize, skuOption, SKU_COLS, SKU_LIST_W } from "./LinesEditor.jsx";
 import { JOB_TYPES, skuIndex, PAYMENT_TYPES, stockCheck, partKey, isColPick, blankPick, blankCollectionItem, itemPending, collectionLineOpen, editCollectionLine, removeCollectionLine, isGrassRoll, sizeLabel, purchaseCost } from "../../lib/crmCore.js";
 import StockCheck from "./StockCheck.jsx";
-import { Icon, Chip, Tg, sect, lbl, card, abtn, inp, btn, goldBtn, RiskChip, WebStatusChip, Soon, usePhone, DateInput, CalendarPop, SuggestInput, selectAllProps } from "./ui.jsx";
+import { Icon, Chip, Tg, sect, lbl, card, abtn, inp, btn, goldBtn, RiskChip, WebStatusChip, Soon, usePhone, DateInput, CalendarPop, SuggestInput, selectAllProps, PrintButton } from "./ui.jsx";
 
 const RANGE_OPTS = [
   ["upcoming", "Upcoming + last 7 days"],
@@ -1623,6 +1623,14 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
                   <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 10 }}>
                     <button type="button" className="dk-title-link" title={"Open the job" + (stamp ? "\n" + stamp : "")} onClick={() => { setPop(null); openInvoice(i.id); }} style={{ fontSize: 15, fontWeight: 700, color: NAVY }}>{c ? c.name || "Unnamed" : "No customer"}</button>
                     <button type="button" className="dk-title-link" title={"Open the job" + (stamp ? "\n" + stamp : "")} onClick={() => { setPop(null); openInvoice(i.id); }} style={{ fontSize: 12, fontWeight: 700, color: "#185FA5" }}>#{i.invNo || "—"}</button>
+                    <span style={{ flex: 1 }} />
+                    <span style={{ alignSelf: "center" }}>
+                      <PrintButton dark={false} options={[
+                        { key: "invoice", label: "Invoice", dot: "#d5d9e0", run: () => printJobs([i], ["invoice"], "Invoice " + (i.invNo || "")) },
+                        { key: "delivery", label: "Delivery note", dot: "#6cc28a", run: () => printJobs([i], ["delivery"], "Delivery note " + (i.invNo || "")) },
+                        { key: "loading", label: "Loading note", dot: "#f2c55c", run: () => printJobs([i], ["loading"], "Loading note " + (i.invNo || "")) },
+                      ]} allLabel="Print all three" onAll={() => printJobs([i], ["loading", "delivery", "invoice"], "Job " + (i.invNo || ""))} />
+                    </span>
                   </div>
                 );
               })()}

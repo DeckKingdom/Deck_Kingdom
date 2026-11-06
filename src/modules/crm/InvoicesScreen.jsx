@@ -8,9 +8,9 @@ import {
   skuIndex, invoiceCost, buildPicks, pickLandedCost, jobCost, blankPick, invoiceLoadKg, applyInvoiceStockDeduction, releaseInvoiceLinks,
   TRADE_COUNTER, TRADE_COUNTER_LABEL, quoteRef, sampleRef, isSaleInvoice, riskOf, staffName, isVoidInvoice, onSchedule, userInitials,
 } from "../../lib/crmCore.js";
-import { ListHero, HeroStat, HeroAdd, SearchBox, RiskChip, WebStatusChip, Soon, DateInput, CalendarPop, usePhone } from "./ui.jsx";
+import { ListHero, HeroStat, HeroAdd, SearchBox, RiskChip, WebStatusChip, Soon, DateInput, CalendarPop, usePhone, PrintButton, bandBtn, BandDelete } from "./ui.jsx";
 import { Icon, Chip, Tg, Modal, selectAllProps, SuggestInput, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
-import { printInvoice, printJobSheet, printLoadingBill } from "./printDocs.js";
+import { printInvoice, printJobSheet, printLoadingBill, printJobDocs } from "./printDocs.js";
 import { readableFor } from "./LinesEditor.jsx";
 import LinesEditor from "./LinesEditor.jsx";
 import StockCheck from "./StockCheck.jsx";
@@ -373,16 +373,20 @@ export default function InvoicesScreen({ headerH = 0, openProduct, money = true,
           </div>
         </div>
         <span style={{ flex: 1 }} />
+        <PrintButton options={[
+          { key: "invoice", label: "Invoice", dot: "#d5d9e0", run: () => tryPrint("invoice") },
+          { key: "delivery", label: "Delivery note", dot: "#6cc28a", run: () => tryPrint("job") },
+          { key: "loading", label: "Loading note", dot: "#f2c55c", run: () => tryPrint("loading") },
+        ]} allLabel="Print all three" onAll={() => {
+          const ok = printJobDocs([inv], ["loading", "delivery", "invoice"], { custOf: (x) => custById[x.customerId], siteOf: (x) => siteById[x.siteId], crm, planner, title: "Job " + (inv.invNo || "") });
+          if (!ok) setNotice("Printing is blocked here — allow pop-ups for ops.deckkingdom.co.uk and try again.");
+        }} />
         {newFollowUp && (
-          <button title="Something missing or broken? Create a follow-up job to post or deliver it" onClick={() => newFollowUp(inv.id)}
-            style={{ display: "inline-flex", alignItems: "center", gap: 6, height: 30, borderRadius: 8, border: "1px solid rgba(255,255,255,.35)", background: "transparent", color: "#fff", fontFamily: "inherit", fontWeight: 700, fontSize: 12, padding: "0 10px", cursor: "pointer", whiteSpace: "nowrap" }}>
-            <Icon name="wrench" stroke="#fff" size={13} />Follow-up job
+          <button style={bandBtn} title="Something missing or broken? Create a follow-up job to post or deliver it" onClick={() => newFollowUp(inv.id)}>
+            <Icon name="wrench" stroke="#fff" size={14} />Follow-up job
           </button>
         )}
-        <button title="Delete this invoice" onClick={() => removeInvoice(inv)}
-          style={{ width: 28, height: 28, borderRadius: 8, border: "1px dashed #3a4f78", background: "transparent", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0, flex: "none" }}>
-          <Icon name="bin" stroke="#8fa0c0" size={13} />
-        </button>
+        <BandDelete title="Delete this invoice" onClick={() => removeInvoice(inv)} />
       </div>
 
       {/* refunded / cancelled on the website */}
@@ -551,10 +555,9 @@ export default function InvoicesScreen({ headerH = 0, openProduct, money = true,
 
       {/* lines + totals */}
       <div style={cardX}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 10, flexWrap: "wrap" }}>
           <p style={{ ...sect, margin: 0 }}>Lines</p>
-        </div>
-        <LinesEditor doc={inv} edit={setInv} crm={crm} onOpenProduct={openProduct} toolbar={<>
+          <span style={{ flex: 1 }} />
           <label title="Flag this job as high risk — it gets a red warning until someone checks it"
             style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", color: inv.riskFlag && !inv.riskChecked ? "#9b1c2e" : NAVY }}>
             <input type="checkbox" checked={!!inv.riskFlag && !inv.riskChecked}
@@ -571,10 +574,8 @@ export default function InvoicesScreen({ headerH = 0, openProduct, money = true,
             Delivery completed
             {inv.stockDeducted && <Chip tone="green" style={{ marginLeft: 4, fontSize: 10, padding: "1px 7px" }}>stock out</Chip>}
           </label>
-          <button style={docBtn} onClick={() => tryPrint("invoice")}><Icon name="doc" stroke={NAVY} size={13} />Invoice PDF</button>
-          <button style={docBtn} onClick={() => tryPrint("job")}><Icon name="truck" stroke={NAVY} size={13} />Delivery note</button>
-          <button style={docBtn} onClick={() => tryPrint("loading")}><Icon name="box" stroke={NAVY} size={13} />Loading note</button>
-        </>} />
+        </div>
+        <LinesEditor doc={inv} edit={setInv} crm={crm} onOpenProduct={openProduct} />
 
 
         {(() => {

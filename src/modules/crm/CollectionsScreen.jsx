@@ -11,16 +11,16 @@ import {
 } from "../../lib/crmCore.js";
 import { SupplierModal } from "./SuppliersScreen.jsx";
 import { purchasesAvailable } from "../../data/crmStorage.js";
-import { Icon, Chip, Modal, selectAllProps, SuggestInput, sect, lbl, card, abtn, inp, btn, goldBtn, DateInput, CalendarPop, BandDelete, HoverStamp, ListHero, HeroStat, HeroAdd, SearchBox, FilterPills } from "./ui.jsx";
+import { Icon, Chip, Modal, selectAllProps, SuggestInput, sect, lbl, card, abtn, inp, btn, goldBtn, DateInput, CalendarPop, BandDelete, HoverStamp, ListHero, HeroStat, HeroAdd, SearchBox, FilterPills, PrintButton, bandBtn } from "./ui.jsx";
 import { printCollectionNote } from "./printDocs.js";
-import { skuOption, SKU_COLS, SKU_LIST_W, SizeRow, applySize } from "./LinesEditor.jsx";
+import { skuOption, SKU_COLS, SKU_LIST_W, SizeRow, applySize, CodeCell, QtyCell, ColourSelect } from "./LinesEditor.jsx";
 
-const navyBtn = { ...btn, background: "transparent", border: "1px solid #3a4f78", color: "#fff" };
+const navyBtn = bandBtn;
 const td = { padding: "6px 6px", borderBottom: "1px solid #f0f2f6", fontSize: 13 };
 
 export { collectionStatus };
 
-export default function CollectionsScreen({ money = true, crm, updateCrm, askConfirm, selId, setSelId, openInvoice, me, goSupplier, planner, newSignal = 0 }) {
+export default function CollectionsScreen({ openProduct, money = true, crm, updateCrm, askConfirm, selId, setSelId, openInvoice, me, goSupplier, planner, newSignal = 0 }) {
   const [allProducts, setAllProducts] = useState(false);
   const [supDraft, setSupDraft] = useState(null);
   const [search, setSearch] = useState("");
@@ -293,7 +293,7 @@ export default function CollectionsScreen({ money = true, crm, updateCrm, askCon
         </div>
         <span style={{ flex: 1 }} />
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button style={navyBtn} onClick={tryPrint} title="Print or save the collection note"><Icon name="print" stroke="#fff" />Print collection note</button>
+          <PrintButton options={[{ key: "collection", label: "Collection note", run: tryPrint }]} />
           {prog.pending > 0 && (
             <>
               <button style={goldBtn} onClick={stockAllPending}><Icon name="box" stroke={NAVY} />Remaining to stock</button>
@@ -393,8 +393,8 @@ export default function CollectionsScreen({ money = true, crm, updateCrm, askCon
         </div>
         <div className="dk-bleed" style={{ overflowX: "auto" }}>
           <table className="dk-t" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 780 }}>
-            <thead><tr>{["SKU", "Description", "Colour", ...(sized ? ["Length × width (m)"] : []), "Qty", "Unit cost £", "Line £", "Where it went", ""].map((h, i) => (!money && (h === "Unit cost £" || h === "Line £")) ? null : (
-              <th key={i} style={{ textAlign: h === "Qty" || h === "Unit cost £" || h === "Line £" ? "right" : "left", fontSize: 10.5, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", padding: "7px 6px", borderBottom: "2px solid #e6e9ef", whiteSpace: "nowrap" }}>{h}</th>
+            <thead><tr>{["Code", ...(sized ? ["Length × width (m)"] : []), "Qty", "Description", "Colour", "Unit cost £", "Line £", "Where it went", ""].map((h, i) => (!money && (h === "Unit cost £" || h === "Line £")) ? null : (
+              <th key={i} style={{ textAlign: h === "Unit cost £" || h === "Line £" ? "right" : "left", fontSize: 10.5, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", padding: "7px 6px", borderBottom: "2px solid #e6e9ef", whiteSpace: "nowrap" }}>{h}</th>
             ))}</tr></thead>
             <tbody>
               {(coll.items || []).map((it) => {
@@ -403,31 +403,30 @@ export default function CollectionsScreen({ money = true, crm, updateCrm, askCon
                 const needs = needsSize(it);
                 return (
                   <tr key={it.id} style={{ opacity: pending ? 1 : 0.85 }}>
-                    <td style={{ ...td, width: 150 }}>
-                      {pending ? (
-                        <SuggestInput value={it.sku} options={skuOpts} listWidth={SKU_LIST_W} cols={SKU_COLS} inputStyle={{ fontWeight: 700, fontSize: 12.5 }} onChange={(v) => setItem(it.id, "sku", v)} />
-                      ) : (
-                        <b style={{ fontSize: 12.5 }}>{it.sku || "—"}</b>
-                      )}
-                    </td>
-                    <td style={{ ...td, minWidth: 170 }}>
-                      {pending ? <input style={inp} {...selectAllProps} value={it.description} onChange={(e) => setItem(it.id, "description", e.target.value)} /> : it.description}
-                    </td>
-                    <td style={{ ...td, width: 100 }}>
-                      {pending ? <input style={inp} {...selectAllProps} value={it.colour} onChange={(e) => setItem(it.id, "colour", e.target.value)} /> : it.colour || "—"}
+                    <td style={{ ...td, width: openProduct ? 218 : 190 }}>
+                      <CodeCell code={it.sku} bySku={bySku} options={skuOpts} onOpenProduct={openProduct} readOnly={!pending} onCode={(v) => setItem(it.id, "sku", v)} />
                     </td>
                     {sized && (
                       <td style={{ ...td, width: 150, whiteSpace: "nowrap", fontWeight: 700, color: "#5a6a85" }}>
                         {pending && needs ? <SizeRow inline compact line={it} onSize={(k, v) => setColl((t, c) => editCollectionLine(c, t, it.id, (y) => applySize(y, k, v)))} /> : sizeLabel(it)}
                       </td>
                     )}
-                    <td style={{ ...td, width: 64, textAlign: "right" }}>
-                      {pending ? <input style={{ ...inp, textAlign: "right" }} inputMode="decimal" {...selectAllProps} value={it.qty} onChange={(e) => setItem(it.id, "qty", e.target.value)} /> : <b>{it.qty}</b>}
+                    <td style={{ ...td, width: 74 }}>
+                      <QtyCell value={it.qty} readOnly={!pending} onChange={(v) => setItem(it.id, "qty", v)} />
                     </td>
-                    {money && <td style={{ ...td, width: 88, textAlign: "right" }}>
+                    <td style={{ ...td, minWidth: 200 }}>
+                      {pending ? <input style={inp} {...selectAllProps} value={it.description} onChange={(e) => setItem(it.id, "description", e.target.value)} /> : it.description}
+                    </td>
+                    <td style={{ ...td, width: 130 }}>
+                      {pending ? (
+                        <ColourSelect line={{ ...it, code: it.sku }} crm={crm} bySku={bySku}
+                          onPick={(colour, sku) => setColl((t, c) => editCollectionLine(c, t, it.id, (y) => { y.colour = colour; if (sku) y.sku = sku; }))} />
+                      ) : it.colour || "—"}
+                    </td>
+                    {money && <td style={{ ...td, width: 100, textAlign: "right" }}>
                       {pending ? <input style={{ ...inp, textAlign: "right" }} inputMode="decimal" {...selectAllProps} value={it.unitCost} onChange={(e) => setItem(it.id, "unitCost", e.target.value)} /> : (it.unitCost === "" ? "—" : Number(it.unitCost).toFixed(2))}
                     </td>}
-                    {money && <td style={{ ...td, textAlign: "right", fontWeight: 700, whiteSpace: "nowrap", width: 80 }}>
+                    {money && <td style={{ ...td, textAlign: "right", fontWeight: 700, whiteSpace: "nowrap", width: 90 }}>
                       {((Number(it.qty) || 0) * (Number(it.unitCost) || 0)).toLocaleString("en-GB", { minimumFractionDigits: 2 })}
                     </td>}
                     <td style={{ ...td, whiteSpace: "nowrap", width: 150 }}>
@@ -460,7 +459,7 @@ export default function CollectionsScreen({ money = true, crm, updateCrm, askCon
         </div>
         <button style={{ ...btn, width: "100%", justifyContent: "center", borderStyle: "dashed", color: "#5a6a85", marginTop: 8 }}
           onClick={() => setColl((t) => t.items.push(blankCollectionItem()))}>
-          <Icon name="plus" />Add item
+          <Icon name="plus" />Add line
         </button>
         {money && <div style={{ display: "flex", gap: 16, alignItems: "center", justifyContent: "flex-end", marginTop: 12, fontSize: 13.5, fontWeight: 700 }}>
           Purchase value: <span style={{ background: GOLD + "33", border: "1px solid " + GOLD, borderRadius: 8, padding: "4px 12px" }}>{gbp(itemsValue(coll))}</span>
