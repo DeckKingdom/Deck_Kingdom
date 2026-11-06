@@ -169,6 +169,7 @@ let webStatusReady = false; // invoices.web_status (migration 032)
 let runReady = false; // invoices.driver / drop_no (migration 033)
 let runNoReady = false; // invoices.run_no (migration 034)
 let collRunReady = false; // collections.driver / run_no / drop_no (migration 035)
+let collMailReady = false; // collections.emailed_at (migration 042)
 const mpToRow = (p, i) => {
   const row = { id: p.id, is_kit: p.isKit === true, active: p.active !== false, position: i };
   if (gradeReady) row.grade = str(p.grade);
@@ -214,6 +215,7 @@ const collToRow = (c, i) => {
   COLL_TEXT.forEach((k) => (row[snake(k)] = str(c[k])));
   if (purchasesReady) row.supplier_id = str(c.supplierId);
   if (collRunReady) { row.driver = str(c.driver); row.run_no = str(c.runNo); row.drop_no = str(c.dropNo); }
+  if (collMailReady) row.emailed_at = str(c.emailedAt);
   return row;
 };
 
@@ -501,11 +503,13 @@ async function loadAll() {
     });
   });
   collRunReady = colls_.length ? Object.prototype.hasOwnProperty.call(colls_[0], "run_no") : collRunReady;
+  collMailReady = colls_.length ? Object.prototype.hasOwnProperty.call(colls_[0], "emailed_at") : collMailReady;
   const collections = colls_.map((r) => {
     const c = { id: r.id, collectionNo: r.collection_no, collected: r.collected === true, items: itemsByColl[r.id] || [] };
     COLL_TEXT.forEach((k) => (c[k] = nv(r[snake(k)])));
     c.supplierId = nv(r.supplier_id);
     c.driver = nv(r.driver); c.runNo = nv(r.run_no); c.dropNo = nv(r.drop_no);
+    c.emailedAt = nv(r.emailed_at);
     return c;
   });
   const movements = moves_.map((r) => ({

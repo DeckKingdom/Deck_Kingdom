@@ -316,7 +316,7 @@ const DayPill = ({ value, onChange, placeholder = "Date", paid, what = "", full 
 // ---- parts status for a job: ready · on a collection note · back order (on an inbound container) · needs collecting
 const PARTS_LOOK = {
   ready: { bg: "#3FA55C22", fg: "#28713e", label: "All parts ready" },
-  coll: { bg: "#185FA51f", fg: "#185FA5", label: "Parts on a collection note" },
+  coll: { bg: "#E8B13A40", fg: "#9a6700", label: "Parts on a collection note — not collected yet" },
   back: { bg: "#7a4dc222", fg: "#6a3fb5", label: "Parts on back order" },
   need: { bg: "#C8102E1a", fg: "#C8102E", label: "Parts need collecting" },
 };
@@ -360,6 +360,29 @@ const PartsIcon = ({ info, onEnter, onLeave, onClick }) => {
       style={{ width: 22, height: 22, borderRadius: 7, background: look.bg, display: "inline-flex", alignItems: "center", justifyContent: "center", flex: "none", cursor: "pointer" }}>
       <Icon name="box" stroke={look.fg} size={13} />
     </span>
+  );
+};
+
+// email the collection note to the supplier (opens Gmail ready to send); goes green once emailed
+const CollMailButton = ({ c, crm, onSent }) => {
+  const sup = (crm.suppliers || []).find((x) => x.id === c.supplierId) || (crm.suppliers || []).find((x) => (x.name || "").toLowerCase() === String(c.supplier || "").toLowerCase());
+  const email = sup && sup.email ? String(sup.email).trim() : "";
+  const sent = !!c.emailedAt;
+  const when = c.collectDate ? new Date(c.collectDate + "T00:00:00").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" }) : "";
+  const body = "Hi" + (c.contact ? " " + String(c.contact).split(/\s+/)[0] : "") + ",\n\n" +
+    "Deck Kingdom will be collecting the following" + (when ? " on " + when + (c.collectTime ? " (" + c.collectTime + ")" : "") : "") + ":\n\n" +
+    (c.items || []).map((it) => "  " + (it.qty || "?") + " × " + (it.description || it.sku || "") + (it.colour ? " – " + it.colour : "") + (it.sku ? " (" + it.sku + ")" : "")).join("\n") +
+    "\n\nOur reference: COL-" + (c.collectionNo || "") + (c.driver ? "\nDriver: " + c.driver : "") + (c.van ? "\nVan: " + c.van : "") +
+    "\n\nPlease could you have these ready. Any problems, call us on 0161 399 1837.\n\nKind regards,\nDeck Kingdom";
+  const href = "https://mail.google.com/mail/?view=cm&fs=1&to=" + encodeURIComponent(email) + "&su=" + encodeURIComponent("Collection COL-" + (c.collectionNo || "") + " – Deck Kingdom" + (when ? " – " + when : "")) + "&body=" + encodeURIComponent(body);
+  const box = { width: 26, height: 26, borderRadius: 8, border: "none", display: "inline-flex", alignItems: "center", justifyContent: "center", padding: 0, flex: "none", textDecoration: "none" };
+  if (!email) return <span title={"No email address for " + (c.supplier || "this supplier") + " — add one on the supplier record"} style={{ ...box, background: "#f0f2f6", opacity: 0.5 }}><Icon name="mail" stroke="#aab3c2" size={13} /></span>;
+  return (
+    <a href={href} target="_blank" rel="noopener noreferrer" onClick={onSent}
+      title={(sent ? "Emailed on " + prettyDateTime(c.emailedAt) + " — click to email again" : "Email the collection note to " + email)}
+      style={{ ...box, cursor: "pointer", background: sent ? "#3FA55C26" : "#185FA51a" }}>
+      <Icon name="mail" stroke={sent ? "#28713e" : "#185FA5"} size={13} />
+    </a>
   );
 };
 
@@ -962,6 +985,8 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
         </div>
         <div style={{ ...sep, gridColumn: showPrep ? "span 4" : "span 2", fontSize: 12, fontWeight: 700 }}>
           {done ? <Chip tone="green">Processed</Chip> : c.collected ? (pr.done > 0 ? <Chip tone="gold">{pr.done}/{pr.total} processed</Chip> : <span style={{ color: "#28713e" }}>Collected</span>) : (c.items || []).some((it) => it.assignedInvoiceId) ? <span style={{ color: "#5a6a85" }}>For a job</span> : null}
+          <span style={{ flex: 1 }} />
+          <CollMailButton c={c} crm={crm} onSent={() => setColl(c.id, (t) => (t.emailedAt = new Date().toISOString()))} />
         </div>
         <div style={{ display: "flex", justifyContent: "flex-end" }}>
           <PrintMenu jobs={false} collCount={1} title="Print or save the collection note" onPick={(kk) => printJobs([], kk, "Collection note COL-" + (c.collectionNo || ""), [c])} />

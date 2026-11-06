@@ -247,6 +247,9 @@ export function printCollectionNote(coll) {
   const body = collectionBody(coll);
   return openDoc(shell("Collection note COL-" + (coll.collectionNo || ""), body));
 }
+// suppliers known by a short name on the paperwork
+const SUPPLIER_SHORT = { "tuda grass": "TG" };
+const supplierShort = (n) => SUPPLIER_SHORT[String(n || "").trim().toLowerCase()] || n;
 const collectionBody = (coll) => {
   const items = (coll.items || []).map((it) => `
     <tr><td style="width:26px"><div style="width:16px;height:16px;border:2px solid #0B1F3F;border-radius:4px"></div></td>
@@ -254,7 +257,7 @@ const collectionBody = (coll) => {
     <td class="r big">${esc(it.qty)}</td></tr>`).join("");
   return `<div class="pg pg-collection">` + head("Collection note", "COL-" + (coll.collectionNo || "—"), pretty(coll.collectDate || coll.date), true) + `
 <div class="grid">
-  ${addrBlock("Collect from", [coll.supplier, coll.address, [coll.town, coll.postcode].filter(Boolean).join(" ")])}
+  ${addrBlock("Collect from", [supplierShort(coll.supplier), coll.address, [coll.town, coll.postcode].filter(Boolean).join(" ")])}
   ${addrBlock("Supplier contact", [coll.contact, coll.phone])}
   ${addrBlock("Collection", ["Date: " + pretty(coll.collectDate), coll.collectTime ? "Time: " + coll.collectTime : "", coll.driver ? "Driver: " + coll.driver : "", coll.van ? "Van: " + coll.van : ""])}
   ${addrBlock("Return to", [COMPANY.name, COMPANY.address, COMPANY.phone])}
