@@ -1648,7 +1648,7 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
                 {contact && <div style={{ color: "#5a6a85" }}>{contact}</div>}
               </div>
               <div style={{ marginTop: 12 }}>
-                <LinesEditor doc={i} crm={crm} edit={(fn) => setInv(i.id, (t) => fn(t))} onOpenProduct={openProduct} />
+                <LinesEditor doc={i} crm={crm} edit={(fn) => setInv(i.id, (t) => fn(t))} onOpenProduct={openProduct} fulfilment={{ planner }} />
               </div>
               <div style={{ marginTop: 8, fontSize: 12.5, fontWeight: 700, color: NAVY, display: "grid", gridTemplateColumns: "1fr auto", gap: "3px 10px" }}>
                 {Number(i.deliveryCharge) ? <><span style={{ color: "#5a6a85" }}>Delivery</span><span>{gbp(Number(i.deliveryCharge))}</span></> : null}

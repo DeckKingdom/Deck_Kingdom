@@ -1,10 +1,11 @@
 // Line entry shared by invoices and quotes: SKU type-ahead fills description,
 // colour and price from the products list; qty is a 1-100 dropdown (double-
 // click to type any amount). `edit(fn)` mutates the record that owns `lines`.
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo, useRef, useEffect, Fragment } from "react";
 import { RED, NAVY } from "../../lib/core.js";
-import { blankLine, skuIndex, PRODUCT_SOURCES, skuSource, skuLists, skuOptionLabel, colourSeg, gradeOf, isGrassRoll, sqmOf, sizeLabel } from "../../lib/crmCore.js";
-import { Icon, SuggestInput, selectAllProps, inp, btn, abtn } from "./ui.jsx";
+import { blankLine, skuIndex, PRODUCT_SOURCES, skuSource, skuLists, skuOptionLabel, colourSeg, gradeOf, isGrassRoll, sqmOf, sizeLabel,
+  stockCheck, explodeInvoiceLines, partKey, isColPick, batchBreakdown, batchKeyForPick, buildPicks } from "../../lib/crmCore.js";
+import { Icon, SuggestInput, selectAllProps, inp, btn, abtn, Chip } from "./ui.jsx";
 
 const numInp = { ...inp, textAlign: "right" };
 
@@ -60,7 +61,9 @@ export const applySize = (line, k, v) => {
 };
 
 // onOpenProduct(productId, rect): optional — a button by each code opens that product's record to edit
-export default function LinesEditor({ doc, edit, crm, readOnly, toolbar, onOpenProduct }) {
+// fulfilment: optional { planner } — adds a second row under each line showing how it's being
+// fulfilled: stock / short / coming on a collection, and the batch + picked tick for each pick
+export default function LinesEditor({ doc, edit, crm, readOnly, toolbar, onOpenProduct, fulfilment }) {
   const [codeDraft, setCodeDraft] = useState({}); // what's being typed in a code box (shown instead of the readable code)
   const [freeQty, setFreeQty] = useState(new Set()); // lines typing a qty directly (double-clicked)
   const [src, setSrc] = useState(""); // offer only one source's codes (DK, TG …)
@@ -99,6 +102,83 @@ export default function LinesEditor({ doc, edit, crm, readOnly, toolbar, onOpenP
       }
     });
 
+  // ===== fulfilment row (second row under each line) =====
+  const checks = useMemo(() => {
+    if (!fulfilment) return {};
+    const m = {};
+    stockCheck(doc, crm).forEach((r) => (m[r.key] = r));
+    return m;
+  }, [fulfilment, doc, crm]);
+  const ncols = 7 + (sized ? 1 : 0);
+  const setPick = (pid, fn) => edit((x) => { const p = (x.picks || []).find((y) => y.id === pid); if (p) fn(p); });
+  const fulfilRow = (l) => {
+    if (!l.code && !l.description) return null;
+    const planner = fulfilment.planner;
+    const ships = (planner && planner.shipments) || [];
+    const parts = explodeInvoiceLines({ lines: [l] }, crm).filter((r) => r.kind !== "kit");
+    const picks = doc.picks || [];
+    const done = !!doc.deliveryCompleted;
+    return (
+      <tr>
+        <td colSpan={ncols} style={{ padding: "0 6px 8px", borderBottom: "1px solid #eef0f4" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4, background: "#f8f9fb", border: "1px solid #eef1f6", borderRadius: 8, padding: "5px 9px" }}>
+            {parts.map((pt, n) => {
+              const key = partKey(pt.sku);
+              const chk = checks[key];
+              const mine = picks.filter((p) => partKey(p.sku) === key);
+              const status = done ? <Chip tone="green" style={{ fontSize: 10.5, padding: "1px 8px" }}>delivered</Chip>
+                : !chk || !bySku[String(pt.sku || "").trim().toLowerCase()] ? <Chip style={{ fontSize: 10.5, padding: "1px 8px" }} title="Pick the code from the list so stock can be checked">not a stock item</Chip>
+                : chk.short > 0 ? <Chip tone="red" style={{ fontSize: 10.5, padding: "1px 8px" }} title={chk.free + " free in stock, " + chk.fromStock + " needed from stock"}>{chk.short} short</Chip>
+                : chk.fromStock > 0 ? <Chip tone="green" style={{ fontSize: 10.5, padding: "1px 8px" }} title={chk.stock + " in stock · " + chk.free + " free after other jobs"}>in stock · {chk.free} free</Chip>
+                : <Chip tone="blue" style={{ fontSize: 10.5, padding: "1px 8px" }}>on a collection</Chip>;
+              return (
+                <div key={n} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontSize: 11.5, fontWeight: 600, color: "#5a6a85" }}>
+                  <span style={{ fontSize: 10, fontWeight: 800, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", minWidth: 62 }}>{parts.length > 1 || pt.kind === "part" ? "Part" : "Fulfil"}</span>
+                  {(parts.length > 1 || pt.kind === "part") && <b style={{ color: NAVY }} title={pt.description}>{pt.sku} ×{pt.qty}</b>}
+                  {status}
+                  {mine.length === 0 && !done && (
+                    picks.length === 0 && !readOnly
+                      ? <button type="button" onClick={() => edit((x) => (x.picks = buildPicks(x, crm)))} style={{ fontFamily: "inherit", fontSize: 11.5, fontWeight: 700, color: "#185FA5", background: "none", border: "none", padding: 0, cursor: "pointer" }} title="Build the job's pick list so the warehouse can record batches">+ pick list</button>
+                      : <span style={{ color: "#8593a8" }}>not on the pick list</span>
+                  )}
+                  {mine.map((p) => {
+                    if (isColPick(p)) return (
+                      <span key={p.id} style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                        <Chip tone="blue" style={{ fontSize: 10.5, padding: "1px 8px" }} title="Coming on (or collected by) this collection note">{String(p.batchRef).toUpperCase()} ×{p.qty}</Chip>
+                        <label style={{ display: "inline-flex", alignItems: "center", gap: 3, cursor: "pointer" }} title="Picked and loaded">
+                          <input type="checkbox" checked={!!p.picked} disabled={readOnly} onChange={(e) => setPick(p.id, (y) => (y.picked = e.target.checked))} />picked
+                        </label>
+                      </span>
+                    );
+                    const cur = batchKeyForPick(p, planner);
+                    const bb = batchBreakdown(p.sku, crm, planner);
+                    return (
+                      <span key={p.id} style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                        {mine.length > 1 && <b style={{ color: NAVY }}>×{p.qty}</b>}
+                        <select value={cur} disabled={readOnly} title="Which batch this stock is coming from"
+                          onChange={(e) => setPick(p.id, (y) => { const v = e.target.value; const sh = ships.find((x) => x.name === v); y.shipmentId = sh ? sh.id : ""; y.batchRef = sh ? "" : v; })}
+                          style={{ ...inp, width: "auto", maxWidth: 230, padding: "2px 6px", fontSize: 11.5, borderColor: cur ? "#d5d9e0" : "#E8B13A", background: cur ? "#fff" : "#fff8e6" }}>
+                          <option value="">— batch —</option>
+                          {bb.filter((b) => b.left > 0 || b.ref === cur).map((b) => (
+                            <option key={b.ref} value={b.ref}>{b.ref === "manual" ? "Stock (no batch)" : b.ref}{" · " + b.left + " left"}</option>
+                          ))}
+                          {cur && !bb.some((b) => b.ref === cur) && <option value={cur}>{cur}</option>}
+                        </select>
+                        <label style={{ display: "inline-flex", alignItems: "center", gap: 3, cursor: "pointer" }} title="Picked and loaded">
+                          <input type="checkbox" checked={!!p.picked} disabled={readOnly} onChange={(e) => setPick(p.id, (y) => (y.picked = e.target.checked))} />picked
+                        </label>
+                      </span>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        </td>
+      </tr>
+    );
+  };
+
   const lineTotal = (l) => ((Number(l.qty) || 0) * (Number(l.price) || 0)).toLocaleString("en-GB", { minimumFractionDigits: 2 });
 
   return (
@@ -133,7 +213,8 @@ export default function LinesEditor({ doc, edit, crm, readOnly, toolbar, onOpenP
                   </tr>
                 ))
               : doc.lines.map((l) => (
-                  <tr key={l.id}>
+                  <Fragment key={l.id}>
+                  <tr style={fulfilment ? { boxShadow: "inset 0 -1px 0 transparent" } : undefined}>
                     <td style={{ ...td, width: onOpenProduct ? 218 : 190 }}>
                       <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
                       <div style={{ flex: 1, minWidth: 0 }}>
@@ -220,6 +301,8 @@ export default function LinesEditor({ doc, edit, crm, readOnly, toolbar, onOpenP
                       </button>
                     </td>
                   </tr>
+                  {fulfilment && fulfilRow(l)}
+                  </Fragment>
                 ))}
           </tbody>
         </table>
