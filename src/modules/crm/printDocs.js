@@ -48,13 +48,13 @@ const shell = (title, body) => `<!doctype html><html><head><meta charset="utf-8"
   .big { font-size: 15px; font-weight: 700; }
   /* paperwork colours, so each kind is easy to spot in the warehouse and the vans */
   html, body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .pg { border-radius: 14px; padding: 22px 24px; min-height: 255mm; box-sizing: border-box; }
-  .pg-loading { background: #fff4d6; } .pg-delivery { background: #e3f4e8; } .pg-collection { background: #e1ecfb; }
+  /* a coloured strip down the left (saves ink) — the page itself stays white */
+  .pg { border-left: 7mm solid; padding: 4px 0 4px 18px; min-height: 270mm; box-sizing: border-box; }
+  .pg-loading { border-left-color: #e0a526; } .pg-delivery { border-left-color: #3f9b5c; } .pg-collection { border-left-color: #3b78d8; }
   .band { display: inline-block; color: #fff; font-weight: 800; font-size: 13px; letter-spacing: 1px; text-transform: uppercase; border-radius: 8px; padding: 5px 12px; margin-bottom: 4px; white-space: nowrap; }
   .pg-loading .band { background: #c98a12; } .pg-delivery .band { background: #2f8a4c; } .pg-collection .band { background: #2563c9; }
   .pg td { border-bottom-color: rgba(11,31,63,.12); } .pg th { border-bottom-color: rgba(11,31,63,.2); }
-  .pg .note { background: #fff; }
-  @page { size: A4; margin: 10mm; }
+    @page { size: A4; margin: 10mm; }
   @media print { body { padding: 0; } }
 </style></head><body>${body}
 <script>window.onload = function(){ setTimeout(function(){ window.print(); }, 300); };</script>
