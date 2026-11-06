@@ -103,16 +103,10 @@ export default function LinesEditor({ doc, edit, crm, readOnly, toolbar, onOpenP
 
   return (
     <>
-      {!readOnly && (sources.length > 1 || toolbar) && (
+      {/* every product is always offered (no "stock from" filter) */}
+      {!readOnly && toolbar && (
         <div style={{ display: "flex", gap: 4, alignItems: "center", flexWrap: "wrap", marginBottom: 6 }}>
-          {sources.length > 1 && <span style={{ fontSize: 11, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", marginRight: 4 }}>Stock from</span>}
-          {(sources.length > 1 ? ["", ...sources] : []).map((k) => (
-            <button key={k || "all"} onClick={() => setSrc(k)} title={k ? PRODUCT_SOURCES[k] || k : "Any source"}
-              style={{ fontFamily: "inherit", fontSize: 12, fontWeight: 700, padding: "3px 10px", borderRadius: 999, cursor: "pointer", border: "1px solid " + (src === k ? NAVY : "#d5d9e0"), background: src === k ? NAVY : "#fff", color: src === k ? "#fff" : "#5a6a85" }}>
-              {k || "All"}
-            </button>
-          ))}
-          {toolbar && <><span style={{ flex: 1 }} /><span style={{ display: "inline-flex", gap: 8, flexWrap: "wrap" }}>{toolbar}</span></>}
+          <span style={{ flex: 1 }} /><span style={{ display: "inline-flex", gap: 8, flexWrap: "wrap" }}>{toolbar}</span>
         </div>
       )}
       <div className="dk-bleed" style={{ overflowX: "auto" }}>
@@ -140,7 +134,9 @@ export default function LinesEditor({ doc, edit, crm, readOnly, toolbar, onOpenP
                 ))
               : doc.lines.map((l) => (
                   <tr key={l.id}>
-                    <td style={{ ...td, width: 190 }}>
+                    <td style={{ ...td, width: onOpenProduct ? 218 : 190 }}>
+                      <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
                       <SuggestInput options={skuOpts} listWidth={SKU_LIST_W} cols={SKU_COLS}
                         value={codeDraft[l.id] !== undefined ? codeDraft[l.id] : readableFor(bySku, l.code) || l.code}
                         title={l.code && !bySku[String(l.code).trim().toLowerCase()] ? "Not a product code — pick it from the list so stock, cost and suppliers can be found" : undefined}
@@ -156,18 +152,21 @@ export default function LinesEditor({ doc, edit, crm, readOnly, toolbar, onOpenP
                             setLine(l.id, "code", v);
                           }
                         }} />
-                      {l.code && !bySku[String(l.code).trim().toLowerCase()] && <div style={{ fontSize: 10.5, fontWeight: 700, color: "#a05f10", marginTop: 3 }}>not a product code</div>}
+                      </div>
                       {onOpenProduct && (() => {
                         const mp = bySku[String(l.code || "").trim().toLowerCase()];
-                        if (!mp || !mp.importProductId) return null;
+                        const ok = mp && mp.importProductId;
                         return (
-                          <button type="button" className="no-print" title="Open this product's record to edit it (name, colours, price, cost, weight…)"
-                            onClick={(e) => onOpenProduct(mp.importProductId, e.currentTarget.getBoundingClientRect())}
-                            style={{ fontFamily: "inherit", fontSize: 11, fontWeight: 700, color: "#185FA5", background: "none", border: "none", padding: "3px 0 0", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }}>
-                            <Icon name="pen" stroke="#185FA5" size={11} />Edit product
+                          <button type="button" className="no-print" disabled={!ok}
+                            title={ok ? "Edit this product (name, colours, price, cost, weight…)" : "Not a product in the list — nothing to edit"}
+                            onClick={(e) => ok && onOpenProduct(mp.importProductId, e.currentTarget.getBoundingClientRect())}
+                            style={{ width: 24, height: 24, flex: "none", border: "none", background: "none", borderRadius: 6, padding: 0, cursor: ok ? "pointer" : "default", display: "inline-flex", alignItems: "center", justifyContent: "center", opacity: ok ? 1 : 0.25 }}>
+                            <Icon name="pen" stroke="#185FA5" size={13} />
                           </button>
                         );
                       })()}
+                      </div>
+                      {l.code && !bySku[String(l.code).trim().toLowerCase()] && <div style={{ fontSize: 10.5, fontWeight: 700, color: "#a05f10", marginTop: 3 }}>not a product code</div>}
                     </td>
                     {sized && (
                       <td style={{ ...td, width: 150, whiteSpace: "nowrap" }}>

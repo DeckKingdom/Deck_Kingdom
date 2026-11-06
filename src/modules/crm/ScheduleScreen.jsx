@@ -1614,23 +1614,25 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
               onMouseDown={() => { if (pop.peek) { peekCancel(); setPop({ ...pop, peek: false }); } }}
               style={{ position: "fixed", ...(phone ? { left: 8, right: 8, top: 62, width: "auto", maxHeight: "calc(100dvh - 74px)" } : { left: pop.side === "left" ? Math.max(10, pop.rect.left - PW - 24) : Math.min(pop.rect.left, window.innerWidth - PW - 20), top: Math.max(10, pop.side === "left" ? Math.min(pop.rect.top - 60, window.innerHeight - PH - 10) : top), width: PW, maxHeight: PH }), zIndex: 71, overflowY: "auto",
               background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, boxShadow: "0 14px 40px rgba(11,31,63,.28)", padding: "14px 18px", boxSizing: "border-box" }}>
-              <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 6 }}>
-                <button type="button" className="dk-title-link" title="Open the job" onClick={() => { setPop(null); openInvoice(i.id); }} style={{ fontSize: 15, fontWeight: 700, color: NAVY }}>{c ? c.name || "Unnamed" : "No customer"}</button>
-                <button type="button" className="dk-title-link" title="Open the job" onClick={() => { setPop(null); openInvoice(i.id); }} style={{ fontSize: 12, fontWeight: 700, color: "#185FA5" }}>#{i.invNo || "—"}</button>
-              </div>
-              <Stamp lines={[
-                i.created || i.date ? "Raised " + prettyDate(i.created || i.date) + (i.raisedBy ? " by " + i.raisedBy.split("@")[0] : "") : "",
-                i.updatedAt ? "Updated " + prettyDateTime(i.updatedAt) + (i.modifiedBy ? " by " + i.modifiedBy.split("@")[0] : "") : "",
-              ]} />
-              <div style={{ display: "flex", gap: 8, alignItems: "center", background: i.deliveryDate ? "#f7f9fc" : "#fff8e6", border: "1px solid " + (i.deliveryDate ? "#e6e9ef" : "#f4d78f"), borderRadius: 10, padding: "6px 10px", marginBottom: 10 }}>
-                <span style={{ ...lbl, marginBottom: 0, whiteSpace: "nowrap", minWidth: 96 }}>{isCollectionJob(i) ? "Collection date" : "Delivery date"}</span>
-                <DateInput value={i.deliveryDate || ""} style={{ ...pill, width: 130, padding: "3px 8px" }}
+              {(() => {
+                const stamp = [
+                  i.created || i.date ? "Raised " + prettyDate(i.created || i.date) + (i.raisedBy ? " by " + i.raisedBy.split("@")[0] : "") : "",
+                  i.updatedAt ? "Updated " + prettyDateTime(i.updatedAt) + (i.modifiedBy ? " by " + i.modifiedBy.split("@")[0] : "") : "",
+                ].filter(Boolean).join("\n");
+                return (
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 10 }}>
+                    <button type="button" className="dk-title-link" title={"Open the job" + (stamp ? "\n" + stamp : "")} onClick={() => { setPop(null); openInvoice(i.id); }} style={{ fontSize: 15, fontWeight: 700, color: NAVY }}>{c ? c.name || "Unnamed" : "No customer"}</button>
+                    <button type="button" className="dk-title-link" title={"Open the job" + (stamp ? "\n" + stamp : "")} onClick={() => { setPop(null); openInvoice(i.id); }} style={{ fontSize: 12, fontWeight: 700, color: "#185FA5" }}>#{i.invNo || "—"}</button>
+                  </div>
+                );
+              })()}
+              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", background: isPaid(i) ? "#eef8f1" : "#f7f9fc", border: "1px solid " + (isPaid(i) ? "#bfe3ca" : "#e6e9ef"), borderRadius: 10, padding: "6px 10px", marginBottom: 10 }}>
+                <span style={{ ...lbl, marginBottom: 0, whiteSpace: "nowrap" }}>{isCollectionJob(i) ? "Collection" : "Delivery"}</span>
+                <DateInput value={i.deliveryDate || ""} title={i.deliveryDate ? "" : "Not booked yet"} style={{ ...pill, width: 130, padding: "3px 8px", ...(i.deliveryDate ? {} : { borderColor: "#f4d78f", background: "#fff8e6" }) }}
                   onChange={(e) => { const v = e.target.value; guard(i.id, () => setInv(i.id, (t) => { t.deliveryDate = v; if (v && (!t.jobType || t.jobType === "Pending")) t.jobType = "Delivery"; })); }} />
-                <span style={{ flex: 1 }} />
                 {!i.deliveryDate && <span style={{ fontSize: 11.5, fontWeight: 700, color: "#a05f10" }}>not booked</span>}
-              </div>
-              <div style={{ display: "flex", gap: 8, alignItems: "center", background: isPaid(i) ? "#eef8f1" : "#f7f9fc", border: "1px solid " + (isPaid(i) ? "#bfe3ca" : "#e6e9ef"), borderRadius: 10, padding: "6px 10px", margin: "-4px 0 10px" }}>
-                <span style={{ ...lbl, marginBottom: 0, whiteSpace: "nowrap", minWidth: 96 }}>Payment</span>
+                <span style={{ width: 1, height: 22, background: "#d5d9e0", margin: "0 6px" }} />
+                <span style={{ ...lbl, marginBottom: 0, whiteSpace: "nowrap" }}>Payment</span>
                 <span style={{ width: 110, flex: "none" }}>
                   <PillSelect value={i.paymentType || ""} options={PAYMENT_TYPES} placeholder="Type" tone={isPaid(i) ? "#28713e" : NAVY} onChange={(v) => setInv(i.id, (t) => (t.paymentType = v))} />
                 </span>
