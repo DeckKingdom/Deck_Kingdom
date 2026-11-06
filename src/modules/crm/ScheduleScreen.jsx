@@ -6,7 +6,7 @@ import {
   RUN_NOS, TIME_SLOTS, DRIVERS, vanOptions,
   invoiceTotals, gbp, isPaid, scheduleStatus, STRIPE_COLOURS, daysSinceRaised, isCollectionJob, invoiceLoadKg, collectionProgress,
   PREP_FLAGS, FOLLOWUP_FLAGS, today,
-  isVoidInvoice, onSchedule, applyInvoiceStockDeduction,
+  isVoidInvoice, onSchedule, applyInvoiceStockDeduction, buildPicks, batchBreakdown, batchKeyForPick,
 } from "../../lib/crmCore.js";
 import { printJobDocs, DOC_KINDS, printPendingList } from "./printDocs.js";
 import LinesEditor, { SizeRow, applySize, skuOption, SKU_COLS, SKU_LIST_W } from "./LinesEditor.jsx";
@@ -103,6 +103,10 @@ const linesKg = (l, i, crm) => invoiceLoadKg({ ...i, lines: [l], weightKg: "" },
 
 // print / save as PDF: loading note, delivery note, invoice — or all of them; plus the collection
 // notes for supplier pick-ups in the same run / day (collCount). jobs=false: collection note only.
+// side windows: the little fold button, and the slim tabs when both windows are folded away
+const foldBtn = { fontFamily: "inherit", border: "none", background: "#eef1f6", borderRadius: 6, width: 22, height: 22, cursor: "pointer", color: NAVY, fontSize: 11, padding: 0, flex: "none" };
+const sideTab = (c) => ({ ...card, marginBottom: 0, padding: "10px 0", width: 46, display: "flex", flexDirection: "column", alignItems: "center", gap: 8, cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 800, color: c, letterSpacing: 0.5 });
+
 // the colour each kind of paperwork prints on
 const DOC_DOT = { loading: "#f2c55c", delivery: "#6cc28a", invoice: "#d5d9e0", collection: "#6f9ee8" };
 const PrintMenu = ({ onPick, label, dark, title = "Print or save as PDF", collCount = 0, jobs = true }) => {
@@ -352,6 +356,14 @@ export default function ScheduleScreen({ headerH = 0, openProduct, money = true,
   const [dragId, setDragId] = useState(null); // pending job being dragged onto a day
   const [oldDays, setOldDays] = useState(() => { try { return Number(localStorage.getItem("dk-pending-days")) || 34; } catch (e) { return 34; } });
   const [oldOpen, setOldOpen] = useState(false);
+  // side windows: pending list and the warehouse loading window, each can fold away (remembered on this computer)
+  const readFold = (k, d) => { try { const v = localStorage.getItem(k); return v === null ? d : v === "1"; } catch (e) { return d; } };
+  const [pendOpen, setPendOpenS] = useState(() => readFold("dk-side-pending", true));
+  const [loadOpen, setLoadOpenS] = useState(() => readFold("dk-side-loading", false));
+  const setPendOpen = (v) => { setPendOpenS(v); try { localStorage.setItem("dk-side-pending", v ? "1" : "0"); } catch (e) { /* ignore */ } };
+  const setLoadOpen = (v) => { setLoadOpenS(v); try { localStorage.setItem("dk-side-loading", v ? "1" : "0"); } catch (e) { /* ignore */ } };
+  const [loadDay, setLoadDay] = useState("");
+  const [loadJob, setLoadJob] = useState(null); // the job opened up in the loading window
   // height of the sticky search bar + key, so the pending list sticks just below it
   const topRef = useRef(null);
   const [topH, setTopH] = useState(0);
@@ -822,6 +834,116 @@ export default function ScheduleScreen({ headerH = 0, openProduct, money = true,
     );
   };
 
+  // ===== warehouse loading window: the day's jobs, their pick lists, which batch each line comes from =====
+  const LoadingWindow = () => {
+    const tod = today();
+    const open = (i) => !isVoidInvoice(i) && onSchedule(i, crm) && !i.deliveryCompleted && i.deliveryDate;
+    const days = [...new Set(crm.invoices.filter((i) => open(i) && i.deliveryDate >= tod).map((i) => i.deliveryDate))].sort();
+    const day = loadDay || days[0] || tod;
+    const jobs = crm.invoices.filter((i) => open(i) && i.deliveryDate === day)
+      .sort((a, b) => (a.driver || "zz").localeCompare(b.driver || "zz") || (Number(a.runNo) || 99) - (Number(b.runNo) || 99) || (Number(a.dropNo) || 99) - (Number(b.dropNo) || 99));
+    const ships = (planner && planner.shipments) || [];
+    const setPk = (jid, pid, fn) => setInv(jid, (x) => { const p = (x.picks || []).find((y) => y.id === pid); if (p) fn(p); });
+    const step = (n) => { const at = days.indexOf(day); const nx = n > 0 ? days.find((d) => d > day) : [...days].reverse().find((d) => d < day); if (nx) setLoadDay(nx); else if (at < 0 && days.length) setLoadDay(days[0]); };
+    let lastRun = null;
+    return (
+      <div style={{ ...card, marginBottom: 0, padding: "12px 14px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+          <button type="button" onClick={() => setLoadOpen(false)} title="Fold the loading window away" style={foldBtn}>▾</button>
+          <p style={{ ...sect, margin: 0 }}>Loading — warehouse</p>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+          <button type="button" style={{ ...abtn, width: 28, height: 28 }} title="Previous day with jobs" onClick={() => step(-1)}><span style={{ display: "inline-flex", transform: "rotate(90deg)" }}><Icon name="back" size={12} stroke={NAVY} /></span></button>
+          <DayPill value={day} full onChange={(v) => setLoadDay(v)} />
+          <button type="button" style={{ ...abtn, width: 28, height: 28 }} title="Next day with jobs" onClick={() => step(1)}><span style={{ display: "inline-flex", transform: "rotate(-90deg)" }}><Icon name="back" size={12} stroke={NAVY} /></span></button>
+          <span style={{ flex: 1 }} />
+          <span style={{ fontSize: 12, fontWeight: 700, color: "#5a6a85" }}>{jobs.length} job{jobs.length === 1 ? "" : "s"}</span>
+        </div>
+        {jobs.length === 0 && <div style={{ fontSize: 13, color: "#8593a8", fontWeight: 600, padding: "6px 0" }}>Nothing to load on {prettyDate(day)}.</div>}
+        {jobs.map((i) => {
+          const c = custById[i.customerId] || {};
+          const picks = i.picks || [];
+          const done = picks.filter((p) => p.picked).length;
+          const all = picks.length > 0 && done === picks.length;
+          const isOpen = loadJob === i.id;
+          const runKey = (i.driver || "") + "|" + (i.runNo || "");
+          const head = runKey !== lastRun ? (lastRun = runKey, (
+            <div style={{ fontSize: 10.5, fontWeight: 800, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", margin: "8px 0 4px" }}>
+              {isCollectionJob(i) ? "Customer collections" : (i.runNo ? "Run " + i.runNo : "No run") + (i.driver ? " · " + i.driver : "")}
+            </div>
+          )) : null;
+          return (
+            <React.Fragment key={i.id}>
+              {head}
+              <div style={{ border: "1px solid " + (all ? "#bfe3ca" : "#e6e9ef"), background: all ? "#f1faf4" : "#fff", borderRadius: 10, marginBottom: 6 }}>
+                <button type="button" onClick={() => setLoadJob(isOpen ? null : i.id)} title={isOpen ? "Close" : "Open the pick list"}
+                  style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "8px 10px", border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}>
+                  <span style={{ fontSize: 11.5, fontWeight: 800, color: "#8593a8", minWidth: 18 }}>{i.dropNo || ""}</span>
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    <b style={{ fontSize: 13, color: NAVY, display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name || "No customer"}</b>
+                    <span style={{ fontSize: 11.5, color: "#5a6a85", fontWeight: 600 }}>#{i.invNo || "—"}{i.van ? " · " + i.van : ""}</span>
+                  </span>
+                  {picks.length ? <Chip tone={all ? "green" : done ? "gold" : "grey"}>{done}/{picks.length} picked</Chip> : <Chip tone="amber">no pick list</Chip>}
+                  <span style={{ color: "#8593a8", fontSize: 11 }}>{isOpen ? "▾" : "▸"}</span>
+                </button>
+                {isOpen && (
+                  <div style={{ padding: "0 10px 10px" }}>
+                    {picks.length === 0 ? (
+                      <button type="button" style={{ ...goldBtn, padding: "6px 12px", fontSize: 12.5 }} onClick={() => setInv(i.id, (x) => (x.picks = buildPicks(x, crm)))}>
+                        <Icon name="box" stroke={NAVY} size={13} />Build pick list
+                      </button>
+                    ) : (
+                      <>
+                        {picks.map((p) => {
+                          const col = isColPick(p);
+                          const cur = batchKeyForPick(p, planner);
+                          const bb = col ? [] : batchBreakdown(p.sku, crm, planner);
+                          return (
+                            <div key={p.id} style={{ display: "grid", gridTemplateColumns: "20px minmax(0,1fr) 40px", gap: "3px 8px", alignItems: "center", padding: "6px 0", borderTop: "1px solid #eef1f6" }}>
+                              <input type="checkbox" checked={!!p.picked} title="Picked and loaded" onChange={(e) => setPk(i.id, p.id, (y) => (y.picked = e.target.checked))} />
+                              <span style={{ minWidth: 0 }}>
+                                <b style={{ fontSize: 12.5 }}>{p.sku || "—"}</b>
+                                <span style={{ display: "block", fontSize: 11.5, color: "#5a6a85", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={(p.description || "") + (p.colour ? " · " + p.colour : "")}>{p.description}{p.colour ? " · " + p.colour : ""}</span>
+                              </span>
+                              <b style={{ fontSize: 14, textAlign: "right" }}>{p.qty || "—"}</b>
+                              <span />
+                              <span style={{ gridColumn: "span 2" }}>
+                                {col ? (
+                                  <span style={{ fontSize: 11.5, fontWeight: 700, color: COLLECTION_BLUE }}>From collection {String(p.batchRef).toUpperCase()}</span>
+                                ) : (
+                                  <select value={cur} title="Which batch this stock is coming from"
+                                    onChange={(e) => setPk(i.id, p.id, (y) => { const v = e.target.value; const sh = ships.find((x) => x.name === v); y.shipmentId = sh ? sh.id : ""; y.batchRef = sh ? "" : v; })}
+                                    style={{ ...inp, padding: "4px 7px", fontSize: 12, borderColor: cur ? "#d5d9e0" : GOLD, background: cur ? "#fff" : "#fff8e6" }}>
+                                    <option value="">— pick a batch —</option>
+                                    {bb.filter((b) => b.left > 0 || b.ref === cur).map((b) => (
+                                      <option key={b.ref} value={b.ref}>{b.ref === "manual" ? "Stock (no batch)" : b.ref}{" · " + b.left + " left"}{b.date ? " · in " + prettyDate(b.date) : ""}</option>
+                                    ))}
+                                    {cur && !bb.some((b) => b.ref === cur) && <option value={cur}>{cur}</option>}
+                                  </select>
+                                )}
+                              </span>
+                            </div>
+                          );
+                        })}
+                        <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                          <button type="button" style={{ ...btn, padding: "5px 10px", fontSize: 12 }} onClick={() => setInv(i.id, (x) => (x.picks || []).forEach((y) => (y.picked = !all)))}>
+                            <Icon name="ready" size={12} />{all ? "Untick all" : "All picked"}
+                          </button>
+                          <span style={{ flex: 1 }} />
+                          <button type="button" style={{ ...btn, padding: "5px 10px", fontSize: 12 }} title="Open the full job" onClick={(e) => setPop({ id: i.id, kind: "inv", rect: e.currentTarget.getBoundingClientRect() })}>Open job</button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            </React.Fragment>
+          );
+        })}
+      </div>
+    );
+  };
+
   // column titles under each day
   const ColHeads = () => (
     <div style={{ display: "grid", gridTemplateColumns: dsCols(showPrep), gap: 10, alignItems: "center", padding: "0 12px 4px 0" }}>
@@ -972,7 +1094,7 @@ export default function ScheduleScreen({ headerH = 0, openProduct, money = true,
         </div>
       )}
 
-      <div className="dk-sched-grid" style={{ display: "grid", gridTemplateColumns: phone ? "minmax(0, 1fr)" : "minmax(0, 1fr) 300px", gap: 14, alignItems: "start" }}>
+      <div className="dk-sched-grid" style={{ display: "grid", gridTemplateColumns: phone ? "minmax(0, 1fr)" : "minmax(0, 1fr) " + (loadOpen ? 400 : pendOpen ? 300 : 46) + "px", gap: 14, alignItems: "start" }}>
       <div style={{ minWidth: 0 }}>
       {groups.length === 0 && (
         <div style={{ ...card, textAlign: "center", padding: "36px 10px", color: "#5a6a85", fontWeight: 600, marginTop: 14 }}>
@@ -1074,8 +1196,27 @@ export default function ScheduleScreen({ headerH = 0, openProduct, money = true,
 
       </div>
 
-      {/* pending: always in view on the right */}
-      <div style={{ ...card, marginBottom: 0, position: phone ? "static" : "sticky", top: headerH + topH + 8, maxHeight: phone ? "none" : "calc(100vh - " + (headerH + topH + 24) + "px)", overflowY: phone ? "visible" : "auto", padding: "12px 16px",
+      {/* side windows, always in view on the right: pending (no date) and warehouse loading */}
+      <div style={{ position: phone ? "static" : "sticky", top: headerH + topH + 8, maxHeight: phone ? "none" : "calc(100vh - " + (headerH + topH + 24) + "px)", overflowY: phone ? "visible" : "auto", display: "flex", flexDirection: "column", gap: 10 }}>
+      {!pendOpen && !loadOpen && !phone ? (
+        <>
+          <button type="button" title={"Open the pending list (" + pending.length + ")"} onClick={() => setPendOpen(true)} style={sideTab(pending.length ? RED : "#8593a8")}>
+            <b style={{ fontSize: 13 }}>{pending.length}</b><span style={{ writingMode: "vertical-rl", transform: "rotate(180deg)" }}>Pending</span>
+          </button>
+          <button type="button" title="Open the loading window for the warehouse" onClick={() => setLoadOpen(true)} style={sideTab(NAVY)}>
+            <Icon name="box" size={14} stroke={NAVY} /><span style={{ writingMode: "vertical-rl", transform: "rotate(180deg)" }}>Loading</span>
+          </button>
+        </>
+      ) : (
+      <>
+      {!pendOpen ? (
+        <button type="button" onClick={() => setPendOpen(true)} style={{ ...card, marginBottom: 0, padding: "10px 16px", display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}
+          title="Show the pending list">
+          <p style={{ ...sect, margin: 0, color: pending.length ? RED : "#8593a8" }}>Pending — no date</p>
+          <span style={{ flex: 1 }} /><b style={{ fontSize: 15, color: pending.length ? RED : "#aab3c2" }}>{pending.length}</b><span style={{ color: "#8593a8", fontSize: 11 }}>▸</span>
+        </button>
+      ) : (
+      <div style={{ ...card, marginBottom: 0, padding: "12px 16px",
           outline: overPending ? "2px dashed " + GOLD : "none", outlineOffset: 3, background: overPending ? "#fff8e6" : "#fff" }}
         onDragOver={(ev) => {
           const it = dragId && (isColDrag(dragId) ? (crm.collections || []).find((x) => "col:" + x.id === dragId) : crm.invoices.find((x) => x.id === dragId));
@@ -1083,6 +1224,7 @@ export default function ScheduleScreen({ headerH = 0, openProduct, money = true,
         onDragLeave={(ev) => { if (!ev.currentTarget.contains(ev.relatedTarget)) setOverPending(false); }}
         onDrop={(ev) => { ev.preventDefault(); unschedule(); }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+          <button type="button" onClick={() => setPendOpen(false)} title="Fold the pending list away" style={{ ...foldBtn }}>▾</button>
           <p style={{ ...sect, margin: 0, color: pending.length ? RED : "#8593a8" }}>Pending — no date</p>
           <span style={{ flex: 1 }} />
           <button title="Print a list of pending deliveries waiting a long time" onClick={() => setOldOpen((o) => !o)}
@@ -1113,6 +1255,16 @@ export default function ScheduleScreen({ headerH = 0, openProduct, money = true,
         {pending.length === 0 ? (
           <div style={{ fontSize: 13, color: "#8593a8", fontWeight: 600, padding: "6px 0" }}>Everything's booked in.</div>
         ) : pending.map((e) => <PendingRow key={e.kind + e.obj.id} e={e} />)}
+      </div>
+      )}
+      {loadOpen ? <LoadingWindow /> : (
+        <button type="button" onClick={() => setLoadOpen(true)} style={{ ...card, marginBottom: 0, padding: "10px 16px", display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}
+          title="Open the loading window: pick each job and record which batch the stock came from">
+          <Icon name="box" size={14} stroke={NAVY} /><p style={{ ...sect, margin: 0 }}>Loading — warehouse</p><span style={{ flex: 1 }} /><span style={{ color: "#8593a8", fontSize: 11 }}>▸</span>
+        </button>
+      )}
+      </>
+      )}
       </div>
       </div>
       <div style={{ height: 30 }} />
