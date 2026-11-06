@@ -984,7 +984,32 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
           <PillSelect value={c.collectTime || ""} options={TIME_SLOTS} placeholder="Time" onChange={(v) => setColl(c.id, (t) => (t.collectTime = v))} />
         </div>
         <div style={{ ...sep, gridColumn: showPrep ? "span 4" : "span 2", fontSize: 12, fontWeight: 700 }}>
-          {done ? <Chip tone="green">Processed</Chip> : c.collected ? (pr.done > 0 ? <Chip tone="gold">{pr.done}/{pr.total} processed</Chip> : <span style={{ color: "#28713e" }}>Collected</span>) : (c.items || []).some((it) => it.assignedInvoiceId) ? <span style={{ color: "#5a6a85" }}>For a job</span> : null}
+          {done ? <Chip tone="green">Processed</Chip> : c.collected ? (pr.done > 0 ? <Chip tone="gold">{pr.done}/{pr.total} processed</Chip> : <span style={{ color: "#28713e" }}>Collected</span>) : (c.items || []).some((it) => it.assignedInvoiceId) ? (() => {
+            // the jobs this note's lines are for: "#5575 M34-2WL"; more than two → the rest in a hover
+            const ids = [...new Set((c.items || []).map((it) => it.assignedInvoiceId).filter(Boolean))];
+            const jobs = ids.map((id) => crm.invoices.find((x) => x.id === id)).filter(Boolean).map((j) => {
+              const st = siteById[j.siteId], cu = custById[j.customerId];
+              return { j, pc: (st && st.postcode) || (cu && cu.postcode) || "", name: (cu && cu.name) || "" };
+            });
+            if (!jobs.length) return <span style={{ color: "#5a6a85" }}>For a job</span>;
+            const label = (x) => "#" + (x.j.invNo || "—") + (x.pc ? " " + x.pc : "");
+            const shown = jobs.length > 2 ? jobs.slice(0, 1) : jobs;
+            const rest = jobs.slice(shown.length);
+            return (
+              <span style={{ display: "inline-flex", gap: 8, alignItems: "center", minWidth: 0, overflow: "hidden", whiteSpace: "nowrap" }}>
+                <span style={{ color: "#8593a8", fontSize: 11 }}>For</span>
+                {shown.map((x) => (
+                  <button key={x.j.id} type="button" className="dk-title-link" title={"Open job #" + (x.j.invNo || "—") + (x.name ? " · " + x.name : "")}
+                    onClick={(e) => setPop({ id: x.j.id, kind: "inv", rect: e.currentTarget.getBoundingClientRect() })}
+                    style={{ fontSize: 12, fontWeight: 700, color: "#185FA5" }}>{label(x)}</button>
+                ))}
+                {rest.length > 0 && (
+                  <span title={jobs.map((x) => label(x) + (x.name ? " · " + x.name : "")).join("\n")}
+                    style={{ fontSize: 11.5, fontWeight: 800, color: "#5a6a85", background: "#eef1f6", borderRadius: 999, padding: "2px 8px", cursor: "default" }}>+{rest.length} more</span>
+                )}
+              </span>
+            );
+          })() : null}
           <span style={{ flex: 1 }} />
           <CollMailButton c={c} crm={crm} onSent={() => setColl(c.id, (t) => (t.emailedAt = new Date().toISOString()))} />
         </div>
