@@ -52,6 +52,7 @@ const shell = (title, body) => `<!doctype html><html><head><meta charset="utf-8"
   .pg { border-left: 7mm solid; padding: 4px 0 4px 18px; min-height: 270mm; box-sizing: border-box; }
   .pg-loading { border-left-color: #e0a526; } .pg-delivery { border-left-color: #3f9b5c; } .pg-collection { border-left-color: #3b78d8; }
   .band { display: inline-block; color: #fff; font-weight: 800; font-size: 13px; letter-spacing: 1px; text-transform: uppercase; border-radius: 8px; padding: 5px 12px; margin-bottom: 4px; white-space: nowrap; }
+  .docno { font-size: 22px; font-weight: 800; white-space: nowrap; margin-top: 4px; }
   .pg-loading .band { background: #c98a12; } .pg-delivery .band { background: #2f8a4c; } .pg-collection .band { background: #2563c9; }
   .pg td { border-bottom-color: rgba(11,31,63,.12); } .pg th { border-bottom-color: rgba(11,31,63,.2); }
     @page { size: A4; margin: 10mm; }
@@ -64,12 +65,19 @@ const shell = (title, body) => `<!doctype html><html><head><meta charset="utf-8"
 const riskBanner = (inv) => (inv && inv.riskFlag && !inv.riskChecked
   ? `<div style="background:#C8102E;color:#fff;font-weight:700;border-radius:8px;padding:8px 12px;margin-bottom:14px;font-size:14px">⚠ ${inv.riskFlag === "manual" ? "FLAGGED HIGH RISK" : "PAYMENT RISK: " + esc(String(inv.riskFlag).toUpperCase())} — check with the office before this goes out</div>`
   : "");
-const head = (docType, no, date) => `
+// paper: the warehouse / van paperwork (loading, delivery, collection notes) — no company address in
+// the heading (it's in Return to / the footer) and the number on its own line under the coloured label
+const head = (docType, no, date, paper) => paper ? `
+<div class="top">
+  <div class="logo">DK</div>
+  <div><h1>${esc(COMPANY.name)}</h1></div>
+  <div class="doc"><div class="band">${esc(docType)}</div><div class="docno">#${esc(no || "—")}</div><div class="sub">${esc(date)}</div></div>
+</div>` : `
 <div class="top">
   <div class="logo">DK</div>
   <div><h1>${esc(COMPANY.name)}</h1>
   <div class="sub">${esc(COMPANY.address)} · ${esc(COMPANY.phone)} · ${esc(COMPANY.email)}</div></div>
-  <div class="doc"><div class="band">${esc(docType)}</div><br><b>${esc(docType)} #${esc(no || "—")}</b><div class="sub">${esc(date)}</div></div>
+  <div class="doc"><b>${esc(docType)} #${esc(no || "—")}</b><div class="sub">${esc(date)}</div></div>
 </div>`;
 
 const openDoc = (html) => {
@@ -213,9 +221,9 @@ const loadingBody = (inv, cust, site, crm, planner) => {
   }).join("");
 
   const dest = site || cust || {};
-  const body = `<div class="pg pg-loading">` + head("Loading note", inv.invNo, pretty(inv.deliveryDate || inv.date)) + riskBanner(inv) + `
+  const body = `<div class="pg pg-loading">` + head("Loading note", inv.invNo, pretty(inv.deliveryDate || inv.date), true) + riskBanner(inv) + `
 <div class="grid">
-  ${addrBlock("Job", [cust && cust.name, inv.jobType, "Delivery: " + pretty(inv.deliveryDate) + (inv.deliveryTime ? " " + inv.deliveryTime : ""), inv.van ? "Van: " + inv.van : ""])}
+  ${addrBlock("Job", [cust && cust.name, inv.jobType, "Delivery: " + pretty(inv.deliveryDate) + (inv.deliveryTime ? " " + inv.deliveryTime : ""), inv.driver ? "Driver: " + inv.driver : "", inv.van ? "Van: " + inv.van : ""])}
   ${addrBlock("Deliver to", [dest.name, dest.address !== dest.name ? dest.address : "", [dest.town, dest.postcode].filter(Boolean).join(" ")])}
   ${addrBlock("Load", [anyKg ? "Approx " + totalKg.toFixed(0) + " kg (items with known weights)" : ""])}
 </div>
@@ -244,11 +252,11 @@ const collectionBody = (coll) => {
     <tr><td style="width:26px"><div style="width:16px;height:16px;border:2px solid #0B1F3F;border-radius:4px"></div></td>
     <td><b>${esc(it.sku)}</b></td><td>${esc(it.description)}${it.colour ? " · " + esc(it.colour) : ""}${withSize(it)}</td>
     <td class="r big">${esc(it.qty)}</td></tr>`).join("");
-  return `<div class="pg pg-collection">` + head("Collection note", "COL-" + (coll.collectionNo || "—"), pretty(coll.collectDate || coll.date)) + `
+  return `<div class="pg pg-collection">` + head("Collection note", "COL-" + (coll.collectionNo || "—"), pretty(coll.collectDate || coll.date), true) + `
 <div class="grid">
   ${addrBlock("Collect from", [coll.supplier, coll.address, [coll.town, coll.postcode].filter(Boolean).join(" ")])}
   ${addrBlock("Supplier contact", [coll.contact, coll.phone])}
-  ${addrBlock("Collection", ["Date: " + pretty(coll.collectDate), coll.collectTime ? "Time: " + coll.collectTime : "", coll.van ? "Van: " + coll.van : ""])}
+  ${addrBlock("Collection", ["Date: " + pretty(coll.collectDate), coll.collectTime ? "Time: " + coll.collectTime : "", coll.driver ? "Driver: " + coll.driver : "", coll.van ? "Van: " + coll.van : ""])}
   ${addrBlock("Return to", [COMPANY.name, COMPANY.address, COMPANY.phone])}
 </div>
 ${coll.notes ? `<div class="note">📝 ${esc(coll.notes)}</div>` : ""}
@@ -269,11 +277,11 @@ const jobSheetBody = (inv, cust, site) => {
     <td class="r big">${esc(l.qty)}</td></tr>`).join("");
 
   const dest = site || cust || {};
-  const body = `<div class="pg pg-delivery">` + head("Delivery note", inv.invNo, pretty(inv.deliveryDate || inv.date)) + riskBanner(inv) + `
+  const body = `<div class="pg pg-delivery">` + head("Delivery note", inv.invNo, pretty(inv.deliveryDate || inv.date), true) + riskBanner(inv) + `
 <div class="grid">
   ${addrBlock("Deliver to", [cust && cust.name, dest.name && dest.name !== (cust && cust.name) ? dest.name : "", dest.address, [dest.town, dest.postcode].filter(Boolean).join(" ")])}
   ${addrBlock("Contact", [dest.contact || (cust && cust.contact), dest.mobile || (cust && cust.mobile), dest.landline || (cust && cust.landline)])}
-  ${addrBlock("Job", [inv.jobType, "Delivery: " + pretty(inv.deliveryDate) + (inv.deliveryTime ? " " + inv.deliveryTime : ""), inv.van ? "Van: " + inv.van : "", inv.weightKg ? "Load: " + inv.weightKg + " kg" : ""])}
+  ${addrBlock("Job", [inv.jobType, "Delivery: " + pretty(inv.deliveryDate) + (inv.deliveryTime ? " " + inv.deliveryTime : ""), inv.driver ? "Driver: " + inv.driver : "", inv.van ? "Van: " + inv.van : "", inv.weightKg ? "Load: " + inv.weightKg + " kg" : ""])}
   ${addrBlock("Payment", [inv.paymentType || "—", inv.paymentDate ? "Paid " + pretty(inv.paymentDate) : (inv.paymentType === "COD" ? "COLLECT " + gb(t.total) + " ON DELIVERY" : "Outstanding: " + gb(t.total))])}
 </div>
 ${site && site.notes ? `<div class="note">📍 ${esc(site.notes)}</div>` : ""}
