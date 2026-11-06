@@ -660,6 +660,8 @@ export default function CustomersScreen({ money = true, crm, updateCrm, askConfi
                   </button>
                 </div>
                 {sites.length === 0 && <div style={{ fontSize: 13, color: "#8593a8", fontWeight: 600 }}>No sites yet — add one for deliveries to a different address.</div>}
+                {/* about four sites in view; scroll for the rest */}
+                <div className="dk-scroll" style={{ maxHeight: 4 * 72 + 3 * 10 + 4, overflowY: sites.length > 4 ? "auto" : "visible", paddingRight: sites.length > 4 ? 8 : 0, marginRight: sites.length > 4 ? -8 : 0 }}>
                 {sites.map((s) => (
                   <div key={s.id} style={{ border: "1px solid #e6e9ef", borderRadius: 12, padding: "13px 15px", display: "flex", gap: 12, alignItems: "flex-start", marginBottom: 10 }}>
                     <div style={{ width: 36, height: 36, borderRadius: 12, background: NAVY, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>
@@ -685,6 +687,7 @@ export default function CustomersScreen({ money = true, crm, updateCrm, askConfi
                     </div>
                   </div>
                 ))}
+                </div>
               </div>
             </div>
 
