@@ -101,8 +101,11 @@ const notifyState = (i, crm) => {
 const shortStamp = (iso) => { const d = new Date(iso); return isNaN(d) ? "" : d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }) + " " + d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }); };
 const linesKg = (l, i, crm) => invoiceLoadKg({ ...i, lines: [l], weightKg: "" }, crm);
 
-// print / save as PDF: pick loading ticket, delivery ticket, invoice — or all three
-const PrintMenu = ({ onPick, label, dark, title = "Print or save as PDF" }) => {
+// print / save as PDF: loading note, delivery note, invoice — or all of them; plus the collection
+// notes for supplier pick-ups in the same run / day (collCount). jobs=false: collection note only.
+// the colour each kind of paperwork prints on
+const DOC_DOT = { loading: "#f2c55c", delivery: "#6cc28a", invoice: "#d5d9e0", collection: "#6f9ee8" };
+const PrintMenu = ({ onPick, label, dark, title = "Print or save as PDF", collCount = 0, jobs = true }) => {
   const [box, setBox] = useState(null);
   const ref = useRef(null);
   useEffect(() => {
@@ -126,10 +129,19 @@ const PrintMenu = ({ onPick, label, dark, title = "Print or save as PDF" }) => {
       {box && (
         <div data-print-menu style={{ position: "fixed", left: Math.max(8, box.left), ...(box.up ? { bottom: window.innerHeight - box.up + 4 } : { top: box.top }), width: 210, zIndex: 85,
           background: "#fff", border: "1px solid #d5d9e0", borderRadius: 12, boxShadow: "0 10px 30px rgba(11,31,63,.2)", padding: 4 }}>
-          {[...DOC_KINDS.map(([k, l]) => [[k], l]), [DOC_KINDS.map(([k]) => k), "All three"]].map(([kinds, l], n) => (
-            <button key={l} type="button" onClick={() => pick(kinds)}
-              style={{ display: "block", width: "100%", height: 32, textAlign: "left", padding: "0 10px", border: "none", borderTop: n === 3 ? "1px solid #eef1f6" : "none", borderRadius: 8, cursor: "pointer", fontFamily: "inherit", fontSize: 12.5, fontWeight: n === 3 ? 800 : 600, background: "transparent", color: NAVY }}>{l}</button>
-          ))}
+          {(() => {
+            const opts = [
+              ...(jobs ? DOC_KINDS.map(([k, l]) => [[k], "Print " + l.toLowerCase(), DOC_DOT[k]]) : []),
+              ...(collCount ? [[["collection"], collCount > 1 ? "Print collection notes (" + collCount + ")" : "Print collection note", DOC_DOT.collection]] : []),
+            ];
+            if (opts.length > 1) opts.push([[...(jobs ? DOC_KINDS.map(([k]) => k) : []), ...(collCount ? ["collection"] : [])], collCount && jobs ? "Print everything" : "Print all three", null, true]);
+            return opts.map(([kinds, l, dot, all]) => (
+              <button key={l} type="button" onClick={() => pick(kinds)}
+                style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", height: 32, textAlign: "left", padding: "0 10px", border: "none", borderTop: all ? "1px solid #eef1f6" : "none", borderRadius: 8, cursor: "pointer", fontFamily: "inherit", fontSize: 12.5, fontWeight: all ? 800 : 600, background: "transparent", color: NAVY }}>
+                {dot && <span style={{ width: 10, height: 10, borderRadius: 3, background: dot, flex: "none" }} />}{l}
+              </button>
+            ));
+          })()}
           <div style={{ fontSize: 10.5, color: "#8593a8", fontWeight: 600, padding: "4px 10px 6px" }}>Opens the print window — choose "Save as PDF" there for a file.</div>
         </div>
       )}
@@ -258,10 +270,10 @@ const SlaChip = ({ days, done }) => (
 export default function ScheduleScreen({ headerH = 0, openProduct, money = true, crm, updateCrm, openInvoice, openCollection, me, planner, goCustomer, newFollowUp }) {
   const [printMsg, setPrintMsg] = useState("");
   const phone = usePhone();
-  const printJobs = (jobs, kinds, title) => {
+  const printJobs = (jobs, kinds, title, colls = []) => {
     const list = jobs.filter((x) => x && !isVoidInvoice(x) && onSchedule(x, crm));
-    if (!list.length) return;
-    const ok = printJobDocs(list, kinds, { custOf: (x) => custById[x.customerId], siteOf: (x) => siteById[x.siteId], crm, planner, title });
+    if (!list.length && !(kinds.includes("collection") && colls.length)) return;
+    const ok = printJobDocs(list, kinds, { custOf: (x) => custById[x.customerId], siteOf: (x) => siteById[x.siteId], crm, planner, title, colls });
     setPrintMsg(ok ? "" : "Printing is blocked here — allow pop-ups for ops.deckkingdom.co.uk and try again.");
   };
   const [search, setSearch] = useState("");
@@ -803,7 +815,9 @@ export default function ScheduleScreen({ headerH = 0, openProduct, money = true,
         <div style={{ ...sep, gridColumn: showPrep ? "span 4" : "span 2", fontSize: 12, fontWeight: 700 }}>
           {done ? <Chip tone="green">Processed</Chip> : c.collected ? (pr.done > 0 ? <Chip tone="gold">{pr.done}/{pr.total} processed</Chip> : <span style={{ color: "#28713e" }}>Collected</span>) : (c.items || []).some((it) => it.assignedInvoiceId) ? <span style={{ color: "#5a6a85" }}>For a job</span> : null}
         </div>
-        <span />
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <PrintMenu jobs={false} collCount={1} title="Print or save the collection note" onPick={(kk) => printJobs([], kk, "Collection note COL-" + (c.collectionNo || ""), [c])} />
+        </div>
       </div>
     );
   };
@@ -982,8 +996,9 @@ export default function ScheduleScreen({ headerH = 0, openProduct, money = true,
             right={g.rows.length ? (
               <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
                 <ConfirmBtn date={g.date} rows={g.rows} />
-                {g.rows.some((x) => x.kind === "inv") && <PrintMenu dark label="Print day" title="Print or save every run's paperwork for this day"
-                  onPick={(kk) => printJobs(g.rows.filter((x) => x.kind === "inv").map((x) => x.obj), kk, dayLabel(g.date))} />}
+                {g.rows.length > 0 && <PrintMenu dark label="Print day" title="Print or save every run's paperwork for this day"
+                  jobs={g.rows.some((x) => x.kind === "inv")} collCount={g.rows.filter((x) => x.kind === "col").length}
+                  onPick={(kk) => printJobs(g.rows.filter((x) => x.kind === "inv").map((x) => x.obj), kk, dayLabel(g.date), g.rows.filter((x) => x.kind === "col").map((x) => x.obj))} />}
               </span>
             ) : null} />
           {g.rows.length === 0 ? (
@@ -1010,7 +1025,7 @@ export default function ScheduleScreen({ headerH = 0, openProduct, money = true,
                       <span style={{ fontWeight: 600, color: "#5a6a85", fontSize: 12, whiteSpace: "nowrap" }}>
                         {[nDrops ? nDrops + (custGroup ? " collecting" : " drop" + (nDrops === 1 ? "" : "s")) : "", nPicks ? nPicks + " pick-up" + (nPicks === 1 ? "" : "s") : "", runKg && !loose ? Math.round(runKg).toLocaleString("en-GB") + " kg" : ""].filter(Boolean).join(" · ")}
                       </span>
-                      {!loose && <PrintMenu title="Print or save this run's paperwork" onPick={(kk) => printJobs(sameRun.filter((x) => x.kind === "inv").map((x) => x.obj), kk, dayLabel(g.date) + " · " + (custGroup ? "Customer collections" : (e.obj.runNo ? "Run " + e.obj.runNo : "No run") + (e.obj.driver ? " · " + e.obj.driver : "")))} />}
+                      {!loose && <PrintMenu title="Print or save this run's paperwork" jobs={sameRun.some((x) => x.kind === "inv")} collCount={sameRun.filter((x) => x.kind === "col").length} onPick={(kk) => printJobs(sameRun.filter((x) => x.kind === "inv").map((x) => x.obj), kk, dayLabel(g.date) + " · " + (custGroup ? "Customer collections" : (e.obj.runNo ? "Run " + e.obj.runNo : "No run") + (e.obj.driver ? " · " + e.obj.driver : "")), sameRun.filter((x) => x.kind === "col").map((x) => x.obj))} />}
                     </div>
                   ) : key !== prevKey ? (
                     <div title={loose ? "Supplier pick-ups not in a run yet — give them a driver and run, or drag one onto a job" : canMove ? "Drag to change the order the runs go out" : ""}
@@ -1039,7 +1054,7 @@ export default function ScheduleScreen({ headerH = 0, openProduct, money = true,
                           {runKg ? Math.round(runKg).toLocaleString("en-GB") + " kg" : "—"}
                         </span>
                         <span style={{ gridColumn: "12 / -1", display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
-                          <PrintMenu title="Print or save this run's paperwork" onPick={(kk) => printJobs(sameRun.filter((x) => x.kind === "inv").map((x) => x.obj), kk, dayLabel(g.date) + " · " + (custGroup ? "Customer collections" : (e.obj.runNo ? "Run " + e.obj.runNo : "No run") + (e.obj.driver ? " · " + e.obj.driver : "")))} />
+                          <PrintMenu title="Print or save this run's paperwork" jobs={sameRun.some((x) => x.kind === "inv")} collCount={sameRun.filter((x) => x.kind === "col").length} onPick={(kk) => printJobs(sameRun.filter((x) => x.kind === "inv").map((x) => x.obj), kk, dayLabel(g.date) + " · " + (custGroup ? "Customer collections" : (e.obj.runNo ? "Run " + e.obj.runNo : "No run") + (e.obj.driver ? " · " + e.obj.driver : "")), sameRun.filter((x) => x.kind === "col").map((x) => x.obj))} />
                         </span>
                       </>}
                     </div>

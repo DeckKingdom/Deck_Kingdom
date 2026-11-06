@@ -46,6 +46,15 @@ const shell = (title, body) => `<!doctype html><html><head><meta charset="utf-8"
   .note { background: #fff8e6; border: 1px solid #f4d78f; border-radius: 8px; padding: 9px 12px; font-weight: 600; margin-bottom: 14px; }
   .foot { margin-top: 26px; border-top: 1px solid #e6e9ef; padding-top: 10px; color: #8593a8; font-size: 11px; font-weight: 600; text-align: center; }
   .big { font-size: 15px; font-weight: 700; }
+  /* paperwork colours, so each kind is easy to spot in the warehouse and the vans */
+  html, body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .pg { border-radius: 14px; padding: 22px 24px; min-height: 255mm; box-sizing: border-box; }
+  .pg-loading { background: #fff4d6; } .pg-delivery { background: #e3f4e8; } .pg-collection { background: #e1ecfb; }
+  .band { display: inline-block; color: #fff; font-weight: 800; font-size: 13px; letter-spacing: 1px; text-transform: uppercase; border-radius: 8px; padding: 5px 12px; margin-bottom: 4px; white-space: nowrap; }
+  .pg-loading .band { background: #c98a12; } .pg-delivery .band { background: #2f8a4c; } .pg-collection .band { background: #2563c9; }
+  .pg td { border-bottom-color: rgba(11,31,63,.12); } .pg th { border-bottom-color: rgba(11,31,63,.2); }
+  .pg .note { background: #fff; }
+  @page { size: A4; margin: 10mm; }
   @media print { body { padding: 0; } }
 </style></head><body>${body}
 <script>window.onload = function(){ setTimeout(function(){ window.print(); }, 300); };</script>
@@ -60,7 +69,7 @@ const head = (docType, no, date) => `
   <div class="logo">DK</div>
   <div><h1>${esc(COMPANY.name)}</h1>
   <div class="sub">${esc(COMPANY.address)} · ${esc(COMPANY.phone)} · ${esc(COMPANY.email)}</div></div>
-  <div class="doc"><b>${esc(docType)} #${esc(no || "—")}</b><div class="sub">${esc(date)}</div></div>
+  <div class="doc"><div class="band">${esc(docType)}</div><br><b>${esc(docType)} #${esc(no || "—")}</b><div class="sub">${esc(date)}</div></div>
 </div>`;
 
 const openDoc = (html) => {
@@ -204,7 +213,7 @@ const loadingBody = (inv, cust, site, crm, planner) => {
   }).join("");
 
   const dest = site || cust || {};
-  const body = head("Packing slip", inv.invNo, pretty(inv.deliveryDate || inv.date)) + riskBanner(inv) + `
+  const body = `<div class="pg pg-loading">` + head("Loading note", inv.invNo, pretty(inv.deliveryDate || inv.date)) + riskBanner(inv) + `
 <div class="grid">
   ${addrBlock("Job", [cust && cust.name, inv.jobType, "Delivery: " + pretty(inv.deliveryDate) + (inv.deliveryTime ? " " + inv.deliveryTime : ""), inv.van ? "Van: " + inv.van : ""])}
   ${addrBlock("Deliver to", [dest.name, dest.address !== dest.name ? dest.address : "", [dest.town, dest.postcode].filter(Boolean).join(" ")])}
@@ -218,21 +227,24 @@ ${inv.jobNotes ? `<div class="note">📝 ${esc(inv.jobNotes)}</div>` : ""}
   <div class="blk"><h3>Checked by</h3><div style="border-bottom:1px solid #0B1F3F;height:34px"></div></div>
   <div class="blk"><h3>Date / time</h3><div style="border-bottom:1px solid #0B1F3F;height:34px"></div></div>
 </div>
-<div class="foot">${esc(COMPANY.name)} · ${esc(COMPANY.phone)}</div>`;
+<div class="foot">${esc(COMPANY.name)} · ${esc(COMPANY.phone)}</div></div>`;
   return body;
 };
 export function printLoadingBill(inv, cust, site, crm, planner) {
-  return openDoc(shell("Packing slip " + (inv.invNo || ""), loadingBody(inv, cust, site, crm, planner)));
+  return openDoc(shell("Loading note " + (inv.invNo || ""), loadingBody(inv, cust, site, crm, planner)));
 }
 
 // Driver's collection note for picking goods up from a UK supplier.
 export function printCollectionNote(coll) {
+  const body = collectionBody(coll);
+  return openDoc(shell("Collection note COL-" + (coll.collectionNo || ""), body));
+}
+const collectionBody = (coll) => {
   const items = (coll.items || []).map((it) => `
     <tr><td style="width:26px"><div style="width:16px;height:16px;border:2px solid #0B1F3F;border-radius:4px"></div></td>
     <td><b>${esc(it.sku)}</b></td><td>${esc(it.description)}${it.colour ? " · " + esc(it.colour) : ""}${withSize(it)}</td>
     <td class="r big">${esc(it.qty)}</td></tr>`).join("");
-
-  const body = head("Collection note", "COL-" + (coll.collectionNo || "—"), pretty(coll.collectDate || coll.date)) + `
+  return `<div class="pg pg-collection">` + head("Collection note", "COL-" + (coll.collectionNo || "—"), pretty(coll.collectDate || coll.date)) + `
 <div class="grid">
   ${addrBlock("Collect from", [coll.supplier, coll.address, [coll.town, coll.postcode].filter(Boolean).join(" ")])}
   ${addrBlock("Supplier contact", [coll.contact, coll.phone])}
@@ -246,10 +258,8 @@ ${coll.notes ? `<div class="note">📝 ${esc(coll.notes)}</div>` : ""}
   <div class="blk"><h3>Released by (supplier)</h3><div style="border-bottom:1px solid #0B1F3F;height:34px"></div></div>
   <div class="blk"><h3>Date / time</h3><div style="border-bottom:1px solid #0B1F3F;height:34px"></div></div>
 </div>
-<div class="foot">${esc(COMPANY.name)} · ${esc(COMPANY.phone)}</div>`;
-
-  return openDoc(shell("Collection note COL-" + (coll.collectionNo || ""), body));
-}
+<div class="foot">${esc(COMPANY.name)} · ${esc(COMPANY.phone)}</div></div>`;
+};
 
 const jobSheetBody = (inv, cust, site) => {
   const t = invoiceTotals(inv);
@@ -259,7 +269,7 @@ const jobSheetBody = (inv, cust, site) => {
     <td class="r big">${esc(l.qty)}</td></tr>`).join("");
 
   const dest = site || cust || {};
-  const body = head("Job sheet", inv.invNo, pretty(inv.deliveryDate || inv.date)) + riskBanner(inv) + `
+  const body = `<div class="pg pg-delivery">` + head("Delivery note", inv.invNo, pretty(inv.deliveryDate || inv.date)) + riskBanner(inv) + `
 <div class="grid">
   ${addrBlock("Deliver to", [cust && cust.name, dest.name && dest.name !== (cust && cust.name) ? dest.name : "", dest.address, [dest.town, dest.postcode].filter(Boolean).join(" ")])}
   ${addrBlock("Contact", [dest.contact || (cust && cust.contact), dest.mobile || (cust && cust.mobile), dest.landline || (cust && cust.landline)])}
@@ -274,21 +284,23 @@ ${inv.jobNotes ? `<div class="note">📝 ${esc(inv.jobNotes)}</div>` : ""}
   <div class="blk"><h3>Received by (print &amp; sign)</h3><div style="border-bottom:1px solid #0B1F3F;height:34px"></div></div>
   <div class="blk"><h3>Date / time</h3><div style="border-bottom:1px solid #0B1F3F;height:34px"></div></div>
 </div>
-<div class="foot">${esc(COMPANY.name)} · ${esc(COMPANY.phone)}</div>`;
+<div class="foot">${esc(COMPANY.name)} · ${esc(COMPANY.phone)}</div></div>`;
   return body;
 };
 export function printJobSheet(inv, cust, site) {
-  return openDoc(shell("Job sheet " + (inv.invNo || ""), jobSheetBody(inv, cust, site)));
+  return openDoc(shell("Delivery note " + (inv.invNo || ""), jobSheetBody(inv, cust, site)));
 }
 
 // Several jobs' paperwork in one print window, one document per page.
-// kinds: any of "loading" (packing slip), "delivery" (job sheet), "invoice" — per job, in that order.
-export const DOC_KINDS = [["loading", "Loading ticket"], ["delivery", "Delivery ticket"], ["invoice", "Invoice"]];
-export function printJobDocs(jobs, kinds, { custOf, siteOf, crm, planner, title }) {
+// kinds: any of "loading" (loading note), "delivery" (delivery note), "invoice" — per job, in that order;
+// "collection" prints the collection notes passed in colls (supplier pick-ups in the same run / day).
+export const DOC_KINDS = [["loading", "Loading note"], ["delivery", "Delivery note"], ["invoice", "Invoice"]];
+export function printJobDocs(jobs, kinds, { custOf, siteOf, crm, planner, title, colls = [] }) {
   const pages = [];
+  if (kinds.includes("collection")) colls.forEach((c) => pages.push(collectionBody(c)));
   jobs.forEach((inv) => {
     const c = custOf(inv), st = siteOf(inv);
-    kinds.forEach((k) => pages.push(k === "invoice" ? invoiceBody(inv, c, st) : k === "loading" ? loadingBody(inv, c, st, crm, planner) : jobSheetBody(inv, c, st)));
+    kinds.forEach((k) => { if (k !== "collection") pages.push(k === "invoice" ? invoiceBody(inv, c, st) : k === "loading" ? loadingBody(inv, c, st, crm, planner) : jobSheetBody(inv, c, st)); });
   });
   if (!pages.length) return true;
   const body = pages.map((p, i) => `<div style="${i < pages.length - 1 ? "page-break-after:always;break-after:page;" : ""}">${p}</div>`).join("");

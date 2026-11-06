@@ -293,7 +293,7 @@ export default function CollectionsScreen({ money = true, crm, updateCrm, askCon
         </div>
         <span style={{ flex: 1 }} />
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button style={navyBtn} onClick={tryPrint}><Icon name="doc" stroke="#fff" />Collection note</button>
+          <button style={navyBtn} onClick={tryPrint} title="Print or save the collection note"><Icon name="print" stroke="#fff" />Print collection note</button>
           {prog.pending > 0 && (
             <>
               <button style={goldBtn} onClick={stockAllPending}><Icon name="box" stroke={NAVY} />Remaining to stock</button>

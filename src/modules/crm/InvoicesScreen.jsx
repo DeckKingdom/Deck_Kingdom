@@ -572,8 +572,8 @@ export default function InvoicesScreen({ headerH = 0, openProduct, money = true,
             {inv.stockDeducted && <Chip tone="green" style={{ marginLeft: 4, fontSize: 10, padding: "1px 7px" }}>stock out</Chip>}
           </label>
           <button style={docBtn} onClick={() => tryPrint("invoice")}><Icon name="doc" stroke={NAVY} size={13} />Invoice PDF</button>
-          <button style={docBtn} onClick={() => tryPrint("job")}><Icon name="truck" stroke={NAVY} size={13} />Job sheet</button>
-          <button style={docBtn} onClick={() => tryPrint("loading")}><Icon name="box" stroke={NAVY} size={13} />Packing slip</button>
+          <button style={docBtn} onClick={() => tryPrint("job")}><Icon name="truck" stroke={NAVY} size={13} />Delivery note</button>
+          <button style={docBtn} onClick={() => tryPrint("loading")}><Icon name="box" stroke={NAVY} size={13} />Loading note</button>
         </>} />
 
 
