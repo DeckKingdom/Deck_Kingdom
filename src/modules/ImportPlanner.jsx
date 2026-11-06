@@ -300,6 +300,12 @@ export default function ImportPlanner() {
   };
   // "+" buttons in the side menu
   const [newVanSignal, setNewVanSignal] = useState(0);
+  // delivery schedule side windows, opened/closed from the tabs in the title bar (remembered on this computer)
+  const [schedPanels, setSchedPanels] = useState(() => {
+    try { return { pending: true, loading: false, ...JSON.parse(localStorage.getItem("dk-sched-panels") || "{}") }; } catch (e) { return { pending: true, loading: false }; }
+  });
+  const setSchedPanel = (k, v) => setSchedPanels((p) => { const n = { ...p, [k]: v }; try { localStorage.setItem("dk-sched-panels", JSON.stringify(n)); } catch (e) { /* not kept */ } return n; });
+  const [schedPending, setSchedPending] = useState(0);
   const sideNew = (t) => {
     if (t === "customers") {
       setSelCustomerId(null);
@@ -1313,6 +1319,20 @@ export default function ImportPlanner() {
             </button>
           );
         })()}
+        {tab === "schedule" && (
+          <div style={{ display: "flex", gap: 6, alignItems: "center", marginLeft: 6 }}>
+            {[["loading", "Loading", "box", null], ["pending", "Pending", "clock", schedPending]].map(([k, label, icon, n]) => {
+              const on = !!schedPanels[k];
+              return (
+                <button key={k} type="button" onClick={() => setSchedPanel(k, !on)} title={(on ? "Close" : "Open") + " the " + label.toLowerCase() + " window"}
+                  style={{ height: 30, borderRadius: 999, border: "1px solid " + (on ? GOLD : "#33466b"), background: on ? GOLD : "transparent", color: on ? NAVY : "#cfd6e4", display: "inline-flex", alignItems: "center", gap: 6, padding: "0 12px", cursor: "pointer", fontFamily: "inherit", fontSize: 12.5, fontWeight: 800 }}>
+                  <Icon name={icon} size={14} stroke={on ? NAVY : "#cfd6e4"} />{label}
+                  {n ? <span style={{ background: on ? NAVY : RED, color: "#fff", borderRadius: 999, fontSize: 11, padding: "1px 7px" }}>{n}</span> : null}
+                </button>
+              );
+            })}
+          </div>
+        )}
         <span style={{ flex: 1 }} />
         <div style={{ display: isPhone ? "none" : "flex", gap: 4, alignItems: "center" }}>
           {[["home", "Home", "home"], ["overview", "Imports", "ship"], ["customers", "Customers", "users"], ["invoices", "Invoices", "doc"], ["quotes", "Quotes", "tag"], ["samples", "Samples", "leaf"], ["schedule", "Delivery Schedule", "cal"]].filter(([t]) => access.canTab(t)).map(([t, label, icon]) => (
@@ -1461,7 +1481,7 @@ export default function ImportPlanner() {
             setFilter={setInvFilter}
           />
         ) : (
-          <ScheduleScreen headerH={headerH} openProduct={openProduct} money={access.money} crm={crm} updateCrm={updateCrm} openInvoice={openInvoice} openCollection={openCollection} me={me} planner={data} goCustomer={goCustomer} newFollowUp={newFollowUp} />
+          <ScheduleScreen headerH={headerH} panels={schedPanels} setPanel={setSchedPanel} onPendingCount={setSchedPending} openProduct={openProduct} money={access.money} crm={crm} updateCrm={updateCrm} openInvoice={openInvoice} openCollection={openCollection} me={me} planner={data} goCustomer={goCustomer} newFollowUp={newFollowUp} />
         ))}
 
       {(tab === "stock" || tab === "collections") &&
