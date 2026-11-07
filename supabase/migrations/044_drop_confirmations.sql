@@ -1,9 +1,9 @@
 -- Deck Kingdom Ops - drivers confirm each drop with a photo (Nov 2026)
 -- Run once in Supabase: SQL Editor -> New query -> paste -> Run. Safe to run again.
 --
--- On the driver's phone each job unlocks only after the one before it has been confirmed:
--- the driver ticks what was dropped and takes a photo. The office sees the confirmation on the
--- delivery schedule and marks the job delivered from there (which also takes the stock out).
+-- On the driver's phone each stop unlocks only after the one before it has been confirmed:
+-- the driver ticks what was dropped (or collected from a supplier) and takes a photo. A full drop
+-- closes the job on the delivery schedule; a short one waits for the office to check it.
 
 create table if not exists public.drop_confirmations (
   id text primary key,
@@ -20,6 +20,12 @@ create table if not exists public.drop_confirmations (
   lng double precision,
   accuracy_m double precision
 );
+-- supplier pick-ups are confirmed the same way
+alter table public.drop_confirmations add column if not exists kind text not null default 'job';
+alter table public.drop_confirmations add column if not exists collection_id text not null default '';
+alter table public.drop_confirmations alter column invoice_id set default '';
+-- set once the office app has closed the job / pick-up from a full confirmation (so un-ticking it later sticks)
+alter table public.drop_confirmations add column if not exists applied_at text not null default '';
 create index if not exists drop_confirmations_invoice on public.drop_confirmations (invoice_id);
 create index if not exists drop_confirmations_date on public.drop_confirmations (delivery_date);
 alter table public.drop_confirmations enable row level security;
@@ -28,17 +34,21 @@ grant select, insert, update, delete on public.drop_confirmations to authenticat
 drop policy if exists "driver confirms" on public.drop_confirmations;
 drop policy if exists "read drops" on public.drop_confirmations;
 drop policy if exists "managers change drops" on public.drop_confirmations;
+drop policy if exists "office marks applied" on public.drop_confirmations;
 drop policy if exists "managers remove drops" on public.drop_confirmations;
 -- a driver can only confirm a job that's planned for them
 create policy "driver confirms" on public.drop_confirmations for insert to authenticated
   with check (user_id = auth.uid() and (
     public.dk_can_edit()
     or (public.dk_my_driver() <> '' and exists (select 1 from public.invoices i where i.id = invoice_id and lower(i.driver) = lower(public.dk_my_driver())))
+    or (public.dk_my_driver() <> '' and exists (select 1 from public.collections c where c.id = collection_id and lower(c.driver) = lower(public.dk_my_driver())))
   ));
 create policy "read drops" on public.drop_confirmations for select to authenticated
   using (public.dk_is_staff() or user_id = auth.uid()
-    or (public.dk_my_driver() <> '' and exists (select 1 from public.invoices i where i.id = invoice_id and lower(i.driver) = lower(public.dk_my_driver()))));
+    or (public.dk_my_driver() <> '' and exists (select 1 from public.invoices i where i.id = invoice_id and lower(i.driver) = lower(public.dk_my_driver())))
+    or (public.dk_my_driver() <> '' and exists (select 1 from public.collections c where c.id = collection_id and lower(c.driver) = lower(public.dk_my_driver()))));
 create policy "managers change drops" on public.drop_confirmations for update to authenticated using (public.dk_can_manage()) with check (public.dk_can_manage());
+create policy "office marks applied" on public.drop_confirmations for update to authenticated using (public.dk_can_edit()) with check (public.dk_can_edit());
 create policy "managers remove drops" on public.drop_confirmations for delete to authenticated using (public.dk_can_manage());
 
 -- drop photos: private; drivers add to their own folder, office staff can view

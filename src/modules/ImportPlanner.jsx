@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import * as XLSX from "xlsx";
 import { storage, storageMode } from "../data/storage.js";
+import { useDropSync } from "./crm/DropSync.jsx";
 import { signOut, getSessionEmail, getMyAccess } from "../data/auth.js";
 import { accessFor, LOCAL_ACCESS, LOADING_ACCESS, levelLabel } from "../lib/access.js";
 import {
@@ -240,6 +241,8 @@ export default function ImportPlanner() {
     if (!access.canEdit) { setRoNote(true); return; }
     updateCrmRaw(fn);
   };
+  // drivers' full drop / pick-up confirmations close the job here
+  useDropSync({ crm, updateCrm: updateCrmRaw, me: storageMode === "supabase" ? getSessionEmail() || "" : "", enabled: !!crm && access.canEdit });
   const [selCustomerId, setSelCustomerId] = useState(null);
   const [selInvoiceId, setSelInvoiceId] = useState(null);
   const [selCollectionId, setSelCollectionId] = useState(null);

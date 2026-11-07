@@ -1040,6 +1040,7 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
               style={{ fontWeight: 700, fontSize: 15, color: COLLECTION_BLUE, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, flex: 1, textAlign: "left" }}>
               {c.supplier || "Supplier"} · pick-up
             </button>
+            {drops["col:" + c.id] && <DropChip conf={drops["col:" + c.id]} pickup done={!!c.collected} onComplete={() => setColl(c.id, (t) => (t.collected = true))} />}
             {c.dropNo && <span style={{ fontSize: 12, fontWeight: 800, color: "#fff", background: COLLECTION_BLUE, borderRadius: 999, padding: "2px 8px", flex: "none" }}>Drop {c.dropNo}</span>}
           </div>
           <div style={{ fontSize: 12.5, color: "#5a6a85", fontWeight: 600, margin: "4px 0 8px 35px" }}>
@@ -1085,11 +1086,12 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
             {c.collected && <span style={{ width: 8, height: 8, borderRadius: 999, background: "#3FA55C", flex: "none" }} />}
           </button>
         </div>
-        <div style={{ minWidth: 0, position: "relative" }}>
+        <div style={{ minWidth: 0, position: "relative", display: "flex", gap: 6, alignItems: "center" }}>
           <button className="dk-title-link" onClick={(e) => { peekCancel(); setPop({ id: c.id, kind: "col", rect: e.currentTarget.parentNode.getBoundingClientRect() }); }}
-            title={c.supplier || ""} style={{ fontWeight: 700, fontSize: 13.5, color: COLLECTION_BLUE, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "100%" }}>
+            title={c.supplier || ""} style={{ fontWeight: 700, fontSize: 13.5, color: COLLECTION_BLUE, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "100%", minWidth: 0 }}>
             {short16(c.supplier || "Supplier")}
           </button>
+          {drops["col:" + c.id] && <DropChip conf={drops["col:" + c.id]} pickup done={!!c.collected} onComplete={() => setColl(c.id, (t) => (t.collected = true))} />}
         </div>
         <span style={{ fontSize: 12.5, color: "#5a6a85", fontWeight: 700, whiteSpace: "nowrap" }}>{c.postcode || "—"}</span>
         <span style={{ fontSize: 11.5, fontWeight: 700, color: COLLECTION_BLUE }}>COL-{c.collectionNo || "—"}</span>
@@ -1852,7 +1854,7 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
 
 
 // ===== a driver confirmed this drop from their phone: photo, what was left, any shortfall =====
-function DropChip({ conf, done, onComplete }) {
+function DropChip({ conf, done, onComplete, pickup }) {
   const [open, setOpen] = useState(false);
   const [url, setUrl] = useState("");
   const [err, setErr] = useState("");
@@ -1866,18 +1868,18 @@ function DropChip({ conf, done, onComplete }) {
   };
   return (
     <>
-      <button type="button" onClick={show} title={"Driver confirmed the drop at " + time + (short ? " — short drop noted" : "") + (done ? "" : " — click to check and mark delivered")}
+      <button type="button" onClick={show} title={"Driver confirmed the " + (pickup ? "pick-up" : "drop") + " at " + time + (short ? " — short noted" : "") + (done ? "" : " — click to check and mark " + (pickup ? "collected" : "delivered"))}
         style={{ border: "1px solid " + (short ? "#f4b9c1" : "#bfe3ca"), background: short ? "#fde8ea" : "#e9f6ee", color: short ? "#9b1c2e" : "#28713e", borderRadius: 999, padding: "0 6px", fontFamily: "inherit", fontSize: 11, fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap", flex: "none", lineHeight: "18px" }}>
         📷{short ? " !" : ""}
       </button>
       {open && (
-        <Modal title={"Drop confirmed by " + (conf.driver || "driver") + " · #" + conf.invNo} onClose={() => setOpen(false)} width={520} z={95}>
+        <Modal title={(pickup ? "Pick-up" : "Drop") + " confirmed by " + (conf.driver || "driver") + (conf.invNo ? " · #" + conf.invNo : "")} onClose={() => setOpen(false)} width={520} z={95}>
           <div style={{ fontSize: 13, fontWeight: 700, color: "#5a6a85" }}>
             {prettyDateTime(conf.at)}
             {conf.lat != null && <> · <a href={"https://www.google.com/maps/search/?api=1&query=" + conf.lat + "," + conf.lng} target="_blank" rel="noopener noreferrer" style={{ color: "#185FA5" }}>where it was confirmed</a></>}
           </div>
           <div style={{ marginTop: 10, borderRadius: 10, border: "1px solid #e6e9ef", background: "#f8f9fb", minHeight: 120, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-            {url ? <a href={url} target="_blank" rel="noopener noreferrer"><img src={url} alt="Drop" style={{ display: "block", maxWidth: "100%", maxHeight: 360 }} /></a>
+            {url ? <a href={url} target="_blank" rel="noopener noreferrer"><img src={url} alt="" style={{ display: "block", maxWidth: "100%", maxHeight: 360 }} /></a>
               : <span style={{ fontSize: 12.5, color: err ? RED : "#8593a8", fontWeight: 600 }}>{err || "Loading photo…"}</span>}
           </div>
           <div style={{ marginTop: 10 }}>
@@ -1885,14 +1887,14 @@ function DropChip({ conf, done, onComplete }) {
               <div key={k} style={{ display: "flex", gap: 8, fontSize: 13.5, padding: "4px 0", borderBottom: "1px solid #f0f2f6", color: x.short ? "#9b1c2e" : NAVY }}>
                 <b style={{ width: 16 }}>{x.short ? "✗" : "✓"}</b><b style={{ minWidth: 32, textAlign: "right" }}>{x.qty}×</b>
                 <span style={{ flex: 1 }}>{x.text}{x.colour ? " · " + x.colour : ""}</span>
-                {x.short && <span style={{ fontSize: 11, fontWeight: 800 }}>NOT DROPPED</span>}
+                {x.short && <span style={{ fontSize: 11, fontWeight: 800 }}>{pickup ? "NOT COLLECTED" : "NOT DROPPED"}</span>}
               </div>
             ))}
           </div>
           {conf.notes && <div style={{ marginTop: 10, background: "#fff8e6", border: "1px solid #f4d78f", borderRadius: 8, padding: "8px 10px", fontSize: 13.5, fontWeight: 600 }}>{conf.notes}</div>}
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 14 }}>
             <button style={btn} onClick={() => setOpen(false)}>Close</button>
-            {!done && <button style={{ ...goldBtn, color: NAVY }} onClick={() => { onComplete(); setOpen(false); }}>Mark delivered</button>}
+            {!done && <button style={{ ...goldBtn, color: NAVY }} onClick={() => { onComplete(); setOpen(false); }}>{pickup ? "Mark collected" : "Mark delivered"}</button>}
           </div>
         </Modal>
       )}

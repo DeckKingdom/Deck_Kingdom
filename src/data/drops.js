@@ -5,11 +5,16 @@ import { getSupabase } from "./supabaseClient.js";
 
 const LOCAL = "dk-drop-confirmations";
 const localAll = () => { try { return JSON.parse(localStorage.getItem(LOCAL) || "[]"); } catch (e) { return []; } };
-const fromRow = (r) => ({ id: r.id, at: r.at, driver: r.driver, invoiceId: r.invoice_id, invNo: r.inv_no, date: r.delivery_date, items: r.items || [], photoPath: r.photo_path, notes: r.notes, lat: r.lat, lng: r.lng });
+const fromRow = (r) => ({ id: r.id, at: r.at, driver: r.driver, kind: r.kind || "job", invoiceId: r.invoice_id || "", collectionId: r.collection_id || "", invNo: r.inv_no, date: r.delivery_date, items: r.items || [], photoPath: r.photo_path, notes: r.notes, lat: r.lat, lng: r.lng, appliedAt: r.applied_at || "" });
 
 export const dropsReady = () => storageMode === "supabase";
 
-// confirmations for these delivery dates -> { [invoiceId]: latest confirmation }
+// the key a confirmation is filed under: the job id, or "col:" + the collection id
+export const dropKey = (r) => (r.collectionId ? "col:" + r.collectionId : r.invoiceId);
+// a confirmation where everything was dropped / collected
+export const dropFull = (r) => !!r && !(r.items || []).some((x) => x.short);
+
+// confirmations for these dates -> { [dropKey]: latest confirmation }
 export async function loadDrops(dates) {
   const ds = [...new Set(dates.filter(Boolean))];
   if (!ds.length) return {};
@@ -21,7 +26,7 @@ export async function loadDrops(dates) {
     rows = (data || []).map(fromRow);
   } else rows = localAll().filter((r) => ds.includes(r.date));
   const m = {};
-  rows.forEach((r) => (m[r.invoiceId] = r));
+  rows.forEach((r) => (m[dropKey(r)] = r));
   return m;
 }
 
@@ -32,7 +37,7 @@ export async function saveDrop(conf, photoBlob) {
     const path = user.id + "/" + conf.date + "-" + conf.id + ".jpg";
     const up = await sb.storage.from("drop-photos").upload(path, photoBlob, { contentType: "image/jpeg", upsert: false });
     if (up.error) throw new Error("photo: " + up.error.message);
-    const ins = await sb.from("drop_confirmations").insert({ id: conf.id, user_id: user.id, driver: conf.driver, invoice_id: conf.invoiceId, inv_no: String(conf.invNo || ""), delivery_date: conf.date, items: conf.items, photo_path: path, notes: conf.notes || "", lat: conf.lat ?? null, lng: conf.lng ?? null, accuracy_m: conf.acc ?? null });
+    const ins = await sb.from("drop_confirmations").insert({ id: conf.id, user_id: user.id, driver: conf.driver, kind: conf.collectionId ? "collection" : "job", invoice_id: conf.invoiceId || "", collection_id: conf.collectionId || "", inv_no: String(conf.invNo || ""), delivery_date: conf.date, items: conf.items, photo_path: path, notes: conf.notes || "", lat: conf.lat ?? null, lng: conf.lng ?? null, accuracy_m: conf.acc ?? null });
     if (ins.error) throw new Error(ins.error.message);
     return { ...conf, photoPath: path, at: new Date().toISOString() };
   }
@@ -64,3 +69,16 @@ export const shrinkPhoto = (file, max = 1600) => new Promise((resolve) => {
   img.onerror = () => resolve(file);
   img.src = URL.createObjectURL(file);
 });
+
+// the office app closed the job / pick-up from these confirmations
+export async function markApplied(ids) {
+  if (!ids.length) return;
+  const at = new Date().toISOString();
+  if (storageMode === "supabase") {
+    const sb = await getSupabase();
+    const { error } = await sb.from("drop_confirmations").update({ applied_at: at }).in("id", ids);
+    if (error) throw error;
+    return;
+  }
+  try { localStorage.setItem(LOCAL, JSON.stringify(localAll().map((r) => (ids.includes(r.id) ? { ...r, appliedAt: at } : r)))); } catch (e) { /* preview only */ }
+}
