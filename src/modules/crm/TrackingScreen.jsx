@@ -284,6 +284,7 @@ function StopRow({ x, n, away, onReopen, openInvoice, openCollection }) {
         {hm(c.at)}
         {x.awayMi != null && x.awayMi > away && <div style={{ fontSize: 11.5, fontWeight: 800, color: RED }}>{x.awayMi.toFixed(1)} mi from the address</div>}
         {x.noGeo && <div style={{ fontSize: 11.5, fontWeight: 700, color: "#a05f10" }}>no location — postcode used</div>}
+        {x.navAt ? <div style={{ fontSize: 11.5, fontWeight: 600, color: "#8593a8" }}>navigated {hm(x.navAt)}</div> : <div style={{ fontSize: 11.5, fontWeight: 700, color: RED }}>no Navigate tap</div>}
       </td>
       <td style={tdR}>{mi(x.leg.miles)}</td>
       <td style={tdR}>{dur(x.leg.minutes)}</td>

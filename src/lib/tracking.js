@@ -139,6 +139,13 @@ export function buildRuns({ crm, confs, events, geo, s, from, to, driver, roads 
     spread(back.cost, Object.keys(share));
     jobs.forEach((x) => (x.jobCost = share[x.id]));
 
+    // every stop should have been navigated to from the app before it was completed
+    confirmed.forEach((x) => {
+      const key = "nav:" + (x.kind === "col" ? "col:" : "") + x.id;
+      const nav = (events || []).filter((e) => e.kind === "nav" && e.itemKey === key).sort((a, b) => ms(a.at) - ms(b.at))[0];
+      x.navAt = nav ? nav.at : null;
+      if (!nav && dep) alerts.push({ tone: "red", kind: "nonav", date: run.date, driver: run.driver, text: x.name + " (" + x.ref + ") was completed without starting the journey from the app's Navigate button." });
+    });
     if (confirmed.length && !run.van) alerts.push({ tone: "amber", kind: "novan", date: run.date, driver: run.driver, text: "Run " + (run.runNo || "—") + " had no van set on the schedule — its miles can't be checked against a van's fuel log." });
     if (confirmed.length && !dep) alerts.push({ tone: "amber", kind: "nodepart", date: run.date, driver: run.driver, text: "Run " + (run.runNo || "—") + " — no set-off recorded; the start time is estimated from the first drop." });
     if (confirmed.length || dep) unconfirmed.filter((x) => x.done).forEach((x) => alerts.push({ tone: "amber", kind: "noconf", date: run.date, driver: run.driver, text: x.name + " (" + x.ref + ") was marked done without a driver confirmation — no time or location for it." }));

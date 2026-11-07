@@ -235,7 +235,7 @@ export async function deleteDrops(confs) {
 
 // delete load-check ticks and set-offs - optionally just one run: { date, driver, runNo }
 export async function clearLoadChecks(run) {
-  const kinds = ["tick", "untick", "depart"];
+  const kinds = ["tick", "untick", "depart", "nav"];
   if (storageMode !== "supabase") {
     const keep = (e) => !kinds.includes(e.kind) || (run && !(e.date === run.date && String(e.driver || "").toLowerCase() === String(run.driver || "").toLowerCase() && String(e.runNo || "") === String(run.runNo || "")));
     try { localStorage.setItem(LOCAL_EV, JSON.stringify(localEv().filter(keep))); } catch (e) { /* */ }

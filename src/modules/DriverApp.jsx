@@ -125,11 +125,16 @@ const maskAddr = (address, postcode) => {
 };
 const invLines = (o) => (o.lines || []).map((l, i) => ({ l, i })).filter(({ l }) => l.qty && (l.description || l.code));
 
-function NavButtons({ dest }) {
+function NavButtons({ dest, onNav, done }) {
   const apple = isApple();
-  const g = <a key="g" href={googleNavHref(dest)} target="_blank" rel="noopener noreferrer" style={{ ...navBtn, background: apple ? "#fff" : "#185FA5", color: apple ? "#185FA5" : "#fff" }}>▶ {apple ? "Google Maps" : "Navigate"}</a>;
-  const a = <a key="a" href={appleNavHref(dest)} target="_blank" rel="noopener noreferrer" style={{ ...navBtn, background: apple ? "#185FA5" : "#fff", color: apple ? "#fff" : "#185FA5" }}>▶ {apple ? "Navigate" : "Apple Maps"}</a>;
-  return <div style={{ display: "flex", gap: 8, marginTop: 8 }}>{apple ? [a, g] : [g, a]}</div>;
+  const g = <a key="g" href={googleNavHref(dest)} target="_blank" rel="noopener noreferrer" onClick={() => onNav && onNav("google")} style={{ ...navBtn, background: apple ? "#fff" : "#185FA5", color: apple ? "#185FA5" : "#fff" }}>▶ {apple ? "Google Maps" : "Navigate"}</a>;
+  const a = <a key="a" href={appleNavHref(dest)} target="_blank" rel="noopener noreferrer" onClick={() => onNav && onNav("apple")} style={{ ...navBtn, background: apple ? "#185FA5" : "#fff", color: apple ? "#fff" : "#185FA5" }}>▶ {apple ? "Navigate" : "Apple Maps"}</a>;
+  return (
+    <>
+      <div style={{ display: "flex", gap: 8, marginTop: 8 }}>{apple ? [a, g] : [g, a]}</div>
+      {done && <div style={{ marginTop: 5, fontSize: 12, fontWeight: 700, color: GREEN }}>✓ Journey started {new Date(done).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</div>}
+    </>
+  );
 }
 const navBtn = { flex: 1, textAlign: "center", border: "1px solid #185FA5", borderRadius: 10, padding: "11px 8px", fontWeight: 800, fontSize: 15, textDecoration: "none" };
 
@@ -161,7 +166,7 @@ function DayRuns({ date, stops, crm, header, onBack, driver }) {
       l.filter((e) => e.kind === "depart" && new Date(e.at).getTime() > Math.max(rs[e.runNo || ""] || 0, rs["*"] || 0)).forEach((e) => (m[e.runNo || ""] = e));
       setResets(rs);
       setDeparts(m);
-      setEvs(l.filter((e) => e.kind === "tick" || e.kind === "untick"));
+      setEvs(l.filter((e) => e.kind === "tick" || e.kind === "untick" || e.kind === "nav"));
     }).catch((e) => live && setEvErr(/driver_events|item_key|column/.test(String(e && e.message)) ? "The load check isn't switched on yet — ask the office to run driver-app-all.sql." : "Couldn't reach the office system — check your signal and tap ↻."));
     return () => { live = false; };
   }, [date]);
@@ -212,6 +217,24 @@ function DayRuns({ date, stops, crm, header, onBack, driver }) {
     (evs || []).forEach((e) => { if (e.itemKey === k && new Date(e.at).getTime() > resetAt(r) && (!last || new Date(e.at) >= new Date(last.at))) last = e; });
     return !!last && last.kind === "tick";
   };
+  // the journey to a stop has to be started from the app's Navigate button before it can be completed
+  const navAt = (x) => {
+    const k = "nav:" + sid(x), r = x.obj.runNo || "";
+    let t = 0;
+    (evs || []).forEach((e) => { if (e.kind === "nav" && e.itemKey === k) { const at = new Date(e.at).getTime(); if (at > resetAt(r) && at > t) t = at; } });
+    return t || null;
+  };
+  const startNav = (x, app) => {
+    if (navAt(x)) return;
+    const ev = { id: uid(), driver, date, runNo: x.obj.runNo || "", kind: "nav", itemKey: "nav:" + sid(x), van: app };
+    setEvs((l) => [...(l || []), { ...ev, at: new Date().toISOString() }]);
+    const pos = (p) => logEvent({ ...ev, lat: p && p.coords.latitude, lng: p && p.coords.longitude, acc: p && p.coords.accuracy }).catch(() => {
+      setEvs((l) => (l || []).filter((e) => e.id !== ev.id));
+      setTickErr("Couldn't record the journey starting — check your signal and tap Navigate again.");
+    });
+    if (navigator.geolocation) navigator.geolocation.getCurrentPosition(pos, () => pos(null), { timeout: 6000, maximumAge: 120000 });
+    else pos(null);
+  };
   const toggle = (k, r) => {
     if (!evs) return;
     const ev = { id: uid(), driver, date, runNo: r, kind: tk(k, r) ? "untick" : "tick", itemKey: k };
@@ -247,16 +270,22 @@ function DayRuns({ date, stops, crm, header, onBack, driver }) {
       ✓ {conf ? (pickup ? "Collected " : "Dropped ") + new Date(conf.at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) + " · photo taken" + ((conf.items || []).some((r) => r.short) ? " · short noted" : "") : pickup ? "Collected" : "Delivered"}
     </div>
   );
-  const completeBtn = (x, label) => (
-    <button type="button" onClick={() => setCompleting(x)}
-      style={{ marginTop: 10, width: "100%", border: "none", borderRadius: 12, padding: 15, fontFamily: "inherit", fontWeight: 800, fontSize: 17, background: GREEN, color: "#fff", cursor: "pointer" }}>
-      ✓ {label}
-    </button>
-  );
-  const addrBlock = (open, isCur, a, addr) => (open ? (
+  const completeBtn = (x, label, noAddress) => {
+    const ok = !!navAt(x) || noAddress; // nothing to navigate to: the office is told in tracking
+    return (
+      <>
+        <button type="button" onClick={() => ok && setCompleting(x)} disabled={!ok}
+          style={{ marginTop: 10, width: "100%", border: "none", borderRadius: 12, padding: 15, fontFamily: "inherit", fontWeight: 800, fontSize: 17, background: ok ? GREEN : "#e6e9ef", color: ok ? "#fff" : "#8593a8", cursor: ok ? "pointer" : "default" }}>
+          {ok ? "✓ " : "🔒 "}{label}
+        </button>
+        {!ok && <div style={{ marginTop: 6, fontSize: 12.5, fontWeight: 700, color: "#8593a8", textAlign: "center" }}>Tap Navigate above to start the journey — you can complete it once you've set off from here.</div>}
+      </>
+    );
+  };
+  const addrBlock = (open, isCur, a, addr, x) => (open ? (
     <>
       <div style={{ marginTop: 6, fontWeight: 700, fontSize: 14 }}>📍 {addr}</div>
-      {isCur && <NavButtons dest={addr} />}
+      {isCur && <NavButtons dest={addr} onNav={(app) => startNav(x, app)} done={navAt(x)} />}
     </>
   ) : (
     <div style={{ marginTop: 6, fontWeight: 700, fontSize: 14, color: "#8593a8" }}>🔒 {maskAddr(a.address, a.postcode)}</div>
@@ -324,7 +353,7 @@ function DayRuns({ date, stops, crm, header, onBack, driver }) {
                   <div style={{ fontSize: 13, fontWeight: 700, color: isCur ? "#185FA5" : "#5a6a85", marginTop: 3 }}>
                     {isCur ? "Next stop" : "Supplier pick-up"}{o.collectTime ? " · " + o.collectTime : ""}{forJobs.length ? " · for " + forJobs.map((j) => "#" + j.invNo).join(", ") : ""}
                   </div>
-                  {addr && addrBlock(open, isCur, o, addr)}
+                  {addr && addrBlock(open, isCur, o, addr, x)}
                   {!open && rs.open && cur && note("Opens after " + stopName(cur) + " is confirmed")}
                   {o.phone && <a href={telHref(o.phone)} style={{ display: "block", marginTop: 8, color: "#185FA5", fontWeight: 700, fontSize: 14, textDecoration: "none" }}>📞 {o.phone}{o.contact ? " · " + o.contact : ""}</a>}
                   <Items rows={(o.items || []).map((it, k) => {
@@ -332,7 +361,7 @@ function DayRuns({ date, stops, crm, header, onBack, driver }) {
                     return { qty: it.qty, text: it.description || it.sku, colour: it.colour, mark: r ? (r.short ? "short" : "ok") : null };
                   })} />
                   {o.notes && <div style={{ marginTop: 8, background: "#fff8e6", borderRadius: 8, padding: "8px 10px", fontSize: 13.5, fontWeight: 600 }}>{o.notes}</div>}
-                  {isCur && completeBtn(x, "Complete this pick-up")}
+                  {isCur && completeBtn(x, "Complete this pick-up", !addr)}
                   {isDone && doneLine(conf, true)}
                 </div>
               </div>
@@ -362,7 +391,7 @@ function DayRuns({ date, stops, crm, header, onBack, driver }) {
                 <div style={{ fontSize: 13, fontWeight: 700, color: coll ? "#a06d00" : isCur ? "#185FA5" : "#5a6a85", marginTop: 3 }}>
                   {coll ? "Customer collecting from the warehouse" : isCur ? "Next drop" : "Delivery"}{o.deliveryTime ? " · " + o.deliveryTime : ""}
                 </div>
-                {addr && !coll && addrBlock(open, isCur, a, addr)}
+                {addr && !coll && addrBlock(open, isCur, a, addr, x)}
                 {!coll && !open && rs.open && (wait.length
                   ? note("Waiting for " + wait.map((w) => "the " + (w.obj.supplier || "supplier") + " pick-up (COL-" + w.obj.collectionNo + ")").join(" and ") + " — opens once it's collected and checked", "#185FA5")
                   : cur ? note("Opens after " + stopName(cur) + " is confirmed") : null)}
@@ -402,7 +431,7 @@ function DayRuns({ date, stops, crm, header, onBack, driver }) {
                 </div>
                 {o.jobNotes && <div style={{ marginTop: 8, background: "#fff8e6", borderRadius: 8, padding: "8px 10px", fontSize: 13.5, fontWeight: 600 }}>{o.jobNotes}</div>}
                 {owed > 0 && <div style={{ marginTop: 8, background: "#fde8ea", color: RED, borderRadius: 8, padding: "8px 10px", fontSize: 14, fontWeight: 800 }}>Payment to take: {gbp(owed)}</div>}
-                {isCur && completeBtn(x, "Complete this drop")}
+                {isCur && completeBtn(x, "Complete this drop", !addr)}
                 {isDone && doneLine(conf, false)}
               </div>
             </div>
