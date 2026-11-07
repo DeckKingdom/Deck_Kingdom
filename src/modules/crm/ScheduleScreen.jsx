@@ -251,8 +251,11 @@ function LoadingWindow({ sticky, crm, planner, setInv, custById, onClose, openJo
 
 // the colour each kind of paperwork prints on
 const DOC_DOT = { loading: "#f2c55c", delivery: "#6cc28a", invoice: "#d5d9e0", collection: "#6f9ee8" };
-const PrintMenu = ({ onPick, label, dark, title = "Print or save as PDF", collCount = 0, jobs = true }) => {
+// send: optional [{ key, driver, phone, label, run(phone) }] — "send to driver on WhatsApp"; onSavePhone(driver, number)
+const PrintMenu = ({ onPick, label, dark, title = "Print or save as PDF", collCount = 0, jobs = true, send = [], onSavePhone }) => {
   const [box, setBox] = useState(null);
+  const [ask, setAsk] = useState(null); // the driver whose mobile we're asking for
+  const [num, setNum] = useState("");
   const ref = useRef(null);
   useEffect(() => {
     if (!box) return;
@@ -263,17 +266,18 @@ const PrintMenu = ({ onPick, label, dark, title = "Print or save as PDF", collCo
     return () => { document.removeEventListener("mousedown", shut); window.removeEventListener("scroll", gone, true); };
   }, [box]);
   const pick = (kinds) => { setBox(null); onPick(kinds); };
+  const go = (o, phone) => { setBox(null); setAsk(null); o.run(phone); };
   return (
     <>
       <button ref={ref} type="button" title={title}
-        onClick={(e) => { e.stopPropagation(); if (box) return setBox(null); const r = ref.current.getBoundingClientRect(); setBox({ left: r.right - 210, top: r.bottom + 4, up: r.bottom > window.innerHeight - 190 ? r.top : 0 }); }}
+        onClick={(e) => { e.stopPropagation(); if (box) return setBox(null); const r = ref.current.getBoundingClientRect(); setBox({ left: r.right - 210, top: r.bottom + 4, up: r.bottom > window.innerHeight - (send.length ? 300 : 190) ? r.top : 0 }); }}
         style={label
           ? { display: "inline-flex", alignItems: "center", gap: 6, border: dark ? "1px solid #3a4d6e" : "1px solid #d5d9e0", background: dark ? "transparent" : "#fff", color: dark ? "#fff" : NAVY, borderRadius: 8, padding: "5px 10px", fontFamily: "inherit", fontWeight: 700, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap" }
           : { width: 26, height: 26, borderRadius: 8, border: "none", background: "#eef1f6", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0, flex: "none" }}>
         <Icon name="print" stroke={dark ? "#fff" : NAVY} size={label ? 13 : 14} />{label}{label && <span style={{ fontSize: 9, opacity: 0.8 }}>▾</span>}
       </button>
       {box && (
-        <div data-print-menu style={{ position: "fixed", left: Math.max(8, box.left), ...(box.up ? { bottom: window.innerHeight - box.up + 4 } : { top: box.top }), width: 210, zIndex: 85,
+        <div data-print-menu style={{ position: "fixed", left: Math.max(8, box.left - (send.length ? 40 : 0)), ...(box.up ? { bottom: window.innerHeight - box.up + 4 } : { top: box.top }), width: send.length ? 250 : 210, zIndex: 85,
           background: "#fff", border: "1px solid #d5d9e0", borderRadius: 12, boxShadow: "0 10px 30px rgba(11,31,63,.2)", padding: 4 }}>
           {(() => {
             const opts = [
@@ -288,6 +292,25 @@ const PrintMenu = ({ onPick, label, dark, title = "Print or save as PDF", collCo
               </button>
             ));
           })()}
+          {send.length > 0 && <div style={{ borderTop: "1px solid #eef1f6", margin: "4px 0" }} />}
+          {send.map((o) => (
+            <div key={o.key}>
+              <button type="button" onClick={() => (o.phone ? go(o, o.phone) : (setAsk(o.key), setNum("")))}
+                title={o.phone ? "Opens WhatsApp with the run written out, ready to send to " + o.driver + " (" + o.phone + ")" : "Add " + o.driver + "'s mobile to send it"}
+                style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", minHeight: 32, textAlign: "left", padding: "4px 10px", border: "none", borderRadius: 8, cursor: "pointer", fontFamily: "inherit", fontSize: 12.5, fontWeight: 600, background: "transparent", color: NAVY }}>
+                <Icon name="wa" stroke="#128C7E" size={14} />{o.label}
+              </button>
+              {ask === o.key && (
+                <div style={{ display: "flex", gap: 6, padding: "2px 10px 8px" }}>
+                  <input autoFocus value={num} onChange={(e) => setNum(e.target.value)} placeholder={o.driver + "'s mobile"} inputMode="tel"
+                    onKeyDown={(e) => { if (e.key === "Enter" && num.trim()) { onSavePhone && onSavePhone(o.driver, num.trim()); go(o, num.trim()); } }}
+                    style={{ ...inp, padding: "5px 8px", fontSize: 12.5 }} />
+                  <button type="button" style={{ ...goldBtn, padding: "5px 10px", fontSize: 12 }} disabled={!num.trim()}
+                    onClick={() => { onSavePhone && onSavePhone(o.driver, num.trim()); go(o, num.trim()); }}>Send</button>
+                </div>
+              )}
+            </div>
+          ))}
           <div style={{ fontSize: 10.5, color: "#8593a8", fontWeight: 600, padding: "4px 10px 6px" }}>Opens the print window — choose "Save as PDF" there for a file.</div>
         </div>
       )}
@@ -439,6 +462,54 @@ const SlaChip = ({ days, done }) => (
 export default function ScheduleScreen({ headerH = 0, panels = { pending: true, loading: false }, setPanel = () => {}, onPendingCount, openProduct, money = true, crm, updateCrm, openInvoice, openCollection, me, planner, goCustomer, newFollowUp }) {
   const [printMsg, setPrintMsg] = useState("");
   const phone = usePhone();
+  // ===== send a driver their run on WhatsApp: drops in order, address, phone, what's going, notes, money to take =====
+  const driverPhones = (crm.driverPhones && typeof crm.driverPhones === "object") ? crm.driverPhones : {};
+  const saveDriverPhone = (driver, num) => updateCrm((c) => { c.driverPhones = { ...((c.driverPhones && typeof c.driverPhones === "object") ? c.driverPhones : {}), [driver]: num }; return c; });
+  const runText = (rows, driver, date) => {
+    const when = date ? new Date(date + "T00:00:00").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" }) : "";
+    const first = rows.find((x) => x.obj.runNo || x.obj.van);
+    const out = ["Hi " + driver + ", here's your run" + (when ? " for " + when : "") + (first && first.obj.runNo ? " (Run " + first.obj.runNo + (first.obj.van ? " · " + first.obj.van : "") + ")" : "") + ":", ""];
+    rows.forEach((x, n) => {
+      const o = x.obj;
+      if (x.kind === "col") {
+        out.push((n + 1) + ". PICK UP – " + (o.supplier || "Supplier") + " – COL-" + (o.collectionNo || ""));
+        const addr = [o.address, o.town, o.postcode].filter(Boolean).join(", ");
+        if (addr) out.push("   " + addr);
+        if (o.postcode) out.push("   https://maps.google.com/?q=" + encodeURIComponent(o.postcode));
+        (o.items || []).forEach((it) => out.push("   " + (it.qty || "?") + " × " + (it.description || it.sku || "") + (it.colour ? " – " + it.colour : "")));
+      } else {
+        const c = custById[o.customerId] || {}, st = siteById[o.siteId] || null;
+        const addr = st ? [st.address, st.town, st.postcode].filter(Boolean).join(", ") : [c.address, c.town, c.postcode].filter(Boolean).join(", ");
+        const pc = (st && st.postcode) || c.postcode || "";
+        out.push((n + 1) + ". " + (isCollectionJob(o) ? "CUSTOMER COLLECTING – " : "") + (c.name || "Customer") + " – #" + (o.invNo || ""));
+        if (addr && !isCollectionJob(o)) out.push("   " + addr);
+        const tel = c.mobile || c.landline || "";
+        if (tel) out.push("   Tel " + tel);
+        if (pc && !isCollectionJob(o)) out.push("   https://maps.google.com/?q=" + encodeURIComponent(pc));
+        (o.lines || []).filter((l) => l.qty && (l.description || l.code)).forEach((l) => out.push("   " + l.qty + " × " + (l.description || l.code) + (l.colour ? " – " + l.colour : "")));
+        if (o.jobNotes) out.push("   Note: " + String(o.jobNotes).replace(/\s+/g, " ").trim());
+        if (!isPaid(o)) { const t = invoiceTotals(o).total; if (t > 0) out.push("   Payment to take: " + gbp(t)); }
+      }
+      out.push("");
+    });
+    const kg = rows.reduce((t, x) => t + ((x.kind === "inv" ? invoiceLoadKg(x.obj, crm) : collKg(x.obj)) || 0), 0);
+    if (kg) out.push("Load about " + Math.round(kg).toLocaleString("en-GB") + " kg.");
+    out.push("Any problems call the office on 0161 399 1837. Thanks!");
+    return out.join("\n");
+  };
+  const sendOptions = (rows, date) => {
+    const byDriver = {};
+    rows.filter((x) => x.obj.driver).forEach((x) => (byDriver[x.obj.driver] = byDriver[x.obj.driver] || []).push(x));
+    return Object.entries(byDriver).map(([driver, list]) => {
+      const ph = UK_PHONE(driverPhones[driver] || "");
+      return {
+        key: driver, driver, phone: ph ? driverPhones[driver] : "",
+        label: "Send to " + driver + " on WhatsApp" + (list.length > 1 ? " (" + list.length + ")" : ""),
+        run: (phone) => { const a = document.createElement("a"); a.href = "whatsapp://send?phone=" + UK_PHONE(phone) + "&text=" + encodeURIComponent(runText(list, driver, date)); a.click(); },
+      };
+    });
+  };
+
   const printJobs = (jobs, kinds, title, colls = []) => {
     const list = jobs.filter((x) => x && !isVoidInvoice(x) && onSchedule(x, crm));
     if (!list.length && !(kinds.includes("collection") && colls.length)) return;
@@ -832,7 +903,7 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
             <div style={{ ...sep, position: "relative" }}>
               <span style={{ display: "inline-flex", gap: 5 }}>
                 <NotifyButtons i={i} c={c} onSent={(via) => markSent([i.id], [via])} />
-                <PrintMenu onPick={(k) => printJobs([i], k, "#" + (i.invNo || "") + " paperwork")} />
+                <PrintMenu send={sendOptions([{ kind: "inv", obj: i }], i.deliveryDate)} onSavePhone={saveDriverPhone} onPick={(k) => printJobs([i], k, "#" + (i.invNo || "") + " paperwork")} />
                 {newFollowUp && <button type="button" title="Follow-up job — something missing or broken that needs posting or delivering" onClick={() => newFollowUp(i.id)}
                   style={{ width: 26, height: 26, borderRadius: 8, border: "none", background: "#eef1f6", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0, flex: "none" }}><Icon name="wrench" stroke={NAVY} size={14} /></button>}
               </span>
@@ -894,7 +965,7 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
             {tel ? <a href={"tel:" + tel} title="Call" style={{ ...mini, background: "#eef1f6" }}><Icon name="phone" stroke={NAVY} size={16} /></a> : null}
             {addr ? <a href={"https://www.google.com/maps/dir/?api=1&destination=" + encodeURIComponent(addr)} target="_blank" rel="noopener noreferrer" title="Directions" style={{ ...mini, background: "#eef1f6" }}><Icon name="pin" stroke={NAVY} size={16} /></a> : null}
             <NotifyButtons i={i} c={c} onSent={(via) => markSent([i.id], [via])} />
-            <PrintMenu onPick={(k) => printJobs([i], k, "#" + (i.invNo || "") + " paperwork")} />
+            <PrintMenu send={sendOptions([{ kind: "inv", obj: i }], i.deliveryDate)} onSavePhone={saveDriverPhone} onPick={(k) => printJobs([i], k, "#" + (i.invNo || "") + " paperwork")} />
             <span style={{ flex: 1 }} />
             <span style={{ fontSize: 12, fontWeight: 700, color: "#8593a8" }}>{i.invNo ? "#" + i.invNo : i.orderRef || ""}</span>
           </div>
@@ -1018,7 +1089,7 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
           <CollMailButton c={c} crm={crm} onSent={() => setColl(c.id, (t) => (t.emailedAt = new Date().toISOString()))} />
         </div>
         <div style={{ display: "flex", justifyContent: "flex-end" }}>
-          <PrintMenu jobs={false} collCount={1} title="Print or save the collection note" onPick={(kk) => printJobs([], kk, "Collection note COL-" + (c.collectionNo || ""), [c])} />
+          <PrintMenu jobs={false} collCount={1} send={sendOptions([{ kind: "col", obj: c }], c.collectDate)} onSavePhone={saveDriverPhone} title="Print or save the collection note" onPick={(kk) => printJobs([], kk, "Collection note COL-" + (c.collectionNo || ""), [c])} />
         </div>
       </div>
     );
@@ -1194,7 +1265,7 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
             right={g.rows.length ? (
               <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
                 <ConfirmBtn date={g.date} rows={g.rows} />
-                {g.rows.length > 0 && <PrintMenu dark label="Print day" title="Print or save every run's paperwork for this day"
+                {g.rows.length > 0 && <PrintMenu dark label="Print day" title="Print or save every run's paperwork for this day" send={sendOptions(g.rows, g.date)} onSavePhone={saveDriverPhone}
                   jobs={g.rows.some((x) => x.kind === "inv")} collCount={g.rows.filter((x) => x.kind === "col").length}
                   onPick={(kk) => printJobs(g.rows.filter((x) => x.kind === "inv").map((x) => x.obj), kk, dayLabel(g.date), g.rows.filter((x) => x.kind === "col").map((x) => x.obj))} />}
               </span>
@@ -1223,7 +1294,7 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
                       <span style={{ fontWeight: 600, color: "#5a6a85", fontSize: 12, whiteSpace: "nowrap" }}>
                         {[nDrops ? nDrops + (custGroup ? " collecting" : " drop" + (nDrops === 1 ? "" : "s")) : "", nPicks ? nPicks + " pick-up" + (nPicks === 1 ? "" : "s") : "", runKg && !loose ? Math.round(runKg).toLocaleString("en-GB") + " kg" : ""].filter(Boolean).join(" · ")}
                       </span>
-                      {!loose && <PrintMenu title="Print or save this run's paperwork" jobs={sameRun.some((x) => x.kind === "inv")} collCount={sameRun.filter((x) => x.kind === "col").length} onPick={(kk) => printJobs(sameRun.filter((x) => x.kind === "inv").map((x) => x.obj), kk, dayLabel(g.date) + " · " + (custGroup ? "Customer collections" : (e.obj.runNo ? "Run " + e.obj.runNo : "No run") + (e.obj.driver ? " · " + e.obj.driver : "")), sameRun.filter((x) => x.kind === "col").map((x) => x.obj))} />}
+                      {!loose && <PrintMenu title="Print or save this run's paperwork" send={sendOptions(sameRun, g.date)} onSavePhone={saveDriverPhone} jobs={sameRun.some((x) => x.kind === "inv")} collCount={sameRun.filter((x) => x.kind === "col").length} onPick={(kk) => printJobs(sameRun.filter((x) => x.kind === "inv").map((x) => x.obj), kk, dayLabel(g.date) + " · " + (custGroup ? "Customer collections" : (e.obj.runNo ? "Run " + e.obj.runNo : "No run") + (e.obj.driver ? " · " + e.obj.driver : "")), sameRun.filter((x) => x.kind === "col").map((x) => x.obj))} />}
                     </div>
                   ) : key !== prevKey ? (
                     <div title={loose ? "Supplier pick-ups not in a run yet — give them a driver and run, or drag one onto a job" : canMove ? "Drag to change the order the runs go out" : ""}
@@ -1252,7 +1323,7 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
                           {runKg ? Math.round(runKg).toLocaleString("en-GB") + " kg" : "—"}
                         </span>
                         <span style={{ gridColumn: "12 / -1", display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
-                          <PrintMenu title="Print or save this run's paperwork" jobs={sameRun.some((x) => x.kind === "inv")} collCount={sameRun.filter((x) => x.kind === "col").length} onPick={(kk) => printJobs(sameRun.filter((x) => x.kind === "inv").map((x) => x.obj), kk, dayLabel(g.date) + " · " + (custGroup ? "Customer collections" : (e.obj.runNo ? "Run " + e.obj.runNo : "No run") + (e.obj.driver ? " · " + e.obj.driver : "")), sameRun.filter((x) => x.kind === "col").map((x) => x.obj))} />
+                          <PrintMenu title="Print or save this run's paperwork" send={sendOptions(sameRun, g.date)} onSavePhone={saveDriverPhone} jobs={sameRun.some((x) => x.kind === "inv")} collCount={sameRun.filter((x) => x.kind === "col").length} onPick={(kk) => printJobs(sameRun.filter((x) => x.kind === "inv").map((x) => x.obj), kk, dayLabel(g.date) + " · " + (custGroup ? "Customer collections" : (e.obj.runNo ? "Run " + e.obj.runNo : "No run") + (e.obj.driver ? " · " + e.obj.driver : "")), sameRun.filter((x) => x.kind === "col").map((x) => x.obj))} />
                         </span>
                       </>}
                     </div>
