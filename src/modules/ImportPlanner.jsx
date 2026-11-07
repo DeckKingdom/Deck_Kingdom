@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import * as XLSX from "xlsx";
 import { storage, storageMode } from "../data/storage.js";
 import { useDropSync, DropAlert } from "./crm/DropSync.jsx";
+import { useTrackingAlerts, TrackingAlertPop } from "./crm/TrackingAlerts.jsx";
+import { fleetSettings } from "../lib/tracking.js";
 import { signOut, getSessionEmail, getMyAccess } from "../data/auth.js";
 import { accessFor, LOCAL_ACCESS, LOADING_ACCESS, levelLabel } from "../lib/access.js";
 import {
@@ -243,7 +245,10 @@ export default function ImportPlanner() {
     updateCrmRaw(fn);
   };
   // drivers' full drop / pick-up confirmations close the job here
-  const dropSync = useDropSync({ crm, updateCrm: updateCrmRaw, me: storageMode === "supabase" ? getSessionEmail() || "" : "", enabled: !!crm && access.canEdit, alertsOn: ["admin", "manager", "office"].includes(access.role) });
+  // pop-up alerts only on the desktop of the login named in the tracking rates (Jon by default)
+  const alertsMine = !!crm && !isPhone && (storageMode !== "supabase" || String(getSessionEmail() || "").toLowerCase() === String(fleetSettings(crm).alertsTo || "").toLowerCase());
+  const dropSync = useDropSync({ crm, updateCrm: updateCrmRaw, me: storageMode === "supabase" ? getSessionEmail() || "" : "", enabled: !!crm && access.canEdit, alertsOn: alertsMine });
+  const trackAlerts = useTrackingAlerts({ crm, enabled: alertsMine && access.canTab("tracking") });
   const [selCustomerId, setSelCustomerId] = useState(null);
   const [selInvoiceId, setSelInvoiceId] = useState(null);
   const [selCollectionId, setSelCollectionId] = useState(null);
@@ -2768,6 +2773,9 @@ export default function ImportPlanner() {
         );
       })()}
 
+      {crm && !dropSync.alerts.length && trackAlerts.alerts.length > 0 && (
+        <TrackingAlertPop alerts={trackAlerts.alerts} onDismiss={trackAlerts.dismiss} onOpen={() => setTab("tracking")} />
+      )}
       {crm && dropSync.alerts.length > 0 && (
         <DropAlert alerts={dropSync.alerts} crm={crm} onDismiss={dropSync.dismiss} onFollowUp={followUpFromDrop}
           onOpenJob={(id) => openInvoice(id)} onOpenCollection={(id) => openCollection(id)} />

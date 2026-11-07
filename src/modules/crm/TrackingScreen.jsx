@@ -4,9 +4,10 @@ import { useEffect, useMemo, useState } from "react";
 import { NAVY, GOLD, RED } from "../../lib/core.js";
 import { gbp, DRIVERS } from "../../lib/crmCore.js";
 import { ListHero, HeroStat, Icon, Chip, card, sect, lbl, inp, btn, goldBtn, Modal } from "./ui.jsx";
-import { loadDropsRange, loadEventsRange, loadFuelRange, dropLeft, dropPhotoUrl } from "../../data/drops.js";
-import { geocodePostcodes } from "../../lib/geo.js";
-import { fleetSettings, FLEET_DEFAULTS, trackingPostcodes, buildRuns, vanChecks, mpgFor } from "../../lib/tracking.js";
+import { dropLeft, dropPhotoUrl } from "../../data/drops.js";
+import { loadTracking, workOut } from "../../data/trackingData.js";
+import { refreshFuelPrice } from "../../data/fleetApi.js";
+import { fleetSettings, FLEET_DEFAULTS, mpgFor } from "../../lib/tracking.js";
 
 const pad = (n) => String(n).padStart(2, "0");
 const ymd = (d) => d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
@@ -45,14 +46,9 @@ export default function TrackingScreen({ crm, updateCrm, openInvoice, openCollec
     setErr("");
     (async () => {
       try {
-        const fuelFrom = new Date(from + "T00:00:00"); fuelFrom.setDate(fuelFrom.getDate() - 45);
-        const [confs, events, fuel] = await Promise.all([
-          loadDropsRange(from, to),
-          loadEventsRange(from, to).catch(() => []),
-          loadFuelRange(fuelFrom.toISOString(), to + "T23:59:59Z").catch(() => []),
-        ]);
-        const geo = await geocodePostcodes(trackingPostcodes(crm, from, to, s));
-        if (live) setData({ confs, events, fuel, geo, key: from + to });
+        await refreshFuelPrice(); // today's supermarket price, if it isn't saved yet
+        const d = await loadTracking(crm, from, to);
+        if (live) setData(d);
       } catch (e) {
         if (live) setErr(/drop_confirmations|driver_events/.test(String(e && e.message)) ? "Run drop-confirmations.sql and driver-tracking.sql in Supabase to switch driver tracking on." : String((e && e.message) || e));
       }
@@ -62,10 +58,7 @@ export default function TrackingScreen({ crm, updateCrm, openInvoice, openCollec
 
   const result = useMemo(() => {
     if (!data) return null;
-    const { runs, alerts } = buildRuns({ crm, confs: data.confs, events: data.events, geo: data.geo, s, from, to, driver });
-    const allRuns = driver ? buildRuns({ crm, confs: data.confs, events: data.events, geo: data.geo, s, from, to }).runs : runs;
-    const vc = vanChecks({ fuel: data.fuel, runs: allRuns, s, from, to });
-    return { runs, alerts: [...alerts, ...vc.alerts], vans: vc.rows };
+    return workOut(crm, data, from, to, driver);
   }, [data, driver, crm.fleetCosts, crm.invoices, crm.collections]);
 
   const tot = result ? result.runs.reduce((t, r) => ({ runs: t.runs + 1, drops: t.drops + r.confirmed.filter((x) => x.kind === "inv").length, miles: t.miles + r.miles, hours: t.hours + r.hours, fuel: t.fuel + r.fuel, time: t.time + r.time }), { runs: 0, drops: 0, miles: 0, hours: 0, fuel: 0, time: 0 }) : null;
@@ -73,7 +66,7 @@ export default function TrackingScreen({ crm, updateCrm, openInvoice, openCollec
 
   return (
     <div style={{ maxWidth: 1320, margin: "0 auto", padding: "18px 18px 40px" }}>
-      <ListHero title="Driver tracking" sub={dayLabel(from) + " – " + dayLabel(to) + " · set-off to back at " + s.yard + " · " + gbp(Number(s.dieselPerLitre)) + "/L diesel, " + s.mpg + "mpg (Sprinter " + s.sprinterMpg + "), " + gbp(Number(s.hourly)) + "/hr"}
+      <ListHero title="Driver tracking" sub={dayLabel(from) + " – " + dayLabel(to) + " · set-off to back at " + s.yard + " · diesel at that day's supermarket price" + (data && Object.keys(data.prices || {}).length ? "" : " (none published yet — " + gbp(Number(s.dieselPerLitre)) + "/L used)") + " · " + s.mpg + "mpg (Sprinter " + s.sprinterMpg + ") · " + gbp(Number(s.hourly)) + "/hr" + (result && result.runs.length ? (result.runs.every((r) => r.roadMiles) ? " · Google road miles" : " · straight-line miles ×" + s.roadFactor + " where Google isn't connected") : "")}
         action={canSettings && <button onClick={() => setShowSettings(true)} title="Fuel price, mpg and driver rate" style={{ ...btn, background: "transparent", border: "1px solid #3a4f78", color: "#fff", display: "inline-flex", alignItems: "center", gap: 6 }}><Icon name="gear" stroke="#fff" /> Rates</button>}>
         <HeroStat label="Drops" value={tot ? tot.drops : "…"} sub={tot ? tot.runs + " run" + (tot.runs === 1 ? "" : "s") : ""} />
         <HeroStat label="Miles" value={tot ? Math.round(tot.miles).toLocaleString("en-GB") : "…"} sub={tot ? Math.round(tot.hours * 10) / 10 + " driver hours" : ""} />
@@ -130,6 +123,7 @@ export default function TrackingScreen({ crm, updateCrm, openInvoice, openCollec
               <b style={{ fontSize: 15 }}>{dayLabel(r.date)}</b>
               <span style={{ fontWeight: 700 }}>{r.driver}{r.runNo ? " · Run " + r.runNo : ""}</span>
               <Chip>{r.van || "No van"} · {mpgFor(r.van, s)}mpg</Chip>
+              <Chip tone={r.price.published ? "blue" : "grey"} title={r.price.published ? "Supermarket diesel price published " + r.price.day : "No published price for this day — the set rate is used"}>{(r.price.perLitre * 100).toFixed(1)}p/L</Chip>
               <span style={{ fontSize: 12.5, fontWeight: 600, color: "#5a6a85" }}>
                 Set off {hm(r.departAt)}{r.estimatedDepart ? " (est.)" : ""} · last drop {hm(r.lastAt)} · back ≈{hm(r.backAt)}
               </span>
@@ -179,14 +173,14 @@ export default function TrackingScreen({ crm, updateCrm, openInvoice, openCollec
         <div style={card}>
           <p style={sect}>Van mileage check · between fill-ups</p>
           <div style={{ fontSize: 12.5, color: "#8593a8", fontWeight: 600, marginBottom: 8 }}>
-            Miles on the clock (from the fuel log) against the miles the runs account for, and against what the fuel bought should cover — assumes each fill-up brings the tank back to full. Over {s.tolerancePct}% either way is flagged.
+            Miles on the clock (from the fuel log) against the miles the runs account for, and against how far the fuel bought should go — receipt £ ÷ that day's published supermarket diesel price = litres, × the van's mpg. Assumes each fill-up brings the tank back to full. Over {s.tolerancePct}% either way is flagged.
           </div>
           {result.vans.length === 0 ? <div style={{ fontSize: 13.5, color: "#8593a8", fontWeight: 600 }}>Needs two fill-ups with a mileage reading for a van in these dates.</div> : (
             <div style={{ overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead>
                   <tr style={{ color: "#8593a8", fontSize: 11, letterSpacing: 0.4, textTransform: "uppercase", textAlign: "left" }}>
-                    {["Van", "Between", "Odometer", "On the clock", "Runs account for", "vs runs", "Fuel bought", "Fuel should cover", "vs fuel"].map((h, k) => <th key={h} style={{ padding: "8px 10px", fontWeight: 700, textAlign: k >= 3 ? "right" : "left", whiteSpace: "nowrap" }}>{h}</th>)}
+                    {["Van", "Between", "Odometer", "On the clock", "Runs account for", "vs runs", "Fuel bought", "Price that day", "Fuel should cover", "vs fuel"].map((h, k) => <th key={h} style={{ padding: "8px 10px", fontWeight: 700, textAlign: k >= 3 ? "right" : "left", whiteSpace: "nowrap" }}>{h}</th>)}
                   </tr>
                 </thead>
                 <tbody>
@@ -198,7 +192,8 @@ export default function TrackingScreen({ crm, updateCrm, openInvoice, openCollec
                       <td style={tdR}>{Math.round(v.clock)} mi</td>
                       <td style={tdR}>{v.expected ? Math.round(v.expected) + " mi" : "—"}</td>
                       <td style={tdR}><Var v={v.vRuns} tol={s.tolerancePct} /></td>
-                      <td style={tdR}>{gbp(v.fuelSpent)}</td>
+                      <td style={tdR}>{gbp(v.fuelSpent)}{v.litres ? <div style={{ fontSize: 11, color: "#8593a8" }}>≈{Math.round(v.litres)} L</div> : null}</td>
+                      <td style={tdR} title={v.price.published ? "Supermarket average, " + v.price.day : "No published price — set rate"}>{(v.price.perLitre * 100).toFixed(1)}p{!v.price.published && <div style={{ fontSize: 11, color: "#8593a8" }}>set rate</div>}</td>
                       <td style={tdR}>{v.fuelMiles ? Math.round(v.fuelMiles) + " mi" : "—"}</td>
                       <td style={tdR}><Var v={v.vFuel} tol={s.tolerancePct} /></td>
                     </tr>
@@ -271,7 +266,7 @@ function RatesModal({ s, onClose, onSave }) {
   return (
     <Modal title="Driver tracking rates" onClose={onClose} width={560}>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        {f("dieselPerLitre", "Diesel price", "£ / litre")}
+        {f("dieselPerLitre", "Diesel price when none is published", "£ / litre")}
         {f("hourly", "Driver rate", "£ / hour")}
         {f("mpg", "Vans", "mpg")}
         {f("sprinterMpg", "Sprinter", "mpg")}
@@ -280,12 +275,16 @@ function RatesModal({ s, onClose, onSave }) {
         {f("roadFactor", "Road miles per straight-line mile", "×")}
         {f("awayMiles", "Flag a drop confirmed further than", "miles away")}
         {f("tolerancePct", "Flag mileage / fuel outside", "%")}
+        <div style={{ gridColumn: "1 / -1" }}>
+          <span style={lbl}>Pop-up alerts go to (login email — desktop only)</span>
+          <input style={inp} value={v.alertsTo || ""} onChange={(e) => setV({ ...v, alertsTo: e.target.value.trim().toLowerCase() })} />
+        </div>
       </div>
       <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
         <button style={btn} onClick={() => setV({ ...FLEET_DEFAULTS })}>Reset to defaults</button>
         <span style={{ flex: 1 }} />
         <button style={btn} onClick={onClose}>Cancel</button>
-        <button style={{ ...goldBtn, color: NAVY }} onClick={() => onSave(Object.fromEntries(Object.entries(v).map(([k, x]) => [k, k === "yard" ? x : Number(x) || FLEET_DEFAULTS[k]])))}>Save</button>
+        <button style={{ ...goldBtn, color: NAVY }} onClick={() => onSave(Object.fromEntries(Object.entries(v).map(([k, x]) => [k, k === "yard" || k === "alertsTo" ? x : Number(x) || FLEET_DEFAULTS[k]])))}>Save</button>
       </div>
     </Modal>
   );
