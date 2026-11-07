@@ -13,6 +13,8 @@ import { htmlToPdfFile, shareToWhatsApp } from "./pdfShare.js";
 import LinesEditor, { SizeRow, applySize, skuOption, SKU_COLS, SKU_LIST_W } from "./LinesEditor.jsx";
 import { JOB_TYPES, skuIndex, PAYMENT_TYPES, stockCheck, partKey, isColPick, blankPick, blankCollectionItem, itemPending, collectionLineOpen, editCollectionLine, removeCollectionLine, isGrassRoll, sizeLabel, purchaseCost } from "../../lib/crmCore.js";
 import StockCheck from "./StockCheck.jsx";
+import { loadDrops, dropPhotoUrl } from "../../data/drops.js";
+import { Modal } from "./ui.jsx";
 import { Icon, Chip, Tg, sect, lbl, card, abtn, inp, btn, goldBtn, RiskChip, WebStatusChip, Soon, usePhone, DateInput, CalendarPop, SuggestInput, selectAllProps, PrintButton } from "./ui.jsx";
 
 const RANGE_OPTS = [
@@ -556,6 +558,19 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
   const [hideDone, setHideDone] = useState(false);
   const todayRef = useRef(null);
   const [pop, setPop] = useState(null); // { id, rect }: the job whose details are open
+  // drivers' drop confirmations (photo + what was dropped) for the days around today
+  const [drops, setDrops] = useState({});
+  useEffect(() => {
+    let live = true;
+    const pull = () => {
+      const from = addDays(today(), -10), to = addDays(today(), 3);
+      const dates = [...new Set(crm.invoices.filter((x) => x.driver && x.deliveryDate >= from && x.deliveryDate <= to).map((x) => x.deliveryDate))];
+      loadDrops(dates).then((m) => live && setDrops(m)).catch(() => {});
+    };
+    pull();
+    const t = setInterval(pull, 120000);
+    return () => { live = false; clearInterval(t); };
+  }, []);
   // names open their pop-over on click only; the parts dot still previews on hover ("peek") — moving into it keeps it open, clicking pins it
   const peekT = useRef({});
   const peekCancel = () => { clearTimeout(peekT.current.open); clearTimeout(peekT.current.close); };
@@ -884,7 +899,7 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
               title={c ? c.name : ""} style={{ fontWeight: 700, fontSize: 13.5, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
               {short16(c ? c.name || "Unnamed" : "No customer")}
             </button>
-            <RiskChip inv={i} /><WebStatusChip inv={i} />
+            <RiskChip inv={i} /><WebStatusChip inv={i} />{drops[i.id] && <DropChip conf={drops[i.id]} done={!!i.deliveryCompleted} onComplete={() => complete(i.id, true)} />}
           </div>
         </div>
         <span style={{ fontSize: 12.5, color: "#5a6a85", fontWeight: 700, whiteSpace: "nowrap" }}>{(s && s.postcode) || (c && c.postcode) || "—"}</span>
@@ -985,7 +1000,7 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
             {i.deliveryTime && <span>· {i.deliveryTime}</span>}
             {kg !== null && <span>· {kg.toLocaleString("en-GB", { maximumFractionDigits: 0 })} kg</span>}
             <span>· {isPaid(i) ? "Paid" : <b style={{ color: RED }}>Not paid</b>}</span>
-            <RiskChip inv={i} /><WebStatusChip inv={i} />
+            <RiskChip inv={i} /><WebStatusChip inv={i} />{drops[i.id] && <DropChip conf={drops[i.id]} done={!!i.deliveryCompleted} onComplete={() => complete(i.id, true)} />}
           </div>
           {!isCollectionJob(i) && (
             <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr 0.8fr 1.1fr", gap: 5, marginBottom: 8 }}>
@@ -1832,5 +1847,55 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
         );
       })()}
     </div>
+  );
+}
+
+
+// ===== a driver confirmed this drop from their phone: photo, what was left, any shortfall =====
+function DropChip({ conf, done, onComplete }) {
+  const [open, setOpen] = useState(false);
+  const [url, setUrl] = useState("");
+  const [err, setErr] = useState("");
+  const short = (conf.items || []).some((x) => x.short);
+  const at = new Date(conf.at);
+  const time = at.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  const show = (e) => {
+    e.stopPropagation();
+    setOpen(true);
+    if (!url) dropPhotoUrl(conf.photoPath).then(setUrl).catch((x) => setErr(String((x && x.message) || x)));
+  };
+  return (
+    <>
+      <button type="button" onClick={show} title={"Driver confirmed the drop at " + time + (short ? " — short drop noted" : "") + (done ? "" : " — click to check and mark delivered")}
+        style={{ border: "1px solid " + (short ? "#f4b9c1" : "#bfe3ca"), background: short ? "#fde8ea" : "#e9f6ee", color: short ? "#9b1c2e" : "#28713e", borderRadius: 999, padding: "0 6px", fontFamily: "inherit", fontSize: 11, fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap", flex: "none", lineHeight: "18px" }}>
+        📷{short ? " !" : ""}
+      </button>
+      {open && (
+        <Modal title={"Drop confirmed by " + (conf.driver || "driver") + " · #" + conf.invNo} onClose={() => setOpen(false)} width={520} z={95}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "#5a6a85" }}>
+            {prettyDateTime(conf.at)}
+            {conf.lat != null && <> · <a href={"https://www.google.com/maps/search/?api=1&query=" + conf.lat + "," + conf.lng} target="_blank" rel="noopener noreferrer" style={{ color: "#185FA5" }}>where it was confirmed</a></>}
+          </div>
+          <div style={{ marginTop: 10, borderRadius: 10, border: "1px solid #e6e9ef", background: "#f8f9fb", minHeight: 120, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+            {url ? <a href={url} target="_blank" rel="noopener noreferrer"><img src={url} alt="Drop" style={{ display: "block", maxWidth: "100%", maxHeight: 360 }} /></a>
+              : <span style={{ fontSize: 12.5, color: err ? RED : "#8593a8", fontWeight: 600 }}>{err || "Loading photo…"}</span>}
+          </div>
+          <div style={{ marginTop: 10 }}>
+            {(conf.items || []).map((x, k) => (
+              <div key={k} style={{ display: "flex", gap: 8, fontSize: 13.5, padding: "4px 0", borderBottom: "1px solid #f0f2f6", color: x.short ? "#9b1c2e" : NAVY }}>
+                <b style={{ width: 16 }}>{x.short ? "✗" : "✓"}</b><b style={{ minWidth: 32, textAlign: "right" }}>{x.qty}×</b>
+                <span style={{ flex: 1 }}>{x.text}{x.colour ? " · " + x.colour : ""}</span>
+                {x.short && <span style={{ fontSize: 11, fontWeight: 800 }}>NOT DROPPED</span>}
+              </div>
+            ))}
+          </div>
+          {conf.notes && <div style={{ marginTop: 10, background: "#fff8e6", border: "1px solid #f4d78f", borderRadius: 8, padding: "8px 10px", fontSize: 13.5, fontWeight: 600 }}>{conf.notes}</div>}
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 14 }}>
+            <button style={btn} onClick={() => setOpen(false)}>Close</button>
+            {!done && <button style={{ ...goldBtn, color: NAVY }} onClick={() => { onComplete(); setOpen(false); }}>Mark delivered</button>}
+          </div>
+        </Modal>
+      )}
+    </>
   );
 }

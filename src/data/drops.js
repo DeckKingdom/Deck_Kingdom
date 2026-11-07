@@ -1,0 +1,66 @@
+// Drivers' drop confirmations (photo + what was dropped). Supabase table drop_confirmations;
+// without Supabase (local preview) they live in this browser.
+import { storageMode } from "./storage.js";
+import { getSupabase } from "./supabaseClient.js";
+
+const LOCAL = "dk-drop-confirmations";
+const localAll = () => { try { return JSON.parse(localStorage.getItem(LOCAL) || "[]"); } catch (e) { return []; } };
+const fromRow = (r) => ({ id: r.id, at: r.at, driver: r.driver, invoiceId: r.invoice_id, invNo: r.inv_no, date: r.delivery_date, items: r.items || [], photoPath: r.photo_path, notes: r.notes, lat: r.lat, lng: r.lng });
+
+export const dropsReady = () => storageMode === "supabase";
+
+// confirmations for these delivery dates -> { [invoiceId]: latest confirmation }
+export async function loadDrops(dates) {
+  const ds = [...new Set(dates.filter(Boolean))];
+  if (!ds.length) return {};
+  let rows = [];
+  if (storageMode === "supabase") {
+    const sb = await getSupabase();
+    const { data, error } = await sb.from("drop_confirmations").select("*").in("delivery_date", ds).order("at", { ascending: true });
+    if (error) throw error;
+    rows = (data || []).map(fromRow);
+  } else rows = localAll().filter((r) => ds.includes(r.date));
+  const m = {};
+  rows.forEach((r) => (m[r.invoiceId] = r));
+  return m;
+}
+
+export async function saveDrop(conf, photoBlob) {
+  if (storageMode === "supabase") {
+    const sb = await getSupabase();
+    const { data: { user } } = await sb.auth.getUser();
+    const path = user.id + "/" + conf.date + "-" + conf.id + ".jpg";
+    const up = await sb.storage.from("drop-photos").upload(path, photoBlob, { contentType: "image/jpeg", upsert: false });
+    if (up.error) throw new Error("photo: " + up.error.message);
+    const ins = await sb.from("drop_confirmations").insert({ id: conf.id, user_id: user.id, driver: conf.driver, invoice_id: conf.invoiceId, inv_no: String(conf.invNo || ""), delivery_date: conf.date, items: conf.items, photo_path: path, notes: conf.notes || "", lat: conf.lat ?? null, lng: conf.lng ?? null, accuracy_m: conf.acc ?? null });
+    if (ins.error) throw new Error(ins.error.message);
+    return { ...conf, photoPath: path, at: new Date().toISOString() };
+  }
+  const url = await new Promise((res) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(photoBlob); });
+  const saved = { ...conf, photoPath: url, at: new Date().toISOString() };
+  try { localStorage.setItem(LOCAL, JSON.stringify([...localAll(), saved].slice(-200))); } catch (e) { /* too big for the preview */ }
+  return saved;
+}
+
+export async function dropPhotoUrl(path) {
+  if (!path) return "";
+  if (path.startsWith("data:")) return path;
+  const sb = await getSupabase();
+  const { data, error } = await sb.storage.from("drop-photos").createSignedUrl(path, 600);
+  if (error) throw error;
+  return data.signedUrl;
+}
+
+// shrink a phone photo so it uploads quickly on a weak signal
+export const shrinkPhoto = (file, max = 1600) => new Promise((resolve) => {
+  const img = new Image();
+  img.onload = () => {
+    const k = Math.min(1, max / Math.max(img.width, img.height));
+    const cv = document.createElement("canvas");
+    cv.width = Math.round(img.width * k); cv.height = Math.round(img.height * k);
+    cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height);
+    cv.toBlob((b) => resolve(b || file), "image/jpeg", 0.8);
+  };
+  img.onerror = () => resolve(file);
+  img.src = URL.createObjectURL(file);
+});

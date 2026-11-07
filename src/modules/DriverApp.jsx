@@ -7,6 +7,7 @@ import { signOut } from "../data/auth.js";
 import { normaliseCrm, isVoidInvoice, isCollectionJob, invoiceTotals, isPaid, gbp } from "../lib/crmCore.js";
 import { NAVY, GOLD, RED, uid, prettyDate, prettyDateTime } from "../lib/core.js";
 import { Icon } from "./crm/ui.jsx";
+import { loadDrops, saveDrop, shrinkPhoto } from "../data/drops.js";
 import { outwardCode, tidyPostcode, googleNavHref, appleNavHref, isApple } from "../lib/addressCheck.js";
 
 const GREEN = "#28713e";
@@ -145,21 +146,39 @@ function DayRuns({ date, stops, crm, header, onBack }) {
   ((crm && crm.sites) || []).forEach((s) => (siteById[s.id] = s));
   const [ticks, setTicks] = useState(() => loadTicks(date));
   const toggle = (k) => setTicks((t) => { const n = { ...t }; if (n[k]) delete n[k]; else n[k] = Date.now(); saveTicks(date, n); return n; });
+  const [drops, setDrops] = useState({}); // invoiceId -> confirmation
+  const [dropsErr, setDropsErr] = useState("");
+  const [completing, setCompleting] = useState(null); // the job being confirmed
+  useEffect(() => {
+    let live = true;
+    loadDrops([date]).then((m) => live && setDrops(m)).catch((e) => live && setDropsErr(/drop_confirmations/.test(String(e && e.message)) ? "Drop confirmations aren't switched on yet — ask the office to run drop-confirmations.sql." : "Couldn't check which drops are done — tap ↻ to try again."));
+    return () => { live = false; };
+  }, [date]);
+  const dropped = (o) => !!(o.deliveryCompleted || drops[o.id]);
+  const isDrop = (x) => x.kind === "inv" && !isCollectionJob(x.obj);
 
-  // what has to be on the van for each run (deliveries still to do; not warehouse collections)
-  const need = {};
+  // what has to be on the van for each run (drops still to do; not warehouse collections)
+  const need = {}, order = {};
   stops.forEach((x) => {
-    if (x.kind !== "inv" || x.obj.deliveryCompleted || isCollectionJob(x.obj)) return;
+    if (!isDrop(x)) return;
     const r = x.obj.runNo || "";
+    (order[r] = order[r] || []).push(x.obj);
+    if (dropped(x.obj)) return;
     invLines(x.obj).forEach(({ i }) => (need[r] = need[r] || []).push(x.obj.id + ":" + i));
   });
   const runState = (r) => { const l = need[r] || []; const done = l.filter((k) => ticks[k]).length; return { total: l.length, done, open: done === l.length }; };
+  // once loaded, drops open one at a time: the next one only after the one before is confirmed
+  const currentOf = (r) => (order[r] || []).find((o) => !dropped(o)) || null;
+
+  if (completing) return <CompleteDrop job={completing} cust={custById[completing.customerId] || {}} header={header} date={date}
+    onBack={() => setCompleting(null)} onSaved={(conf) => { setDrops((m) => ({ ...m, [conf.invoiceId]: conf })); setCompleting(null); window.scrollTo(0, 0); }} />;
 
   let lastRun = null;
   return (
     <div style={page}>
       {header(title, onBack)}
       <div style={{ padding: 14 }}>
+        {dropsErr && <div style={{ ...cardS, borderColor: "#f4d78f", background: "#fff8e6", color: "#6b5305", fontWeight: 700, fontSize: 13.5 }}>{dropsErr}</div>}
         {stops.length === 0 && <div style={{ ...cardS, textAlign: "center", color: "#8593a8", fontWeight: 700 }}>Nothing planned for you on {prettyDate(date)}.</div>}
         {stops.map((x, n) => {
           const o = x.obj;
@@ -171,11 +190,11 @@ function DayRuns({ date, stops, crm, header, onBack }) {
                 {o.runNo ? "Run " + o.runNo : "No run number"}{o.van ? " · " + o.van : ""}
               </div>
               {rs.total > 0 && (rs.open ? (
-                <div style={{ background: "#f1faf4", border: "1px solid #bfe3ca", color: GREEN, borderRadius: 10, padding: "9px 12px", fontSize: 13.5, fontWeight: 800 }}>✓ Everything's on the van — addresses unlocked</div>
+                <div style={{ background: "#f1faf4", border: "1px solid #bfe3ca", color: GREEN, borderRadius: 10, padding: "9px 12px", fontSize: 13.5, fontWeight: 800 }}>✓ Everything's on the van — {currentOf(runKey) ? "drops open one at a time" : "all drops confirmed"}</div>
               ) : (
                 <div style={{ background: "#fff8e6", border: "1px solid #f4d78f", color: "#6b5305", borderRadius: 10, padding: "9px 12px", fontSize: 13.5, fontWeight: 700 }}>
                   <div style={{ fontWeight: 800 }}>🔒 Load check: {rs.done} of {rs.total} ticked</div>
-                  <div style={{ marginTop: 3, fontWeight: 600 }}>Tick every item as you check it's on the van. The full addresses and sat nav open once everything's ticked.</div>
+                  <div style={{ marginTop: 3, fontWeight: 600 }}>Tick every item as you check it's on the van. Your first drop's address and sat nav open once everything's ticked.</div>
                   <div style={{ height: 6, background: "#f4e3b5", borderRadius: 4, marginTop: 7, overflow: "hidden" }}><div style={{ height: "100%", width: (100 * rs.done / rs.total) + "%", background: GOLD }} /></div>
                 </div>
               ))}
@@ -209,29 +228,34 @@ function DayRuns({ date, stops, crm, header, onBack }) {
           const tel = (st && (st.mobile || st.landline)) || c.mobile || c.landline || "";
           const coll = isCollectionJob(o);
           const owed = !isPaid(o) ? invoiceTotals(o).total : 0;
-          const unlocked = rs.open || o.deliveryCompleted;
+          const isDone = dropped(o);
+          const cur = !coll && rs.open && currentOf(runKey) && currentOf(runKey).id === o.id;
+          const unlocked = isDone || cur;
+          const prev = !coll && !isDone && !cur && rs.open ? (order[runKey] || [])[(order[runKey] || []).findIndex((y) => y.id === o.id) - 1] : null;
           const lines = invLines(o);
-          const tickable = !o.deliveryCompleted && !coll;
+          const tickable = !isDone && !coll && !rs.open;
+          const conf = drops[o.id];
           return (
             <div key={"i" + o.id}>
               {runHead}
-              <div style={{ ...cardS, borderLeft: "5px solid " + (o.deliveryCompleted ? GREEN : coll ? GOLD : NAVY), opacity: o.deliveryCompleted ? 0.75 : 1 }}>
+              <div style={{ ...cardS, borderLeft: "5px solid " + (isDone ? GREEN : coll ? GOLD : cur ? "#185FA5" : NAVY), opacity: isDone ? 0.75 : 1, boxShadow: cur ? "0 0 0 2px #185FA533" : "none" }}>
                 <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
                   <b style={{ fontSize: 13, color: "#8593a8" }}>{o.dropNo || n + 1}</b>
                   <b style={{ fontSize: 17, flex: 1 }}>{c.name || "Customer"}</b>
                   <span style={{ fontSize: 12, fontWeight: 800, color: "#8593a8" }}>#{o.invNo}</span>
                 </div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: coll ? "#a06d00" : "#5a6a85", marginTop: 3 }}>
-                  {coll ? "Customer collecting from the warehouse" : "Delivery"}{o.deliveryTime ? " · " + o.deliveryTime : ""}
+                <div style={{ fontSize: 13, fontWeight: 700, color: coll ? "#a06d00" : cur ? "#185FA5" : "#5a6a85", marginTop: 3 }}>
+                  {coll ? "Customer collecting from the warehouse" : cur ? "Next drop" : "Delivery"}{o.deliveryTime ? " · " + o.deliveryTime : ""}
                 </div>
                 {addr && !coll && (unlocked ? (
                   <>
                     <div style={{ marginTop: 6, fontWeight: 700, fontSize: 14 }}>📍 {addr}</div>
-                    {!o.deliveryCompleted && <NavButtons dest={addr} />}
+                    {cur && <NavButtons dest={addr} />}
                   </>
                 ) : (
                   <div style={{ marginTop: 6, fontWeight: 700, fontSize: 14, color: "#8593a8" }}>🔒 {maskAddr(a.address, a.postcode)}</div>
                 ))}
+                {prev && <div style={{ marginTop: 4, fontSize: 12.5, fontWeight: 700, color: "#8593a8" }}>Opens once drop {prev.dropNo || ""} ({(custById[prev.customerId] || {}).name || "#" + prev.invNo}) is confirmed</div>}
                 {tel && <a href={telHref(tel)} style={{ display: "block", marginTop: 8, color: "#185FA5", fontWeight: 700, fontSize: 14, textDecoration: "none" }}>📞 {tel}{st && st.contact ? " · " + st.contact : ""}</a>}
                 {tickable ? (
                   <div style={{ marginTop: 8, borderTop: "1px solid #eef1f6", paddingTop: 4 }}>
@@ -240,7 +264,7 @@ function DayRuns({ date, stops, crm, header, onBack }) {
                       return (
                         <button key={k} type="button" onClick={() => toggle(k)}
                           style={{ display: "flex", gap: 10, alignItems: "center", width: "100%", border: "none", background: "none", fontFamily: "inherit", color: NAVY, textAlign: "left", fontSize: 14.5, padding: "8px 0", cursor: "pointer", borderBottom: "1px solid #f3f5f8" }}>
-                          <span style={{ width: 26, height: 26, flex: "none", borderRadius: 7, border: "2px solid " + (on ? GREEN : "#c4cbd6"), background: on ? GREEN : "#fff", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontWeight: 900, fontSize: 15 }}>{on ? "✓" : ""}</span>
+                          <span style={tickBox(on)}>{on ? "✓" : ""}</span>
                           <b style={{ minWidth: 34, textAlign: "right" }}>{l.qty}×</b>
                           <span style={{ flex: 1, textDecoration: on ? "line-through" : "none", color: on ? "#8593a8" : NAVY }}>{l.description || l.code}{l.colour ? <span style={{ color: "#5a6a85" }}> · {l.colour}</span> : null}</span>
                         </button>
@@ -252,12 +276,114 @@ function DayRuns({ date, stops, crm, header, onBack }) {
                 )}
                 {o.jobNotes && <div style={{ marginTop: 8, background: "#fff8e6", borderRadius: 8, padding: "8px 10px", fontSize: 13.5, fontWeight: 600 }}>{o.jobNotes}</div>}
                 {owed > 0 && <div style={{ marginTop: 8, background: "#fde8ea", color: RED, borderRadius: 8, padding: "8px 10px", fontSize: 14, fontWeight: 800 }}>Payment to take: {gbp(owed)}</div>}
-                {o.deliveryCompleted && <div style={{ marginTop: 8, color: GREEN, fontWeight: 800, fontSize: 13 }}>✓ Delivered</div>}
+                {cur && (
+                  <button type="button" onClick={() => setCompleting(o)}
+                    style={{ marginTop: 10, width: "100%", border: "none", borderRadius: 12, padding: 15, fontFamily: "inherit", fontWeight: 800, fontSize: 17, background: GREEN, color: "#fff", cursor: "pointer" }}>
+                    ✓ Complete this drop
+                  </button>
+                )}
+                {isDone && (
+                  <div style={{ marginTop: 8, color: GREEN, fontWeight: 800, fontSize: 13 }}>
+                    ✓ {conf ? "Dropped " + new Date(conf.at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) + " · photo taken" + (conf.items && conf.items.some((x) => x.short) ? " · short drop noted" : "") : "Delivered"}
+                  </div>
+                )}
               </div>
             </div>
           );
         })}
         {stops.length > 0 && <div style={{ textAlign: "center", fontSize: 12.5, color: "#8593a8", fontWeight: 600, marginTop: 10 }}>Problems? Call the office on <a href="tel:01613991837" style={{ color: "#185FA5", fontWeight: 800 }}>0161 399 1837</a></div>}
+      </div>
+    </div>
+  );
+}
+
+const Items = ({ rows }) => (rows.length ? (
+  <div style={{ marginTop: 8, borderTop: "1px solid #eef1f6", paddingTop: 6 }}>
+    {rows.map((r, i) => (
+      <div key={i} style={{ display: "flex", gap: 8, fontSize: 14, padding: "3px 0" }}>
+        <b style={{ minWidth: 34, textAlign: "right" }}>{r.qty}×</b>
+        <span style={{ flex: 1 }}>{r.text}{r.colour ? <span style={{ color: "#5a6a85" }}> · {r.colour}</span> : null}</span>
+      </div>
+    ))}
+  </div>
+) : null);
+
+const tickBox = (on) => ({ width: 26, height: 26, flex: "none", borderRadius: 7, border: "2px solid " + (on ? GREEN : "#c4cbd6"), background: on ? GREEN : "#fff", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontWeight: 900, fontSize: 15 });
+
+// ===== confirm a drop: tick what was left, a photo, then the next job opens =====
+function CompleteDrop({ job, cust, header, date, onBack, onSaved }) {
+  const lines = invLines(job);
+  const [got, setGot] = useState({}); // line index -> true
+  const [notes, setNotes] = useState("");
+  const [photo, setPhoto] = useState(null);
+  const [preview, setPreview] = useState("");
+  const [geo, setGeo] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+  useEffect(() => {
+    if (navigator.geolocation) navigator.geolocation.getCurrentPosition((p) => setGeo({ lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy }), () => {}, { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 });
+  }, []);
+  const all = lines.every(({ i }) => got[i]);
+  const short = !all;
+  const ok = photo && (all || notes.trim().length >= 3);
+  const save = async () => {
+    if (!ok || busy) return;
+    setBusy(true); setMsg("");
+    try {
+      const blob = await shrinkPhoto(photo);
+      const conf = await saveDrop({
+        id: uid(), driver: job.driver || "", invoiceId: job.id, invNo: job.invNo, date,
+        items: lines.map(({ l, i }) => ({ qty: l.qty, text: l.description || l.code, colour: l.colour || "", dropped: !!got[i], short: !got[i] })),
+        notes: notes.trim(), lat: geo && geo.lat, lng: geo && geo.lng, acc: geo && geo.acc,
+      }, blob);
+      onSaved(conf);
+    } catch (e) {
+      setMsg("Couldn't save — " + (e && e.message ? e.message : "try again") + ". Check your signal and tap Confirm again.");
+    } finally { setBusy(false); }
+  };
+  return (
+    <div style={page}>
+      {header("Complete drop " + (job.dropNo || ""), onBack)}
+      <div style={{ padding: 14 }}>
+        <div style={cardS}>
+          <div style={{ fontWeight: 800, fontSize: 17 }}>{cust.name || "Customer"} <span style={{ fontSize: 12, color: "#8593a8" }}>#{job.invNo}</span></div>
+          <span style={label}>Tick everything you've dropped</span>
+          {lines.map(({ l, i }) => {
+            const on = !!got[i];
+            return (
+              <button key={i} type="button" onClick={() => setGot((g) => ({ ...g, [i]: !g[i] }))}
+                style={{ display: "flex", gap: 10, alignItems: "center", width: "100%", border: "none", background: "none", fontFamily: "inherit", color: NAVY, textAlign: "left", fontSize: 15, padding: "10px 0", cursor: "pointer", borderBottom: "1px solid #f3f5f8" }}>
+                <span style={tickBox(on)}>{on ? "✓" : ""}</span>
+                <b style={{ minWidth: 34, textAlign: "right" }}>{l.qty}×</b>
+                <span style={{ flex: 1 }}>{l.description || l.code}{l.colour ? <span style={{ color: "#5a6a85" }}> · {l.colour}</span> : null}</span>
+              </button>
+            );
+          })}
+          {lines.length > 1 && (
+            <button type="button" onClick={() => setGot(all ? {} : Object.fromEntries(lines.map(({ i }) => [i, true])))}
+              style={{ marginTop: 8, border: "none", background: "none", color: "#185FA5", fontFamily: "inherit", fontWeight: 800, fontSize: 14, padding: 0, cursor: "pointer" }}>{all ? "Untick all" : "Tick all"}</button>
+          )}
+
+          <span style={label}>Photo of the drop</span>
+          <label style={{ ...field, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, minHeight: 54, cursor: "pointer", fontWeight: 800, borderStyle: preview ? "solid" : "dashed", color: preview ? GREEN : NAVY }}>
+            <input type="file" accept="image/*" capture="environment" style={{ display: "none" }}
+              onChange={(e) => { const f = e.target.files && e.target.files[0]; if (f) { setPhoto(f); setPreview(URL.createObjectURL(f)); } }} />
+            📷 {preview ? "Photo taken — tap to retake" : "Take a photo of the goods where you left them"}
+          </label>
+          {preview && <img src={preview} alt="Drop" style={{ marginTop: 10, width: "100%", maxHeight: 280, objectFit: "contain", borderRadius: 10, border: "1px solid #e6e9ef" }} />}
+
+          <span style={label}>{short ? "What's short or wrong? (needed)" : "Notes (optional)"}</span>
+          <textarea style={{ ...field, minHeight: 70, resize: "vertical", borderColor: short && lines.length ? "#f4d78f" : "#d5d9e0" }} value={notes} onChange={(e) => setNotes(e.target.value)}
+            placeholder={short ? "e.g. 2 boards damaged, brought back" : "e.g. left round the back by the gate"} />
+
+          {msg && <div style={{ marginTop: 12, color: RED, fontWeight: 700, fontSize: 14 }}>{msg}</div>}
+          <button type="button" onClick={save} disabled={!ok || busy}
+            style={{ marginTop: 16, width: "100%", border: "none", borderRadius: 12, padding: 15, fontFamily: "inherit", fontWeight: 800, fontSize: 17, background: ok ? GREEN : "#e6e9ef", color: ok ? "#fff" : "#8593a8", cursor: ok ? "pointer" : "default" }}>
+            {busy ? "Saving…" : "Confirm drop"}
+          </button>
+          {!ok && <div style={{ marginTop: 8, fontSize: 12.5, color: "#8593a8", fontWeight: 600, textAlign: "center" }}>{!photo ? "A photo of the drop is needed." : "Tick everything dropped, or say what's short."}</div>}
+          <div style={{ marginTop: 8, fontSize: 12.5, color: "#8593a8", fontWeight: 600, textAlign: "center" }}>Confirming opens your next drop.</div>
+        </div>
       </div>
     </div>
   );
