@@ -31,6 +31,8 @@ alter table public.drop_confirmations add column if not exists applied_at text n
 alter table public.drop_confirmations add column if not exists alert_state text not null default '';   -- '' | open | dismissed | followup
 alter table public.drop_confirmations add column if not exists alert_by text not null default '';
 alter table public.drop_confirmations add column if not exists followup_inv_no text not null default '';
+-- every photo the driver took (photo_path is the first)
+alter table public.drop_confirmations add column if not exists photo_paths jsonb not null default '[]'::jsonb;
 -- payment taken on the doorstep: { owed, collected, method }
 alter table public.drop_confirmations add column if not exists payment jsonb not null default '{}'::jsonb;
 create index if not exists drop_confirmations_invoice on public.drop_confirmations (invoice_id);

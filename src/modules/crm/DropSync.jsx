@@ -9,6 +9,7 @@ import { loadDrops, dropLeft, dropNeedsLook, payMissed, updateDrops, dropPhotoUr
 import { applyInvoiceStockDeduction, explodeInvoiceLines, blankMovement, today, gbp } from "../../lib/crmCore.js";
 import { addDays, NAVY, GOLD, RED, prettyDateTime } from "../../lib/core.js";
 import { Modal, btn, goldBtn } from "./ui.jsx";
+import DropPhotos from "./DropPhotos.jsx";
 
 const DAYS_BACK = 14;
 
@@ -174,10 +175,7 @@ export function DropAlert({ alerts, crm, onDismiss, onFollowUp, onOpenJob, onOpe
           {r.notes}
         </div>
       )}
-      <div style={{ marginTop: 10 }}>
-        {photo[r.id] && photo[r.id] !== "x" ? <a href={photo[r.id]} target="_blank" rel="noopener noreferrer"><img src={photo[r.id]} alt="" style={{ display: "block", maxWidth: "100%", maxHeight: 260, borderRadius: 10, border: "1px solid #e6e9ef" }} /></a>
-          : <button style={{ ...btn, fontSize: 12.5, padding: "5px 11px" }} onClick={showPhoto}>{photo[r.id] === "x" ? "Photo not available" : "📷 Show the driver's photo"}</button>}
-      </div>
+      <div style={{ marginTop: 10 }}><DropPhotos conf={r} height={260} /></div>
       <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16, flexWrap: "wrap" }}>
         {pickup ? (col && <button style={btn} onClick={() => onOpenCollection(col.id)}>Open collection</button>)
           : (inv && <button style={btn} onClick={() => onOpenJob(inv.id)}>Open job</button>)}

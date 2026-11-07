@@ -6,6 +6,7 @@ import { gbp, DRIVERS } from "../../lib/crmCore.js";
 import { ListHero, HeroStat, Chip, card, sect, lbl, inp, btn, goldBtn, Modal, SearchBox } from "./ui.jsx";
 import { loadAllDrops, dropLeft, payMissed, dropPhotoUrl, deleteDrops, resetLoadChecks, wipeDriverData, updateDrops } from "../../data/drops.js";
 import { reopenConfirmations } from "./DropSync.jsx";
+import DropPhotos from "./DropPhotos.jsx";
 
 const pad = (n) => String(n).padStart(2, "0");
 const ymd = (d) => d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
@@ -157,11 +158,9 @@ function Flags({ r, f }) {
 
 // ===== one completion, in full =====
 function CompletionPage({ r, d, f, crm, updateCrm, me, isAdmin, onClose, onChanged, openInvoice, openCollection }) {
-  const [url, setUrl] = useState("");
   const [ask, setAsk] = useState(null); // "reopen" | "delete"
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
-  useEffect(() => { if (r.photoPath) dropPhotoUrl(r.photoPath).then(setUrl).catch(() => setUrl("x")); }, [r.id]);
   const left = dropLeft(r);
   const o = d.obj;
   const go = async (what) => {
@@ -179,10 +178,7 @@ function CompletionPage({ r, d, f, crm, updateCrm, me, isAdmin, onClose, onChang
     <Modal title={<span style={{ display: "inline-flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>{d.pickup ? "Pick-up" : "Drop"} · {d.name} <Chip>{d.ref}</Chip>{f.void && <Chip>Reopened</Chip>}</span>} onClose={onClose} width={860} z={80}>
       <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1.1fr)", gap: 18 }}>
         <div>
-          <div style={{ borderRadius: 12, border: "1px solid #e6e9ef", background: "#f8f9fb", minHeight: 220, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-            {url && url !== "x" ? <a href={url} target="_blank" rel="noopener noreferrer"><img src={url} alt="" style={{ display: "block", maxWidth: "100%", maxHeight: 380 }} /></a>
-              : <span style={{ fontSize: 12.5, color: "#8593a8", fontWeight: 600 }}>{url === "x" || !r.photoPath ? "No photo" : "Loading photo…"}</span>}
-          </div>
+          <DropPhotos conf={r} height={380} />
           <div style={{ marginTop: 10, fontSize: 13, fontWeight: 600, color: "#5a6a85", lineHeight: 1.6 }}>
             <div>Confirmed by <b style={{ color: NAVY }}>{r.driver || "—"}</b> · {prettyDateTime(r.at)}</div>
             <div>Run date {dayLabel(r.date)}</div>

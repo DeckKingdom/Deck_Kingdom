@@ -16,6 +16,7 @@ import StockCheck from "./StockCheck.jsx";
 import { loadDrops, dropPhotoUrl } from "../../data/drops.js";
 import { Modal } from "./ui.jsx";
 import { reopenConfirmations } from "./DropSync.jsx";
+import DropPhotos from "./DropPhotos.jsx";
 import { Icon, Chip, Tg, sect, lbl, card, abtn, inp, btn, goldBtn, RiskChip, WebStatusChip, Soon, usePhone, DateInput, CalendarPop, SuggestInput, selectAllProps, PrintButton } from "./ui.jsx";
 
 const RANGE_OPTS = [
@@ -1875,7 +1876,7 @@ function DropChip({ conf, done, onComplete, onReopen, pickup }) {
   const show = (e) => {
     e.stopPropagation();
     setOpen(true);
-    if (!url) dropPhotoUrl(conf.photoPath).then(setUrl).catch((x) => setErr(String((x && x.message) || x)));
+    // photos load in DropPhotos
   };
   return (
     <>
@@ -1889,10 +1890,7 @@ function DropChip({ conf, done, onComplete, onReopen, pickup }) {
             {prettyDateTime(conf.at)}
             {conf.lat != null && <> · <a href={"https://www.google.com/maps/search/?api=1&query=" + conf.lat + "," + conf.lng} target="_blank" rel="noopener noreferrer" style={{ color: "#185FA5" }}>where it was confirmed</a></>}
           </div>
-          <div style={{ marginTop: 10, borderRadius: 10, border: "1px solid #e6e9ef", background: "#f8f9fb", minHeight: 120, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-            {url ? <a href={url} target="_blank" rel="noopener noreferrer"><img src={url} alt="" style={{ display: "block", maxWidth: "100%", maxHeight: 360 }} /></a>
-              : <span style={{ fontSize: 12.5, color: err ? RED : "#8593a8", fontWeight: 600 }}>{err || "Loading photo…"}</span>}
-          </div>
+          <div style={{ marginTop: 10 }}><DropPhotos conf={conf} height={360} /></div>
           <div style={{ marginTop: 10 }}>
             {(conf.items || []).map((x, k) => (
               <div key={k} style={{ display: "flex", gap: 8, fontSize: 13.5, padding: "4px 0", borderBottom: "1px solid #f0f2f6", color: x.short ? "#9b1c2e" : NAVY }}>

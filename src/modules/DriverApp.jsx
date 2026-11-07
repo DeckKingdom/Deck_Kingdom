@@ -267,7 +267,7 @@ function DayRuns({ date, stops, crm, header, onBack, driver }) {
 
   const doneLine = (conf, pickup) => (
     <div style={{ marginTop: 8, color: conf && (conf.items || []).some((r) => r.short) ? "#a05f10" : GREEN, fontWeight: 800, fontSize: 13 }}>
-      ✓ {conf ? (pickup ? "Collected " : "Dropped ") + new Date(conf.at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) + " · photo taken" + ((conf.items || []).some((r) => r.short) ? " · short noted" : "") : pickup ? "Collected" : "Delivered"}
+      ✓ {conf ? (pickup ? "Collected " : "Dropped ") + new Date(conf.at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) + " · " + ((conf.photoPaths || []).length > 1 ? conf.photoPaths.length + " photos" : "photo taken") + ((conf.items || []).some((r) => r.short) ? " · short noted" : "") : pickup ? "Collected" : "Delivered"}
     </div>
   );
   const completeBtn = (x, label, noAddress) => {
@@ -474,8 +474,8 @@ function CompleteDrop({ target, header, date, onBack, onSaved }) {
   const owed = Number(target.owed) || 0;
   const [paid, setPaid] = useState(null); // true = collected, false = not collected
   const [method, setMethod] = useState("");
-  const [photo, setPhoto] = useState(null);
-  const [preview, setPreview] = useState("");
+  const [photos, setPhotos] = useState([]); // [{ file, url }] - the first is required, more can be added
+  const MAX_PHOTOS = 10;
   const [geo, setGeo] = useState(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
@@ -488,12 +488,13 @@ function CompleteDrop({ target, header, date, onBack, onSaved }) {
   const counted = rows.every((r, i) => got[i] || (part[i] !== undefined && part[i] !== ""));
   const leftCount = rows.filter((r, i) => doneQty(r, i) < qtyOf(r)).length;
   const payOk = !owed || (paid === true && method) || (paid === false && notes.trim().length >= 3);
-  const ok = photo && counted && payOk;
+  const ok = photos.length > 0 && counted && payOk;
   const save = async () => {
     if (!ok || busy) return;
     setBusy(true); setMsg("");
     try {
-      const blob = await shrinkPhoto(photo);
+      const blob = [];
+      for (const p of photos) blob.push(await shrinkPhoto(p.file));
       const conf = await saveDrop({
         id: uid(), driver: target.driver, invoiceId: target.invoiceId || "", collectionId: target.collectionId || "", invNo: target.invNo || "", date,
         items: rows.map((r, i) => { const dq = doneQty(r, i), rem = Math.max(0, qtyOf(r) - dq); return { qty: r.qty, text: r.text, colour: r.colour || "", code: r.code || "", lineIndex: r.lineIndex, delivered: dq, remaining: rem, dropped: rem === 0, short: rem > 0 }; }),
@@ -538,13 +539,25 @@ function CompleteDrop({ target, header, date, onBack, onSaved }) {
               style={{ marginTop: 8, border: "none", background: "none", color: "#185FA5", fontFamily: "inherit", fontWeight: 800, fontSize: 14, padding: 0, cursor: "pointer" }}>{all ? "Untick all" : "Tick all"}</button>
           )}
 
-          <span style={label}>{pickup ? "Photo of the goods on the van" : "Photo of the drop"}</span>
-          <label style={{ ...field, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, minHeight: 54, cursor: "pointer", fontWeight: 800, borderStyle: preview ? "solid" : "dashed", color: preview ? GREEN : NAVY, textAlign: "center" }}>
+          <span style={label}>{pickup ? "Photos of the goods on the van" : "Photos of the drop"} <span style={{ textTransform: "none", fontWeight: 600 }}>— at least one, add as many as help</span></span>
+          {photos.length > 0 && (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginBottom: 8 }}>
+              {photos.map((p, n) => (
+                <div key={p.url} style={{ position: "relative", aspectRatio: "1", borderRadius: 10, overflow: "hidden", border: "1px solid #e6e9ef", background: "#f3f5f8" }}>
+                  <img src={p.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                  <button type="button" onClick={() => setPhotos((l) => l.filter((_, k) => k !== n))} aria-label="Remove photo"
+                    style={{ position: "absolute", top: 4, right: 4, width: 26, height: 26, borderRadius: 999, border: "none", background: "rgba(11,31,63,.75)", color: "#fff", fontWeight: 800, cursor: "pointer", lineHeight: 1 }}>×</button>
+                </div>
+              ))}
+            </div>
+          )}
+          {photos.length < MAX_PHOTOS && (
+          <label style={{ ...field, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, minHeight: 54, cursor: "pointer", fontWeight: 800, borderStyle: "dashed", color: photos.length ? "#185FA5" : NAVY, textAlign: "center" }}>
             <input type="file" accept="image/*" capture="environment" style={{ display: "none" }}
-              onChange={(e) => { const f = e.target.files && e.target.files[0]; if (f) { setPhoto(f); setPreview(URL.createObjectURL(f)); } }} />
-            📷 {preview ? "Photo taken — tap to retake" : pickup ? "Take a photo of what you've collected" : "Take a photo of the goods where you left them"}
+              onChange={(e) => { const f = e.target.files && e.target.files[0]; if (f) setPhotos((l) => [...l, { file: f, url: URL.createObjectURL(f) }]); e.target.value = ""; }} />
+            📷 {photos.length ? "Add another photo (" + photos.length + " taken)" : pickup ? "Take a photo of what you've collected" : "Take a photo of the goods where you left them"}
           </label>
-          {preview && <img src={preview} alt="" style={{ marginTop: 10, width: "100%", maxHeight: 280, objectFit: "contain", borderRadius: 10, border: "1px solid #e6e9ef" }} />}
+          )}
 
           {owed > 0 && (
             <div style={{ marginTop: 16, border: "2px solid " + (paid === true ? GREEN : paid === false ? RED : "#f4b9c1"), background: paid === true ? "#f1faf4" : "#fdf3f4", borderRadius: 12, padding: "12px 12px" }}>
@@ -574,7 +587,7 @@ function CompleteDrop({ target, header, date, onBack, onSaved }) {
             style={{ marginTop: 16, width: "100%", border: "none", borderRadius: 12, padding: 15, fontFamily: "inherit", fontWeight: 800, fontSize: 17, background: ok ? GREEN : "#e6e9ef", color: ok ? "#fff" : "#8593a8", cursor: ok ? "pointer" : "default" }}>
             {busy ? "Saving…" : pickup ? "Confirm pick-up" : "Confirm drop"}
           </button>
-          {!ok && <div style={{ marginTop: 8, fontSize: 12.5, color: "#8593a8", fontWeight: 600, textAlign: "center" }}>{!photo ? "A photo is needed." : !counted ? "Tick each line, or put how many you " + (pickup ? "collected" : "dropped") + "." : paid === null ? "Say whether the payment was collected." : paid ? "Pick how they paid." : "Say why the payment wasn't collected."}</div>}
+          {!ok && <div style={{ marginTop: 8, fontSize: 12.5, color: "#8593a8", fontWeight: 600, textAlign: "center" }}>{!photos.length ? "At least one photo is needed." : !counted ? "Tick each line, or put how many you " + (pickup ? "collected" : "dropped") + "." : paid === null ? "Say whether the payment was collected." : paid ? "Pick how they paid." : "Say why the payment wasn't collected."}</div>}
           <div style={{ marginTop: 8, fontSize: 12.5, color: "#8593a8", fontWeight: 600, textAlign: "center" }}>{pickup ? "Confirming ticks these parts off on the jobs they're for and opens your next stop." : "Confirming opens your next stop."}</div>
         </div>
       </div>

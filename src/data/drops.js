@@ -5,7 +5,7 @@ import { getSupabase } from "./supabaseClient.js";
 
 const LOCAL = "dk-drop-confirmations";
 const localAll = () => { try { return JSON.parse(localStorage.getItem(LOCAL) || "[]"); } catch (e) { return []; } };
-const fromRow = (r) => ({ id: r.id, at: r.at, driver: r.driver, kind: r.kind || "job", invoiceId: r.invoice_id || "", collectionId: r.collection_id || "", invNo: r.inv_no, date: r.delivery_date, items: r.items || [], photoPath: r.photo_path, notes: r.notes, lat: r.lat, lng: r.lng, appliedAt: r.applied_at || "", alertState: r.alert_state || "", alertBy: r.alert_by || "", followupInvNo: r.followup_inv_no || "", payment: r.payment || {}, voidedAt: r.voided_at || "" });
+const fromRow = (r) => ({ id: r.id, at: r.at, driver: r.driver, kind: r.kind || "job", invoiceId: r.invoice_id || "", collectionId: r.collection_id || "", invNo: r.inv_no, date: r.delivery_date, items: r.items || [], photoPath: r.photo_path, notes: r.notes, lat: r.lat, lng: r.lng, appliedAt: r.applied_at || "", alertState: r.alert_state || "", alertBy: r.alert_by || "", followupInvNo: r.followup_inv_no || "", payment: r.payment || {}, voidedAt: r.voided_at || "", photoPaths: Array.isArray(r.photo_paths) && r.photo_paths.length ? r.photo_paths : [r.photo_path].filter(Boolean) });
 
 export const dropsReady = () => storageMode === "supabase";
 
@@ -36,19 +36,30 @@ export async function loadDrops(dates) {
   return m;
 }
 
-export async function saveDrop(conf, photoBlob) {
+// every photo of the drop, as stored paths (or data URLs in the local preview)
+export const photosOf = (r) => (r && Array.isArray(r.photoPaths) && r.photoPaths.length ? r.photoPaths : [r && r.photoPath].filter(Boolean));
+
+export async function saveDrop(conf, photoBlobs) {
+  const blobs = Array.isArray(photoBlobs) ? photoBlobs : [photoBlobs];
   if (storageMode === "supabase") {
     const sb = await getSupabase();
     const { data: { user } } = await sb.auth.getUser();
-    const path = user.id + "/" + conf.date + "-" + conf.id + ".jpg";
-    const up = await sb.storage.from("drop-photos").upload(path, photoBlob, { contentType: "image/jpeg", upsert: false });
-    if (up.error) throw new Error("photo: " + up.error.message);
-    const ins = await sb.from("drop_confirmations").insert({ id: conf.id, user_id: user.id, driver: conf.driver, kind: conf.collectionId ? "collection" : "job", invoice_id: conf.invoiceId || "", collection_id: conf.collectionId || "", inv_no: String(conf.invNo || ""), delivery_date: conf.date, items: conf.items, photo_path: path, notes: conf.notes || "", payment: conf.payment || {}, lat: conf.lat ?? null, lng: conf.lng ?? null, accuracy_m: conf.acc ?? null });
+    const paths = [];
+    for (let n = 0; n < blobs.length; n++) {
+      const path = user.id + "/" + conf.date + "-" + conf.id + (n ? "-" + (n + 1) : "") + ".jpg";
+      const up = await sb.storage.from("drop-photos").upload(path, blobs[n], { contentType: "image/jpeg", upsert: true });
+      if (up.error) throw new Error("photo " + (n + 1) + ": " + up.error.message);
+      paths.push(path);
+    }
+    const row = { id: conf.id, user_id: user.id, driver: conf.driver, kind: conf.collectionId ? "collection" : "job", invoice_id: conf.invoiceId || "", collection_id: conf.collectionId || "", inv_no: String(conf.invNo || ""), delivery_date: conf.date, items: conf.items, photo_path: paths[0] || "", photo_paths: paths, notes: conf.notes || "", payment: conf.payment || {}, lat: conf.lat ?? null, lng: conf.lng ?? null, accuracy_m: conf.acc ?? null };
+    let ins = await sb.from("drop_confirmations").insert(row);
+    if (ins.error && /photo_paths/.test(ins.error.message)) { const { photo_paths, ...old } = row; ins = await sb.from("drop_confirmations").insert(old); } // SQL not updated yet: first photo only
     if (ins.error) throw new Error(ins.error.message);
-    return { ...conf, photoPath: path, at: new Date().toISOString() };
+    return { ...conf, photoPath: paths[0], photoPaths: paths, at: new Date().toISOString() };
   }
-  const url = await new Promise((res) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(photoBlob); });
-  const saved = { ...conf, photoPath: url, at: new Date().toISOString() };
+  const urls = [];
+  for (const bl of blobs) urls.push(await new Promise((res) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(bl); }));
+  const saved = { ...conf, photoPath: urls[0], photoPaths: urls, at: new Date().toISOString() };
   try { localStorage.setItem(LOCAL, JSON.stringify([...localAll(), saved].slice(-200))); } catch (e) { /* too big for the preview */ }
   return saved;
 }
@@ -222,7 +233,7 @@ export async function deleteDrops(confs) {
   }
   const sb = await getSupabase();
   let photoErr = "";
-  const paths = confs.map((r) => r.photoPath).filter((p) => p && !p.startsWith("data:"));
+  const paths = confs.flatMap(photosOf).filter((p) => p && !p.startsWith("data:"));
   if (paths.length) {
     const { data: gone, error } = await sb.storage.from("drop-photos").remove(paths);
     if (error) photoErr = error.message;
