@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import * as XLSX from "xlsx";
 import { storage, storageMode } from "../data/storage.js";
-import { useDropSync } from "./crm/DropSync.jsx";
+import { useDropSync, DropAlert } from "./crm/DropSync.jsx";
 import { signOut, getSessionEmail, getMyAccess } from "../data/auth.js";
 import { accessFor, LOCAL_ACCESS, LOADING_ACCESS, levelLabel } from "../lib/access.js";
 import {
@@ -25,7 +25,7 @@ import {
   money,
   int,
 } from "../lib/core.js";
-import { blankInvoice, blankQuote, blankSample, blankSampleItem, nextNumber, TRADE_COUNTER, vanReminders, syncCatalogue, renameSkus, syncOpenPicks, colourTidyPlan, syncSampleConversions, cleanCode, codeSource, PRODUCT_SOURCES, suggestDescription, suggestCode, codeFollowsName, dueScheduledFor, setTaskDone, describeSchedule, today as todayStr, newPurchaseFor } from "../lib/crmCore.js";
+import { blankInvoice, blankLine, blankQuote, blankSample, blankSampleItem, nextNumber, TRADE_COUNTER, vanReminders, syncCatalogue, renameSkus, syncOpenPicks, colourTidyPlan, syncSampleConversions, cleanCode, codeSource, PRODUCT_SOURCES, suggestDescription, suggestCode, codeFollowsName, dueScheduledFor, setTaskDone, describeSchedule, today as todayStr, newPurchaseFor } from "../lib/crmCore.js";
 import { useCrm } from "./crm/useCrm.js";
 import CustomersScreen from "./crm/CustomersScreen.jsx";
 import InvoicesScreen from "./crm/InvoicesScreen.jsx";
@@ -242,7 +242,7 @@ export default function ImportPlanner() {
     updateCrmRaw(fn);
   };
   // drivers' full drop / pick-up confirmations close the job here
-  useDropSync({ crm, updateCrm: updateCrmRaw, me: storageMode === "supabase" ? getSessionEmail() || "" : "", enabled: !!crm && access.canEdit });
+  const dropSync = useDropSync({ crm, updateCrm: updateCrmRaw, me: storageMode === "supabase" ? getSessionEmail() || "" : "", enabled: !!crm && access.canEdit, alertsOn: ["admin", "manager", "office"].includes(access.role) });
   const [selCustomerId, setSelCustomerId] = useState(null);
   const [selInvoiceId, setSelInvoiceId] = useState(null);
   const [selCollectionId, setSelCollectionId] = useState(null);
@@ -527,6 +527,30 @@ export default function ImportPlanner() {
         setTab("invoices");
       },
     });
+  };
+  // driver closed a job with items left over: a no-charge follow-up job carrying what's still to deliver
+  const followUpFromDrop = (r, o, left) => {
+    const n = blankInvoice(o.customerId, o.siteId);
+    n.invNo = nextNumber(crm.invoices, "invNo", crm.numbering.invoice);
+    n.raisedBy = me;
+    n.orderRef = "Follow-up to #" + (o.invNo || "—");
+    n.jobNotes = "Follow-up to #" + (o.invNo || "—") + (left.length ? " — not delivered on " + prettyDate(String(r.at).slice(0, 10)) : "") + (String(r.notes || "").trim() ? ". Driver: " + r.notes.trim() : "");
+    n.deliveryCharge = 0;
+    n.discountPct = "";
+    n.paymentDate = todayStr();
+    n.lines = left.map((x) => {
+      const l = (o.lines || [])[x.lineIndex] || {};
+      return { ...blankLine(), code: l.code || x.code || "", description: l.description || x.text || "", colour: l.colour || x.colour || "", qty: x.remaining, price: 0 };
+    });
+    if (!n.lines.length) n.lines = [blankLine()];
+    updateCrm((c) => {
+      c.invoices.unshift(n);
+      c.numbering.invoice = (Number(n.invNo) || 0) + 1;
+      return c;
+    });
+    dropSync.followedUp(r, n.invNo);
+    setSelInvoiceId(n.id);
+    setTab("invoices");
   };
   const newInvoiceFor = (customerId, siteId) => {
     if (!crm) return;
@@ -2736,6 +2760,10 @@ export default function ImportPlanner() {
         );
       })()}
 
+      {crm && dropSync.alerts.length > 0 && (
+        <DropAlert alerts={dropSync.alerts} crm={crm} onDismiss={dropSync.dismiss} onFollowUp={followUpFromDrop}
+          onOpenJob={(id) => openInvoice(id)} onOpenCollection={(id) => openCollection(id)} />
+      )}
       {confirmBox && (
         <div
           onClick={() => setConfirmBox(null)}

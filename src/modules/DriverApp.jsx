@@ -88,7 +88,7 @@ export default function DriverApp({ me }) {
         {err && <div style={{ ...cardS, borderColor: RED, color: RED, fontWeight: 700 }}>{err}</div>}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
           {days.map((d, n) => {
-            const k = ymd(d), count = crm ? (byDay[k] || []).length : null;
+            const k = ymd(d), count = crm ? (byDay[k] || []).filter((x) => !(x.kind === "col" ? x.obj.collected : x.obj.deliveryCompleted)).length : null;
             const first = n === 0;
             return (
               <button key={k} type="button" onClick={() => setView(k)}
@@ -151,6 +151,7 @@ function DayRuns({ date, stops, crm, header, onBack }) {
   const [drops, setDrops] = useState({}); // dropKey -> confirmation
   const [dropsErr, setDropsErr] = useState("");
   const [completing, setCompleting] = useState(null); // the stop being confirmed
+  const [showDone, setShowDone] = useState(false);
   useEffect(() => {
     let live = true;
     loadDrops([date]).then((m) => live && setDrops(m)).catch((e) => live && setDropsErr(/drop_confirmations|collection_id/.test(String(e && e.message)) ? "Drop confirmations aren't switched on yet — ask the office to run drop-confirmations.sql." : "Couldn't check which drops are done — tap ↻ to try again."));
@@ -171,7 +172,7 @@ function DayRuns({ date, stops, crm, header, onBack }) {
   const same = (l, it) => (l.code && it.sku && partKey(l.code) === partKey(it.sku)) || (l.description && it.description && l.description.trim().toLowerCase() === it.description.trim().toLowerCase());
   // job line -> the pick-up it comes on (null = it should already be on the van)
   const lineSource = (job, l) => pickupFor(job).find((p) => same(l, p.it)) || null;
-  const pickedState = (p) => { const c = drops["col:" + p.cs.obj.id]; if (c) { const r = (c.items || [])[p.k]; return r && r.short ? "short" : "ok"; } return p.cs.obj.collected ? "ok" : "waiting"; };
+  const pickedState = (p) => { const c = drops["col:" + p.cs.obj.id]; if (c) { const r = (c.items || [])[p.k]; return r && (r.short || Number(r.remaining) > 0) ? "short" : "ok"; } return p.cs.obj.collected ? "ok" : "waiting"; };
   const waitingOn = (x) => (x.kind === "inv" ? [...new Map(pickupFor(x.obj).filter((p) => !done(p.cs)).map((p) => [p.cs.obj.id, p.cs])).values()] : []);
 
   // ----- load check per run: everything that should be on the van before leaving -----
@@ -192,9 +193,9 @@ function DayRuns({ date, stops, crm, header, onBack }) {
     const x = completing, o = x.obj;
     const target = x.kind === "col"
       ? { pickup: true, title: "Complete pick-up", name: o.supplier || "Supplier", ref: "COL-" + o.collectionNo, collectionId: o.id,
-          rows: (o.items || []).map((it) => ({ qty: it.qty, text: it.description || it.sku, colour: it.colour })) }
+          rows: (o.items || []).map((it, k) => ({ qty: it.qty, text: it.description || it.sku, colour: it.colour, code: it.sku || "", lineIndex: k })) }
       : { title: "Complete drop " + (o.dropNo || ""), name: (custById[o.customerId] || {}).name || "Customer", ref: "#" + o.invNo, invoiceId: o.id, invNo: o.invNo,
-          rows: invLines(o).map(({ l }) => ({ qty: l.qty, text: l.description || l.code, colour: l.colour })) };
+          rows: invLines(o).map(({ l, i }) => ({ qty: l.qty, text: l.description || l.code, colour: l.colour, code: l.code || "", lineIndex: i })) };
     return <CompleteDrop target={{ ...target, driver: o.driver || "" }} header={header} date={date}
       onBack={() => setCompleting(null)} onSaved={(conf) => { setDrops((m) => ({ ...m, [conf.collectionId ? "col:" + conf.collectionId : conf.invoiceId]: conf })); setCompleting(null); window.scrollTo(0, 0); }} />;
   }
@@ -229,6 +230,7 @@ function DayRuns({ date, stops, crm, header, onBack }) {
         {stops.length === 0 && <div style={{ ...cardS, textAlign: "center", color: "#8593a8", fontWeight: 700 }}>Nothing planned for you on {prettyDate(date)}.</div>}
         {stops.map((x, n) => {
           const o = x.obj;
+          if (done(x) && !showDone) return null;
           const runKey = o.runNo || "";
           const rs = runState(runKey);
           const cur = currentOf(runKey);
@@ -256,7 +258,7 @@ function DayRuns({ date, stops, crm, header, onBack }) {
           const conf = drops[sid(x)];
 
           if (x.kind === "col") {
-            const addr = [o.address, o.town, tidyPostcode(o.postcode)].filter(Boolean).join(", ");
+            const addr = [o.address, o.town, tidyPostcode(o.postcode)].filter(Boolean).join(", ") || [o.supplier, tidyPostcode(o.postcode)].filter(Boolean).join(", ");
             const forJobs = [...new Set((o.items || []).map((it) => it.assignedInvoiceId).filter(Boolean))].map((id) => (stops.find((y) => y.kind === "inv" && y.obj.id === id) || {}).obj).filter(Boolean);
             return (
               <div key={"c" + o.id}>
@@ -354,6 +356,13 @@ function DayRuns({ date, stops, crm, header, onBack }) {
             </div>
           );
         })}
+        {stops.length > 0 && stops.every(done) && !showDone && <div style={{ ...cardS, textAlign: "center", color: GREEN, fontWeight: 800 }}>✓ All done for {prettyDate(date)} — thanks!</div>}
+        {stops.some(done) && (
+          <button type="button" onClick={() => setShowDone((v) => !v)}
+            style={{ display: "block", margin: "10px auto 0", border: "none", background: "none", color: "#185FA5", fontFamily: "inherit", fontWeight: 800, fontSize: 13.5, cursor: "pointer" }}>
+            {showDone ? "Hide completed" : "Show " + stops.filter(done).length + " completed"}
+          </button>
+        )}
         {stops.length > 0 && <div style={{ textAlign: "center", fontSize: 12.5, color: "#8593a8", fontWeight: 600, marginTop: 10 }}>Problems? Call the office on <a href="tel:01613991837" style={{ color: "#185FA5", fontWeight: 800 }}>0161 399 1837</a></div>}
       </div>
     </div>
@@ -378,7 +387,8 @@ const tickBox = (on) => ({ width: 26, height: 26, flex: "none", borderRadius: 7,
 function CompleteDrop({ target, header, date, onBack, onSaved }) {
   const rows = target.rows;
   const pickup = !!target.pickup;
-  const [got, setGot] = useState({}); // row index -> true
+  const [got, setGot] = useState({}); // row index -> true (all of it)
+  const [part, setPart] = useState({}); // row index -> how many, when not all of it
   const [notes, setNotes] = useState("");
   const [photo, setPhoto] = useState(null);
   const [preview, setPreview] = useState("");
@@ -389,8 +399,11 @@ function CompleteDrop({ target, header, date, onBack, onSaved }) {
     if (navigator.geolocation) navigator.geolocation.getCurrentPosition((p) => setGeo({ lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy }), () => {}, { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 });
   }, []);
   const all = rows.every((_, i) => got[i]);
-  const short = !all;
-  const ok = photo && (all || notes.trim().length >= 3);
+  const qtyOf = (r) => Number(r.qty) || 0;
+  const doneQty = (r, i) => (got[i] ? qtyOf(r) : Math.min(qtyOf(r), Number(part[i]) || 0));
+  const counted = rows.every((r, i) => got[i] || (part[i] !== undefined && part[i] !== ""));
+  const leftCount = rows.filter((r, i) => doneQty(r, i) < qtyOf(r)).length;
+  const ok = photo && counted;
   const save = async () => {
     if (!ok || busy) return;
     setBusy(true); setMsg("");
@@ -398,7 +411,7 @@ function CompleteDrop({ target, header, date, onBack, onSaved }) {
       const blob = await shrinkPhoto(photo);
       const conf = await saveDrop({
         id: uid(), driver: target.driver, invoiceId: target.invoiceId || "", collectionId: target.collectionId || "", invNo: target.invNo || "", date,
-        items: rows.map((r, i) => ({ qty: r.qty, text: r.text, colour: r.colour || "", dropped: !!got[i], short: !got[i] })),
+        items: rows.map((r, i) => { const dq = doneQty(r, i), rem = Math.max(0, qtyOf(r) - dq); return { qty: r.qty, text: r.text, colour: r.colour || "", code: r.code || "", lineIndex: r.lineIndex, delivered: dq, remaining: rem, dropped: rem === 0, short: rem > 0 }; }),
         notes: notes.trim(), lat: geo && geo.lat, lng: geo && geo.lng, acc: geo && geo.acc,
       }, blob);
       onSaved(conf);
@@ -412,16 +425,27 @@ function CompleteDrop({ target, header, date, onBack, onSaved }) {
       <div style={{ padding: 14 }}>
         <div style={cardS}>
           <div style={{ fontWeight: 800, fontSize: 17 }}>{target.name} <span style={{ fontSize: 12, color: "#8593a8" }}>{target.ref}</span></div>
-          <span style={label}>{pickup ? "Tick everything you've collected and checked" : "Tick everything you've dropped"}</span>
+          <span style={label}>{pickup ? "Tick each line collected and checked" : "Tick each line dropped in full"}</span>
           {rows.map((r, i) => {
             const on = !!got[i];
             return (
-              <button key={i} type="button" onClick={() => setGot((g) => ({ ...g, [i]: !g[i] }))}
-                style={{ display: "flex", gap: 10, alignItems: "center", width: "100%", border: "none", background: "none", fontFamily: "inherit", color: NAVY, textAlign: "left", fontSize: 15, padding: "10px 0", cursor: "pointer", borderBottom: "1px solid #f3f5f8" }}>
-                <span style={tickBox(on)}>{on ? "✓" : ""}</span>
-                <b style={{ minWidth: 34, textAlign: "right" }}>{r.qty}×</b>
-                <span style={{ flex: 1 }}>{r.text}{r.colour ? <span style={{ color: "#5a6a85" }}> · {r.colour}</span> : null}</span>
-              </button>
+              <div key={i} style={{ borderBottom: "1px solid #f3f5f8" }}>
+                <button type="button" onClick={() => setGot((g) => ({ ...g, [i]: !g[i] }))}
+                  style={{ display: "flex", gap: 10, alignItems: "center", width: "100%", border: "none", background: "none", fontFamily: "inherit", color: NAVY, textAlign: "left", fontSize: 15, padding: "10px 0 " + (on ? 10 : 4) + "px", cursor: "pointer" }}>
+                  <span style={tickBox(on)}>{on ? "✓" : ""}</span>
+                  <b style={{ minWidth: 34, textAlign: "right" }}>{r.qty}×</b>
+                  <span style={{ flex: 1 }}>{r.text}{r.colour ? <span style={{ color: "#5a6a85" }}> · {r.colour}</span> : null}</span>
+                </button>
+                {!on && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 0 10px 36px", fontSize: 13.5, fontWeight: 700, color: "#6b5305" }}>
+                    <span>Not all of it? {pickup ? "Collected" : "Dropped"}</span>
+                    <input inputMode="numeric" value={part[i] ?? ""} placeholder="0"
+                      onChange={(e) => setPart((p) => ({ ...p, [i]: e.target.value.replace(/[^\d]/g, "") }))}
+                      style={{ ...field, width: 70, padding: "7px 8px", fontSize: 15, textAlign: "center", borderColor: part[i] === undefined || part[i] === "" ? "#f4d78f" : "#d5d9e0" }} />
+                    <span>of {r.qty}{part[i] !== undefined && part[i] !== "" ? " · " + Math.max(0, qtyOf(r) - doneQty(r, i)) + " left" : ""}</span>
+                  </div>
+                )}
+              </div>
             );
           })}
           {rows.length > 1 && (
@@ -437,16 +461,17 @@ function CompleteDrop({ target, header, date, onBack, onSaved }) {
           </label>
           {preview && <img src={preview} alt="" style={{ marginTop: 10, width: "100%", maxHeight: 280, objectFit: "contain", borderRadius: 10, border: "1px solid #e6e9ef" }} />}
 
-          <span style={label}>{short ? "What's short or wrong? (needed)" : "Notes (optional)"}</span>
-          <textarea style={{ ...field, minHeight: 70, resize: "vertical", borderColor: short && rows.length ? "#f4d78f" : "#d5d9e0" }} value={notes} onChange={(e) => setNotes(e.target.value)}
-            placeholder={short ? (pickup ? "e.g. only 8 of the 10 boards ready" : "e.g. 2 boards damaged, brought back") : (pickup ? "e.g. collection note signed by Dave" : "e.g. left round the back by the gate")} />
+          <span style={label}>{leftCount ? "Notes — why is some left? (the office sees this)" : "Notes for the office (optional)"}</span>
+          <textarea style={{ ...field, minHeight: 70, resize: "vertical" }} value={notes} onChange={(e) => setNotes(e.target.value)}
+            placeholder={leftCount ? (pickup ? "e.g. only 8 of the 10 boards ready" : "e.g. 2 boards damaged, brought back") : (pickup ? "e.g. collection note signed by Dave" : "e.g. left round the back by the gate")} />
+          {leftCount > 0 && counted && <div style={{ marginTop: 8, fontSize: 13, fontWeight: 700, color: "#a05f10" }}>{leftCount} line{leftCount === 1 ? "" : "s"} with some left — the office will be alerted.</div>}
 
           {msg && <div style={{ marginTop: 12, color: RED, fontWeight: 700, fontSize: 14 }}>{msg}</div>}
           <button type="button" onClick={save} disabled={!ok || busy}
             style={{ marginTop: 16, width: "100%", border: "none", borderRadius: 12, padding: 15, fontFamily: "inherit", fontWeight: 800, fontSize: 17, background: ok ? GREEN : "#e6e9ef", color: ok ? "#fff" : "#8593a8", cursor: ok ? "pointer" : "default" }}>
             {busy ? "Saving…" : pickup ? "Confirm pick-up" : "Confirm drop"}
           </button>
-          {!ok && <div style={{ marginTop: 8, fontSize: 12.5, color: "#8593a8", fontWeight: 600, textAlign: "center" }}>{!photo ? "A photo is needed." : pickup ? "Tick everything collected, or say what's short." : "Tick everything dropped, or say what's short."}</div>}
+          {!ok && <div style={{ marginTop: 8, fontSize: 12.5, color: "#8593a8", fontWeight: 600, textAlign: "center" }}>{!photo ? "A photo is needed." : "Tick each line, or put how many you " + (pickup ? "collected" : "dropped") + "."}</div>}
           <div style={{ marginTop: 8, fontSize: 12.5, color: "#8593a8", fontWeight: 600, textAlign: "center" }}>{pickup ? "Confirming ticks these parts off on the jobs they're for and opens your next stop." : "Confirming opens your next stop."}</div>
         </div>
       </div>

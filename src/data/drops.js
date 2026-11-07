@@ -5,7 +5,7 @@ import { getSupabase } from "./supabaseClient.js";
 
 const LOCAL = "dk-drop-confirmations";
 const localAll = () => { try { return JSON.parse(localStorage.getItem(LOCAL) || "[]"); } catch (e) { return []; } };
-const fromRow = (r) => ({ id: r.id, at: r.at, driver: r.driver, kind: r.kind || "job", invoiceId: r.invoice_id || "", collectionId: r.collection_id || "", invNo: r.inv_no, date: r.delivery_date, items: r.items || [], photoPath: r.photo_path, notes: r.notes, lat: r.lat, lng: r.lng, appliedAt: r.applied_at || "" });
+const fromRow = (r) => ({ id: r.id, at: r.at, driver: r.driver, kind: r.kind || "job", invoiceId: r.invoice_id || "", collectionId: r.collection_id || "", invNo: r.inv_no, date: r.delivery_date, items: r.items || [], photoPath: r.photo_path, notes: r.notes, lat: r.lat, lng: r.lng, appliedAt: r.applied_at || "", alertState: r.alert_state || "", alertBy: r.alert_by || "", followupInvNo: r.followup_inv_no || "" });
 
 export const dropsReady = () => storageMode === "supabase";
 
@@ -13,6 +13,10 @@ export const dropsReady = () => storageMode === "supabase";
 export const dropKey = (r) => (r.collectionId ? "col:" + r.collectionId : r.invoiceId);
 // a confirmation where everything was dropped / collected
 export const dropFull = (r) => !!r && !(r.items || []).some((x) => x.short);
+// lines with something left over: [{ text, qty, delivered, remaining }]
+export const dropLeft = (r) => ((r && r.items) || []).filter((x) => x.short).map((x) => ({ ...x, remaining: x.remaining != null ? Number(x.remaining) : Number(x.qty) || 0, delivered: x.delivered != null ? Number(x.delivered) : 0 }));
+// does the office need to look at it? (something left over, or the driver wrote a note)
+export const dropNeedsLook = (r) => !!r && (dropLeft(r).length > 0 || !!String(r.notes || "").trim());
 
 // confirmations for these dates -> { [dropKey]: latest confirmation }
 export async function loadDrops(dates) {
@@ -70,15 +74,17 @@ export const shrinkPhoto = (file, max = 1600) => new Promise((resolve) => {
   img.src = URL.createObjectURL(file);
 });
 
-// the office app closed the job / pick-up from these confirmations
-export async function markApplied(ids) {
+
+// set fields on confirmations: { applied_at, alert_state, alert_by, followup_inv_no }
+export async function updateDrops(ids, patch) {
   if (!ids.length) return;
-  const at = new Date().toISOString();
   if (storageMode === "supabase") {
     const sb = await getSupabase();
-    const { error } = await sb.from("drop_confirmations").update({ applied_at: at }).in("id", ids);
+    const { error } = await sb.from("drop_confirmations").update(patch).in("id", ids);
     if (error) throw error;
     return;
   }
-  try { localStorage.setItem(LOCAL, JSON.stringify(localAll().map((r) => (ids.includes(r.id) ? { ...r, appliedAt: at } : r)))); } catch (e) { /* preview only */ }
+  const camel = { applied_at: "appliedAt", alert_state: "alertState", alert_by: "alertBy", followup_inv_no: "followupInvNo" };
+  const p = {}; Object.keys(patch).forEach((k) => (p[camel[k] || k] = patch[k]));
+  try { localStorage.setItem(LOCAL, JSON.stringify(localAll().map((r) => (ids.includes(r.id) ? { ...r, ...p } : r)))); } catch (e) { /* preview only */ }
 }

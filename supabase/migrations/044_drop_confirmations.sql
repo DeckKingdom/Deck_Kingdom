@@ -2,8 +2,9 @@
 -- Run once in Supabase: SQL Editor -> New query -> paste -> Run. Safe to run again.
 --
 -- On the driver's phone each stop unlocks only after the one before it has been confirmed:
--- the driver ticks what was dropped (or collected from a supplier) and takes a photo. A full drop
--- closes the job on the delivery schedule; a short one waits for the office to check it.
+-- the driver records what was dropped (or collected from a supplier) and takes a photo. The job
+-- closes on the delivery schedule; anything left over or a driver's note pops up on the office
+-- screens to dismiss or turn into a follow-up job.
 
 create table if not exists public.drop_confirmations (
   id text primary key,
@@ -26,6 +27,10 @@ alter table public.drop_confirmations add column if not exists collection_id tex
 alter table public.drop_confirmations alter column invoice_id set default '';
 -- set once the office app has closed the job / pick-up from a full confirmation (so un-ticking it later sticks)
 alter table public.drop_confirmations add column if not exists applied_at text not null default '';
+-- part drops / driver notes raise an alert on the office screens until someone deals with it
+alter table public.drop_confirmations add column if not exists alert_state text not null default '';   -- '' | open | dismissed | followup
+alter table public.drop_confirmations add column if not exists alert_by text not null default '';
+alter table public.drop_confirmations add column if not exists followup_inv_no text not null default '';
 create index if not exists drop_confirmations_invoice on public.drop_confirmations (invoice_id);
 create index if not exists drop_confirmations_date on public.drop_confirmations (delivery_date);
 alter table public.drop_confirmations enable row level security;
