@@ -24,7 +24,7 @@ const COMPANY = {
   web: "deckkingdom.co.uk",
 };
 
-const shell = (title, body) => `<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title>
+const shell = (title, body, noPrint) => `<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&display=swap');
   body { font-family: Quicksand, sans-serif; color: #0B1F3F; margin: 0; padding: 32px 36px; font-size: 13px; }
@@ -58,7 +58,7 @@ const shell = (title, body) => `<!doctype html><html><head><meta charset="utf-8"
     @page { size: A4; margin: 10mm; }
   @media print { body { padding: 0; } }
 </style></head><body>${body}
-<script>window.onload = function(){ setTimeout(function(){ window.print(); }, 300); };</script>
+${noPrint ? "" : `<script>window.onload = function(){ setTimeout(function(){ window.print(); }, 300); };</script>`}
 </body></html>`;
 
 // red strip on warehouse paperwork while a job's payment risk hasn't been checked
@@ -316,6 +316,19 @@ export function printJobDocs(jobs, kinds, { custOf, siteOf, crm, planner, title,
   if (!pages.length) return true;
   const body = pages.map((p, i) => `<div style="${i < pages.length - 1 ? "page-break-after:always;break-after:page;" : ""}">${p}</div>`).join("");
   return openDoc(shell(title || "Paperwork", body));
+}
+
+// A driver's run as one document, stops in drop order: each job's delivery note (or whichever kinds),
+// each supplier pick-up's collection note. Returns the HTML (no print prompt) — for making a PDF.
+// rows: [{ kind: "inv" | "col", obj }]
+export function runDocsHtml(rows, kinds, { custOf, siteOf, crm, planner, title }) {
+  const pages = [];
+  rows.forEach((x) => {
+    if (x.kind === "col") pages.push(collectionBody(x.obj));
+    else kinds.forEach((k) => pages.push(k === "invoice" ? invoiceBody(x.obj, custOf(x.obj), siteOf(x.obj)) : k === "loading" ? loadingBody(x.obj, custOf(x.obj), siteOf(x.obj), crm, planner) : jobSheetBody(x.obj, custOf(x.obj), siteOf(x.obj))));
+  });
+  const body = pages.map((p) => `<div class="pdfpage">${p}</div>`).join("");
+  return shell(title || "Run", body, true);
 }
 
 // ===== pending deliveries waiting longer than N days (Delivery Schedule › Pending › Print) =====

@@ -10,14 +10,16 @@
     "build:claude-preview": "node scripts/build-preview.mjs"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^4.2.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "xlsx": "^0.18.5",
-    "@supabase/supabase-js": "^2.45.0"
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.1",
-    "vite": "^5.4.0",
-    "esbuild": "^0.23.0"
+    "esbuild": "^0.23.0",
+    "vite": "^5.4.0"
   }
 }

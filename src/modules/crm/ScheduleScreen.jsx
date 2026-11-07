@@ -8,7 +8,8 @@ import {
   PREP_FLAGS, FOLLOWUP_FLAGS, today,
   isVoidInvoice, onSchedule, applyInvoiceStockDeduction, buildPicks, batchBreakdown, batchKeyForPick,
 } from "../../lib/crmCore.js";
-import { printJobDocs, DOC_KINDS, printPendingList } from "./printDocs.js";
+import { printJobDocs, runDocsHtml, DOC_KINDS, printPendingList } from "./printDocs.js";
+import { htmlToPdfFile, shareToWhatsApp } from "./pdfShare.js";
 import LinesEditor, { SizeRow, applySize, skuOption, SKU_COLS, SKU_LIST_W } from "./LinesEditor.jsx";
 import { JOB_TYPES, skuIndex, PAYMENT_TYPES, stockCheck, partKey, isColPick, blankPick, blankCollectionItem, itemPending, collectionLineOpen, editCollectionLine, removeCollectionLine, isGrassRoll, sizeLabel, purchaseCost } from "../../lib/crmCore.js";
 import StockCheck from "./StockCheck.jsx";
@@ -465,6 +466,39 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
   // ===== send a driver their run on WhatsApp: drops in order, address, phone, what's going, notes, money to take =====
   const driverPhones = (crm.driverPhones && typeof crm.driverPhones === "object") ? crm.driverPhones : {};
   const saveDriverPhone = (driver, num) => updateCrm((c) => { c.driverPhones = { ...((c.driverPhones && typeof c.driverPhones === "object") ? c.driverPhones : {}), [driver]: num }; return c; });
+  // the WhatsApp message that goes with the PDF: who, when, and the stops in order (details are in the PDF)
+  const runCaption = (rows, driver, date) => {
+    const when = date ? new Date(date + "T00:00:00").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" }) : "";
+    const first = rows.find((x) => x.obj.runNo || x.obj.van);
+    const out = ["Hi " + driver + ", your run" + (when ? " for " + when : "") + (first && first.obj.runNo ? " (Run " + first.obj.runNo + (first.obj.van ? " · " + first.obj.van : "") + ")" : "") + " — paperwork attached:", ""];
+    rows.forEach((x, n) => {
+      const o = x.obj;
+      if (x.kind === "col") out.push((n + 1) + ". Pick up: " + (o.supplier || "Supplier") + (o.postcode ? " " + o.postcode : "") + " (COL-" + (o.collectionNo || "") + ")");
+      else {
+        const c = custById[o.customerId] || {}, st = siteById[o.siteId] || null;
+        const pc = (st && st.postcode) || c.postcode || "";
+        out.push((n + 1) + ". " + (c.name || "Customer") + (pc && !isCollectionJob(o) ? " " + pc : "") + " (#" + (o.invNo || "") + ")" + (!isPaid(o) && invoiceTotals(o).total > 0 ? " — take " + gbp(invoiceTotals(o).total) : ""));
+      }
+    });
+    out.push("", "Any problems call the office on 0161 399 1837.");
+    return out.join("\n");
+  };
+  const [sendNote, setSendNote] = useState("");
+  const sendRunPdf = async (list, driver, date, phone) => {
+    const when = date ? prettyDate(date) : "";
+    const name = (driver + " run " + when).trim().replace(/[^\w\- ]+/g, "") + ".pdf";
+    setSendNote("Making " + driver + "'s run sheet…");
+    try {
+      const html = runDocsHtml(list, ["delivery"], { custOf: (x) => custById[x.customerId], siteOf: (x) => siteById[x.siteId], crm, planner, title: name });
+      const file = await htmlToPdfFile(html, name);
+      const how = await shareToWhatsApp(file, runCaption(list, driver, date), UK_PHONE(phone));
+      setSendNote(how === "shared" ? "" : how === "cancelled" ? "" : "Run sheet downloaded (" + name + ") — attach it in the WhatsApp chat that's opened.");
+      if (how === "downloaded") setTimeout(() => setSendNote(""), 9000);
+    } catch (e) {
+      setSendNote("Couldn't make the PDF — " + (e && e.message ? e.message : "try again"));
+      setTimeout(() => setSendNote(""), 8000);
+    }
+  };
   const runText = (rows, driver, date) => {
     const when = date ? new Date(date + "T00:00:00").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" }) : "";
     const first = rows.find((x) => x.obj.runNo || x.obj.van);
@@ -504,8 +538,8 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
       const ph = UK_PHONE(driverPhones[driver] || "");
       return {
         key: driver, driver, phone: ph ? driverPhones[driver] : "",
-        label: "Send to " + driver + " on WhatsApp" + (list.length > 1 ? " (" + list.length + ")" : ""),
-        run: (phone) => { const a = document.createElement("a"); a.href = "whatsapp://send?phone=" + UK_PHONE(phone) + "&text=" + encodeURIComponent(runText(list, driver, date)); a.click(); },
+        label: "Send to " + driver + " on WhatsApp (PDF" + (list.length > 1 ? ", " + list.length + " stops" : "") + ")",
+        run: (phone) => sendRunPdf(list, driver, date, phone),
       };
     });
   };
@@ -1396,6 +1430,12 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
       )}
       </div>
       <div style={{ height: 30 }} />
+      {sendNote && (
+        <div style={{ position: "fixed", bottom: 20, left: "50%", transform: "translateX(-50%)", zIndex: 120, background: NAVY, color: "#fff", borderRadius: 12, padding: "10px 16px", fontSize: 13, fontWeight: 700, boxShadow: "0 10px 30px rgba(11,31,63,.35)", display: "flex", gap: 10, alignItems: "center", maxWidth: "90vw" }}>
+          <Icon name="wa" stroke="#25D366" size={15} />{sendNote}
+          <button type="button" onClick={() => setSendNote("")} style={{ border: "none", background: "transparent", color: "#aeb9cf", cursor: "pointer", fontSize: 16, padding: 0 }}>×</button>
+        </div>
+      )}
       {resetAsk && (
         <div onMouseDown={(e) => { if (e.target === e.currentTarget) setResetAsk(null); }} style={{ position: "fixed", inset: 0, zIndex: 90, background: "rgba(11,31,63,.35)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
           <div style={{ background: "#fff", borderRadius: 12, padding: "18px 20px", width: 460, maxWidth: "100%", boxShadow: "0 20px 50px rgba(11,31,63,.35)" }}>
