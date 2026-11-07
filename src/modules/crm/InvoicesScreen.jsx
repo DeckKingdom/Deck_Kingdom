@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import { NAVY, GOLD, RED, uid, prettyDate, prettyDateTime, addMonths, addDays, daysBetween } from "../../lib/core.js";
 import {
-  recordOrigin, blankInvoice, blankLine, nextNumber, invoiceTotals, gbp, isPaid,
+  recordOrigin, blankInvoice, blankLine, nextNumber, blankSite, DRIVERS, invoiceTotals, gbp, isPaid,
   JOB_TYPES, PAYMENT_TYPES, PREP_FLAGS, FOLLOWUP_FLAGS, today, TIME_SLOTS, vanOptions,
   skuIndex, invoiceCost, buildPicks, pickLandedCost, jobCost, blankPick, invoiceLoadKg, applyInvoiceStockDeduction, releaseInvoiceLinks,
   TRADE_COUNTER, isCollectionJob, TRADE_COUNTER_LABEL, quoteRef, sampleRef, isSaleInvoice, riskOf, staffName, isVoidInvoice, onSchedule, userInitials,
@@ -14,7 +14,8 @@ import { printInvoice, printJobSheet, printLoadingBill, printJobDocs } from "./p
 import { readableFor } from "./LinesEditor.jsx";
 import LinesEditor from "./LinesEditor.jsx";
 import StockCheck from "./StockCheck.jsx";
-import { DeliverAddrCheck } from "./AddressGuard.jsx";
+import { DeliverAddrCheck, useAddressGuard } from "./AddressGuard.jsx";
+import { tidyPostcode } from "../../lib/addressCheck.js";
 
 const docBtn = { ...btn, padding: "6px 11px", fontSize: 12.5 };
 const navyBtn = { ...btn, background: "transparent", border: "1px solid #3a4f78", color: "#fff" };
@@ -75,6 +76,8 @@ export default function InvoicesScreen({ headerH = 0, openProduct, money = true,
 
   const [stampOpen, setStampOpen] = useState(false);
   const [followOpen, setFollowOpen] = useState(false);
+  const [siteNew, setSiteNew] = useState(null); // draft for the "+ new site" pop-over
+  const addrGuard = useAddressGuard();
   const setInv = (fn) =>
     updateCrm((c) => {
       const t = c.invoices.find((i) => i.id === inv.id);
@@ -283,6 +286,31 @@ export default function InvoicesScreen({ headerH = 0, openProduct, money = true,
     );
 
   // ===== entry view =====
+  // picking a driver here puts the job on the end of that driver's run for the day (as the schedule does)
+  const setDriver = (v) => setInv((x, c) => {
+    x.driver = v;
+    if (!v || !x.deliveryDate || isCollectionJob(x) || x.runNo) return;
+    const others = [
+      ...c.invoices.filter((y) => y.id !== x.id && !isVoidInvoice(y) && !isCollectionJob(y) && y.deliveryDate === x.deliveryDate),
+      ...(c.collections || []).filter((y) => y.collectDate === x.deliveryDate),
+    ].filter((y) => y.driver === v);
+    const run = others.reduce((m, y) => Math.max(m, Number(y.runNo) || 0), 0) || 1;
+    x.runNo = String(run);
+    x.dropNo = String(others.filter((y) => Number(y.runNo) === run).reduce((m, y) => Math.max(m, Number(y.dropNo) || 0), 0) + 1);
+  });
+  const saveNewSite = () => {
+    const d = { ...siteNew, postcode: tidyPostcode(siteNew.postcode) || siteNew.postcode };
+    if (!(d.address || d.name || "").trim()) return;
+    const commit = () => {
+      setInv((x, c) => {
+        c.sites.push(d);
+        c.numbering.site = (Number(d.siteNo) || 0) + 1;
+        x.siteId = d.id;
+      });
+      setSiteNew(null);
+    };
+    if (d.address || d.postcode) addrGuard.guard(d, commit); else commit();
+  };
   const cust = custById[inv.customerId];
   const sites = crm.sites.filter((s) => s.customerId === inv.customerId);
   const site = siteById[inv.siteId];
@@ -503,7 +531,8 @@ export default function InvoicesScreen({ headerH = 0, openProduct, money = true,
               <Icon name="pin" size={17} stroke={GOLD} />
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <select style={{ ...inp, fontWeight: 700 }} value={inv.siteId} disabled={!cust}
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <select style={{ ...inp, fontWeight: 700, flex: 1, minWidth: 0 }} value={inv.siteId} disabled={!cust}
                 onChange={(e) => setInv((x) => (x.siteId = e.target.value))}>
                 <option value="">{cust ? "Invoice address — " + [cust.address, cust.postcode].filter(Boolean).join(", ") : "Pick the customer first"}</option>
                 <option value={TRADE_COUNTER}>{TRADE_COUNTER_LABEL} — collected from the warehouse</option>
@@ -513,6 +542,11 @@ export default function InvoicesScreen({ headerH = 0, openProduct, money = true,
                   </option>
                 ))}
               </select>
+              <button style={{ ...abtn, width: 36, height: 36, flex: "none", opacity: cust ? 1 : 0.4 }} disabled={!cust} title="Add a new delivery site for this customer"
+                onClick={() => setSiteNew({ ...blankSite(cust.id), siteNo: nextNumber(crm.sites, "siteNo", crm.numbering.site) })}>
+                <Icon name="plus" />
+              </button>
+              </div>
               {cust && inv.siteId !== TRADE_COUNTER && !isCollectionJob(inv) && (() => { const a = site || cust; return <DeliverAddrCheck address={a.address} town={a.town} postcode={a.postcode} />; })()}
               {site && site.notes && <NoteBox>{site.notes}</NoteBox>}
             </div>
@@ -520,10 +554,34 @@ export default function InvoicesScreen({ headerH = 0, openProduct, money = true,
         </div>
       </div>
 
+      {siteNew && cust && (
+        <Modal title={<span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>New site for {cust.name || "customer"} <Chip style={{ fontSize: 13 }}>Site #{siteNew.siteNo || "—"}</Chip></span>} onClose={() => setSiteNew(null)}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12 }}>
+            {[["name", "Site name", { gridColumn: "1 / -1" }], ["address", "Address"], ["town", "Town"], ["postcode", "Post code"], ["contact", "Contact name"], ["mobile", "Mobile"], ["landline", "Landline"]].map(([k, l, st]) => (
+              <div key={k} style={st}>
+                <span style={lbl}>{l}</span>
+                <input style={inp} value={siteNew[k] || ""} autoFocus={k === "name"} onChange={(e) => setSiteNew({ ...siteNew, [k]: e.target.value })} />
+              </div>
+            ))}
+          </div>
+          <div style={{ marginTop: 12 }}>
+            <span style={lbl}>Notes for booking in &amp; locating this site</span>
+            <textarea style={{ ...inp, resize: "vertical" }} rows={3} value={siteNew.notes || ""} onChange={(e) => setSiteNew({ ...siteNew, notes: e.target.value })} />
+          </div>
+          <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+            <button style={btn} onClick={() => setSiteNew({ ...siteNew, address: cust.address || "", town: cust.town || "", postcode: cust.postcode || "", contact: siteNew.contact || cust.contact || "", mobile: siteNew.mobile || cust.mobile || "", landline: siteNew.landline || cust.landline || "" })}>Copy from account</button>
+            <span style={{ flex: 1 }} />
+            <button style={btn} onClick={() => setSiteNew(null)}>Cancel</button>
+            <button className="dk-save" style={{ ...goldBtn, opacity: (siteNew.address || siteNew.name || "").trim() ? 1 : 0.5 }} onClick={saveNewSite}>{addrGuard.busy ? "Checking address…" : "Save & use for this job"}</button>
+          </div>
+        </Modal>
+      )}
+      {addrGuard.modal}
+
       {/* job & delivery */}
       <div style={cardX}>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(118px, 1fr))", gap: 12 }}>
-          <div style={{ gridColumn: "span 2" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(128px, 1fr))", gap: 12 }}>
+          <div style={{ gridColumn: "span 1" }}>
             <span style={lbl}>Job type</span>
             <select style={inp} value={inv.jobType} onChange={(e) => setInv((x) => (x.jobType = e.target.value))}>
               {inv.jobType && !JOB_TYPES.includes(inv.jobType) && <option value={inv.jobType}>{inv.jobType}</option>}
@@ -542,8 +600,14 @@ export default function InvoicesScreen({ headerH = 0, openProduct, money = true,
               {TIME_SLOTS.map((t) => <option key={t} value={t}>{t}</option>)}
             </select>
           </div>
-          {field("Order ref / PO", "orderRef")}
-          {field("Payment date", "paymentDate", { type: "date" })}
+          <div>
+            <span style={lbl}>Driver</span>
+            <select style={inp} value={inv.driver || ""} onChange={(e) => setDriver(e.target.value)}>
+              <option value="">—</option>
+              {inv.driver && !DRIVERS.includes(inv.driver) && <option value={inv.driver}>{inv.driver}</option>}
+              {DRIVERS.map((d) => <option key={d} value={d}>{d}</option>)}
+            </select>
+          </div>
           <div>
             <span style={lbl}>Payment type</span>
             <select style={inp} value={inv.paymentType || ""} onChange={(e) => setInv((x) => (x.paymentType = e.target.value))}>
@@ -552,6 +616,8 @@ export default function InvoicesScreen({ headerH = 0, openProduct, money = true,
               {PAYMENT_TYPES.map((p) => <option key={p} value={p}>{p}</option>)}
             </select>
           </div>
+          {field("Payment date", "paymentDate", { type: "date" })}
+          {field("Order ref / PO", "orderRef")}
         </div>
       </div>
 
