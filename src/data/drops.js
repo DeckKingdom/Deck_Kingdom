@@ -182,21 +182,10 @@ export async function wipeDriverData(drivers) {
     return { photos: 0 };
   }
   const sb = await getSupabase();
-  // photos: one folder per driver login
-  let photos = 0;
-  const { data: folders } = await sb.storage.from("drop-photos").list("", { limit: 1000 });
-  for (const f of folders || []) {
-    const { data: files } = await sb.storage.from("drop-photos").list(f.name, { limit: 1000 });
-    const paths = (files || []).map((x) => f.name + "/" + x.name);
-    for (let i = 0; i < paths.length; i += 100) {
-      const { data: gone, error } = await sb.storage.from("drop-photos").remove(paths.slice(i, i + 100));
-      if (error) throw new Error("photos: " + error.message);
-      if (!(gone || []).length) throw new Error("photos couldn't be deleted — permission missing");
-      photos += gone.length;
-    }
-  }
-  let r = await sb.from("drop_confirmations").delete().neq("id", "");
+  // 1. the records - this is what reopens everything on the phones
+  let r = await sb.from("drop_confirmations").delete().neq("id", "").select("id");
   if (r.error) throw new Error("confirmations: " + r.error.message);
+  const removed = (r.data || []).length;
   r = await sb.from("driver_events").delete().neq("id", "");
   if (r.error) throw new Error("set-offs: " + r.error.message);
   // tell every driver's phone to forget its load-check ticks
@@ -205,5 +194,20 @@ export async function wipeDriverData(drivers) {
     r = await sb.from("driver_events").insert(drivers.map((d, n) => ({ id: "wipe" + stamp + n, user_id: user.id, driver: d, run_date: "*", run_no: "*", kind: "reset" })));
     if (r.error) throw new Error("reset: " + r.error.message);
   }
-  return { photos };
+  // 2. the photos (one folder per driver login) - best effort, reported back
+  let photos = 0, photoErr = "";
+  try {
+    const { data: folders } = await sb.storage.from("drop-photos").list("", { limit: 1000 });
+    for (const f of folders || []) {
+      const { data: files } = await sb.storage.from("drop-photos").list(f.name, { limit: 1000 });
+      const paths = (files || []).map((x) => f.name + "/" + x.name);
+      for (let i = 0; i < paths.length; i += 100) {
+        const { data: gone, error } = await sb.storage.from("drop-photos").remove(paths.slice(i, i + 100));
+        if (error) throw new Error(error.message);
+        if (!(gone || []).length) throw new Error("permission missing — run clear-driver-data.sql, then clear again");
+        photos += gone.length;
+      }
+    }
+  } catch (e) { photoErr = String((e && e.message) || e); }
+  return { photos, photoErr, removed };
 }

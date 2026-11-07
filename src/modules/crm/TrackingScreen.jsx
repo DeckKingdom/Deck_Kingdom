@@ -249,7 +249,7 @@ export default function TrackingScreen({ crm, updateCrm, openInvoice, openCollec
               <button style={{ ...btn, background: RED, borderColor: RED, color: "#fff", opacity: wipe.text.trim().toUpperCase() === "CLEAR" ? 1 : 0.4 }} disabled={wipe.busy || wipe.text.trim().toUpperCase() !== "CLEAR"}
                 onClick={async () => {
                   setWipe((w) => ({ ...w, busy: true, msg: "Clearing…" }));
-                  try { const r = await doWipe(); setWipe((w) => ({ ...w, busy: false, done: true, msg: "✓ Cleared — " + r.photos + " photo" + (r.photos === 1 ? "" : "s") + " removed." })); setReload((n) => n + 1); }
+                  try { const r = await doWipe(); setWipe((w) => ({ ...w, busy: false, done: true, msg: "✓ Cleared " + (r.removed ?? 0) + " confirmation" + (r.removed === 1 ? "" : "s") + " and " + r.photos + " photo" + (r.photos === 1 ? "" : "s") + "." + (r.photoErr ? " Photos not deleted: " + r.photoErr : " Drivers need to tap ↻ on their phone.") })); setReload((n) => n + 1); }
                   catch (e) { setWipe((w) => ({ ...w, busy: false, msg: "Stopped — " + ((e && e.message) || e) + (/photo|policy|permission/i.test(String(e && e.message)) ? " (run clear-driver-data.sql)" : "") })); }
                 }}>
                 {wipe.busy ? "Clearing…" : "Clear everything"}
