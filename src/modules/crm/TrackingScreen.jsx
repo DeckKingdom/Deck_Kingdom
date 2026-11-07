@@ -331,7 +331,7 @@ function RatesModal({ s, onClose, onSave }) {
         {f("awayMiles", "Flag a drop confirmed further than", "miles away")}
         {f("tolerancePct", "Flag mileage / fuel outside", "%")}
         <div style={{ gridColumn: "1 / -1" }}>
-          <span style={lbl}>Pop-up alerts go to (login email — desktop only)</span>
+          <span style={lbl}>Pop-up alerts also go to (login email — admins always get them, desktop only)</span>
           <input style={inp} value={v.alertsTo || ""} onChange={(e) => setV({ ...v, alertsTo: e.target.value.trim().toLowerCase() })} />
         </div>
       </div>

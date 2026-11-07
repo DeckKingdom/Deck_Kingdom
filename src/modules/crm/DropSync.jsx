@@ -5,7 +5,7 @@
 // 2. If something was left over, or the driver wrote a note, an alert pops up on every office
 //    screen until someone dismisses it or raises a follow-up job.
 import { useEffect, useRef, useState } from "react";
-import { loadDrops, dropLeft, dropNeedsLook, payMissed, updateDrops, dropPhotoUrl, voidEvents, logEvent, clearLoadChecks } from "../../data/drops.js";
+import { loadDrops, loadPendingDrops, dropLeft, dropNeedsLook, payMissed, updateDrops, dropPhotoUrl, voidEvents, logEvent, clearLoadChecks } from "../../data/drops.js";
 import { applyInvoiceStockDeduction, explodeInvoiceLines, blankMovement, today, gbp } from "../../lib/crmCore.js";
 import { addDays, NAVY, GOLD, RED, prettyDateTime } from "../../lib/core.js";
 import { Modal, btn, goldBtn } from "./ui.jsx";
@@ -80,9 +80,8 @@ export function useDropSync({ crm, updateCrm, me, enabled, alertsOn }) {
       busy = true;
       try {
         const t = today();
-        const dates = Array.from({ length: DAYS_BACK + 2 }, (_, n) => addDays(t, n - DAYS_BACK));
-        const m = await loadDrops(dates);
-        const all = Object.values(m);
+        // anything not applied yet or with an open alert, whatever day the run was booked for
+        const all = await loadPendingDrops();
         const todo = all.filter((r) => !r.appliedAt);
         if (live && todo.length) {
           updRef.current((c) => {
@@ -145,44 +144,55 @@ export function DropAlert({ alerts, crm, onDismiss, onFollowUp, onOpenJob, onOpe
   const showPhoto = () => { if (!photo[r.id]) dropPhotoUrl(r.photoPath).then((u) => setPhoto((p) => ({ ...p, [r.id]: u }))).catch(() => setPhoto((p) => ({ ...p, [r.id]: "x" }))); };
   const title = pickup ? "Pick-up " + (left.length ? "short" : "note") + " · COL-" + (col ? col.collectionNo : "") + (col && col.supplier ? " " + col.supplier : "")
     : "Job closed " + (left.length ? "with items left over" : payMissed(r) ? "— payment not collected" : "with a driver's note") + " · #" + (r.invNo || (inv && inv.invNo) || "");
+  const serious = left.length > 0 || payMissed(r);
+  const band = serious ? "#C8102E" : "#E8912D";
   return (
-    <Modal title={<span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}><span style={{ fontSize: 19 }}>{left.length || payMissed(r) ? "⚠️" : "📝"}</span>{title}</span>} onClose={() => onDismiss(r)} width={540} z={120}>
-      <div style={{ fontSize: 13, fontWeight: 700, color: "#5a6a85" }}>
-        {pickup ? (col ? col.supplier : "Supplier") : (cust ? cust.name : "Customer")} · {r.driver || "Driver"} · {prettyDateTime(r.at)}
-        {alerts.length > 1 && <span style={{ float: "right", color: "#8593a8" }}>1 of {alerts.length}</span>}
-      </div>
-      {left.length > 0 && (
-        <div style={{ marginTop: 10, border: "1px solid #f4b9c1", background: "#fdf3f4", borderRadius: 10, padding: "8px 12px" }}>
-          <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 0.5, color: "#9b1c2e", textTransform: "uppercase", marginBottom: 4 }}>{pickup ? "Not collected" : "Still to deliver"}</div>
-          {left.map((x, k) => (
-            <div key={k} style={{ display: "flex", gap: 8, fontSize: 13.5, padding: "3px 0", color: NAVY }}>
-              <b style={{ minWidth: 40, textAlign: "right", color: "#9b1c2e" }}>{x.remaining}×</b>
-              <span style={{ flex: 1 }}>{x.text}{x.colour ? " · " + x.colour : ""}</span>
-              <span style={{ fontSize: 12, color: "#5a6a85", fontWeight: 700 }}>{x.delivered} of {x.qty} {pickup ? "collected" : "dropped"}</span>
+    <div style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(11,31,63,.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+      <div role="alertdialog" aria-label={title}
+        style={{ width: "min(600px, 94vw)", minHeight: "min(600px, 90vh)", maxHeight: "92vh", background: "#fff", borderRadius: 18, boxShadow: "0 24px 70px rgba(0,0,0,.35)", display: "flex", flexDirection: "column", overflow: "hidden", borderTop: "10px solid " + band }}>
+        <div style={{ textAlign: "center", padding: "22px 24px 10px" }}>
+          <div style={{ fontSize: 54, lineHeight: 1 }}>{serious ? "⚠️" : "📝"}</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: band, marginTop: 8 }}>{title}</div>
+          {alerts.length > 1 && <div style={{ fontSize: 12.5, fontWeight: 700, color: "#8593a8", marginTop: 4 }}>1 of {alerts.length} alerts</div>}
+        </div>
+        <div style={{ flex: 1, overflowY: "auto", padding: "4px 26px 6px" }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "#5a6a85" }}>
+            {pickup ? (col ? col.supplier : "Supplier") : (cust ? cust.name : "Customer")} · {r.driver || "Driver"} · {prettyDateTime(r.at)}
+          </div>
+          {left.length > 0 && (
+            <div style={{ marginTop: 10, border: "1px solid #f4b9c1", background: "#fdf3f4", borderRadius: 10, padding: "8px 12px" }}>
+              <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 0.5, color: "#9b1c2e", textTransform: "uppercase", marginBottom: 4 }}>{pickup ? "Not collected" : "Still to deliver"}</div>
+              {left.map((x, k) => (
+                <div key={k} style={{ display: "flex", gap: 8, fontSize: 13.5, padding: "3px 0", color: NAVY }}>
+                  <b style={{ minWidth: 40, textAlign: "right", color: "#9b1c2e" }}>{x.remaining}×</b>
+                  <span style={{ flex: 1 }}>{x.text}{x.colour ? " · " + x.colour : ""}</span>
+                  <span style={{ fontSize: 12, color: "#5a6a85", fontWeight: 700 }}>{x.delivered} of {x.qty} {pickup ? "collected" : "dropped"}</span>
+                </div>
+              ))}
+              {!pickup && <div style={{ fontSize: 11.5, color: "#8593a8", fontWeight: 600, marginTop: 4 }}>What wasn't delivered has gone back into stock.</div>}
             </div>
-          ))}
-          {!pickup && <div style={{ fontSize: 11.5, color: "#8593a8", fontWeight: 600, marginTop: 4 }}>What wasn't delivered has gone back into stock.</div>}
+          )}
+          {!pickup && r.payment && Number(r.payment.owed) > 0 && (
+            <div style={{ marginTop: 10, borderRadius: 10, padding: "8px 12px", fontSize: 13.5, fontWeight: 800, border: "1px solid " + (r.payment.collected ? "#bfe3ca" : "#f4b9c1"), background: r.payment.collected ? "#f1faf4" : "#fdf3f4", color: r.payment.collected ? "#28713e" : "#9b1c2e" }}>
+              {r.payment.collected ? "✓ Payment of " + gbp(Number(r.payment.owed)) + " collected" + (r.payment.method ? " by " + r.payment.method.toLowerCase() : "") : "✗ Payment of " + gbp(Number(r.payment.owed)) + " NOT collected — still owed"}
+            </div>
+          )}
+          {String(r.notes || "").trim() && (
+            <div style={{ marginTop: 10, background: "#fff8e6", border: "1px solid #f4d78f", borderRadius: 10, padding: "8px 12px", fontSize: 13.5, fontWeight: 600, color: "#6b5305" }}>
+              <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 3 }}>Driver's note</div>
+              {r.notes}
+            </div>
+          )}
+          <div style={{ marginTop: 10 }}><DropPhotos conf={r} height={260} /></div>
         </div>
-      )}
-      {!pickup && r.payment && Number(r.payment.owed) > 0 && (
-        <div style={{ marginTop: 10, borderRadius: 10, padding: "8px 12px", fontSize: 13.5, fontWeight: 800, border: "1px solid " + (r.payment.collected ? "#bfe3ca" : "#f4b9c1"), background: r.payment.collected ? "#f1faf4" : "#fdf3f4", color: r.payment.collected ? "#28713e" : "#9b1c2e" }}>
-          {r.payment.collected ? "✓ Payment of " + gbp(Number(r.payment.owed)) + " collected" + (r.payment.method ? " by " + r.payment.method.toLowerCase() : "") : "✗ Payment of " + gbp(Number(r.payment.owed)) + " NOT collected — still owed"}
+        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", flexWrap: "wrap", padding: "14px 24px 20px", borderTop: "1px solid #eef1f6" }}>
+          {pickup ? (col && <button style={{ ...btn, padding: "11px 18px", fontSize: 14.5 }} onClick={() => onOpenCollection(col.id)}>Open collection</button>)
+            : (inv && <button style={{ ...btn, padding: "11px 18px", fontSize: 14.5 }} onClick={() => onOpenJob(inv.id)}>Open job</button>)}
+          <span style={{ flex: 1 }} />
+          <button style={{ ...btn, padding: "11px 18px", fontSize: 14.5 }} onClick={() => onDismiss(r)}>Dismiss</button>
+          {!pickup && inv && (left.length > 0 || String(r.notes || "").trim()) && <button style={{ ...goldBtn, color: NAVY, padding: "11px 18px", fontSize: 14.5 }} onClick={() => onFollowUp(r, inv, left)}>Raise follow-up job</button>}
         </div>
-      )}
-      {String(r.notes || "").trim() && (
-        <div style={{ marginTop: 10, background: "#fff8e6", border: "1px solid #f4d78f", borderRadius: 10, padding: "8px 12px", fontSize: 13.5, fontWeight: 600, color: "#6b5305" }}>
-          <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 3 }}>Driver's note</div>
-          {r.notes}
-        </div>
-      )}
-      <div style={{ marginTop: 10 }}><DropPhotos conf={r} height={260} /></div>
-      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16, flexWrap: "wrap" }}>
-        {pickup ? (col && <button style={btn} onClick={() => onOpenCollection(col.id)}>Open collection</button>)
-          : (inv && <button style={btn} onClick={() => onOpenJob(inv.id)}>Open job</button>)}
-        <span style={{ flex: 1 }} />
-        <button style={btn} onClick={() => onDismiss(r)}>Dismiss</button>
-        {!pickup && inv && (left.length > 0 || String(r.notes || "").trim()) && <button style={{ ...goldBtn, color: NAVY }} onClick={() => onFollowUp(r, inv, left)}>Raise follow-up job</button>}
       </div>
-    </Modal>
+    </div>
   );
 }

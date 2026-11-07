@@ -262,3 +262,20 @@ export async function clearLoadChecks(run) {
 export async function resetLoadChecks() {
   await clearLoadChecks(null);
 }
+
+// office: confirmations still to be applied, or with an alert still open - whatever the run date
+export async function loadPendingDrops() {
+  let rows = [];
+  if (storageMode === "supabase") {
+    const sb = await getSupabase();
+    const [a, b] = await Promise.all([
+      sb.from("drop_confirmations").select("*").eq("applied_at", "").limit(500),
+      sb.from("drop_confirmations").select("*").eq("alert_state", "open").limit(200),
+    ]);
+    if (a.error) throw a.error;
+    if (b.error) throw b.error;
+    const seen = new Set();
+    rows = [...(a.data || []), ...(b.data || [])].filter((r) => (seen.has(r.id) ? false : seen.add(r.id))).map(fromRow);
+  } else rows = localAll().filter((r) => !r.appliedAt || r.alertState === "open");
+  return rows.filter((r) => !r.voidedAt);
+}

@@ -247,7 +247,8 @@ export default function ImportPlanner() {
   };
   // drivers' full drop / pick-up confirmations close the job here
   // pop-up alerts only on the desktop of the login named in the tracking rates (Jon by default)
-  const alertsMine = !!crm && !isPhone && (storageMode !== "supabase" || String(getSessionEmail() || "").toLowerCase() === String(fleetSettings(crm).alertsTo || "").toLowerCase());
+  // pop-up alerts: admin logins (plus anyone named in the tracking rates), on a desktop - never phones
+  const alertsMine = !!crm && !isPhone && (storageMode !== "supabase" || access.role === "admin" || String(getSessionEmail() || "").toLowerCase() === String(fleetSettings(crm).alertsTo || "").toLowerCase());
   const dropSync = useDropSync({ crm, updateCrm: updateCrmRaw, me: storageMode === "supabase" ? getSessionEmail() || "" : "", enabled: !!crm && access.canEdit, alertsOn: alertsMine });
   const trackAlerts = useTrackingAlerts({ crm, enabled: alertsMine && access.canTab("tracking") });
   const [selCustomerId, setSelCustomerId] = useState(null);
