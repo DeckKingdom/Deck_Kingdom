@@ -11,6 +11,8 @@ import {
 } from "../../lib/crmCore.js";
 import { ComposeEmail, EmailHistory } from "./EmailPanels.jsx";
 import { emailReady } from "../../data/email.js";
+import { useAddressGuard } from "./AddressGuard.jsx";
+import { tidyPostcode } from "../../lib/addressCheck.js";
 import { ListHero, heroTile, heroLab, heroSub, RiskChip, WebStatusChip } from "./ui.jsx";
 import { Icon, Chip, Modal, SuggestInput, selectAllProps, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
 
@@ -101,6 +103,7 @@ const NoteBox = ({ children }) => (
 export default function CustomersScreen({ money = true, crm, updateCrm, askConfirm, selId, setSelId, openInvoice, newInvoiceFor, newFollowUp, openQuote, newQuoteFor, openSample, newSampleFor, onOutstanding, me, newSignal, onNewHandled, onEmailSetup }) {
   const [search, setSearch] = useState("");
   const [custDraft, setCustDraft] = useState(null);
+  const addrGuard = useAddressGuard();
   const [siteDraft, setSiteDraft] = useState(null);
   const [noEdit, setNoEdit] = useState(false); // account # unlocked for editing
   const [noConfirm, setNoConfirm] = useState(false); // confirmation bar showing
@@ -185,8 +188,15 @@ export default function CustomersScreen({ money = true, crm, updateCrm, askConfi
     openCustDraft({ ...blankCustomer(), source: "Manual entry", accountNo: nextNumber(crm.customers, "accountNo", crm.numbering.account), createdBy: me || "", _new: true });
 
   const saveCustomer = () => {
-    const d = custDraft;
-    if (!d.name.trim()) return;
+    const d0 = custDraft;
+    if (!d0.name.trim()) return;
+    const d = { ...d0, postcode: tidyPostcode(d0.postcode) || d0.postcode };
+    const old = d._new ? null : crm.customers.find((x) => x.id === d.id);
+    const moved = !old || [old.address, old.town, old.postcode].join("|") !== [d.address, d.town, d.postcode].join("|");
+    if (moved && (d.address || d.postcode)) addrGuard.guard(d, () => commitCustomer(d));
+    else commitCustomer(d);
+  };
+  const commitCustomer = (d) => {
     updateCrm((c) => {
       if (d._new) {
         const { _new, ...clean } = d;
@@ -240,7 +250,13 @@ export default function CustomersScreen({ money = true, crm, updateCrm, askConfi
     openSiteDraft({ ...blankSite(sel.id), siteNo: nextNumber(crm.sites, "siteNo", crm.numbering.site), _new: true });
 
   const saveSite = () => {
-    const d = siteDraft;
+    const d = { ...siteDraft, postcode: tidyPostcode(siteDraft.postcode) || siteDraft.postcode };
+    const old = d._new ? null : crm.sites.find((x) => x.id === d.id);
+    const moved = !old || [old.address, old.town, old.postcode].join("|") !== [d.address, d.town, d.postcode].join("|");
+    if (moved && (d.address || d.postcode)) addrGuard.guard(d, () => commitSite(d));
+    else commitSite(d);
+  };
+  const commitSite = (d) => {
     updateCrm((c) => {
       if (d._new) {
         const { _new, ...clean } = d;
@@ -946,7 +962,7 @@ export default function CustomersScreen({ money = true, crm, updateCrm, askConfi
           </label>
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
             <button style={btn} onClick={() => setCustDraft(null)}>Cancel</button>
-            <button className="dk-save" style={{ ...goldBtn, opacity: custDraft.name.trim() ? 1 : 0.5 }} onClick={saveCustomer}>Save</button>
+            <button className="dk-save" style={{ ...goldBtn, opacity: custDraft.name.trim() ? 1 : 0.5 }} onClick={saveCustomer}>{addrGuard.busy ? "Checking address…" : "Save"}</button>
           </div>
         </Modal>
       )}
@@ -1003,10 +1019,12 @@ export default function CustomersScreen({ money = true, crm, updateCrm, askConfi
             <button style={btn} onClick={copyFromAccount}>Copy from account</button>
             <span style={{ flex: 1 }} />
             <button style={btn} onClick={() => setSiteDraft(null)}>Cancel</button>
-            <button className="dk-save" style={goldBtn} onClick={saveSite}>Save</button>
+            <button className="dk-save" style={goldBtn} onClick={saveSite}>{addrGuard.busy ? "Checking address…" : "Save"}</button>
           </div>
         </Modal>
       )}
+
+      {addrGuard.modal}
 
       {/* ===== numbering modal ===== */}
       {numPanel && numDraft && (

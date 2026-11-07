@@ -7,12 +7,12 @@ import { signOut } from "../data/auth.js";
 import { normaliseCrm, isVoidInvoice, isCollectionJob, invoiceTotals, isPaid, gbp } from "../lib/crmCore.js";
 import { NAVY, GOLD, RED, uid, prettyDate, prettyDateTime } from "../lib/core.js";
 import { Icon } from "./crm/ui.jsx";
+import { outwardCode, tidyPostcode, googleNavHref, appleNavHref, isApple } from "../lib/addressCheck.js";
 
 const GREEN = "#28713e";
 const ymd = (d) => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
 const addDaysTo = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
 const telHref = (n) => "tel:" + String(n || "").replace(/[^\d+]/g, "");
-const mapHref = (q) => "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(q);
 
 const page = { minHeight: "100vh", background: "#f3f5f8", fontFamily: "Quicksand, sans-serif", color: NAVY, paddingBottom: 30 };
 const bar = { background: NAVY, color: "#fff", padding: "14px 16px", display: "flex", alignItems: "center", gap: 10, position: "sticky", top: 0, zIndex: 5 };
@@ -111,12 +111,50 @@ export default function DriverApp({ me }) {
 }
 
 // ===== one day's stops, in run and drop order =====
+// Fail-safe: a run's delivery addresses stay part-hidden (first 5 characters, first half of the
+// postcode) until the driver has ticked every item on that run as being on the van.
+const tickKey = (date) => "dk-van-check:" + date;
+const loadTicks = (date) => { try { return JSON.parse(localStorage.getItem(tickKey(date)) || "{}"); } catch (e) { return {}; } };
+const saveTicks = (date, t) => {
+  try {
+    localStorage.setItem(tickKey(date), JSON.stringify(t));
+    // tidy old days
+    Object.keys(localStorage).filter((k) => k.startsWith("dk-van-check:") && k.slice(13) < ymd(addDaysTo(new Date(), -7))).forEach((k) => localStorage.removeItem(k));
+  } catch (e) { /* private window: ticks just last while the page is open */ }
+};
+const maskAddr = (address, postcode) => {
+  const a = String(address || "").trim();
+  const out = outwardCode(postcode);
+  return [a ? a.slice(0, 5) + (a.length > 5 ? "…" : "") : "", out ? out + " •••" : ""].filter(Boolean).join("  ·  ");
+};
+const invLines = (o) => (o.lines || []).map((l, i) => ({ l, i })).filter(({ l }) => l.qty && (l.description || l.code));
+
+function NavButtons({ dest }) {
+  const apple = isApple();
+  const g = <a key="g" href={googleNavHref(dest)} target="_blank" rel="noopener noreferrer" style={{ ...navBtn, background: apple ? "#fff" : "#185FA5", color: apple ? "#185FA5" : "#fff" }}>▶ {apple ? "Google Maps" : "Navigate"}</a>;
+  const a = <a key="a" href={appleNavHref(dest)} target="_blank" rel="noopener noreferrer" style={{ ...navBtn, background: apple ? "#185FA5" : "#fff", color: apple ? "#fff" : "#185FA5" }}>▶ {apple ? "Navigate" : "Apple Maps"}</a>;
+  return <div style={{ display: "flex", gap: 8, marginTop: 8 }}>{apple ? [a, g] : [g, a]}</div>;
+}
+const navBtn = { flex: 1, textAlign: "center", border: "1px solid #185FA5", borderRadius: 10, padding: "11px 8px", fontWeight: 800, fontSize: 15, textDecoration: "none" };
+
 function DayRuns({ date, stops, crm, header, onBack }) {
   const d = new Date(date + "T00:00:00");
   const title = d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
   const custById = {}, siteById = {};
   ((crm && crm.customers) || []).forEach((c) => (custById[c.id] = c));
   ((crm && crm.sites) || []).forEach((s) => (siteById[s.id] = s));
+  const [ticks, setTicks] = useState(() => loadTicks(date));
+  const toggle = (k) => setTicks((t) => { const n = { ...t }; if (n[k]) delete n[k]; else n[k] = Date.now(); saveTicks(date, n); return n; });
+
+  // what has to be on the van for each run (deliveries still to do; not warehouse collections)
+  const need = {};
+  stops.forEach((x) => {
+    if (x.kind !== "inv" || x.obj.deliveryCompleted || isCollectionJob(x.obj)) return;
+    const r = x.obj.runNo || "";
+    invLines(x.obj).forEach(({ i }) => (need[r] = need[r] || []).push(x.obj.id + ":" + i));
+  });
+  const runState = (r) => { const l = need[r] || []; const done = l.filter((k) => ticks[k]).length; return { total: l.length, done, open: done === l.length }; };
+
   let lastRun = null;
   return (
     <div style={page}>
@@ -126,13 +164,25 @@ function DayRuns({ date, stops, crm, header, onBack }) {
         {stops.map((x, n) => {
           const o = x.obj;
           const runKey = o.runNo || "";
+          const rs = runState(runKey);
           const runHead = runKey !== lastRun ? (lastRun = runKey, (
-            <div style={{ fontSize: 12, fontWeight: 800, color: "#5a6a85", letterSpacing: 0.5, textTransform: "uppercase", margin: n ? "16px 2px 8px" : "2px 2px 8px" }}>
-              {o.runNo ? "Run " + o.runNo : "No run number"}{o.van ? " · " + o.van : ""}
+            <div style={{ margin: n ? "18px 0 8px" : "2px 0 8px" }}>
+              <div style={{ fontSize: 12, fontWeight: 800, color: "#5a6a85", letterSpacing: 0.5, textTransform: "uppercase", margin: "0 2px 6px" }}>
+                {o.runNo ? "Run " + o.runNo : "No run number"}{o.van ? " · " + o.van : ""}
+              </div>
+              {rs.total > 0 && (rs.open ? (
+                <div style={{ background: "#f1faf4", border: "1px solid #bfe3ca", color: GREEN, borderRadius: 10, padding: "9px 12px", fontSize: 13.5, fontWeight: 800 }}>✓ Everything's on the van — addresses unlocked</div>
+              ) : (
+                <div style={{ background: "#fff8e6", border: "1px solid #f4d78f", color: "#6b5305", borderRadius: 10, padding: "9px 12px", fontSize: 13.5, fontWeight: 700 }}>
+                  <div style={{ fontWeight: 800 }}>🔒 Load check: {rs.done} of {rs.total} ticked</div>
+                  <div style={{ marginTop: 3, fontWeight: 600 }}>Tick every item as you check it's on the van. The full addresses and sat nav open once everything's ticked.</div>
+                  <div style={{ height: 6, background: "#f4e3b5", borderRadius: 4, marginTop: 7, overflow: "hidden" }}><div style={{ height: "100%", width: (100 * rs.done / rs.total) + "%", background: GOLD }} /></div>
+                </div>
+              ))}
             </div>
           )) : null;
           if (x.kind === "col") {
-            const addr = [o.address, o.town, o.postcode].filter(Boolean).join(", ");
+            const addr = [o.address, o.town, tidyPostcode(o.postcode)].filter(Boolean).join(", ");
             return (
               <div key={"c" + o.id}>
                 {runHead}
@@ -143,8 +193,9 @@ function DayRuns({ date, stops, crm, header, onBack }) {
                     <span style={{ fontSize: 12, fontWeight: 800, color: "#185FA5" }}>COL-{o.collectionNo}</span>
                   </div>
                   {o.collectTime && <div style={{ fontSize: 13, fontWeight: 700, marginTop: 4 }}>{o.collectTime}</div>}
-                  {addr && <a href={mapHref(addr)} target="_blank" rel="noopener noreferrer" style={{ display: "block", marginTop: 6, color: "#185FA5", fontWeight: 700, fontSize: 14, textDecoration: "none" }}>📍 {addr}</a>}
-                  {o.phone && <a href={telHref(o.phone)} style={{ display: "block", marginTop: 6, color: "#185FA5", fontWeight: 700, fontSize: 14, textDecoration: "none" }}>📞 {o.phone}{o.contact ? " · " + o.contact : ""}</a>}
+                  {addr && <div style={{ marginTop: 6, fontWeight: 700, fontSize: 14 }}>📍 {addr}</div>}
+                  {addr && !o.collected && <NavButtons dest={addr} />}
+                  {o.phone && <a href={telHref(o.phone)} style={{ display: "block", marginTop: 8, color: "#185FA5", fontWeight: 700, fontSize: 14, textDecoration: "none" }}>📞 {o.phone}{o.contact ? " · " + o.contact : ""}</a>}
                   <Items rows={(o.items || []).map((it) => ({ qty: it.qty, text: it.description || it.sku, colour: it.colour }))} />
                   {o.notes && <div style={{ marginTop: 8, background: "#fff8e6", borderRadius: 8, padding: "8px 10px", fontSize: 13.5, fontWeight: 600 }}>{o.notes}</div>}
                   {o.collected && <div style={{ marginTop: 8, color: GREEN, fontWeight: 800, fontSize: 13 }}>✓ Collected</div>}
@@ -153,10 +204,14 @@ function DayRuns({ date, stops, crm, header, onBack }) {
             );
           }
           const c = custById[o.customerId] || {}, st = siteById[o.siteId] || null;
-          const addr = st ? [st.address, st.town, st.postcode].filter(Boolean).join(", ") : [c.address, c.town, c.postcode].filter(Boolean).join(", ");
+          const a = st || c;
+          const addr = [a.address, a.town, tidyPostcode(a.postcode)].filter(Boolean).join(", ");
           const tel = (st && (st.mobile || st.landline)) || c.mobile || c.landline || "";
           const coll = isCollectionJob(o);
           const owed = !isPaid(o) ? invoiceTotals(o).total : 0;
+          const unlocked = rs.open || o.deliveryCompleted;
+          const lines = invLines(o);
+          const tickable = !o.deliveryCompleted && !coll;
           return (
             <div key={"i" + o.id}>
               {runHead}
@@ -169,9 +224,32 @@ function DayRuns({ date, stops, crm, header, onBack }) {
                 <div style={{ fontSize: 13, fontWeight: 700, color: coll ? "#a06d00" : "#5a6a85", marginTop: 3 }}>
                   {coll ? "Customer collecting from the warehouse" : "Delivery"}{o.deliveryTime ? " · " + o.deliveryTime : ""}
                 </div>
-                {addr && !coll && <a href={mapHref(addr)} target="_blank" rel="noopener noreferrer" style={{ display: "block", marginTop: 6, color: "#185FA5", fontWeight: 700, fontSize: 14, textDecoration: "none" }}>📍 {addr}</a>}
-                {tel && <a href={telHref(tel)} style={{ display: "block", marginTop: 6, color: "#185FA5", fontWeight: 700, fontSize: 14, textDecoration: "none" }}>📞 {tel}{st && st.contact ? " · " + st.contact : ""}</a>}
-                <Items rows={(o.lines || []).filter((l) => l.qty && (l.description || l.code)).map((l) => ({ qty: l.qty, text: l.description || l.code, colour: l.colour }))} />
+                {addr && !coll && (unlocked ? (
+                  <>
+                    <div style={{ marginTop: 6, fontWeight: 700, fontSize: 14 }}>📍 {addr}</div>
+                    {!o.deliveryCompleted && <NavButtons dest={addr} />}
+                  </>
+                ) : (
+                  <div style={{ marginTop: 6, fontWeight: 700, fontSize: 14, color: "#8593a8" }}>🔒 {maskAddr(a.address, a.postcode)}</div>
+                ))}
+                {tel && <a href={telHref(tel)} style={{ display: "block", marginTop: 8, color: "#185FA5", fontWeight: 700, fontSize: 14, textDecoration: "none" }}>📞 {tel}{st && st.contact ? " · " + st.contact : ""}</a>}
+                {tickable ? (
+                  <div style={{ marginTop: 8, borderTop: "1px solid #eef1f6", paddingTop: 4 }}>
+                    {lines.map(({ l, i }) => {
+                      const k = o.id + ":" + i, on = !!ticks[k];
+                      return (
+                        <button key={k} type="button" onClick={() => toggle(k)}
+                          style={{ display: "flex", gap: 10, alignItems: "center", width: "100%", border: "none", background: "none", fontFamily: "inherit", color: NAVY, textAlign: "left", fontSize: 14.5, padding: "8px 0", cursor: "pointer", borderBottom: "1px solid #f3f5f8" }}>
+                          <span style={{ width: 26, height: 26, flex: "none", borderRadius: 7, border: "2px solid " + (on ? GREEN : "#c4cbd6"), background: on ? GREEN : "#fff", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontWeight: 900, fontSize: 15 }}>{on ? "✓" : ""}</span>
+                          <b style={{ minWidth: 34, textAlign: "right" }}>{l.qty}×</b>
+                          <span style={{ flex: 1, textDecoration: on ? "line-through" : "none", color: on ? "#8593a8" : NAVY }}>{l.description || l.code}{l.colour ? <span style={{ color: "#5a6a85" }}> · {l.colour}</span> : null}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <Items rows={lines.map(({ l }) => ({ qty: l.qty, text: l.description || l.code, colour: l.colour }))} />
+                )}
                 {o.jobNotes && <div style={{ marginTop: 8, background: "#fff8e6", borderRadius: 8, padding: "8px 10px", fontSize: 13.5, fontWeight: 600 }}>{o.jobNotes}</div>}
                 {owed > 0 && <div style={{ marginTop: 8, background: "#fde8ea", color: RED, borderRadius: 8, padding: "8px 10px", fontSize: 14, fontWeight: 800 }}>Payment to take: {gbp(owed)}</div>}
                 {o.deliveryCompleted && <div style={{ marginTop: 8, color: GREEN, fontWeight: 800, fontSize: 13 }}>✓ Delivered</div>}
@@ -184,17 +262,6 @@ function DayRuns({ date, stops, crm, header, onBack }) {
     </div>
   );
 }
-
-const Items = ({ rows }) => (rows.length ? (
-  <div style={{ marginTop: 8, borderTop: "1px solid #eef1f6", paddingTop: 6 }}>
-    {rows.map((r, i) => (
-      <div key={i} style={{ display: "flex", gap: 8, fontSize: 14, padding: "3px 0" }}>
-        <b style={{ minWidth: 34, textAlign: "right" }}>{r.qty}×</b>
-        <span style={{ flex: 1 }}>{r.text}{r.colour ? <span style={{ color: "#5a6a85" }}> · {r.colour}</span> : null}</span>
-      </div>
-    ))}
-  </div>
-) : null);
 
 // ===== fuel: time, driver and location are recorded automatically =====
 function FuelForm({ driver, vans, header, onBack }) {
