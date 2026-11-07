@@ -94,7 +94,7 @@ export async function updateDrops(ids, patch) {
 // ===== run events: when a driver sets off on a run (driver_events) =====
 const LOCAL_EV = "dk-driver-events";
 const localEv = () => { try { return JSON.parse(localStorage.getItem(LOCAL_EV) || "[]"); } catch (e) { return []; } };
-const evFromRow = (r) => ({ id: r.id, at: r.at, driver: r.driver, date: r.run_date, runNo: r.run_no, van: r.van, kind: r.kind, lat: r.lat, lng: r.lng, voidedAt: r.voided_at || "" });
+const evFromRow = (r) => ({ id: r.id, at: r.at, driver: r.driver, date: r.run_date, runNo: r.run_no, van: r.van, kind: r.kind, lat: r.lat, lng: r.lng, voidedAt: r.voided_at || "", itemKey: r.item_key || "" });
 
 export async function loadEvents(dates) {
   const ds = [...new Set([...dates.filter(Boolean), "*"])];
@@ -113,7 +113,7 @@ export async function logEvent(ev) {
   if (storageMode === "supabase") {
     const sb = await getSupabase();
     const { data: { user } } = await sb.auth.getUser();
-    const { error } = await sb.from("driver_events").insert({ id: row.id, user_id: user.id, driver: row.driver || "", run_date: row.date, run_no: String(row.runNo || ""), van: row.van || "", kind: row.kind || "depart", lat: row.lat ?? null, lng: row.lng ?? null, accuracy_m: row.acc ?? null });
+    const { error } = await sb.from("driver_events").insert({ id: row.id, user_id: user.id, driver: row.driver || "", run_date: row.date, run_no: String(row.runNo || ""), van: row.van || "", kind: row.kind || "depart", item_key: row.itemKey || "", lat: row.lat ?? null, lng: row.lng ?? null, accuracy_m: row.acc ?? null });
     if (error) throw error;
     return row;
   }
@@ -233,9 +233,21 @@ export async function deleteDrops(confs) {
   return { photoErr };
 }
 
+// delete load-check ticks and set-offs - optionally just one run: { date, driver, runNo }
+export async function clearLoadChecks(run) {
+  const kinds = ["tick", "untick", "depart"];
+  if (storageMode !== "supabase") {
+    const keep = (e) => !kinds.includes(e.kind) || (run && !(e.date === run.date && String(e.driver || "").toLowerCase() === String(run.driver || "").toLowerCase() && String(e.runNo || "") === String(run.runNo || "")));
+    try { localStorage.setItem(LOCAL_EV, JSON.stringify(localEv().filter(keep))); } catch (e) { /* */ }
+    return;
+  }
+  const sb = await getSupabase();
+  let q = sb.from("driver_events").delete().in("kind", kinds);
+  if (run) q = q.eq("run_date", run.date).ilike("driver", run.driver || "").eq("run_no", String(run.runNo || ""));
+  const { error } = await q;
+  if (error) throw error;
+}
 // every driver's phone forgets its load-check ticks (all days, all runs)
-export async function resetLoadChecks(drivers) {
-  const stamp = Date.now().toString(36);
-  const rows = drivers.map((d, n) => ({ id: "rst" + stamp + n, driver: d, date: "*", runNo: "*", kind: "reset" }));
-  for (const r of rows) await logEvent(r);
+export async function resetLoadChecks() {
+  await clearLoadChecks(null);
 }

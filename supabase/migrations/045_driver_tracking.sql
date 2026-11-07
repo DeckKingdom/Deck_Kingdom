@@ -14,11 +14,13 @@ create table if not exists public.driver_events (
   run_date text not null default '',
   run_no text not null default '',
   van text not null default '',
-  kind text not null default 'depart',  -- depart | back
+  kind text not null default 'depart',  -- depart | tick | untick | reset
   lat double precision,
   lng double precision,
   accuracy_m double precision
 );
+-- load-check ticks are kept here too (kind tick / untick, one row per tap) so the office can clear them
+alter table public.driver_events add column if not exists item_key text not null default '';
 create index if not exists driver_events_date on public.driver_events (run_date);
 alter table public.driver_events enable row level security;
 grant select, insert, update, delete on public.driver_events to authenticated;

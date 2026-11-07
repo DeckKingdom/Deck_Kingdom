@@ -264,7 +264,7 @@ function ToolModal({ tool, rows, drivers, updateCrm, me, onClose, onDone }) {
         const r = await wipeDriverData(drivers);
         setMsg("✓ Cleared " + (r.removed ?? rows.length) + " confirmation" + (r.removed === 1 ? "" : "s") + ", every set-off and " + r.photos + " photo" + (r.photos === 1 ? "" : "s") + "." + (r.photoErr ? " Photos not deleted: " + r.photoErr : "") + " Drivers tap ↻ on their phone to see it.");
       } else {
-        await resetLoadChecks(drivers);
+        await resetLoadChecks();
         setMsg("✓ Done — every driver's load check starts from 0 when they tap ↻ or reopen a day.");
       }
       setDone(true); onDone();
@@ -278,7 +278,7 @@ function ToolModal({ tool, rows, drivers, updateCrm, me, onClose, onDone }) {
       <div style={{ fontSize: 13.5, color: "#5a6a85", fontWeight: 600, lineHeight: 1.5 }}>
         {wipe
           ? <>Removes <b>every</b> drop and pick-up confirmation, set-off time and drop photo. Jobs and pick-ups the drivers closed go back to not delivered / not collected (stock back in, left-overs taken back out, driver-recorded payments taken off), and every driver's load-check ticks clear. Can't be undone. Fuel logs aren't touched.</>
-          : <>Every driver's phone forgets the items they've ticked as on the van, for every day — they tick again before setting off. Confirmed drops and pick-ups aren't touched.</>}
+          : <>Clears every item the drivers have ticked as on the van and every set-off, for every day — each driver has to check and tick the van again before any address opens. Confirmed drops and pick-ups aren't touched.</>}
       </div>
       {wipe && !done && <>
         <span style={{ ...lbl, marginTop: 14 }}>Type CLEAR to confirm</span>

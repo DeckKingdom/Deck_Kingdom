@@ -80,7 +80,7 @@ export default function DriverApp({ me }) {
   }
 
   if (view === "fuel") return <FuelForm driver={driver} vans={(crm && crm.vans) || []} header={header} onBack={() => setView(null)} />;
-  if (view) return <DayRuns key={view + ":" + loads} date={view} stops={byDay[view] || []} crm={crm} header={header} onBack={() => setView(null)} />;
+  if (view) return <DayRuns key={view + ":" + loads} driver={driver} date={view} stops={byDay[view] || []} crm={crm} header={header} onBack={() => setView(null)} />;
 
   // ===== home: 7 day buttons + fuel =====
   return (
@@ -118,15 +118,6 @@ export default function DriverApp({ me }) {
 // until the driver has ticked every item on that run as being on the van. Then stops open one at a
 // time - each needs confirming (ticks + photo) before the next. Parts coming on a supplier pick-up
 // tick themselves once that pick-up is confirmed, and the jobs waiting on them open then.
-const tickKey = (date) => "dk-van-check:" + date;
-const loadTicks = (date) => { try { return JSON.parse(localStorage.getItem(tickKey(date)) || "{}"); } catch (e) { return {}; } };
-const saveTicks = (date, t) => {
-  try {
-    localStorage.setItem(tickKey(date), JSON.stringify(t));
-    // tidy old days
-    Object.keys(localStorage).filter((k) => k.startsWith("dk-van-check:") && k.slice(13) < ymd(addDaysTo(new Date(), -7))).forEach((k) => localStorage.removeItem(k));
-  } catch (e) { /* private window: ticks just last while the page is open */ }
-};
 const maskAddr = (address, postcode) => {
   const a = String(address || "").trim();
   const out = outwardCode(postcode);
@@ -142,14 +133,16 @@ function NavButtons({ dest }) {
 }
 const navBtn = { flex: 1, textAlign: "center", border: "1px solid #185FA5", borderRadius: 10, padding: "11px 8px", fontWeight: 800, fontSize: 15, textDecoration: "none" };
 
-function DayRuns({ date, stops, crm, header, onBack }) {
+function DayRuns({ date, stops, crm, header, onBack, driver }) {
   const d = new Date(date + "T00:00:00");
   const title = d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
   const custById = {}, siteById = {};
   ((crm && crm.customers) || []).forEach((c) => (custById[c.id] = c));
   ((crm && crm.sites) || []).forEach((s) => (siteById[s.id] = s));
-  const [ticks, setTicks] = useState(() => loadTicks(date));
-  const toggle = (k, r) => setTicks((t) => { const n = { ...t }; if (n[k] && n[k] > Math.max(resets[r] || 0, resets["*"] || 0)) delete n[k]; else n[k] = Date.now(); saveTicks(date, n); return n; });
+  // load-check ticks live in the database (driver_events), so the office can clear them and a
+  // phone that can't reach the system stays locked
+  const [evs, setEvs] = useState(null); // null = still loading
+  const [tickErr, setTickErr] = useState("");
   const [drops, setDrops] = useState({}); // dropKey -> confirmation
   const [dropsErr, setDropsErr] = useState("");
   const [completing, setCompleting] = useState(null); // the stop being confirmed
@@ -157,7 +150,7 @@ function DayRuns({ date, stops, crm, header, onBack }) {
   // set-off times per run (driver_events); if that table isn't there yet the set-off step is skipped
   const [departs, setDeparts] = useState({});
   const [resets, setResets] = useState({}); // run -> time the office reset it (older ticks / set-offs don't count)
-  const [evOff, setEvOff] = useState(false);
+  const [evErr, setEvErr] = useState("");
   const [leaving, setLeaving] = useState("");
   useEffect(() => {
     let live = true;
@@ -168,7 +161,8 @@ function DayRuns({ date, stops, crm, header, onBack }) {
       l.filter((e) => e.kind === "depart" && new Date(e.at).getTime() > Math.max(rs[e.runNo || ""] || 0, rs["*"] || 0)).forEach((e) => (m[e.runNo || ""] = e));
       setResets(rs);
       setDeparts(m);
-    }).catch(() => live && setEvOff(true));
+      setEvs(l.filter((e) => e.kind === "tick" || e.kind === "untick"));
+    }).catch((e) => live && setEvErr(/driver_events|item_key|column/.test(String(e && e.message)) ? "The load check isn't switched on yet — ask the office to run driver-app-all.sql." : "Couldn't reach the office system — check your signal and tap ↻."));
     return () => { live = false; };
   }, [date]);
   const setOff = (runKey, van, driver) => {
@@ -176,7 +170,7 @@ function DayRuns({ date, stops, crm, header, onBack }) {
     setLeaving(runKey);
     const go = (pos) => logEvent({ id: uid(), driver, date, runNo: runKey, van: van || "", kind: "depart", lat: pos && pos.coords.latitude, lng: pos && pos.coords.longitude, acc: pos && pos.coords.accuracy })
       .then((e) => setDeparts((m) => ({ ...m, [runKey]: e })))
-      .catch(() => setEvOff(true))
+      .catch(() => setTickErr("Couldn't record setting off — check your signal and tap Set off again."))
       .finally(() => setLeaving(""));
     if (navigator.geolocation) navigator.geolocation.getCurrentPosition(go, () => go(null), { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 });
     else go(null);
@@ -212,12 +206,27 @@ function DayRuns({ date, stops, crm, header, onBack }) {
     invLines(x.obj).forEach(({ l, i }) => { if (!lineSource(x.obj, l)) (need[r] = need[r] || []).push(x.obj.id + ":" + i); });
   });
   const resetAt = (r) => Math.max(resets[r] || 0, resets["*"] || 0);
-  const tk = (k, r) => !!ticks[k] && ticks[k] > resetAt(r);
-  const runState = (r) => { const l = need[r] || []; const n = l.filter((k) => tk(k, r)).length; return { total: l.length, done: n, open: n === l.length }; };
+  // the latest tick / untick for an item since the run was last reset
+  const tk = (k, r) => {
+    let last = null;
+    (evs || []).forEach((e) => { if (e.itemKey === k && new Date(e.at).getTime() > resetAt(r) && (!last || new Date(e.at) >= new Date(last.at))) last = e; });
+    return !!last && last.kind === "tick";
+  };
+  const toggle = (k, r) => {
+    if (!evs) return;
+    const ev = { id: uid(), driver, date, runNo: r, kind: tk(k, r) ? "untick" : "tick", itemKey: k };
+    setTickErr("");
+    setEvs((l) => [...(l || []), { ...ev, at: new Date().toISOString() }]);
+    logEvent(ev).catch(() => {
+      setEvs((l) => (l || []).filter((e) => e.id !== ev.id));
+      setTickErr("Couldn't save that tick — check your signal and tap it again.");
+    });
+  };
+  const runState = (r) => { const l = need[r] || []; const n = evs ? l.filter((k) => tk(k, r)).length : 0; return { total: l.length, done: n, open: !!evs && !evErr && n === l.length }; };
   // stops open one at a time; a drop waiting on a pick-up is skipped until that pick-up is checked
   const byRun = {};
   driven.forEach((x) => (byRun[x.obj.runNo || ""] = byRun[x.obj.runNo || ""] || []).push(x));
-  const setOffDone = (r) => evOff || !!departs[r] || (byRun[r] || []).some(done);
+  const setOffDone = (r) => !!departs[r] || (byRun[r] || []).some((x) => drops[sid(x)]);
   const currentOf = (r) => (runState(r).open && setOffDone(r) ? (byRun[r] || []).find((x) => !done(x) && !waitingOn(x).length) || null : null);
   const stopName = (x) => (x.kind === "col" ? "the " + (x.obj.supplier || "supplier") + " pick-up" : "drop " + (x.obj.dropNo || "") + " (" + ((custById[x.obj.customerId] || {}).name || "#" + x.obj.invNo) + ")");
 
@@ -259,6 +268,7 @@ function DayRuns({ date, stops, crm, header, onBack }) {
     <div style={page}>
       {header(title, onBack)}
       <div style={{ padding: 14 }}>
+        {(evErr || tickErr) && <div style={{ ...cardS, borderColor: "#f4b9c1", background: "#fdf3f4", color: RED, fontWeight: 700, fontSize: 13.5 }}>🔒 {evErr || tickErr}</div>}
         {dropsErr && <div style={{ ...cardS, borderColor: "#f4d78f", background: "#fff8e6", color: "#6b5305", fontWeight: 700, fontSize: 13.5 }}>{dropsErr}</div>}
         {stops.length === 0 && <div style={{ ...cardS, textAlign: "center", color: "#8593a8", fontWeight: 700 }}>Nothing planned for you on {prettyDate(date)}.</div>}
         {stops.map((x, n) => {

@@ -5,7 +5,7 @@
 // 2. If something was left over, or the driver wrote a note, an alert pops up on every office
 //    screen until someone dismisses it or raises a follow-up job.
 import { useEffect, useRef, useState } from "react";
-import { loadDrops, dropLeft, dropNeedsLook, payMissed, updateDrops, dropPhotoUrl, voidEvents, logEvent } from "../../data/drops.js";
+import { loadDrops, dropLeft, dropNeedsLook, payMissed, updateDrops, dropPhotoUrl, voidEvents, logEvent, clearLoadChecks } from "../../data/drops.js";
 import { applyInvoiceStockDeduction, explodeInvoiceLines, blankMovement, today, gbp } from "../../lib/crmCore.js";
 import { addDays, NAVY, GOLD, RED, prettyDateTime } from "../../lib/core.js";
 import { Modal, btn, goldBtn } from "./ui.jsx";
@@ -62,7 +62,7 @@ export async function reopenConfirmations(updateCrm, confs, me, opts = {}) {
 export async function resetRun(updateCrm, run, events, me) {
   await reopenConfirmations(updateCrm, run.confirmed.map((x) => x.conf), me);
   const deps = (events || []).filter((e) => e.kind === "depart" && e.date === run.date && String(e.driver || "").toLowerCase() === String(run.driver || "").toLowerCase() && String(e.runNo || "") === String(run.runNo || ""));
-  await voidEvents(deps.map((e) => e.id));
+  await clearLoadChecks({ date: run.date, driver: run.driver, runNo: run.runNo }).catch(() => voidEvents(deps.map((e) => e.id)));
   await logEvent({ id: Math.random().toString(36).slice(2, 10), driver: run.driver, date: run.date, runNo: run.runNo, van: run.van || "", kind: "reset" });
 }
 
