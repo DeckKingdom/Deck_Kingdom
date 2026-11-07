@@ -45,6 +45,7 @@ import UsersScreen from "./crm/UsersScreen.jsx";
 import StockScreen from "./crm/StockScreen.jsx";
 import CollectionsScreen from "./crm/CollectionsScreen.jsx";
 import VansScreen from "./crm/VansScreen.jsx";
+import TrackingScreen from "./crm/TrackingScreen.jsx";
 import { Icon, SuggestInput, abtn, DateInput, CalendarPop, selectAllProps } from "./crm/ui.jsx";
 import { EmailSettings } from "./crm/EmailPanels.jsx";
 import { emailReady } from "../data/email.js";
@@ -343,7 +344,7 @@ export default function ImportPlanner() {
   const [remindersClosed, setRemindersClosed] = useState(false); // closed for this visit
 
   useEffect(() => {
-    if (CRM_TABS.includes(tab) || ["home", "tasks", "purchases", "suppliers", "activity", "stock", "collections", "vans", "products"].includes(tab)) setCrmOn(true);
+    if (CRM_TABS.includes(tab) || ["home", "tasks", "purchases", "suppliers", "activity", "stock", "collections", "vans", "tracking", "products"].includes(tab)) setCrmOn(true);
   }, [tab]);
 
   const me = storageMode === "supabase" ? getSessionEmail() || "" : "";
@@ -1428,6 +1429,13 @@ export default function ImportPlanner() {
       {emailSettings && <EmailSettings me={me} onClose={() => setEmailSettings(false)} />}
       {tab === "activity" && <ActivityScreen crm={crm} data={data} storageMode={storageMode} />}
       {tab === "users" && access.system && storageMode === "supabase" && <UsersScreen me={me} />}
+
+      {tab === "tracking" && access.canTab("tracking") &&
+        (!crm ? (
+          <div style={{ padding: 40, textAlign: "center", color: "#5a6a85", fontWeight: 600 }}>Loading driver tracking…</div>
+        ) : (
+          <TrackingScreen crm={crm} updateCrm={updateCrm} openInvoice={openInvoice} openCollection={openCollection} canSettings={access.system} />
+        ))}
 
       {tab === "vans" &&
         (!crm ? (

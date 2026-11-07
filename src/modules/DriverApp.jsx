@@ -7,7 +7,7 @@ import { signOut } from "../data/auth.js";
 import { normaliseCrm, isVoidInvoice, isCollectionJob, invoiceTotals, isPaid, gbp, partKey } from "../lib/crmCore.js";
 import { NAVY, GOLD, RED, uid, prettyDate, prettyDateTime } from "../lib/core.js";
 import { Icon } from "./crm/ui.jsx";
-import { loadDrops, saveDrop, shrinkPhoto } from "../data/drops.js";
+import { loadDrops, saveDrop, shrinkPhoto, loadEvents, logEvent } from "../data/drops.js";
 import { outwardCode, tidyPostcode, googleNavHref, appleNavHref, isApple } from "../lib/addressCheck.js";
 
 const GREEN = "#28713e";
@@ -152,6 +152,30 @@ function DayRuns({ date, stops, crm, header, onBack }) {
   const [dropsErr, setDropsErr] = useState("");
   const [completing, setCompleting] = useState(null); // the stop being confirmed
   const [showDone, setShowDone] = useState(false);
+  // set-off times per run (driver_events); if that table isn't there yet the set-off step is skipped
+  const [departs, setDeparts] = useState({});
+  const [evOff, setEvOff] = useState(false);
+  const [leaving, setLeaving] = useState("");
+  useEffect(() => {
+    let live = true;
+    loadEvents([date]).then((l) => {
+      if (!live) return;
+      const m = {};
+      l.filter((e) => e.kind === "depart").forEach((e) => (m[e.runNo || ""] = e));
+      setDeparts(m);
+    }).catch(() => live && setEvOff(true));
+    return () => { live = false; };
+  }, [date]);
+  const setOff = (runKey, van, driver) => {
+    if (leaving) return;
+    setLeaving(runKey);
+    const go = (pos) => logEvent({ id: uid(), driver, date, runNo: runKey, van: van || "", kind: "depart", lat: pos && pos.coords.latitude, lng: pos && pos.coords.longitude, acc: pos && pos.coords.accuracy })
+      .then((e) => setDeparts((m) => ({ ...m, [runKey]: e })))
+      .catch(() => setEvOff(true))
+      .finally(() => setLeaving(""));
+    if (navigator.geolocation) navigator.geolocation.getCurrentPosition(go, () => go(null), { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 });
+    else go(null);
+  };
   useEffect(() => {
     let live = true;
     loadDrops([date]).then((m) => live && setDrops(m)).catch((e) => live && setDropsErr(/drop_confirmations|collection_id/.test(String(e && e.message)) ? "Drop confirmations aren't switched on yet — ask the office to run drop-confirmations.sql." : "Couldn't check which drops are done — tap ↻ to try again."));
@@ -186,7 +210,8 @@ function DayRuns({ date, stops, crm, header, onBack }) {
   // stops open one at a time; a drop waiting on a pick-up is skipped until that pick-up is checked
   const byRun = {};
   driven.forEach((x) => (byRun[x.obj.runNo || ""] = byRun[x.obj.runNo || ""] || []).push(x));
-  const currentOf = (r) => (runState(r).open ? (byRun[r] || []).find((x) => !done(x) && !waitingOn(x).length) || null : null);
+  const setOffDone = (r) => evOff || !!departs[r] || (byRun[r] || []).some(done);
+  const currentOf = (r) => (runState(r).open && setOffDone(r) ? (byRun[r] || []).find((x) => !done(x) && !waitingOn(x).length) || null : null);
   const stopName = (x) => (x.kind === "col" ? "the " + (x.obj.supplier || "supplier") + " pick-up" : "drop " + (x.obj.dropNo || "") + " (" + ((custById[x.obj.customerId] || {}).name || "#" + x.obj.invNo) + ")");
 
   if (completing) {
@@ -240,14 +265,23 @@ function DayRuns({ date, stops, crm, header, onBack }) {
               <div style={{ fontSize: 12, fontWeight: 800, color: "#5a6a85", letterSpacing: 0.5, textTransform: "uppercase", margin: "0 2px 6px" }}>
                 {o.runNo ? "Run " + o.runNo : "No run number"}{o.van ? " · " + o.van : ""}
               </div>
-              {rs.open ? (
+              {rs.open && !setOffDone(runKey) ? (
+                <div style={{ background: "#f1faf4", border: "1px solid #bfe3ca", borderRadius: 10, padding: "10px 12px" }}>
+                  <div style={{ color: GREEN, fontSize: 13.5, fontWeight: 800 }}>✓ {rs.total ? "Everything's on the van" : "Ready to go"}</div>
+                  <button type="button" onClick={() => setOff(runKey, o.van, o.driver)} disabled={!!leaving}
+                    style={{ marginTop: 8, width: "100%", border: "none", borderRadius: 12, padding: 14, fontFamily: "inherit", fontWeight: 800, fontSize: 17, background: NAVY, color: "#fff", cursor: "pointer" }}>
+                    {leaving === runKey ? "Setting off…" : "▶ Set off on " + (o.runNo ? "run " + o.runNo : "this run")}
+                  </button>
+                  <div style={{ marginTop: 6, fontSize: 12, fontWeight: 600, color: "#5a6a85", textAlign: "center" }}>Tap as you leave the yard — your first stop opens.</div>
+                </div>
+              ) : rs.open ? (
                 <div style={{ background: "#f1faf4", border: "1px solid #bfe3ca", color: GREEN, borderRadius: 10, padding: "9px 12px", fontSize: 13.5, fontWeight: 800 }}>
-                  ✓ {rs.total ? "Everything's on the van — " : ""}{(byRun[runKey] || []).every(done) ? "all stops confirmed" : "stops open one at a time"}
+                  ✓ {departs[runKey] ? "Set off " + new Date(departs[runKey].at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) + " — " : rs.total ? "Everything's on the van — " : ""}{(byRun[runKey] || []).every(done) ? "all stops confirmed" : "stops open one at a time"}
                 </div>
               ) : (
                 <div style={{ background: "#fff8e6", border: "1px solid #f4d78f", color: "#6b5305", borderRadius: 10, padding: "9px 12px", fontSize: 13.5, fontWeight: 700 }}>
                   <div style={{ fontWeight: 800 }}>🔒 Load check: {rs.done} of {rs.total} ticked</div>
-                  <div style={{ marginTop: 3, fontWeight: 600 }}>Tick every item as you check it's on the van. Parts coming on a pick-up tick themselves once it's collected. Your first stop opens once everything's ticked.</div>
+                  <div style={{ marginTop: 3, fontWeight: 600 }}>Tick every item as you check it's on the van. Parts coming on a pick-up tick themselves once it's collected. Then tap Set off to open your first stop.</div>
                   <div style={{ height: 6, background: "#f4e3b5", borderRadius: 4, marginTop: 7, overflow: "hidden" }}><div style={{ height: "100%", width: (100 * rs.done / Math.max(1, rs.total)) + "%", background: GOLD }} /></div>
                 </div>
               )}
