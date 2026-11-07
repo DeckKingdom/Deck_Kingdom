@@ -149,7 +149,7 @@ function DayRuns({ date, stops, crm, header, onBack }) {
   ((crm && crm.customers) || []).forEach((c) => (custById[c.id] = c));
   ((crm && crm.sites) || []).forEach((s) => (siteById[s.id] = s));
   const [ticks, setTicks] = useState(() => loadTicks(date));
-  const toggle = (k, r) => setTicks((t) => { const n = { ...t }; if (n[k] && n[k] > (resets[r] || 0)) delete n[k]; else n[k] = Date.now(); saveTicks(date, n); return n; });
+  const toggle = (k, r) => setTicks((t) => { const n = { ...t }; if (n[k] && n[k] > Math.max(resets[r] || 0, resets["*"] || 0)) delete n[k]; else n[k] = Date.now(); saveTicks(date, n); return n; });
   const [drops, setDrops] = useState({}); // dropKey -> confirmation
   const [dropsErr, setDropsErr] = useState("");
   const [completing, setCompleting] = useState(null); // the stop being confirmed
@@ -165,7 +165,7 @@ function DayRuns({ date, stops, crm, header, onBack }) {
       if (!live) return;
       const rs = {}, m = {};
       l.filter((e) => e.kind === "reset").forEach((e) => { const t = new Date(e.at).getTime(); if (!rs[e.runNo || ""] || t > rs[e.runNo || ""]) rs[e.runNo || ""] = t; });
-      l.filter((e) => e.kind === "depart" && new Date(e.at).getTime() > (rs[e.runNo || ""] || 0)).forEach((e) => (m[e.runNo || ""] = e));
+      l.filter((e) => e.kind === "depart" && new Date(e.at).getTime() > Math.max(rs[e.runNo || ""] || 0, rs["*"] || 0)).forEach((e) => (m[e.runNo || ""] = e));
       setResets(rs);
       setDeparts(m);
     }).catch(() => live && setEvOff(true));
@@ -211,7 +211,8 @@ function DayRuns({ date, stops, crm, header, onBack }) {
     const r = x.obj.runNo || "";
     invLines(x.obj).forEach(({ l, i }) => { if (!lineSource(x.obj, l)) (need[r] = need[r] || []).push(x.obj.id + ":" + i); });
   });
-  const tk = (k, r) => !!ticks[k] && ticks[k] > (resets[r] || 0);
+  const resetAt = (r) => Math.max(resets[r] || 0, resets["*"] || 0);
+  const tk = (k, r) => !!ticks[k] && ticks[k] > resetAt(r);
   const runState = (r) => { const l = need[r] || []; const n = l.filter((k) => tk(k, r)).length; return { total: l.length, done: n, open: n === l.length }; };
   // stops open one at a time; a drop waiting on a pick-up is skipped until that pick-up is checked
   const byRun = {};

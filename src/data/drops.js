@@ -97,7 +97,7 @@ const localEv = () => { try { return JSON.parse(localStorage.getItem(LOCAL_EV) |
 const evFromRow = (r) => ({ id: r.id, at: r.at, driver: r.driver, date: r.run_date, runNo: r.run_no, van: r.van, kind: r.kind, lat: r.lat, lng: r.lng, voidedAt: r.voided_at || "" });
 
 export async function loadEvents(dates) {
-  const ds = [...new Set(dates.filter(Boolean))];
+  const ds = [...new Set([...dates.filter(Boolean), "*"])];
   if (!ds.length) return [];
   if (storageMode === "supabase") {
     const sb = await getSupabase();
@@ -159,4 +159,50 @@ export async function voidEvents(ids) {
     return;
   }
   try { localStorage.setItem(LOCAL_EV, JSON.stringify(localEv().map((e) => (ids.includes(e.id) ? { ...e, voidedAt: at } : e)))); } catch (e) { /* */ }
+}
+
+// ===== admin: wipe all driver completion data (testing) =====
+export async function loadAllDrops() {
+  if (storageMode === "supabase") {
+    const sb = await getSupabase();
+    const { data, error } = await sb.from("drop_confirmations").select("*").limit(5000);
+    if (error) throw error;
+    return (data || []).map(fromRow);
+  }
+  return localAll();
+}
+// removes every confirmation, set-off and drop photo; drivers' phones get a reset so their load ticks clear
+export async function wipeDriverData(drivers) {
+  const stamp = Date.now().toString(36);
+  if (storageMode !== "supabase") {
+    try {
+      localStorage.removeItem(LOCAL);
+      localStorage.setItem(LOCAL_EV, JSON.stringify(drivers.map((d, n) => ({ id: "wipe" + stamp + n, driver: d, date: "*", runNo: "*", kind: "reset", at: new Date().toISOString() }))));
+    } catch (e) { /* */ }
+    return { photos: 0 };
+  }
+  const sb = await getSupabase();
+  // photos: one folder per driver login
+  let photos = 0;
+  const { data: folders } = await sb.storage.from("drop-photos").list("", { limit: 1000 });
+  for (const f of folders || []) {
+    const { data: files } = await sb.storage.from("drop-photos").list(f.name, { limit: 1000 });
+    const paths = (files || []).map((x) => f.name + "/" + x.name);
+    for (let i = 0; i < paths.length; i += 100) {
+      const { error } = await sb.storage.from("drop-photos").remove(paths.slice(i, i + 100));
+      if (error) throw new Error("photos: " + error.message);
+      photos += Math.min(100, paths.length - i);
+    }
+  }
+  let r = await sb.from("drop_confirmations").delete().neq("id", "");
+  if (r.error) throw new Error("confirmations: " + r.error.message);
+  r = await sb.from("driver_events").delete().neq("id", "");
+  if (r.error) throw new Error("set-offs: " + r.error.message);
+  // tell every driver's phone to forget its load-check ticks
+  const { data: { user } } = await sb.auth.getUser();
+  if (drivers.length) {
+    r = await sb.from("driver_events").insert(drivers.map((d, n) => ({ id: "wipe" + stamp + n, user_id: user.id, driver: d, run_date: "*", run_no: "*", kind: "reset" })));
+    if (r.error) throw new Error("reset: " + r.error.message);
+  }
+  return { photos };
 }

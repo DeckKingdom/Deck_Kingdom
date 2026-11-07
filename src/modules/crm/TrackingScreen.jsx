@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { NAVY, GOLD, RED } from "../../lib/core.js";
 import { gbp, DRIVERS } from "../../lib/crmCore.js";
 import { ListHero, HeroStat, Icon, Chip, card, sect, lbl, inp, btn, goldBtn, Modal } from "./ui.jsx";
-import { dropLeft, dropPhotoUrl } from "../../data/drops.js";
+import { dropLeft, dropPhotoUrl, loadAllDrops, wipeDriverData } from "../../data/drops.js";
 import { loadTracking, workOut } from "../../data/trackingData.js";
 import { refreshFuelPrice } from "../../data/fleetApi.js";
 import { reopenConfirmations, resetRun } from "./DropSync.jsx";
@@ -44,6 +44,13 @@ export default function TrackingScreen({ crm, updateCrm, openInvoice, openCollec
   const [busy, setBusy] = useState(false);
   const reopenStop = (x) => setAsk({ title: "Reopen " + x.name + " " + x.ref + "?", text: "It goes back to not " + (x.kind === "col" ? "collected" : "delivered") + (x.kind === "col" ? "" : " (stock back in, and any payment the driver recorded taken off)") + " and opens again on the driver's phone to confirm again. The photo and times stay on record but drop out of tracking.",
     go: () => reopenConfirmations(updateCrm, [x.conf], me) });
+  const [wipe, setWipe] = useState(null); // typed confirmation for clearing everything
+  const doWipe = async () => {
+    const all = await loadAllDrops();
+    await reopenConfirmations(updateCrm, all.filter((r) => !r.voidedAt), me); // jobs back to not delivered first
+    const names = [...new Set([...DRIVERS, ...all.map((r) => r.driver).filter(Boolean)])];
+    return wipeDriverData(names);
+  };
   const resetOne = (r) => setAsk({ title: "Reset " + r.driver + "'s run " + (r.runNo || "") + " on " + dayLabel(r.date) + "?", text: "Every stop on the run is reopened (" + r.confirmed.length + " confirmed), the set-off is cleared, and the driver's phone forgets the load-check ticks — they start the run again from the load check. Good for testing or when a run was done wrong.",
     go: () => resetRun(updateCrm, r, data.events, me) });
   const [from, to] = rangeOf(range, custom);
@@ -75,7 +82,8 @@ export default function TrackingScreen({ crm, updateCrm, openInvoice, openCollec
   return (
     <div style={{ maxWidth: 1320, margin: "0 auto", padding: "18px 18px 40px" }}>
       <ListHero title="Driver tracking" sub={dayLabel(from) + " – " + dayLabel(to) + " · set-off to back at " + s.yard + " · diesel at that day's supermarket price" + (data && Object.keys(data.prices || {}).length ? "" : " (none published yet — " + gbp(Number(s.dieselPerLitre)) + "/L used)") + " · " + s.mpg + "mpg (Sprinter " + s.sprinterMpg + ") · " + gbp(Number(s.hourly)) + "/hr" + (result && result.runs.length ? (result.runs.every((r) => r.roadMiles) ? " · Google road miles" : " · straight-line miles ×" + s.roadFactor + " where Google isn't connected") : "")}
-        action={canSettings && <button onClick={() => setShowSettings(true)} title="Fuel price, mpg and driver rate" style={{ ...btn, background: "transparent", border: "1px solid #3a4f78", color: "#fff", display: "inline-flex", alignItems: "center", gap: 6 }}><Icon name="gear" stroke="#fff" /> Rates</button>}>
+        action={canSettings && <span style={{ display: "inline-flex", gap: 8 }}><button onClick={() => setWipe({ text: "", busy: false, msg: "" })} title="Remove every drop confirmation, set-off and drop photo — for clearing test data"
+          style={{ ...btn, background: "transparent", border: "1px solid #7a3b48", color: "#f3b3bf" }}>Clear driver data</button><button onClick={() => setShowSettings(true)} title="Fuel price, mpg and driver rate" style={{ ...btn, background: "transparent", border: "1px solid #3a4f78", color: "#fff", display: "inline-flex", alignItems: "center", gap: 6 }}><Icon name="gear" stroke="#fff" /> Rates</button></span>}>
         <HeroStat label="Drops" value={tot ? tot.drops : "…"} sub={tot ? tot.runs + " run" + (tot.runs === 1 ? "" : "s") : ""} />
         <HeroStat label="Miles" value={tot ? Math.round(tot.miles).toLocaleString("en-GB") : "…"} sub={tot ? Math.round(tot.hours * 10) / 10 + " driver hours" : ""} />
         <HeroStat label="Fuel" value={tot ? gbp(tot.fuel) : "…"} sub="estimated from the miles" />
@@ -224,6 +232,29 @@ export default function TrackingScreen({ crm, updateCrm, openInvoice, openCollec
               onClick={async () => { setBusy(true); try { await ask.go(); } catch (e) { setErr("Couldn't reopen — " + ((e && e.message) || e) + ". Has reopen-drops.sql been run?"); } setBusy(false); setAsk(null); setReload((n) => n + 1); }}>
               {busy ? "Working…" : "Yes, reopen"}
             </button>
+          </div>
+        </Modal>
+      )}
+      {wipe && (
+        <Modal title="Clear all driver completion data?" onClose={() => !wipe.busy && setWipe(null)} width={520}>
+          <div style={{ fontSize: 13.5, color: "#5a6a85", fontWeight: 600, lineHeight: 1.5 }}>
+            This removes <b>every</b> drop and pick-up confirmation, set-off time and drop photo. Jobs and pick-ups the drivers closed go back to not delivered / not collected (stock back in, driver-recorded payments taken off), and every driver's phone clears its load-check ticks. It can't be undone. Fuel logs aren't touched.
+          </div>
+          <span style={{ ...lbl, marginTop: 14 }}>Type CLEAR to confirm</span>
+          <input style={inp} value={wipe.text} autoFocus onChange={(e) => setWipe({ ...wipe, text: e.target.value })} />
+          {wipe.msg && <div style={{ marginTop: 10, fontSize: 13, fontWeight: 700, color: wipe.done ? "#28713e" : RED }}>{wipe.msg}</div>}
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
+            <button style={btn} disabled={wipe.busy} onClick={() => setWipe(null)}>{wipe.done ? "Close" : "Cancel"}</button>
+            {!wipe.done && (
+              <button style={{ ...btn, background: RED, borderColor: RED, color: "#fff", opacity: wipe.text.trim().toUpperCase() === "CLEAR" ? 1 : 0.4 }} disabled={wipe.busy || wipe.text.trim().toUpperCase() !== "CLEAR"}
+                onClick={async () => {
+                  setWipe((w) => ({ ...w, busy: true, msg: "Clearing…" }));
+                  try { const r = await doWipe(); setWipe((w) => ({ ...w, busy: false, done: true, msg: "✓ Cleared — " + r.photos + " photo" + (r.photos === 1 ? "" : "s") + " removed." })); setReload((n) => n + 1); }
+                  catch (e) { setWipe((w) => ({ ...w, busy: false, msg: "Stopped — " + ((e && e.message) || e) + (/photo|policy|permission/i.test(String(e && e.message)) ? " (run clear-driver-data.sql)" : "") })); }
+                }}>
+                {wipe.busy ? "Clearing…" : "Clear everything"}
+              </button>
+            )}
           </div>
         </Modal>
       )}
