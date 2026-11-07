@@ -301,15 +301,23 @@ export default function InvoicesScreen({ headerH = 0, openProduct, money = true,
   const saveNewSite = () => {
     const d = { ...siteNew, postcode: tidyPostcode(siteNew.postcode) || siteNew.postcode };
     if (!(d.address || d.name || "").trim()) return;
+    const { _edit, ...clean } = d;
     const commit = () => {
       setInv((x, c) => {
-        c.sites.push(d);
-        c.numbering.site = (Number(d.siteNo) || 0) + 1;
-        x.siteId = d.id;
+        if (_edit) {
+          const t = c.sites.find((y) => y.id === clean.id);
+          if (t) Object.assign(t, clean);
+        } else {
+          c.sites.push(clean);
+          c.numbering.site = (Number(clean.siteNo) || 0) + 1;
+        }
+        x.siteId = clean.id;
       });
       setSiteNew(null);
     };
-    if (d.address || d.postcode) addrGuard.guard(d, commit); else commit();
+    const was = _edit ? crm.sites.find((y) => y.id === clean.id) : null;
+    const moved = !was || [was.address, was.town, was.postcode].join("|") !== [clean.address, clean.town, clean.postcode].join("|");
+    if (moved && (clean.address || clean.postcode)) addrGuard.guard(clean, commit); else commit();
   };
   const cust = custById[inv.customerId];
   const sites = crm.sites.filter((s) => s.customerId === inv.customerId);
@@ -542,6 +550,10 @@ export default function InvoicesScreen({ headerH = 0, openProduct, money = true,
                   </option>
                 ))}
               </select>
+              <button style={{ ...abtn, width: 36, height: 36, flex: "none", opacity: site ? 1 : 0.4 }} disabled={!site} title={site ? "Edit this site's details" : "Pick a site to edit it"}
+                onClick={() => setSiteNew({ ...site, _edit: true })}>
+                <Icon name="pen" size={13} />
+              </button>
               <button style={{ ...abtn, width: 36, height: 36, flex: "none", opacity: cust ? 1 : 0.4 }} disabled={!cust} title="Add a new delivery site for this customer"
                 onClick={() => setSiteNew({ ...blankSite(cust.id), siteNo: nextNumber(crm.sites, "siteNo", crm.numbering.site) })}>
                 <Icon name="plus" />
@@ -555,7 +567,7 @@ export default function InvoicesScreen({ headerH = 0, openProduct, money = true,
       </div>
 
       {siteNew && cust && (
-        <Modal title={<span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>New site for {cust.name || "customer"} <Chip style={{ fontSize: 13 }}>Site #{siteNew.siteNo || "—"}</Chip></span>} onClose={() => setSiteNew(null)}>
+        <Modal title={<span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>{siteNew._edit ? "Edit site" : "New site for " + (cust.name || "customer")} <Chip style={{ fontSize: 13 }}>Site #{siteNew.siteNo || "—"}</Chip></span>} onClose={() => setSiteNew(null)}>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12 }}>
             {[["name", "Site name", { gridColumn: "1 / -1" }], ["address", "Address"], ["town", "Town"], ["postcode", "Post code"], ["contact", "Contact name"], ["mobile", "Mobile"], ["landline", "Landline"]].map(([k, l, st]) => (
               <div key={k} style={st}>
@@ -572,7 +584,7 @@ export default function InvoicesScreen({ headerH = 0, openProduct, money = true,
             <button style={btn} onClick={() => setSiteNew({ ...siteNew, address: cust.address || "", town: cust.town || "", postcode: cust.postcode || "", contact: siteNew.contact || cust.contact || "", mobile: siteNew.mobile || cust.mobile || "", landline: siteNew.landline || cust.landline || "" })}>Copy from account</button>
             <span style={{ flex: 1 }} />
             <button style={btn} onClick={() => setSiteNew(null)}>Cancel</button>
-            <button className="dk-save" style={{ ...goldBtn, opacity: (siteNew.address || siteNew.name || "").trim() ? 1 : 0.5 }} onClick={saveNewSite}>{addrGuard.busy ? "Checking address…" : "Save & use for this job"}</button>
+            <button className="dk-save" style={{ ...goldBtn, opacity: (siteNew.address || siteNew.name || "").trim() ? 1 : 0.5 }} onClick={saveNewSite}>{addrGuard.busy ? "Checking address…" : siteNew._edit ? "Save" : "Save & use for this job"}</button>
           </div>
         </Modal>
       )}
