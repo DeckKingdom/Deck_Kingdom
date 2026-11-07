@@ -5,8 +5,8 @@
 // 2. If something was left over, or the driver wrote a note, an alert pops up on every office
 //    screen until someone dismisses it or raises a follow-up job.
 import { useEffect, useRef, useState } from "react";
-import { loadDrops, dropLeft, dropNeedsLook, updateDrops, dropPhotoUrl } from "../../data/drops.js";
-import { applyInvoiceStockDeduction, explodeInvoiceLines, blankMovement, today } from "../../lib/crmCore.js";
+import { loadDrops, dropLeft, dropNeedsLook, payMissed, updateDrops, dropPhotoUrl } from "../../data/drops.js";
+import { applyInvoiceStockDeduction, explodeInvoiceLines, blankMovement, today, gbp } from "../../lib/crmCore.js";
 import { addDays, NAVY, GOLD, RED, prettyDateTime } from "../../lib/core.js";
 import { Modal, btn, goldBtn } from "./ui.jsx";
 
@@ -54,6 +54,11 @@ export function useDropSync({ crm, updateCrm, me, enabled, alertsOn }) {
                 if (col && !col.collected) col.collected = true;
               } else {
                 const inv = (c.invoices || []).find((x) => x.id === r.invoiceId);
+                // payment taken on the doorstep: the job shows paid, with how
+                if (inv && r.payment && r.payment.collected && !inv.paymentDate) {
+                  inv.paymentDate = String(r.at || new Date().toISOString()).slice(0, 10);
+                  if (r.payment.method) inv.paymentType = r.payment.method;
+                }
                 if (inv && !inv.deliveryCompleted) {
                   inv.deliveryCompleted = true;
                   const actor = me || r.driver || "driver";
@@ -101,9 +106,9 @@ export function DropAlert({ alerts, crm, onDismiss, onFollowUp, onOpenJob, onOpe
   const left = dropLeft(r);
   const showPhoto = () => { if (!photo[r.id]) dropPhotoUrl(r.photoPath).then((u) => setPhoto((p) => ({ ...p, [r.id]: u }))).catch(() => setPhoto((p) => ({ ...p, [r.id]: "x" }))); };
   const title = pickup ? "Pick-up " + (left.length ? "short" : "note") + " · COL-" + (col ? col.collectionNo : "") + (col && col.supplier ? " " + col.supplier : "")
-    : "Job closed " + (left.length ? "with items left over" : "with a driver's note") + " · #" + (r.invNo || (inv && inv.invNo) || "");
+    : "Job closed " + (left.length ? "with items left over" : payMissed(r) ? "— payment not collected" : "with a driver's note") + " · #" + (r.invNo || (inv && inv.invNo) || "");
   return (
-    <Modal title={<span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}><span style={{ fontSize: 19 }}>{left.length ? "⚠️" : "📝"}</span>{title}</span>} onClose={() => onDismiss(r)} width={540} z={120}>
+    <Modal title={<span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}><span style={{ fontSize: 19 }}>{left.length || payMissed(r) ? "⚠️" : "📝"}</span>{title}</span>} onClose={() => onDismiss(r)} width={540} z={120}>
       <div style={{ fontSize: 13, fontWeight: 700, color: "#5a6a85" }}>
         {pickup ? (col ? col.supplier : "Supplier") : (cust ? cust.name : "Customer")} · {r.driver || "Driver"} · {prettyDateTime(r.at)}
         {alerts.length > 1 && <span style={{ float: "right", color: "#8593a8" }}>1 of {alerts.length}</span>}
@@ -121,6 +126,11 @@ export function DropAlert({ alerts, crm, onDismiss, onFollowUp, onOpenJob, onOpe
           {!pickup && <div style={{ fontSize: 11.5, color: "#8593a8", fontWeight: 600, marginTop: 4 }}>What wasn't delivered has gone back into stock.</div>}
         </div>
       )}
+      {!pickup && r.payment && Number(r.payment.owed) > 0 && (
+        <div style={{ marginTop: 10, borderRadius: 10, padding: "8px 12px", fontSize: 13.5, fontWeight: 800, border: "1px solid " + (r.payment.collected ? "#bfe3ca" : "#f4b9c1"), background: r.payment.collected ? "#f1faf4" : "#fdf3f4", color: r.payment.collected ? "#28713e" : "#9b1c2e" }}>
+          {r.payment.collected ? "✓ Payment of " + gbp(Number(r.payment.owed)) + " collected" + (r.payment.method ? " by " + r.payment.method.toLowerCase() : "") : "✗ Payment of " + gbp(Number(r.payment.owed)) + " NOT collected — still owed"}
+        </div>
+      )}
       {String(r.notes || "").trim() && (
         <div style={{ marginTop: 10, background: "#fff8e6", border: "1px solid #f4d78f", borderRadius: 10, padding: "8px 12px", fontSize: 13.5, fontWeight: 600, color: "#6b5305" }}>
           <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 3 }}>Driver's note</div>
@@ -136,7 +146,7 @@ export function DropAlert({ alerts, crm, onDismiss, onFollowUp, onOpenJob, onOpe
           : (inv && <button style={btn} onClick={() => onOpenJob(inv.id)}>Open job</button>)}
         <span style={{ flex: 1 }} />
         <button style={btn} onClick={() => onDismiss(r)}>Dismiss</button>
-        {!pickup && inv && <button style={{ ...goldBtn, color: NAVY }} onClick={() => onFollowUp(r, inv, left)}>Raise follow-up job</button>}
+        {!pickup && inv && (left.length > 0 || String(r.notes || "").trim()) && <button style={{ ...goldBtn, color: NAVY }} onClick={() => onFollowUp(r, inv, left)}>Raise follow-up job</button>}
       </div>
     </Modal>
   );

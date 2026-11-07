@@ -5,7 +5,7 @@ import { getSupabase } from "./supabaseClient.js";
 
 const LOCAL = "dk-drop-confirmations";
 const localAll = () => { try { return JSON.parse(localStorage.getItem(LOCAL) || "[]"); } catch (e) { return []; } };
-const fromRow = (r) => ({ id: r.id, at: r.at, driver: r.driver, kind: r.kind || "job", invoiceId: r.invoice_id || "", collectionId: r.collection_id || "", invNo: r.inv_no, date: r.delivery_date, items: r.items || [], photoPath: r.photo_path, notes: r.notes, lat: r.lat, lng: r.lng, appliedAt: r.applied_at || "", alertState: r.alert_state || "", alertBy: r.alert_by || "", followupInvNo: r.followup_inv_no || "" });
+const fromRow = (r) => ({ id: r.id, at: r.at, driver: r.driver, kind: r.kind || "job", invoiceId: r.invoice_id || "", collectionId: r.collection_id || "", invNo: r.inv_no, date: r.delivery_date, items: r.items || [], photoPath: r.photo_path, notes: r.notes, lat: r.lat, lng: r.lng, appliedAt: r.applied_at || "", alertState: r.alert_state || "", alertBy: r.alert_by || "", followupInvNo: r.followup_inv_no || "", payment: r.payment || {} });
 
 export const dropsReady = () => storageMode === "supabase";
 
@@ -16,7 +16,8 @@ export const dropFull = (r) => !!r && !(r.items || []).some((x) => x.short);
 // lines with something left over: [{ text, qty, delivered, remaining }]
 export const dropLeft = (r) => ((r && r.items) || []).filter((x) => x.short).map((x) => ({ ...x, remaining: x.remaining != null ? Number(x.remaining) : Number(x.qty) || 0, delivered: x.delivered != null ? Number(x.delivered) : 0 }));
 // does the office need to look at it? (something left over, or the driver wrote a note)
-export const dropNeedsLook = (r) => !!r && (dropLeft(r).length > 0 || !!String(r.notes || "").trim());
+export const payMissed = (r) => !!(r && r.payment && Number(r.payment.owed) > 0 && !r.payment.collected);
+export const dropNeedsLook = (r) => !!r && (dropLeft(r).length > 0 || !!String(r.notes || "").trim() || payMissed(r));
 
 // confirmations for these dates -> { [dropKey]: latest confirmation }
 export async function loadDrops(dates) {
@@ -41,7 +42,7 @@ export async function saveDrop(conf, photoBlob) {
     const path = user.id + "/" + conf.date + "-" + conf.id + ".jpg";
     const up = await sb.storage.from("drop-photos").upload(path, photoBlob, { contentType: "image/jpeg", upsert: false });
     if (up.error) throw new Error("photo: " + up.error.message);
-    const ins = await sb.from("drop_confirmations").insert({ id: conf.id, user_id: user.id, driver: conf.driver, kind: conf.collectionId ? "collection" : "job", invoice_id: conf.invoiceId || "", collection_id: conf.collectionId || "", inv_no: String(conf.invNo || ""), delivery_date: conf.date, items: conf.items, photo_path: path, notes: conf.notes || "", lat: conf.lat ?? null, lng: conf.lng ?? null, accuracy_m: conf.acc ?? null });
+    const ins = await sb.from("drop_confirmations").insert({ id: conf.id, user_id: user.id, driver: conf.driver, kind: conf.collectionId ? "collection" : "job", invoice_id: conf.invoiceId || "", collection_id: conf.collectionId || "", inv_no: String(conf.invNo || ""), delivery_date: conf.date, items: conf.items, photo_path: path, notes: conf.notes || "", payment: conf.payment || {}, lat: conf.lat ?? null, lng: conf.lng ?? null, accuracy_m: conf.acc ?? null });
     if (ins.error) throw new Error(ins.error.message);
     return { ...conf, photoPath: path, at: new Date().toISOString() };
   }

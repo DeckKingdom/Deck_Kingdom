@@ -31,6 +31,8 @@ alter table public.drop_confirmations add column if not exists applied_at text n
 alter table public.drop_confirmations add column if not exists alert_state text not null default '';   -- '' | open | dismissed | followup
 alter table public.drop_confirmations add column if not exists alert_by text not null default '';
 alter table public.drop_confirmations add column if not exists followup_inv_no text not null default '';
+-- payment taken on the doorstep: { owed, collected, method }
+alter table public.drop_confirmations add column if not exists payment jsonb not null default '{}'::jsonb;
 create index if not exists drop_confirmations_invoice on public.drop_confirmations (invoice_id);
 create index if not exists drop_confirmations_date on public.drop_confirmations (delivery_date);
 alter table public.drop_confirmations enable row level security;

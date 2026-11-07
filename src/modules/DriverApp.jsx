@@ -195,6 +195,7 @@ function DayRuns({ date, stops, crm, header, onBack }) {
       ? { pickup: true, title: "Complete pick-up", name: o.supplier || "Supplier", ref: "COL-" + o.collectionNo, collectionId: o.id,
           rows: (o.items || []).map((it, k) => ({ qty: it.qty, text: it.description || it.sku, colour: it.colour, code: it.sku || "", lineIndex: k })) }
       : { title: "Complete drop " + (o.dropNo || ""), name: (custById[o.customerId] || {}).name || "Customer", ref: "#" + o.invNo, invoiceId: o.id, invNo: o.invNo,
+          owed: !isPaid(o) ? invoiceTotals(o).total : 0,
           rows: invLines(o).map(({ l, i }) => ({ qty: l.qty, text: l.description || l.code, colour: l.colour, code: l.code || "", lineIndex: i })) };
     return <CompleteDrop target={{ ...target, driver: o.driver || "" }} header={header} date={date}
       onBack={() => setCompleting(null)} onSaved={(conf) => { setDrops((m) => ({ ...m, [conf.collectionId ? "col:" + conf.collectionId : conf.invoiceId]: conf })); setCompleting(null); window.scrollTo(0, 0); }} />;
@@ -390,6 +391,9 @@ function CompleteDrop({ target, header, date, onBack, onSaved }) {
   const [got, setGot] = useState({}); // row index -> true (all of it)
   const [part, setPart] = useState({}); // row index -> how many, when not all of it
   const [notes, setNotes] = useState("");
+  const owed = Number(target.owed) || 0;
+  const [paid, setPaid] = useState(null); // true = collected, false = not collected
+  const [method, setMethod] = useState("");
   const [photo, setPhoto] = useState(null);
   const [preview, setPreview] = useState("");
   const [geo, setGeo] = useState(null);
@@ -403,7 +407,8 @@ function CompleteDrop({ target, header, date, onBack, onSaved }) {
   const doneQty = (r, i) => (got[i] ? qtyOf(r) : Math.min(qtyOf(r), Number(part[i]) || 0));
   const counted = rows.every((r, i) => got[i] || (part[i] !== undefined && part[i] !== ""));
   const leftCount = rows.filter((r, i) => doneQty(r, i) < qtyOf(r)).length;
-  const ok = photo && counted;
+  const payOk = !owed || (paid === true && method) || (paid === false && notes.trim().length >= 3);
+  const ok = photo && counted && payOk;
   const save = async () => {
     if (!ok || busy) return;
     setBusy(true); setMsg("");
@@ -412,7 +417,7 @@ function CompleteDrop({ target, header, date, onBack, onSaved }) {
       const conf = await saveDrop({
         id: uid(), driver: target.driver, invoiceId: target.invoiceId || "", collectionId: target.collectionId || "", invNo: target.invNo || "", date,
         items: rows.map((r, i) => { const dq = doneQty(r, i), rem = Math.max(0, qtyOf(r) - dq); return { qty: r.qty, text: r.text, colour: r.colour || "", code: r.code || "", lineIndex: r.lineIndex, delivered: dq, remaining: rem, dropped: rem === 0, short: rem > 0 }; }),
-        notes: notes.trim(), lat: geo && geo.lat, lng: geo && geo.lng, acc: geo && geo.acc,
+        notes: notes.trim(), payment: owed ? { owed, collected: paid === true, method: paid === true ? method : "" } : {}, lat: geo && geo.lat, lng: geo && geo.lng, acc: geo && geo.acc,
       }, blob);
       onSaved(conf);
     } catch (e) {
@@ -461,17 +466,35 @@ function CompleteDrop({ target, header, date, onBack, onSaved }) {
           </label>
           {preview && <img src={preview} alt="" style={{ marginTop: 10, width: "100%", maxHeight: 280, objectFit: "contain", borderRadius: 10, border: "1px solid #e6e9ef" }} />}
 
+          {owed > 0 && (
+            <div style={{ marginTop: 16, border: "2px solid " + (paid === true ? GREEN : paid === false ? RED : "#f4b9c1"), background: paid === true ? "#f1faf4" : "#fdf3f4", borderRadius: 12, padding: "12px 12px" }}>
+              <div style={{ fontWeight: 800, fontSize: 16, color: paid === true ? GREEN : RED }}>Payment to take: {gbp(owed)}</div>
+              <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                <button type="button" onClick={() => setPaid(true)} style={{ flex: 1, borderRadius: 10, padding: "11px 6px", fontFamily: "inherit", fontWeight: 800, fontSize: 15, cursor: "pointer", border: "2px solid " + GREEN, background: paid === true ? GREEN : "#fff", color: paid === true ? "#fff" : GREEN }}>✓ Collected</button>
+                <button type="button" onClick={() => setPaid(false)} style={{ flex: 1, borderRadius: 10, padding: "11px 6px", fontFamily: "inherit", fontWeight: 800, fontSize: 15, cursor: "pointer", border: "2px solid " + RED, background: paid === false ? RED : "#fff", color: paid === false ? "#fff" : RED }}>✗ Not collected</button>
+              </div>
+              {paid === true && (
+                <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                  {["Cash", "Card", "Transfer"].map((m) => (
+                    <button key={m} type="button" onClick={() => setMethod(m)} style={{ flex: 1, borderRadius: 10, padding: "9px 4px", fontFamily: "inherit", fontWeight: 800, fontSize: 14, cursor: "pointer", border: "1px solid " + (method === m ? NAVY : "#d5d9e0"), background: method === m ? NAVY : "#fff", color: method === m ? "#fff" : NAVY }}>{m}</button>
+                  ))}
+                </div>
+              )}
+              {paid === false && <div style={{ marginTop: 8, fontSize: 13, fontWeight: 700, color: RED }}>Say why in the notes — the office will be alerted.</div>}
+            </div>
+          )}
+
           <span style={label}>{leftCount ? "Notes — why is some left? (the office sees this)" : "Notes for the office (optional)"}</span>
           <textarea style={{ ...field, minHeight: 70, resize: "vertical" }} value={notes} onChange={(e) => setNotes(e.target.value)}
             placeholder={leftCount ? (pickup ? "e.g. only 8 of the 10 boards ready" : "e.g. 2 boards damaged, brought back") : (pickup ? "e.g. collection note signed by Dave" : "e.g. left round the back by the gate")} />
-          {leftCount > 0 && counted && <div style={{ marginTop: 8, fontSize: 13, fontWeight: 700, color: "#a05f10" }}>{leftCount} line{leftCount === 1 ? "" : "s"} with some left — the office will be alerted.</div>}
+          {(leftCount > 0 || paid === false) && counted && <div style={{ marginTop: 8, fontSize: 13, fontWeight: 700, color: "#a05f10" }}>{[leftCount ? leftCount + " line" + (leftCount === 1 ? "" : "s") + " with some left" : "", paid === false ? "payment not collected" : ""].filter(Boolean).join(" and ")} — the office will be alerted.</div>}
 
           {msg && <div style={{ marginTop: 12, color: RED, fontWeight: 700, fontSize: 14 }}>{msg}</div>}
           <button type="button" onClick={save} disabled={!ok || busy}
             style={{ marginTop: 16, width: "100%", border: "none", borderRadius: 12, padding: 15, fontFamily: "inherit", fontWeight: 800, fontSize: 17, background: ok ? GREEN : "#e6e9ef", color: ok ? "#fff" : "#8593a8", cursor: ok ? "pointer" : "default" }}>
             {busy ? "Saving…" : pickup ? "Confirm pick-up" : "Confirm drop"}
           </button>
-          {!ok && <div style={{ marginTop: 8, fontSize: 12.5, color: "#8593a8", fontWeight: 600, textAlign: "center" }}>{!photo ? "A photo is needed." : "Tick each line, or put how many you " + (pickup ? "collected" : "dropped") + "."}</div>}
+          {!ok && <div style={{ marginTop: 8, fontSize: 12.5, color: "#8593a8", fontWeight: 600, textAlign: "center" }}>{!photo ? "A photo is needed." : !counted ? "Tick each line, or put how many you " + (pickup ? "collected" : "dropped") + "." : paid === null ? "Say whether the payment was collected." : paid ? "Pick how they paid." : "Say why the payment wasn't collected."}</div>}
           <div style={{ marginTop: 8, fontSize: 12.5, color: "#8593a8", fontWeight: 600, textAlign: "center" }}>{pickup ? "Confirming ticks these parts off on the jobs they're for and opens your next stop." : "Confirming opens your next stop."}</div>
         </div>
       </div>

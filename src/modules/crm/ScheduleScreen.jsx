@@ -1891,6 +1891,7 @@ function DropChip({ conf, done, onComplete, pickup }) {
               </div>
             ))}
           </div>
+          {conf.payment && Number(conf.payment.owed) > 0 && <div style={{ marginTop: 10, fontSize: 13.5, fontWeight: 800, color: conf.payment.collected ? "#28713e" : "#9b1c2e" }}>{conf.payment.collected ? "✓ Payment collected" + (conf.payment.method ? " by " + conf.payment.method.toLowerCase() : "") : "✗ Payment not collected"} · {gbp(Number(conf.payment.owed))}</div>}
           {conf.notes && <div style={{ marginTop: 10, background: "#fff8e6", border: "1px solid #f4d78f", borderRadius: 8, padding: "8px 10px", fontSize: 13.5, fontWeight: 600 }}>{conf.notes}</div>}
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 14 }}>
             <button style={btn} onClick={() => setOpen(false)}>Close</button>
