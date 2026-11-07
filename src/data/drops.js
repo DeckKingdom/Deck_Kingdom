@@ -211,3 +211,31 @@ export async function wipeDriverData(drivers) {
   } catch (e) { photoErr = String((e && e.message) || e); }
   return { photos, photoErr, removed };
 }
+
+// delete confirmations for good (and their photos, best effort)
+export async function deleteDrops(confs) {
+  const ids = confs.map((r) => r.id);
+  if (!ids.length) return { photoErr: "" };
+  if (storageMode !== "supabase") {
+    try { localStorage.setItem(LOCAL, JSON.stringify(localAll().filter((r) => !ids.includes(r.id)))); } catch (e) { /* */ }
+    return { photoErr: "" };
+  }
+  const sb = await getSupabase();
+  let photoErr = "";
+  const paths = confs.map((r) => r.photoPath).filter((p) => p && !p.startsWith("data:"));
+  if (paths.length) {
+    const { data: gone, error } = await sb.storage.from("drop-photos").remove(paths);
+    if (error) photoErr = error.message;
+    else if ((gone || []).length < paths.length) photoErr = "permission missing — run driver-app-all.sql";
+  }
+  const { error } = await sb.from("drop_confirmations").delete().in("id", ids);
+  if (error) throw error;
+  return { photoErr };
+}
+
+// every driver's phone forgets its load-check ticks (all days, all runs)
+export async function resetLoadChecks(drivers) {
+  const stamp = Date.now().toString(36);
+  const rows = drivers.map((d, n) => ({ id: "rst" + stamp + n, driver: d, date: "*", runNo: "*", kind: "reset" }));
+  for (const r of rows) await logEvent(r);
+}

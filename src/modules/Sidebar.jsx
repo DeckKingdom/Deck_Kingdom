@@ -40,7 +40,7 @@ export const NAV_SECTIONS = [
       ["products", "Products", "box"],
     ],
   },
-  { title: "Fleet", items: [["vans", "Vans", "truck", true], ["tracking", "Driver tracking", "pin"]] },
+  { title: "Fleet", items: [["vans", "Vans", "truck", true], ["tracking", "Driver tracking", "pin"], ["completions", "Completions", "flag"]] },
   { title: "System", items: [["activity", "Activity", "clock"], ["users", "Users & access", "lock"]] },
 ];
 
