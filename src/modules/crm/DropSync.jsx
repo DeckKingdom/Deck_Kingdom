@@ -50,9 +50,10 @@ const undoConfirmation = (c, r, actor) => {
   if (p.collected && inv.paymentDate === String(r.at || "").slice(0, 10) && (!p.method || inv.paymentType === p.method)) { inv.paymentDate = ""; inv.paymentType = ""; }
 };
 
-export async function reopenConfirmations(updateCrm, confs, me) {
+export async function reopenConfirmations(updateCrm, confs, me, opts = {}) {
   if (!confs.length) return;
   updateCrm((c) => { confs.forEach((r) => undoConfirmation(c, r, me || "office")); return c; });
+  if (opts.noVoid) return; // about to be deleted anyway
   await updateDrops(confs.map((r) => r.id), { voided_at: new Date().toISOString(), voided_by: me || "office", alert_state: "dismissed" });
 }
 

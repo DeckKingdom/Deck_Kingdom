@@ -141,9 +141,9 @@ export function buildRuns({ crm, confs, events, geo, s, from, to, driver, roads 
 
     if (confirmed.length && !run.van) alerts.push({ tone: "amber", kind: "novan", date: run.date, driver: run.driver, text: "Run " + (run.runNo || "—") + " had no van set on the schedule — its miles can't be checked against a van's fuel log." });
     if (confirmed.length && !dep) alerts.push({ tone: "amber", kind: "nodepart", date: run.date, driver: run.driver, text: "Run " + (run.runNo || "—") + " — no set-off recorded; the start time is estimated from the first drop." });
-    unconfirmed.filter((x) => x.done).forEach((x) => alerts.push({ tone: "amber", kind: "noconf", date: run.date, driver: run.driver, text: x.name + " (" + x.ref + ") was marked done without a driver confirmation — no time or location for it." }));
+    if (confirmed.length || dep) unconfirmed.filter((x) => x.done).forEach((x) => alerts.push({ tone: "amber", kind: "noconf", date: run.date, driver: run.driver, text: x.name + " (" + x.ref + ") was marked done without a driver confirmation — no time or location for it." }));
     return { ...run, legs, roadMiles: allRoad && legs.length > 0, price, dep, departAt, estimatedDepart: !dep, lastAt, backAt, back, confirmed, unconfirmed, miles, hours, fuel, time, cost: fuel + time, cpm };
-  }).filter((r) => r.confirmed.length || r.unconfirmed.some((x) => x.done))
+  }).filter((r) => r.confirmed.length || r.dep) // runs done before the driver app was in use are left out
     .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : lc(a.driver).localeCompare(lc(b.driver)) || a.runNo.localeCompare(b.runNo)));
   return { runs, alerts };
 }

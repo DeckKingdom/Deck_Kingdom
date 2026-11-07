@@ -189,9 +189,10 @@ export async function wipeDriverData(drivers) {
     const { data: files } = await sb.storage.from("drop-photos").list(f.name, { limit: 1000 });
     const paths = (files || []).map((x) => f.name + "/" + x.name);
     for (let i = 0; i < paths.length; i += 100) {
-      const { error } = await sb.storage.from("drop-photos").remove(paths.slice(i, i + 100));
+      const { data: gone, error } = await sb.storage.from("drop-photos").remove(paths.slice(i, i + 100));
       if (error) throw new Error("photos: " + error.message);
-      photos += Math.min(100, paths.length - i);
+      if (!(gone || []).length) throw new Error("photos couldn't be deleted — permission missing");
+      photos += gone.length;
     }
   }
   let r = await sb.from("drop_confirmations").delete().neq("id", "");

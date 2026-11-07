@@ -47,7 +47,7 @@ export default function TrackingScreen({ crm, updateCrm, openInvoice, openCollec
   const [wipe, setWipe] = useState(null); // typed confirmation for clearing everything
   const doWipe = async () => {
     const all = await loadAllDrops();
-    await reopenConfirmations(updateCrm, all.filter((r) => !r.voidedAt), me); // jobs back to not delivered first
+    await reopenConfirmations(updateCrm, all.filter((r) => !r.voidedAt), me, { noVoid: true }); // jobs back to not delivered first
     const names = [...new Set([...DRIVERS, ...all.map((r) => r.driver).filter(Boolean)])];
     return wipeDriverData(names);
   };
