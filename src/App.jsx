@@ -2,7 +2,8 @@ import { useState, useEffect, Component } from "react";
 import ImportPlanner from "./modules/ImportPlanner.jsx";
 import LoginScreen from "./modules/LoginScreen.jsx";
 import { storageMode } from "./data/storage.js";
-import { getSession, onAuthChange } from "./data/auth.js";
+import { getSession, onAuthChange, getMyAccess } from "./data/auth.js";
+import DriverApp from "./modules/DriverApp.jsx";
 
 function AuthGate() {
   const [session, setSession] = useState(undefined);
@@ -23,7 +24,18 @@ function AuthGate() {
   if (session === undefined)
     return <div style={{ fontFamily: "Quicksand, sans-serif", background: "#0B1F3F", minHeight: "100vh" }} />;
   if (!session) return <LoginScreen />;
-  return <ImportPlanner key={session.user.id} />;
+  return <Routed key={session.user.id} />;
+}
+
+// drivers get the phone screen with their runs and the fuel log; everyone else the office app
+function Routed() {
+  const [me, setMe] = useState(undefined);
+  useEffect(() => {
+    getMyAccess().then((p) => setMe(p || { role: "none" })).catch(() => setMe({ role: "none" }));
+  }, []);
+  if (me === undefined) return <div style={{ fontFamily: "Quicksand, sans-serif", background: "#0B1F3F", minHeight: "100vh" }} />;
+  if (me.role === "driver") return <DriverApp me={{ fullName: me.full_name || "", driverName: me.driver_name || "" }} />;
+  return <ImportPlanner />;
 }
 
 class ErrorBoundary extends Component {
@@ -54,5 +66,8 @@ class ErrorBoundary extends Component {
 }
 
 export default function App() {
-  return <ErrorBoundary>{storageMode === "supabase" ? <AuthGate /> : <ImportPlanner />}</ErrorBoundary>;
+  // local/offline version: ?as=driver&driver=Brian previews the driver phone screen
+  let localDriver = "";
+  try { const q = new URLSearchParams(window.location.search); if (q.get("as") === "driver") localDriver = q.get("driver") || "Brian"; } catch (e) { /* ignore */ }
+  return <ErrorBoundary>{storageMode === "supabase" ? <AuthGate /> : localDriver ? <DriverApp me={{ driverName: localDriver }} /> : <ImportPlanner />}</ErrorBoundary>;
 }

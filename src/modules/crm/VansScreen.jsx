@@ -4,6 +4,9 @@ import { useState, useEffect, useRef } from "react";
 import { NAVY, GOLD, RED, prettyDate } from "../../lib/core.js";
 import { blankVan, blankVanCheck, VAN_CHECK_ITEMS, daysUntil, FIELD_FORMATS } from "../../lib/crmCore.js";
 import { Icon, Chip, Modal, selectAllProps, sect, lbl, card, abtn, inp, btn, goldBtn, DateInput, CalendarPop } from "./ui.jsx";
+import { getSupabase } from "../../data/supabaseClient.js";
+import { storageMode } from "../../data/storage.js";
+import { gbp } from "../../lib/crmCore.js";
 
 const DUE_FIELDS = [
   ["insuranceRenewal", "Insurance"],
@@ -227,6 +230,69 @@ export default function VansScreen({ crm, updateCrm, askConfirm, me, newSignal }
             <button className="dk-save" style={goldBtn} onClick={saveCheck}>Save check</button>
           </div>
         </Modal>
+      )}
+      {storageMode === "supabase" && <FuelLog />}
+    </div>
+  );
+}
+
+// ===== fuel fill-ups the drivers log from their phones =====
+function FuelLog() {
+  const [rows, setRows] = useState(null);
+  const [err, setErr] = useState("");
+  const load = async () => {
+    try {
+      const sb = await getSupabase();
+      const { data, error } = await sb.from("fuel_logs").select("*").order("at", { ascending: false }).limit(60);
+      if (error) throw error;
+      setRows(data || []); setErr("");
+    } catch (e) {
+      setErr(/fuel_logs/.test(String(e.message || e)) ? "Run driver-app.sql in Supabase to switch the fuel log on." : String(e.message || e));
+    }
+  };
+  useEffect(() => { load(); }, []);
+  const receipt = async (path) => {
+    const w = window.open("", "_blank");
+    try {
+      const sb = await getSupabase();
+      const { data, error } = await sb.storage.from("fuel-receipts").createSignedUrl(path, 600);
+      if (error) throw error;
+      if (w) w.location = data.signedUrl;
+    } catch (e) { if (w) w.close(); setErr("Couldn't open the receipt: " + (e.message || e)); }
+  };
+  const th = { textAlign: "left", fontSize: 10.5, fontWeight: 800, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", padding: "6px 8px", borderBottom: "1px solid #e6e9ef" };
+  const td = { padding: "8px", borderBottom: "1px solid #f0f2f6", fontSize: 13 };
+  const total = (rows || []).reduce((t, r) => t + (Number(r.amount) || 0), 0);
+  return (
+    <div style={{ ...card, marginTop: 14 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <p style={{ ...sect, margin: 0 }}>Fuel log</p>
+        <span style={{ fontSize: 12, color: "#8593a8", fontWeight: 600 }}>from the drivers' phones · latest {rows ? rows.length : "…"}{rows && rows.length ? " · " + gbp(total) : ""}</span>
+        <span style={{ flex: 1 }} />
+        <button style={{ ...btn, padding: "5px 10px", fontSize: 12 }} onClick={load}>↻ Refresh</button>
+      </div>
+      {err && <div style={{ color: "#a05f10", fontWeight: 700, fontSize: 13, marginTop: 8 }}>{err}</div>}
+      {rows && rows.length === 0 && !err && <div style={{ color: "#8593a8", fontWeight: 600, fontSize: 13, marginTop: 8 }}>No fill-ups logged yet.</div>}
+      {rows && rows.length > 0 && (
+        <div style={{ overflowX: "auto", marginTop: 8 }}>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead><tr>{["When", "Driver", "Van", "£", "Mileage", "Points", "Where", "Receipt"].map((h) => <th key={h} style={{ ...th, textAlign: h === "£" || h === "Mileage" ? "right" : "left" }}>{h}</th>)}</tr></thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.id}>
+                  <td style={{ ...td, whiteSpace: "nowrap" }}>{new Date(r.at).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</td>
+                  <td style={{ ...td, fontWeight: 700 }}>{r.driver}</td>
+                  <td style={td}>{r.van}</td>
+                  <td style={{ ...td, textAlign: "right", fontWeight: 700 }}>{r.amount != null ? gbp(Number(r.amount)) : "—"}</td>
+                  <td style={{ ...td, textAlign: "right" }}>{r.mileage != null ? Number(r.mileage).toLocaleString("en-GB") : "—"}</td>
+                  <td style={td}>{r.points_collected ? <Chip tone="green" style={{ fontSize: 10.5, padding: "1px 8px" }}>yes</Chip> : "—"}</td>
+                  <td style={td}>{r.lat != null ? <a href={"https://www.google.com/maps/search/?api=1&query=" + r.lat + "," + r.lng} target="_blank" rel="noopener noreferrer" style={{ color: "#185FA5", fontWeight: 700 }}>Map</a> : "—"}</td>
+                  <td style={td}>{r.receipt_path ? <button type="button" className="dk-title-link" onClick={() => receipt(r.receipt_path)} style={{ fontSize: 13, fontWeight: 700, color: "#185FA5" }}>View</button> : "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );

@@ -39,7 +39,8 @@ export async function getMyAccess() {
   const sb = await getSupabase();
   const uid = currentSession && currentSession.user && currentSession.user.id;
   if (!uid) return null;
-  const { data, error } = await sb.from("profiles").select("role, read_only, full_name").eq("id", uid).maybeSingle();
+  let { data, error } = await sb.from("profiles").select("role, read_only, full_name, driver_name").eq("id", uid).maybeSingle();
+  if (error && /driver_name/.test(error.message || "")) ({ data, error } = await sb.from("profiles").select("role, read_only, full_name").eq("id", uid).maybeSingle());
   if (error) {
     if (/read_only/.test(error.message || "")) return { role: "admin", read_only: false, legacy: true };
     throw new Error(error.message);

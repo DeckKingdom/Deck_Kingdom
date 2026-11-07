@@ -5,6 +5,7 @@ export const LEVELS = [
   { key: "manager", label: "Manager", blurb: "Everything except system settings and user access" },
   { key: "office", label: "Office", blurb: "Customers, invoices, quotes, samples, delivery schedule, collections — no costs or profit" },
   { key: "warehouse", label: "Warehouse", blurb: "Same as office for now" },
+  { key: "driver", label: "Driver", blurb: "Phone screen only: their own runs for the week and the fuel log" },
 ];
 export const levelLabel = (k) => (LEVELS.find((x) => x.key === k) || { label: k === "none" ? "No access" : k || "—" }).label;
 
@@ -14,7 +15,7 @@ const DAY_TO_DAY = ["home", "tasks", "customers", "invoices", "quotes", "samples
 export const accessFor = (role, readOnly) => {
   const r = role || "none";
   const full = r === "admin" || r === "manager";
-  const staff = r !== "none";
+  const staff = r !== "none" && r !== "driver"; // drivers get their own phone screen, not the office app
   return {
     role: r,
     readOnly: !!readOnly,

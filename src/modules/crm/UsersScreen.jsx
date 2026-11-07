@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { NAVY, GOLD, RED } from "../../lib/core.js";
 import { LEVELS, levelLabel } from "../../lib/access.js";
+import { DRIVERS } from "../../lib/crmCore.js";
 import { loadAccess, saveAccess } from "../../data/staffAccess.js";
 import { card, btn, goldBtn, inp, sect, lbl, Icon } from "./ui.jsx";
 
@@ -26,10 +27,10 @@ export default function UsersScreen({ me }) {
     try {
       const { profiles, invites } = await loadAccess();
       const byEmail = {};
-      profiles.forEach((p) => { const e = (p.email || "").toLowerCase(); byEmail[e] = { email: e, full_name: p.full_name || "", role: p.role, read_only: p.read_only, login: true }; });
+      profiles.forEach((p) => { const e = (p.email || "").toLowerCase(); byEmail[e] = { email: e, full_name: p.full_name || "", role: p.role, read_only: p.read_only, driver_name: p.driver_name || "", login: true }; });
       invites.forEach((i) => {
         const e = i.email.toLowerCase();
-        byEmail[e] = { ...(byEmail[e] || { login: false }), email: e, full_name: i.full_name || (byEmail[e] && byEmail[e].full_name) || "", role: i.role, read_only: i.read_only, invited: true };
+        byEmail[e] = { ...(byEmail[e] || { login: false }), email: e, full_name: i.full_name || (byEmail[e] && byEmail[e].full_name) || "", role: i.role, read_only: i.read_only, driver_name: i.driver_name || (byEmail[e] && byEmail[e].driver_name) || "", invited: true };
       });
       setRows(Object.values(byEmail).sort((a, b) => (a.role === "none") - (b.role === "none") || a.email.localeCompare(b.email)));
       setErr("");
@@ -52,6 +53,19 @@ export default function UsersScreen({ me }) {
       <option value="none">No access</option>
     </select>
   );
+  // a driver login sees the runs planned under this name on the delivery schedule
+  const driverSelect = (r, onChange, disabled) => {
+    const cur = r.driver_name || String(r.full_name || "").split(" ")[0];
+    const names = [...new Set([...DRIVERS, cur].filter(Boolean))];
+    return (
+      <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600, color: NAVY }} title="The name they go by on the delivery schedule — they'll see the runs planned for this driver">
+        Runs for
+        <select style={{ ...inp, width: 110, padding: "6px 8px" }} value={cur} disabled={disabled} onChange={(e) => onChange(e.target.value)}>
+          {names.map((n) => <option key={n} value={n}>{n}</option>)}
+        </select>
+      </label>
+    );
+  };
   const roToggle = (on, onChange, disabled) => (
     <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600, cursor: disabled ? "default" : "pointer", color: on ? NAVY : "#8593a8" }}>
       <input type="checkbox" checked={!!on} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />Read only
@@ -90,7 +104,7 @@ export default function UsersScreen({ me }) {
                     <td style={{ ...td, fontWeight: 700 }}>{r.full_name || <span style={{ color: "#aab3c2" }}>—</span>}{self && <span style={{ fontSize: 11, color: "#8593a8", marginLeft: 6 }}>(you)</span>}</td>
                     <td style={td}>{r.email}</td>
                     <td style={td}>{levelSelect(r.role, (v) => save({ ...r, role: v }), busy === r.email || self)}</td>
-                    <td style={td}>{r.role !== "none" && roToggle(r.read_only, (v) => save({ ...r, read_only: v }), busy === r.email || self)}</td>
+                    <td style={td}>{r.role === "driver" ? driverSelect(r, (v) => save({ ...r, driver_name: v }), busy === r.email || self) : r.role !== "none" && roToggle(r.read_only, (v) => save({ ...r, read_only: v }), busy === r.email || self)}</td>
                     <td style={{ ...td, fontSize: 12.5, fontWeight: 700, color: r.login ? "#28713e" : "#a05f10", whiteSpace: "nowrap" }}>
                       {r.login ? "Has a login" : "Needs a login ↓"}
                     </td>
@@ -120,7 +134,7 @@ export default function UsersScreen({ me }) {
           <div><span style={lbl}>Name</span><input style={inp} value={draft.full_name} onChange={(e) => setDraft((d) => ({ ...d, full_name: e.target.value }))} /></div>
           <div><span style={lbl}>Email they'll log in with</span><input style={inp} value={draft.email} onChange={(e) => setDraft((d) => ({ ...d, email: e.target.value }))} /></div>
           <div><span style={lbl}>Level</span>{levelSelect(draft.role, (v) => setDraft((d) => ({ ...d, role: v })))}</div>
-          <div style={{ paddingBottom: 8 }}>{roToggle(draft.read_only, (v) => setDraft((d) => ({ ...d, read_only: v })))}</div>
+          <div style={{ paddingBottom: 8 }}>{draft.role === "driver" ? driverSelect(draft, (v) => setDraft((d) => ({ ...d, driver_name: v }))) : roToggle(draft.read_only, (v) => setDraft((d) => ({ ...d, read_only: v })))}</div>
           <button style={goldBtn} disabled={!validEmail(draft.email) || draft.role === "none"}
             onClick={async () => { await save(draft); setDraft({ email: "", full_name: "", role: "office", read_only: false }); }}>
             <Icon name="plus" stroke={NAVY} />Add
