@@ -7,6 +7,7 @@ import { ListHero, HeroStat, Icon, Chip, card, sect, lbl, inp, btn, goldBtn, Mod
 import { dropLeft, dropPhotoUrl } from "../../data/drops.js";
 import { loadTracking, workOut } from "../../data/trackingData.js";
 import { refreshFuelPrice } from "../../data/fleetApi.js";
+import { reopenConfirmations, resetRun } from "./DropSync.jsx";
 import { fleetSettings, FLEET_DEFAULTS, mpgFor } from "../../lib/tracking.js";
 
 const pad = (n) => String(n).padStart(2, "0");
@@ -29,7 +30,7 @@ const rangeOf = (k, custom) => {
   return [custom.from || ymd(mon), custom.to || ymd(t)];
 };
 
-export default function TrackingScreen({ crm, updateCrm, openInvoice, openCollection, canSettings }) {
+export default function TrackingScreen({ crm, updateCrm, openInvoice, openCollection, canSettings, me }) {
   const s = fleetSettings(crm);
   const [range, setRange] = useState(() => { try { return localStorage.getItem("dk-track-range") || "week"; } catch (e) { return "week"; } });
   const [custom, setCustom] = useState({ from: "", to: "" });
@@ -38,6 +39,13 @@ export default function TrackingScreen({ crm, updateCrm, openInvoice, openCollec
   const [err, setErr] = useState("");
   const [showSettings, setShowSettings] = useState(false);
   const [openRun, setOpenRun] = useState({});
+  const [reload, setReload] = useState(0);
+  const [ask, setAsk] = useState(null); // { title, text, go } confirm box
+  const [busy, setBusy] = useState(false);
+  const reopenStop = (x) => setAsk({ title: "Reopen " + x.name + " " + x.ref + "?", text: "It goes back to not " + (x.kind === "col" ? "collected" : "delivered") + (x.kind === "col" ? "" : " (stock back in, and any payment the driver recorded taken off)") + " and opens again on the driver's phone to confirm again. The photo and times stay on record but drop out of tracking.",
+    go: () => reopenConfirmations(updateCrm, [x.conf], me) });
+  const resetOne = (r) => setAsk({ title: "Reset " + r.driver + "'s run " + (r.runNo || "") + " on " + dayLabel(r.date) + "?", text: "Every stop on the run is reopened (" + r.confirmed.length + " confirmed), the set-off is cleared, and the driver's phone forgets the load-check ticks — they start the run again from the load check. Good for testing or when a run was done wrong.",
+    go: () => resetRun(updateCrm, r, data.events, me) });
   const [from, to] = rangeOf(range, custom);
 
   useEffect(() => { try { localStorage.setItem("dk-track-range", range); } catch (e) { /* */ } }, [range]);
@@ -54,7 +62,7 @@ export default function TrackingScreen({ crm, updateCrm, openInvoice, openCollec
       }
     })();
     return () => { live = false; };
-  }, [from, to, crm.invoices, crm.collections]);
+  }, [from, to, reload]);
 
   const result = useMemo(() => {
     if (!data) return null;
@@ -131,6 +139,8 @@ export default function TrackingScreen({ crm, updateCrm, openInvoice, openCollec
               <span style={{ fontSize: 12.5, fontWeight: 700, color: "#5a6a85" }}>{mi(r.miles)} · {dur(r.hours * 60)}</span>
               <span style={{ fontSize: 12.5, fontWeight: 700 }}>Fuel {gbp(r.fuel)} · Driver {gbp(r.time)}</span>
               <b style={{ fontSize: 15, color: NAVY }}>{gbp(r.cost)}</b>
+              <span role="button" tabIndex={0} title="Reopen every stop and clear the set-off — the driver starts the run again" onClick={(e) => { e.stopPropagation(); resetOne(r); }}
+                style={{ fontSize: 12, fontWeight: 700, color: RED, border: "1px solid #ecc4cb", borderRadius: 8, padding: "3px 9px", background: "#fff" }}>Reset run</span>
               <Icon name={open ? "chevleft" : "chevright"} />
             </button>
             {open && (
@@ -142,7 +152,7 @@ export default function TrackingScreen({ crm, updateCrm, openInvoice, openCollec
                     </tr>
                   </thead>
                   <tbody>
-                    {r.confirmed.map((x, n) => <StopRow key={x.id} x={x} n={n + 1} away={Number(s.awayMiles) || 0.5} openInvoice={openInvoice} openCollection={openCollection} />)}
+                    {r.confirmed.map((x, n) => <StopRow key={x.id} x={x} n={n + 1} away={Number(s.awayMiles) || 0.5} onReopen={() => reopenStop(x)} openInvoice={openInvoice} openCollection={openCollection} />)}
                     {r.confirmed.length > 0 && <tr style={{ borderTop: "1px solid #f0f2f6", color: "#5a6a85" }}>
                       <td style={td} />
                       <td style={{ ...td, fontWeight: 700 }} colSpan={2}>Back to the yard · {s.yard}</td>
@@ -205,6 +215,18 @@ export default function TrackingScreen({ crm, updateCrm, openInvoice, openCollec
         </div>
       )}
 
+      {ask && (
+        <Modal title={ask.title} onClose={() => !busy && setAsk(null)} width={500}>
+          <div style={{ fontSize: 13.5, color: "#5a6a85", fontWeight: 600, lineHeight: 1.45 }}>{ask.text}</div>
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
+            <button style={btn} disabled={busy} onClick={() => setAsk(null)}>Cancel</button>
+            <button style={{ ...btn, background: RED, borderColor: RED, color: "#fff" }} disabled={busy}
+              onClick={async () => { setBusy(true); try { await ask.go(); } catch (e) { setErr("Couldn't reopen — " + ((e && e.message) || e) + ". Has reopen-drops.sql been run?"); } setBusy(false); setAsk(null); setReload((n) => n + 1); }}>
+              {busy ? "Working…" : "Yes, reopen"}
+            </button>
+          </div>
+        </Modal>
+      )}
       {showSettings && <RatesModal s={s} onClose={() => setShowSettings(false)} onSave={(v) => { updateCrm((c) => { c.fleetCosts = v; return c; }); setShowSettings(false); }} />}
     </div>
   );
@@ -215,7 +237,7 @@ const tdR = { ...td, textAlign: "right", whiteSpace: "nowrap" };
 const Var = ({ v, tol }) => (v == null ? <span style={{ color: "#aab3c2" }}>—</span>
   : <b style={{ color: Math.abs(v) * 100 > tol ? RED : "#28713e" }}>{(v > 0 ? "+" : "") + Math.round(v * 100)}%</b>);
 
-function StopRow({ x, n, away, openInvoice, openCollection }) {
+function StopRow({ x, n, away, onReopen, openInvoice, openCollection }) {
   const [photo, setPhoto] = useState("");
   const c = x.conf;
   const left = dropLeft(c);
@@ -245,6 +267,8 @@ function StopRow({ x, n, away, openInvoice, openCollection }) {
           {c.followupInvNo && <Chip title="Follow-up job raised">Follow-up #{c.followupInvNo}</Chip>}
           <button onClick={() => (photo ? window.open(photo, "_blank") : dropPhotoUrl(c.photoPath).then((u) => { setPhoto(u); window.open(u, "_blank"); }).catch(() => {}))} title="The driver's photo"
             style={{ border: "1px solid #d5d9e0", background: "#fff", borderRadius: 999, padding: "1px 7px", cursor: "pointer", fontSize: 11 }}>📷</button>
+          <button onClick={onReopen} title="Reopen this stop — it opens again on the driver's phone"
+            style={{ border: "1px solid #ecc4cb", background: "#fff", color: RED, borderRadius: 999, padding: "1px 8px", cursor: "pointer", fontSize: 11, fontWeight: 700 }}>Reopen</button>
         </div>
         {c.notes && <div style={{ color: "#6b5305", marginTop: 3, maxWidth: 260 }}>{c.notes}</div>}
       </td>

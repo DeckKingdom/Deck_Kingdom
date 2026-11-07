@@ -1439,7 +1439,7 @@ export default function ImportPlanner() {
         (!crm ? (
           <div style={{ padding: 40, textAlign: "center", color: "#5a6a85", fontWeight: 600 }}>Loading driver tracking…</div>
         ) : (
-          <TrackingScreen crm={crm} updateCrm={updateCrm} openInvoice={openInvoice} openCollection={openCollection} canSettings={access.system} />
+          <TrackingScreen crm={crm} updateCrm={updateCrm} openInvoice={openInvoice} openCollection={openCollection} canSettings={access.system} me={me} />
         ))}
 
       {tab === "vans" &&

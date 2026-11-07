@@ -5,7 +5,7 @@
 // 2. If something was left over, or the driver wrote a note, an alert pops up on every office
 //    screen until someone dismisses it or raises a follow-up job.
 import { useEffect, useRef, useState } from "react";
-import { loadDrops, dropLeft, dropNeedsLook, payMissed, updateDrops, dropPhotoUrl } from "../../data/drops.js";
+import { loadDrops, dropLeft, dropNeedsLook, payMissed, updateDrops, dropPhotoUrl, voidEvents, logEvent } from "../../data/drops.js";
 import { applyInvoiceStockDeduction, explodeInvoiceLines, blankMovement, today, gbp } from "../../lib/crmCore.js";
 import { addDays, NAVY, GOLD, RED, prettyDateTime } from "../../lib/core.js";
 import { Modal, btn, goldBtn } from "./ui.jsx";
@@ -13,7 +13,7 @@ import { Modal, btn, goldBtn } from "./ui.jsx";
 const DAYS_BACK = 14;
 
 // the undelivered part of a job comes back on the van: put it back into stock
-const returnLeftovers = (c, inv, left, actor) => {
+const returnLeftovers = (c, inv, left, actor, sign = 1) => {
   const lines = left.map((x) => {
     const l = (inv.lines || [])[x.lineIndex] || {};
     return { ...l, code: l.code || x.code || "", description: l.description || x.text || "", colour: l.colour || x.colour || "", qty: x.remaining };
@@ -23,11 +23,47 @@ const returnLeftovers = (c, inv, left, actor) => {
     if (r.kind === "kit" || !r.sku || !Number(r.qty)) return;
     const mp = (c.masterProducts || []).find((m) => (m.sku || "").trim().toLowerCase() === String(r.sku).trim().toLowerCase());
     if (!mp) return;
-    const q = Number(r.qty);
+    const q = Number(r.qty) * sign;
     mp.stock = (mp.stock === "" || mp.stock === null ? 0 : Number(mp.stock)) + q;
-    c.movements.push({ ...blankMovement(), sku: mp.sku, mpId: mp.id, qty: q, kind: "job", ref: "#" + (inv.invNo || "") + " not delivered", actor: actor || "" });
+    c.movements.push({ ...blankMovement(), sku: mp.sku, mpId: mp.id, qty: q, kind: "job", ref: "#" + (inv.invNo || "") + " not delivered" + (sign < 0 ? " (reopened)" : ""), actor: actor || "" });
   });
 };
+
+// ===== reopen: undo what a driver's confirmation did, and void it so the stop opens again on their phone =====
+// (the confirmation, photo and times stay on record, marked void)
+const undoConfirmation = (c, r, actor) => {
+  if (r.collectionId) {
+    const col = (c.collections || []).find((x) => x.id === r.collectionId);
+    if (col) col.collected = false;
+    return;
+  }
+  const inv = (c.invoices || []).find((x) => x.id === r.invoiceId);
+  if (!inv) return;
+  if (inv.deliveryCompleted) {
+    const wasDeducted = !!inv.stockDeducted;
+    inv.deliveryCompleted = false;
+    applyInvoiceStockDeduction(inv, c, false, actor); // the whole job back into stock…
+    if (wasDeducted && r.appliedAt) returnLeftovers(c, inv, dropLeft(r), actor, -1); // …less what was already put back
+  }
+  // payment the driver recorded: only undone if the job still shows exactly that
+  const p = r.payment || {};
+  if (p.collected && inv.paymentDate === String(r.at || "").slice(0, 10) && (!p.method || inv.paymentType === p.method)) { inv.paymentDate = ""; inv.paymentType = ""; }
+};
+
+export async function reopenConfirmations(updateCrm, confs, me) {
+  if (!confs.length) return;
+  updateCrm((c) => { confs.forEach((r) => undoConfirmation(c, r, me || "office")); return c; });
+  await updateDrops(confs.map((r) => r.id), { voided_at: new Date().toISOString(), voided_by: me || "office", alert_state: "dismissed" });
+}
+
+// reset a whole run: every confirmation reopened, the set-off voided, and the driver's load-check
+// ticks for that run forgotten (a "reset" event their phone picks up)
+export async function resetRun(updateCrm, run, events, me) {
+  await reopenConfirmations(updateCrm, run.confirmed.map((x) => x.conf), me);
+  const deps = (events || []).filter((e) => e.kind === "depart" && e.date === run.date && String(e.driver || "").toLowerCase() === String(run.driver || "").toLowerCase() && String(e.runNo || "") === String(run.runNo || ""));
+  await voidEvents(deps.map((e) => e.id));
+  await logEvent({ id: Math.random().toString(36).slice(2, 10), driver: run.driver, date: run.date, runNo: run.runNo, van: run.van || "", kind: "reset" });
+}
 
 export function useDropSync({ crm, updateCrm, me, enabled, alertsOn }) {
   const crmRef = useRef(crm), updRef = useRef(updateCrm);

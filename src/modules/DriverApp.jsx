@@ -26,8 +26,10 @@ export default function DriverApp({ me }) {
   const [crm, setCrm] = useState(null);
   const [err, setErr] = useState("");
   const [view, setView] = useState(null); // null = home · a yyyy-mm-dd = that day's runs · "fuel"
+  const [loads, setLoads] = useState(0); // bumped on refresh so the day view re-checks drops and resets
   const load = async () => {
     setErr("");
+    setLoads((n) => n + 1);
     try {
       const r = await crmStorage.get("dk-crm");
       setCrm(normaliseCrm(r && r.value ? JSON.parse(r.value) : {}));
@@ -78,7 +80,7 @@ export default function DriverApp({ me }) {
   }
 
   if (view === "fuel") return <FuelForm driver={driver} vans={(crm && crm.vans) || []} header={header} onBack={() => setView(null)} />;
-  if (view) return <DayRuns date={view} stops={byDay[view] || []} crm={crm} header={header} onBack={() => setView(null)} />;
+  if (view) return <DayRuns key={view + ":" + loads} date={view} stops={byDay[view] || []} crm={crm} header={header} onBack={() => setView(null)} />;
 
   // ===== home: 7 day buttons + fuel =====
   return (
@@ -147,21 +149,24 @@ function DayRuns({ date, stops, crm, header, onBack }) {
   ((crm && crm.customers) || []).forEach((c) => (custById[c.id] = c));
   ((crm && crm.sites) || []).forEach((s) => (siteById[s.id] = s));
   const [ticks, setTicks] = useState(() => loadTicks(date));
-  const toggle = (k) => setTicks((t) => { const n = { ...t }; if (n[k]) delete n[k]; else n[k] = Date.now(); saveTicks(date, n); return n; });
+  const toggle = (k, r) => setTicks((t) => { const n = { ...t }; if (n[k] && n[k] > (resets[r] || 0)) delete n[k]; else n[k] = Date.now(); saveTicks(date, n); return n; });
   const [drops, setDrops] = useState({}); // dropKey -> confirmation
   const [dropsErr, setDropsErr] = useState("");
   const [completing, setCompleting] = useState(null); // the stop being confirmed
   const [showDone, setShowDone] = useState(false);
   // set-off times per run (driver_events); if that table isn't there yet the set-off step is skipped
   const [departs, setDeparts] = useState({});
+  const [resets, setResets] = useState({}); // run -> time the office reset it (older ticks / set-offs don't count)
   const [evOff, setEvOff] = useState(false);
   const [leaving, setLeaving] = useState("");
   useEffect(() => {
     let live = true;
     loadEvents([date]).then((l) => {
       if (!live) return;
-      const m = {};
-      l.filter((e) => e.kind === "depart").forEach((e) => (m[e.runNo || ""] = e));
+      const rs = {}, m = {};
+      l.filter((e) => e.kind === "reset").forEach((e) => { const t = new Date(e.at).getTime(); if (!rs[e.runNo || ""] || t > rs[e.runNo || ""]) rs[e.runNo || ""] = t; });
+      l.filter((e) => e.kind === "depart" && new Date(e.at).getTime() > (rs[e.runNo || ""] || 0)).forEach((e) => (m[e.runNo || ""] = e));
+      setResets(rs);
       setDeparts(m);
     }).catch(() => live && setEvOff(true));
     return () => { live = false; };
@@ -206,7 +211,8 @@ function DayRuns({ date, stops, crm, header, onBack }) {
     const r = x.obj.runNo || "";
     invLines(x.obj).forEach(({ l, i }) => { if (!lineSource(x.obj, l)) (need[r] = need[r] || []).push(x.obj.id + ":" + i); });
   });
-  const runState = (r) => { const l = need[r] || []; const n = l.filter((k) => ticks[k]).length; return { total: l.length, done: n, open: n === l.length }; };
+  const tk = (k, r) => !!ticks[k] && ticks[k] > (resets[r] || 0);
+  const runState = (r) => { const l = need[r] || []; const n = l.filter((k) => tk(k, r)).length; return { total: l.length, done: n, open: n === l.length }; };
   // stops open one at a time; a drop waiting on a pick-up is skipped until that pick-up is checked
   const byRun = {};
   driven.forEach((x) => (byRun[x.obj.runNo || ""] = byRun[x.obj.runNo || ""] || []).push(x));
@@ -355,7 +361,7 @@ function DayRuns({ date, stops, crm, header, onBack }) {
                     const src = !isDone && !coll ? lineSource(o, l) : null;
                     const k = o.id + ":" + i;
                     const ps = src ? pickedState(src) : null;
-                    const on = src ? ps === "ok" : !!ticks[k];
+                    const on = src ? ps === "ok" : tk(k, runKey);
                     const row = (
                       <>
                         {(loading || src) && <span style={{ ...tickBox(on), ...(src && !on ? { borderStyle: "dashed", borderColor: ps === "short" ? RED : "#8fb3d9" } : {}) }}>{on ? "✓" : ps === "short" ? "!" : ""}</span>}
@@ -370,7 +376,7 @@ function DayRuns({ date, stops, crm, header, onBack }) {
                     );
                     const rowStyle = { display: "flex", gap: 10, alignItems: "center", width: "100%", border: "none", background: "none", fontFamily: "inherit", color: NAVY, textAlign: "left", fontSize: 14.5, padding: loading || src ? "8px 0" : "3px 0", borderBottom: loading || src ? "1px solid #f3f5f8" : "none" };
                     return loading && !src
-                      ? <button key={k} type="button" onClick={() => toggle(k)} style={{ ...rowStyle, cursor: "pointer" }}>{row}</button>
+                      ? <button key={k} type="button" onClick={() => toggle(k, runKey)} style={{ ...rowStyle, cursor: "pointer" }}>{row}</button>
                       : <div key={k} style={rowStyle}>{row}</div>;
                   })}
                   {!isDone && extra.map((p) => {

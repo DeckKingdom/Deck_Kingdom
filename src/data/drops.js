@@ -5,7 +5,7 @@ import { getSupabase } from "./supabaseClient.js";
 
 const LOCAL = "dk-drop-confirmations";
 const localAll = () => { try { return JSON.parse(localStorage.getItem(LOCAL) || "[]"); } catch (e) { return []; } };
-const fromRow = (r) => ({ id: r.id, at: r.at, driver: r.driver, kind: r.kind || "job", invoiceId: r.invoice_id || "", collectionId: r.collection_id || "", invNo: r.inv_no, date: r.delivery_date, items: r.items || [], photoPath: r.photo_path, notes: r.notes, lat: r.lat, lng: r.lng, appliedAt: r.applied_at || "", alertState: r.alert_state || "", alertBy: r.alert_by || "", followupInvNo: r.followup_inv_no || "", payment: r.payment || {} });
+const fromRow = (r) => ({ id: r.id, at: r.at, driver: r.driver, kind: r.kind || "job", invoiceId: r.invoice_id || "", collectionId: r.collection_id || "", invNo: r.inv_no, date: r.delivery_date, items: r.items || [], photoPath: r.photo_path, notes: r.notes, lat: r.lat, lng: r.lng, appliedAt: r.applied_at || "", alertState: r.alert_state || "", alertBy: r.alert_by || "", followupInvNo: r.followup_inv_no || "", payment: r.payment || {}, voidedAt: r.voided_at || "" });
 
 export const dropsReady = () => storageMode === "supabase";
 
@@ -30,6 +30,7 @@ export async function loadDrops(dates) {
     if (error) throw error;
     rows = (data || []).map(fromRow);
   } else rows = localAll().filter((r) => ds.includes(r.date));
+  rows = rows.filter((r) => !r.voidedAt); // reopened by the office
   const m = {};
   rows.forEach((r) => (m[dropKey(r)] = r));
   return m;
@@ -85,7 +86,7 @@ export async function updateDrops(ids, patch) {
     if (error) throw error;
     return;
   }
-  const camel = { applied_at: "appliedAt", alert_state: "alertState", alert_by: "alertBy", followup_inv_no: "followupInvNo" };
+  const camel = { applied_at: "appliedAt", alert_state: "alertState", alert_by: "alertBy", followup_inv_no: "followupInvNo", voided_at: "voidedAt", voided_by: "voidedBy" };
   const p = {}; Object.keys(patch).forEach((k) => (p[camel[k] || k] = patch[k]));
   try { localStorage.setItem(LOCAL, JSON.stringify(localAll().map((r) => (ids.includes(r.id) ? { ...r, ...p } : r)))); } catch (e) { /* preview only */ }
 }
@@ -93,7 +94,7 @@ export async function updateDrops(ids, patch) {
 // ===== run events: when a driver sets off on a run (driver_events) =====
 const LOCAL_EV = "dk-driver-events";
 const localEv = () => { try { return JSON.parse(localStorage.getItem(LOCAL_EV) || "[]"); } catch (e) { return []; } };
-const evFromRow = (r) => ({ id: r.id, at: r.at, driver: r.driver, date: r.run_date, runNo: r.run_no, van: r.van, kind: r.kind, lat: r.lat, lng: r.lng });
+const evFromRow = (r) => ({ id: r.id, at: r.at, driver: r.driver, date: r.run_date, runNo: r.run_no, van: r.van, kind: r.kind, lat: r.lat, lng: r.lng, voidedAt: r.voided_at || "" });
 
 export async function loadEvents(dates) {
   const ds = [...new Set(dates.filter(Boolean))];
@@ -102,9 +103,9 @@ export async function loadEvents(dates) {
     const sb = await getSupabase();
     const { data, error } = await sb.from("driver_events").select("*").in("run_date", ds).order("at", { ascending: true });
     if (error) throw error;
-    return (data || []).map(evFromRow);
+    return (data || []).map(evFromRow).filter((e) => !e.voidedAt);
   }
-  return localEv().filter((r) => ds.includes(r.date));
+  return localEv().filter((r) => ds.includes(r.date) && !r.voidedAt);
 }
 
 export async function logEvent(ev) {
@@ -126,18 +127,18 @@ export async function loadDropsRange(from, to) {
     const sb = await getSupabase();
     const { data, error } = await sb.from("drop_confirmations").select("*").gte("delivery_date", from).lte("delivery_date", to).order("at", { ascending: true });
     if (error) throw error;
-    return (data || []).map(fromRow);
+    return (data || []).map(fromRow).filter((r) => !r.voidedAt);
   }
-  return localAll().filter((r) => r.date >= from && r.date <= to);
+  return localAll().filter((r) => r.date >= from && r.date <= to && !r.voidedAt);
 }
 export async function loadEventsRange(from, to) {
   if (storageMode === "supabase") {
     const sb = await getSupabase();
     const { data, error } = await sb.from("driver_events").select("*").gte("run_date", from).lte("run_date", to).order("at", { ascending: true });
     if (error) throw error;
-    return (data || []).map(evFromRow);
+    return (data || []).map(evFromRow).filter((e) => !e.voidedAt);
   }
-  return localEv().filter((r) => r.date >= from && r.date <= to);
+  return localEv().filter((r) => r.date >= from && r.date <= to && !r.voidedAt);
 }
 export async function loadFuelRange(fromIso, toIso) {
   if (storageMode !== "supabase") { try { return JSON.parse(localStorage.getItem("dk-fuel-local") || "[]"); } catch (e) { return []; } }
@@ -145,4 +146,17 @@ export async function loadFuelRange(fromIso, toIso) {
   const { data, error } = await sb.from("fuel_logs").select("id, at, driver, van, amount, litres, mileage, lat, lng").gte("at", fromIso).lte("at", toIso).order("at", { ascending: true });
   if (error) throw error;
   return data || [];
+}
+
+// office: void set-off events for a run (so it can be set off again)
+export async function voidEvents(ids) {
+  if (!ids.length) return;
+  const at = new Date().toISOString();
+  if (storageMode === "supabase") {
+    const sb = await getSupabase();
+    const { error } = await sb.from("driver_events").update({ voided_at: at }).in("id", ids);
+    if (error) throw error;
+    return;
+  }
+  try { localStorage.setItem(LOCAL_EV, JSON.stringify(localEv().map((e) => (ids.includes(e.id) ? { ...e, voidedAt: at } : e)))); } catch (e) { /* */ }
 }

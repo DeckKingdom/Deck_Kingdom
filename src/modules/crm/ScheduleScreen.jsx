@@ -15,6 +15,7 @@ import { JOB_TYPES, skuIndex, PAYMENT_TYPES, stockCheck, partKey, isColPick, bla
 import StockCheck from "./StockCheck.jsx";
 import { loadDrops, dropPhotoUrl } from "../../data/drops.js";
 import { Modal } from "./ui.jsx";
+import { reopenConfirmations } from "./DropSync.jsx";
 import { Icon, Chip, Tg, sect, lbl, card, abtn, inp, btn, goldBtn, RiskChip, WebStatusChip, Soon, usePhone, DateInput, CalendarPop, SuggestInput, selectAllProps, PrintButton } from "./ui.jsx";
 
 const RANGE_OPTS = [
@@ -558,6 +559,13 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
   const [hideDone, setHideDone] = useState(false);
   const todayRef = useRef(null);
   const [pop, setPop] = useState(null); // { id, rect }: the job whose details are open
+  // reopen a stop the driver confirmed: undo it here and open it again on their phone
+  const reopenDrop = async (key) => {
+    const conf = drops[key];
+    if (!conf) return;
+    await reopenConfirmations(updateCrm, [conf], me);
+    setDrops((m) => { const n = { ...m }; delete n[key]; return n; });
+  };
   // drivers' drop confirmations (photo + what was dropped) for the days around today
   const [drops, setDrops] = useState({});
   useEffect(() => {
@@ -661,7 +669,9 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
   const moveColl = (id, date) => setColl(id.slice(4), (t) => { t.collectDate = date; if (!date) t.dropNo = ""; });
   const collKg = (col) => { const by = skuIndex(crm); let kg = 0, any = false; (col.items || []).forEach((it) => { const mp = by[String(it.sku || "").trim().toLowerCase()]; const w = mp && Number(mp.weightKg); if (w) { kg += w * (Number(it.qty) || 0); any = true; } }); return any ? kg : null; };
   const endDrag = () => { setDragId(null); setOverDate(null); setOverRow(null); setOverPending(false); };
-  const complete = (id, on) => updateCrm((c) => {
+  // un-ticking a job the driver confirmed reopens it properly (on their phone too)
+  const complete = (id, on) => (!on && drops[id] ? reopenDrop(id) : completeRaw(id, on));
+  const completeRaw = (id, on) => updateCrm((c) => {
     const t = c.invoices.find((x) => x.id === id);
     if (t) { t.deliveryCompleted = on; applyInvoiceStockDeduction(t, c, on, me); }
     return c;
@@ -899,7 +909,7 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
               title={c ? c.name : ""} style={{ fontWeight: 700, fontSize: 13.5, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
               {short16(c ? c.name || "Unnamed" : "No customer")}
             </button>
-            <RiskChip inv={i} /><WebStatusChip inv={i} />{drops[i.id] && <DropChip conf={drops[i.id]} done={!!i.deliveryCompleted} onComplete={() => complete(i.id, true)} />}
+            <RiskChip inv={i} /><WebStatusChip inv={i} />{drops[i.id] && <DropChip conf={drops[i.id]} done={!!i.deliveryCompleted} onComplete={() => complete(i.id, true)} onReopen={() => reopenDrop(i.id)} />}
           </div>
         </div>
         <span style={{ fontSize: 12.5, color: "#5a6a85", fontWeight: 700, whiteSpace: "nowrap" }}>{(s && s.postcode) || (c && c.postcode) || "—"}</span>
@@ -1000,7 +1010,7 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
             {i.deliveryTime && <span>· {i.deliveryTime}</span>}
             {kg !== null && <span>· {kg.toLocaleString("en-GB", { maximumFractionDigits: 0 })} kg</span>}
             <span>· {isPaid(i) ? "Paid" : <b style={{ color: RED }}>Not paid</b>}</span>
-            <RiskChip inv={i} /><WebStatusChip inv={i} />{drops[i.id] && <DropChip conf={drops[i.id]} done={!!i.deliveryCompleted} onComplete={() => complete(i.id, true)} />}
+            <RiskChip inv={i} /><WebStatusChip inv={i} />{drops[i.id] && <DropChip conf={drops[i.id]} done={!!i.deliveryCompleted} onComplete={() => complete(i.id, true)} onReopen={() => reopenDrop(i.id)} />}
           </div>
           {!isCollectionJob(i) && (
             <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr 0.8fr 1.1fr", gap: 5, marginBottom: 8 }}>
@@ -1032,7 +1042,7 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
         <div style={{ width: 5, flex: "none", background: c.collected ? "#3FA55C" : COLLECTION_BLUE }} />
         <div style={{ flex: 1, minWidth: 0, padding: 10 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-            <button type="button" title={c.collected ? "Collected — tap to undo" : "Mark as collected"} onClick={() => setColl(c.id, (t) => (t.collected = !t.collected))}
+            <button type="button" title={c.collected ? "Collected — tap to undo" : "Mark as collected"} onClick={() => (c.collected && drops["col:" + c.id] ? reopenDrop("col:" + c.id) : setColl(c.id, (t) => (t.collected = !t.collected)))}
               style={{ width: 26, height: 26, borderRadius: 999, border: "2px solid " + (c.collected ? "#3FA55C" : "#b8c0cc"), background: "#fff", padding: 0, boxSizing: "border-box", cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", flex: "none" }}>
               {c.collected && <span style={{ width: 12, height: 12, borderRadius: 999, background: "#3FA55C" }} />}
             </button>
@@ -1040,7 +1050,7 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
               style={{ fontWeight: 700, fontSize: 15, color: COLLECTION_BLUE, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, flex: 1, textAlign: "left" }}>
               {c.supplier || "Supplier"} · pick-up
             </button>
-            {drops["col:" + c.id] && <DropChip conf={drops["col:" + c.id]} pickup done={!!c.collected} onComplete={() => setColl(c.id, (t) => (t.collected = true))} />}
+            {drops["col:" + c.id] && <DropChip conf={drops["col:" + c.id]} pickup done={!!c.collected} onComplete={() => setColl(c.id, (t) => (t.collected = true))} onReopen={() => reopenDrop("col:" + c.id)} />}
             {c.dropNo && <span style={{ fontSize: 12, fontWeight: 800, color: "#fff", background: COLLECTION_BLUE, borderRadius: 999, padding: "2px 8px", flex: "none" }}>Drop {c.dropNo}</span>}
           </div>
           <div style={{ fontSize: 12.5, color: "#5a6a85", fontWeight: 600, margin: "4px 0 8px 35px" }}>
@@ -1081,7 +1091,7 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
             onDragStart={(ev) => { ev.dataTransfer.setData("text/plain", me_); ev.dataTransfer.effectAllowed = "move"; setDragId(me_); }}
             onDragEnd={endDrag}
             style={{ cursor: "grab", color: "#aab3c2", fontSize: 14, lineHeight: 1, padding: "4px 1px", userSelect: "none" }}>⋮⋮</span>
-          <button type="button" title={c.collected ? "Collected — click to undo" : "Mark as collected"} onClick={() => setColl(c.id, (t) => (t.collected = !t.collected))}
+          <button type="button" title={c.collected ? "Collected — click to undo" : "Mark as collected"} onClick={() => (c.collected && drops["col:" + c.id] ? reopenDrop("col:" + c.id) : setColl(c.id, (t) => (t.collected = !t.collected)))}
             style={{ width: 18, height: 18, borderRadius: 999, border: "2px solid " + (c.collected ? "#3FA55C" : "#b8c0cc"), background: "#fff", padding: 0, boxSizing: "border-box", lineHeight: 0, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", flex: "none" }}>
             {c.collected && <span style={{ width: 8, height: 8, borderRadius: 999, background: "#3FA55C", flex: "none" }} />}
           </button>
@@ -1091,7 +1101,7 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
             title={c.supplier || ""} style={{ fontWeight: 700, fontSize: 13.5, color: COLLECTION_BLUE, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "100%", minWidth: 0 }}>
             {short16(c.supplier || "Supplier")}
           </button>
-          {drops["col:" + c.id] && <DropChip conf={drops["col:" + c.id]} pickup done={!!c.collected} onComplete={() => setColl(c.id, (t) => (t.collected = true))} />}
+          {drops["col:" + c.id] && <DropChip conf={drops["col:" + c.id]} pickup done={!!c.collected} onComplete={() => setColl(c.id, (t) => (t.collected = true))} onReopen={() => reopenDrop("col:" + c.id)} />}
         </div>
         <span style={{ fontSize: 12.5, color: "#5a6a85", fontWeight: 700, whiteSpace: "nowrap" }}>{c.postcode || "—"}</span>
         <span style={{ fontSize: 11.5, fontWeight: 700, color: COLLECTION_BLUE }}>COL-{c.collectionNo || "—"}</span>
@@ -1854,7 +1864,8 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
 
 
 // ===== a driver confirmed this drop from their phone: photo, what was left, any shortfall =====
-function DropChip({ conf, done, onComplete, pickup }) {
+function DropChip({ conf, done, onComplete, onReopen, pickup }) {
+  const [sure, setSure] = useState(false);
   const [open, setOpen] = useState(false);
   const [url, setUrl] = useState("");
   const [err, setErr] = useState("");
@@ -1893,8 +1904,17 @@ function DropChip({ conf, done, onComplete, pickup }) {
           </div>
           {conf.payment && Number(conf.payment.owed) > 0 && <div style={{ marginTop: 10, fontSize: 13.5, fontWeight: 800, color: conf.payment.collected ? "#28713e" : "#9b1c2e" }}>{conf.payment.collected ? "✓ Payment collected" + (conf.payment.method ? " by " + conf.payment.method.toLowerCase() : "") : "✗ Payment not collected"} · {gbp(Number(conf.payment.owed))}</div>}
           {conf.notes && <div style={{ marginTop: 10, background: "#fff8e6", border: "1px solid #f4d78f", borderRadius: 8, padding: "8px 10px", fontSize: 13.5, fontWeight: 600 }}>{conf.notes}</div>}
+          {sure && (
+            <div style={{ marginTop: 12, background: "#fdf3f4", border: "1px solid #f4b9c1", borderRadius: 8, padding: "8px 12px", fontSize: 12.5, fontWeight: 600, color: "#9b1c2e" }}>
+              Reopen this {pickup ? "pick-up" : "job"}? It goes back to not {pickup ? "collected" : "delivered"}{pickup ? "" : " (stock back in, and any payment the driver recorded taken off)"}, and opens again on {conf.driver || "the driver"}'s phone to confirm again. The photo and times stay on record.
+            </div>
+          )}
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 14 }}>
-            <button style={btn} onClick={() => setOpen(false)}>Close</button>
+            {onReopen && (sure
+              ? <button style={{ ...btn, background: RED, borderColor: RED, color: "#fff" }} onClick={() => { onReopen(); setOpen(false); setSure(false); }}>Yes, reopen</button>
+              : <button style={{ ...btn, color: RED }} onClick={() => setSure(true)}>Reopen</button>)}
+            <span style={{ flex: 1 }} />
+            <button style={btn} onClick={() => { setOpen(false); setSure(false); }}>Close</button>
             {!done && <button style={{ ...goldBtn, color: NAVY }} onClick={() => { onComplete(); setOpen(false); }}>{pickup ? "Mark collected" : "Mark delivered"}</button>}
           </div>
         </Modal>
