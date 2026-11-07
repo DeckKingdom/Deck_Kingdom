@@ -189,7 +189,7 @@ export function DropAlert({ alerts, crm, onDismiss, onFollowUp, onOpenJob, onOpe
           {pickup ? (col && <button style={{ ...btn, padding: "11px 18px", fontSize: 14.5 }} onClick={() => onOpenCollection(col.id)}>Open collection</button>)
             : (inv && <button style={{ ...btn, padding: "11px 18px", fontSize: 14.5 }} onClick={() => onOpenJob(inv.id)}>Open job</button>)}
           <span style={{ flex: 1 }} />
-          <button style={{ ...btn, padding: "11px 18px", fontSize: 14.5 }} onClick={() => onDismiss(r)}>Dismiss</button>
+          <button style={{ ...btn, padding: "11px 18px", fontSize: 14.5 }} onClick={() => onDismiss(r)} title="Closes this pop-up — the issue stays live in Delivery issues until it's sorted">Dismiss</button>
           {!pickup && inv && (left.length > 0 || String(r.notes || "").trim()) && <button style={{ ...goldBtn, color: NAVY, padding: "11px 18px", fontSize: 14.5 }} onClick={() => onFollowUp(r, inv, left)}>Raise follow-up job</button>}
         </div>
       </div>

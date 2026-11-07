@@ -16,7 +16,7 @@ export const NAV_SECTIONS = [
       ["samples", "Samples", "leaf", true],
     ],
   },
-  { title: "", items: [["schedule", "Delivery Schedule", "cal"]] },
+  { title: "", items: [["schedule", "Delivery Schedule", "cal"], ["issues", "Delivery issues", "warn"]] },
   {
     title: "Purchasing",
     items: [
@@ -47,7 +47,7 @@ export const NAV_SECTIONS = [
 export const TAB_LABELS = { ...Object.fromEntries(NAV_SECTIONS.flatMap((s) => s.items.map(([t, l]) => [t, l]))), shipments: "Shipment", tasks: "Tasks" };
 
 // canNew(t): optional — whether this login can add that kind of record (some need a manager)
-export default function Sidebar({ tab, setTab, open, footer, onNew, canNew, onToggle, allow, phone }) {
+export default function Sidebar({ tab, setTab, open, footer, onNew, canNew, onToggle, allow, phone, badges = {} }) {
   const ok = allow || (() => true);
   const sections = NAV_SECTIONS.map((s) => ({ ...s, items: s.items.filter(([t]) => ok(t)) })).filter((s) => s.items.length);
   const [shut, setShut] = useState({});
@@ -157,8 +157,12 @@ export default function Sidebar({ tab, setTab, open, footer, onNew, canNew, onTo
                     marginBottom: 2,
                   }}
                 >
-                  <Icon name={icon} size={17} stroke={on ? NAVY : "#8fa0c0"} />
+                  <span style={{ position: "relative", display: "inline-flex" }}>
+                    <Icon name={icon} size={17} stroke={on ? NAVY : "#8fa0c0"} />
+                    {!open && badges[t] > 0 && <span style={{ position: "absolute", top: -4, right: -6, width: 9, height: 9, borderRadius: 99, background: "#e5394f", border: "2px solid " + NAVY }} />}
+                  </span>
                   {open && <span style={{ whiteSpace: "nowrap" }}>{label}</span>}
+                  {open && badges[t] > 0 && <span title={badges[t] + " live"} style={{ marginLeft: "auto", minWidth: 20, height: 20, padding: "0 6px", borderRadius: 99, background: "#e5394f", color: "#fff", fontSize: 11.5, fontWeight: 800, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>{badges[t]}</span>}
                 </button>
                 {open && canAdd && onNew && (!canNew || canNew(t)) && (
                   <button

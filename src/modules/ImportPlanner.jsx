@@ -49,6 +49,8 @@ import CollectionsScreen from "./crm/CollectionsScreen.jsx";
 import VansScreen from "./crm/VansScreen.jsx";
 import TrackingScreen from "./crm/TrackingScreen.jsx";
 import CompletionsScreen from "./crm/CompletionsScreen.jsx";
+import IssuesScreen, { issueOf } from "./crm/IssuesScreen.jsx";
+import { loadAllDrops } from "../data/drops.js";
 import { Icon, SuggestInput, abtn, DateInput, CalendarPop, selectAllProps } from "./crm/ui.jsx";
 import { EmailSettings } from "./crm/EmailPanels.jsx";
 import { emailReady } from "../data/email.js";
@@ -250,6 +252,18 @@ export default function ImportPlanner() {
   // pop-up alerts: admin logins (plus anyone named in the tracking rates), on a desktop - never phones
   const alertsMine = !!crm && !isPhone && (storageMode !== "supabase" || access.role === "admin" || String(getSessionEmail() || "").toLowerCase() === String(fleetSettings(crm).alertsTo || "").toLowerCase());
   const dropSync = useDropSync({ crm, updateCrm: updateCrmRaw, me: storageMode === "supabase" ? getSessionEmail() || "" : "", enabled: !!crm && access.canEdit, alertsOn: alertsMine });
+  // live delivery issues, for the red count on the menu
+  const [issueCount, setIssueCount] = useState(0);
+  const crmRefForIssues = useRef(crm);
+  crmRefForIssues.current = crm;
+  useEffect(() => {
+    if (!crm || !access.canTab("issues")) return;
+    let live = true;
+    const pull = () => loadAllDrops().then((l) => { const c = crmRefForIssues.current; if (live && c) setIssueCount(l.filter((r) => !r.voidedAt && issueOf(r, c).live).length); }).catch(() => {});
+    pull();
+    const t = setInterval(pull, 90000);
+    return () => { live = false; clearInterval(t); };
+  }, [!!crm, access.role, tab]);
   const trackAlerts = useTrackingAlerts({ crm, enabled: alertsMine && access.canTab("tracking") });
   const [selCustomerId, setSelCustomerId] = useState(null);
   const [selInvoiceId, setSelInvoiceId] = useState(null);
@@ -351,7 +365,7 @@ export default function ImportPlanner() {
   const [remindersClosed, setRemindersClosed] = useState(false); // closed for this visit
 
   useEffect(() => {
-    if (CRM_TABS.includes(tab) || ["home", "tasks", "purchases", "suppliers", "activity", "stock", "collections", "vans", "tracking", "completions", "products"].includes(tab)) setCrmOn(true);
+    if (CRM_TABS.includes(tab) || ["home", "tasks", "purchases", "suppliers", "activity", "stock", "collections", "vans", "tracking", "completions", "issues", "products"].includes(tab)) setCrmOn(true);
   }, [tab]);
 
   const me = storageMode === "supabase" ? getSessionEmail() || "" : "";
@@ -1328,7 +1342,7 @@ export default function ImportPlanner() {
         );
       })()}
       <div style={{ display: "flex", alignItems: "stretch" }}>
-      <Sidebar phone={isPhone} tab={tab} setTab={navTo} open={sideOpen} footer={sideFooter} onNew={access.canEdit ? (t) => { if (isPhone) setSideOpen(false); sideNew(t); } : null} canNew={(t) => (["overview", "vans", "purchases", "suppliers"].includes(t) ? access.canManage : access.canEdit)} onToggle={() => setSideOpen((o) => !o)} allow={access.canTab} />
+      <Sidebar phone={isPhone} tab={tab} setTab={navTo} open={sideOpen} footer={sideFooter} onNew={access.canEdit ? (t) => { if (isPhone) setSideOpen(false); sideNew(t); } : null} canNew={(t) => (["overview", "vans", "purchases", "suppliers"].includes(t) ? access.canManage : access.canEdit)} onToggle={() => setSideOpen((o) => !o)} allow={access.canTab} badges={{ issues: issueCount }} />
       <div style={{ flex: 1, minWidth: 0 }}>
 
       <div ref={headerRef} className="no-print" style={{ background: NAVY, padding: isPhone ? "8px 10px" : "10px 16px", display: "flex", alignItems: "center", gap: isPhone ? 6 : 10, position: "sticky", top: 0, zIndex: 25, boxShadow: "0 2px 8px rgba(11,31,63,0.25)" }}>
@@ -1442,6 +1456,13 @@ export default function ImportPlanner() {
           <div style={{ padding: 40, textAlign: "center", color: "#5a6a85", fontWeight: 600 }}>Loading driver tracking…</div>
         ) : (
           <TrackingScreen crm={crm} updateCrm={updateCrm} openInvoice={openInvoice} openCollection={openCollection} canSettings={access.system} me={me} />
+        ))}
+
+      {tab === "issues" && access.canTab("issues") &&
+        (!crm ? (
+          <div style={{ padding: 40, textAlign: "center", color: "#5a6a85", fontWeight: 600 }}>Loading delivery issues…</div>
+        ) : (
+          <IssuesScreen crm={crm} updateCrm={updateCrm} me={me} openInvoice={openInvoice} openCollection={openCollection} newFollowUpFromDrop={followUpFromDrop} canEdit={access.canEdit} onLiveCount={setIssueCount} />
         ))}
 
       {tab === "completions" && access.canTab("completions") &&

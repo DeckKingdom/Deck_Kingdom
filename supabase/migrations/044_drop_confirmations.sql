@@ -31,6 +31,10 @@ alter table public.drop_confirmations add column if not exists applied_at text n
 alter table public.drop_confirmations add column if not exists alert_state text not null default '';   -- '' | open | dismissed | followup
 alter table public.drop_confirmations add column if not exists alert_by text not null default '';
 alter table public.drop_confirmations add column if not exists followup_inv_no text not null default '';
+-- delivery issues stay live until someone marks them sorted (or the follow-up / payment sorts them)
+alter table public.drop_confirmations add column if not exists resolved_at text not null default '';
+alter table public.drop_confirmations add column if not exists resolved_by text not null default '';
+alter table public.drop_confirmations add column if not exists resolution text not null default '';
 -- every photo the driver took (photo_path is the first)
 alter table public.drop_confirmations add column if not exists photo_paths jsonb not null default '[]'::jsonb;
 -- payment taken on the doorstep: { owed, collected, method }
