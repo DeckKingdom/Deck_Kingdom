@@ -10,6 +10,8 @@ import { applyInvoiceStockDeduction, explodeInvoiceLines, blankMovement, today, 
 import { addDays, NAVY, GOLD, RED, prettyDateTime } from "../../lib/core.js";
 import { Modal, btn, goldBtn } from "./ui.jsx";
 import DropPhotos from "./DropPhotos.jsx";
+import { clearLoading } from "../../data/loading.js";
+import { reportKey } from "../../lib/loading.js";
 import { shortPickupMail } from "../../lib/supplierMail.js";
 
 const DAYS_BACK = 14;
@@ -65,6 +67,7 @@ export async function resetRun(updateCrm, run, events, me) {
   await reopenConfirmations(updateCrm, run.confirmed.map((x) => x.conf), me);
   const deps = (events || []).filter((e) => e.kind === "depart" && e.date === run.date && String(e.driver || "").toLowerCase() === String(run.driver || "").toLowerCase() && String(e.runNo || "") === String(run.runNo || ""));
   await clearLoadChecks({ date: run.date, driver: run.driver, runNo: run.runNo }).catch(() => voidEvents(deps.map((e) => e.id)));
+  await clearLoading(reportKey(run.date, run.driver, run.runNo)).catch(() => {}); // the van has to be loaded and checked again
   await logEvent({ id: Math.random().toString(36).slice(2, 10), driver: run.driver, date: run.date, runNo: run.runNo, van: run.van || "", kind: "reset" });
 }
 

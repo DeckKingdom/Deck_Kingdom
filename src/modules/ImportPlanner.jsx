@@ -50,6 +50,7 @@ import VansScreen from "./crm/VansScreen.jsx";
 import TrackingScreen from "./crm/TrackingScreen.jsx";
 import CompletionsScreen from "./crm/CompletionsScreen.jsx";
 import IssuesScreen, { issueOf } from "./crm/IssuesScreen.jsx";
+import LoadingScreen from "./crm/LoadingScreen.jsx";
 import { loadAllDrops } from "../data/drops.js";
 import { Icon, SuggestInput, abtn, DateInput, CalendarPop, selectAllProps } from "./crm/ui.jsx";
 import { EmailSettings } from "./crm/EmailPanels.jsx";
@@ -365,7 +366,7 @@ export default function ImportPlanner() {
   const [remindersClosed, setRemindersClosed] = useState(false); // closed for this visit
 
   useEffect(() => {
-    if (CRM_TABS.includes(tab) || ["home", "tasks", "purchases", "suppliers", "activity", "stock", "collections", "vans", "tracking", "completions", "issues", "products"].includes(tab)) setCrmOn(true);
+    if (CRM_TABS.includes(tab) || ["home", "tasks", "purchases", "suppliers", "activity", "stock", "collections", "vans", "tracking", "completions", "issues", "loading", "products"].includes(tab)) setCrmOn(true);
   }, [tab]);
 
   const me = storageMode === "supabase" ? getSessionEmail() || "" : "";
@@ -1456,6 +1457,13 @@ export default function ImportPlanner() {
           <div style={{ padding: 40, textAlign: "center", color: "#5a6a85", fontWeight: 600 }}>Loading driver tracking…</div>
         ) : (
           <TrackingScreen crm={crm} updateCrm={updateCrm} openInvoice={openInvoice} openCollection={openCollection} canSettings={access.system} me={me} />
+        ))}
+
+      {tab === "loading" && access.canTab("loading") &&
+        (!crm ? (
+          <div style={{ padding: 40, textAlign: "center", color: "#5a6a85", fontWeight: 600 }}>Loading the vans…</div>
+        ) : (
+          <LoadingScreen crm={crm} me={me} canEdit={access.canEdit} canManage={access.canManage} openInvoice={openInvoice} openCollection={openCollection} />
         ))}
 
       {tab === "issues" && access.canTab("issues") &&

@@ -16,7 +16,7 @@ export const NAV_SECTIONS = [
       ["samples", "Samples", "leaf", true],
     ],
   },
-  { title: "", items: [["schedule", "Delivery Schedule", "cal"], ["issues", "Delivery issues", "warn"]] },
+  { title: "", items: [["schedule", "Delivery Schedule", "cal"], ["loading", "Loading", "box"], ["issues", "Delivery issues", "warn"]] },
   {
     title: "Purchasing",
     items: [

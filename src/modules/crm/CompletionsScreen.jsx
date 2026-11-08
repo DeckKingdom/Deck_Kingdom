@@ -6,6 +6,7 @@ import { gbp, DRIVERS } from "../../lib/crmCore.js";
 import { ListHero, HeroStat, Chip, card, sect, lbl, inp, btn, goldBtn, Modal, SearchBox } from "./ui.jsx";
 import { loadAllDrops, dropLeft, payMissed, dropPhotoUrl, deleteDrops, resetLoadChecks, wipeDriverData, updateDrops } from "../../data/drops.js";
 import { reopenConfirmations } from "./DropSync.jsx";
+import { clearLoading } from "../../data/loading.js";
 import DropPhotos from "./DropPhotos.jsx";
 
 const pad = (n) => String(n).padStart(2, "0");
@@ -71,7 +72,7 @@ export default function CompletionsScreen({ crm, updateCrm, openInvoice, openCol
       <ListHero title="Completions" sub="Every drop and pick-up confirmed on the drivers' phones — click one for the full completion page"
         action={isAdmin && (
           <span style={{ display: "inline-flex", gap: 8 }}>
-            <button onClick={() => setTool("loads")} title="Every driver's phone forgets its load-check ticks" style={{ ...btn, background: "transparent", border: "1px solid #3a4f78", color: "#fff" }}>Reset load checks</button>
+            <button onClick={() => setTool("loads")} title="Clear every loading count and report, and every set-off" style={{ ...btn, background: "transparent", border: "1px solid #3a4f78", color: "#fff" }}>Reset loading</button>
             <button onClick={() => setTool("wipe")} title="Remove every confirmation, set-off and photo" style={{ ...btn, background: "transparent", border: "1px solid #7a3b48", color: "#f3b3bf" }}>Clear everything</button>
           </span>
         )}>
@@ -258,10 +259,12 @@ function ToolModal({ tool, rows, drivers, updateCrm, me, onClose, onDone }) {
       if (wipe) {
         await reopenConfirmations(updateCrm, rows.filter((r) => !r.voidedAt), me, { noVoid: true });
         const r = await wipeDriverData(drivers);
+        await clearLoading(null).catch(() => {});
         setMsg("✓ Cleared " + (r.removed ?? rows.length) + " confirmation" + (r.removed === 1 ? "" : "s") + ", every set-off and " + r.photos + " photo" + (r.photos === 1 ? "" : "s") + "." + (r.photoErr ? " Photos not deleted: " + r.photoErr : "") + " Drivers tap ↻ on their phone to see it.");
       } else {
         await resetLoadChecks();
-        setMsg("✓ Done — every driver's load check starts from 0 when they tap ↻ or reopen a day.");
+        await clearLoading(null).catch(() => {});
+        setMsg("✓ Done — every van needs loading and closing again; drivers see it when they tap ↻.");
       }
       setDone(true); onDone();
     } catch (e) {
@@ -270,11 +273,11 @@ function ToolModal({ tool, rows, drivers, updateCrm, me, onClose, onDone }) {
     setBusy(false);
   };
   return (
-    <Modal title={wipe ? "Clear all driver completion data?" : "Reset every driver's load check?"} onClose={() => !busy && onClose()} width={520}>
+    <Modal title={wipe ? "Clear all driver completion data?" : "Reset all loading?"} onClose={() => !busy && onClose()} width={520}>
       <div style={{ fontSize: 13.5, color: "#5a6a85", fontWeight: 600, lineHeight: 1.5 }}>
         {wipe
           ? <>Removes <b>every</b> drop and pick-up confirmation, set-off time and drop photo. Jobs and pick-ups the drivers closed go back to not delivered / not collected (stock back in, left-overs taken back out, driver-recorded payments taken off), and every driver's load-check ticks clear. Can't be undone. Fuel logs aren't touched.</>
-          : <>Clears every item the drivers have ticked as on the van and every set-off, for every day — each driver has to check and tick the van again before any address opens. Confirmed drops and pick-ups aren't touched.</>}
+          : <>Clears every loading count and loading report, and every set-off, for every day — each van has to be loaded, double-checked and closed again before its driver's deliveries open. Confirmed drops and pick-ups aren't touched.</>}
       </div>
       {wipe && !done && <>
         <span style={{ ...lbl, marginTop: 14 }}>Type CLEAR to confirm</span>
@@ -284,7 +287,7 @@ function ToolModal({ tool, rows, drivers, updateCrm, me, onClose, onDone }) {
       <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
         <button style={btn} disabled={busy} onClick={onClose}>{done ? "Close" : "Cancel"}</button>
         {!done && <button style={{ ...btn, background: RED, borderColor: RED, color: "#fff", opacity: !wipe || text.trim().toUpperCase() === "CLEAR" ? 1 : 0.4 }}
-          disabled={busy || (wipe && text.trim().toUpperCase() !== "CLEAR")} onClick={run}>{busy ? "Working…" : wipe ? "Clear everything" : "Reset load checks"}</button>}
+          disabled={busy || (wipe && text.trim().toUpperCase() !== "CLEAR")} onClick={run}>{busy ? "Working…" : wipe ? "Clear everything" : "Reset loading"}</button>}
       </div>
     </Modal>
   );

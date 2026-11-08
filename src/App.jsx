@@ -2,7 +2,7 @@ import { useState, useEffect, Component } from "react";
 import ImportPlanner from "./modules/ImportPlanner.jsx";
 import LoginScreen from "./modules/LoginScreen.jsx";
 import { storageMode } from "./data/storage.js";
-import { getSession, onAuthChange, getMyAccess } from "./data/auth.js";
+import { getSession, onAuthChange, getMyAccess, getSessionEmail } from "./data/auth.js";
 import DriverApp from "./modules/DriverApp.jsx";
 
 function AuthGate() {
@@ -34,7 +34,10 @@ function Routed() {
     getMyAccess().then((p) => setMe(p || { role: "none" })).catch(() => setMe({ role: "none" }));
   }, []);
   if (me === undefined) return <div style={{ fontFamily: "Quicksand, sans-serif", background: "#0B1F3F", minHeight: "100vh" }} />;
-  if (me.role === "driver") return <DriverApp me={{ fullName: me.full_name || "", driverName: me.driver_name || "" }} />;
+  if (me.role === "driver") return <DriverApp me={{ fullName: me.full_name || "", driverName: me.driver_name || "", email: getSessionEmail() || "" }} />;
+  // warehouse on a phone: the loading app for every van (?full=1 opens the whole system)
+  const phone = typeof window !== "undefined" && window.matchMedia && window.matchMedia("(max-width: 760px)").matches;
+  if (me.role === "warehouse" && phone && !/[?&]full=1/.test(window.location.search)) return <DriverApp warehouse me={{ fullName: me.full_name || "", email: getSessionEmail() || "" }} />;
   return <ImportPlanner />;
 }
 
@@ -67,7 +70,7 @@ class ErrorBoundary extends Component {
 
 export default function App() {
   // local/offline version: ?as=driver&driver=Brian previews the driver phone screen
-  let localDriver = "";
-  try { const q = new URLSearchParams(window.location.search); if (q.get("as") === "driver") localDriver = q.get("driver") || "Brian"; } catch (e) { /* ignore */ }
-  return <ErrorBoundary>{storageMode === "supabase" ? <AuthGate /> : localDriver ? <DriverApp me={{ driverName: localDriver }} /> : <ImportPlanner />}</ErrorBoundary>;
+  let localDriver = "", localWarehouse = false;
+  try { const q = new URLSearchParams(window.location.search); if (q.get("as") === "driver") localDriver = q.get("driver") || "Brian"; if (q.get("as") === "warehouse") localWarehouse = true; } catch (e) { /* ignore */ }
+  return <ErrorBoundary>{storageMode === "supabase" ? <AuthGate /> : localDriver ? <DriverApp me={{ driverName: localDriver }} /> : localWarehouse ? <DriverApp warehouse me={{ fullName: "Warehouse" }} /> : <ImportPlanner />}</ErrorBoundary>;
 }

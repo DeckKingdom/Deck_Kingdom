@@ -4,13 +4,13 @@ export const LEVELS = [
   { key: "admin", label: "Admin", blurb: "Everything, including system settings and who can log in" },
   { key: "manager", label: "Manager", blurb: "Everything except system settings and user access" },
   { key: "office", label: "Office", blurb: "Customers, invoices, quotes, samples, delivery schedule, collections — no costs or profit" },
-  { key: "warehouse", label: "Warehouse", blurb: "Same as office for now" },
-  { key: "driver", label: "Driver", blurb: "Phone screen only: their own runs for the week and the fuel log" },
+  { key: "warehouse", label: "Warehouse", blurb: "Same as office; on a phone it opens the loading app for every van" },
+  { key: "driver", label: "Driver", blurb: "Phone screen only: loading and deliveries for their own runs, and the fuel log" },
 ];
 export const levelLabel = (k) => (LEVELS.find((x) => x.key === k) || { label: k === "none" ? "No access" : k || "—" }).label;
 
 // screens office and warehouse logins can open
-const DAY_TO_DAY = ["home", "tasks", "customers", "invoices", "quotes", "samples", "schedule", "issues", "collections"];
+const DAY_TO_DAY = ["home", "tasks", "customers", "invoices", "quotes", "samples", "schedule", "loading", "issues", "collections"];
 
 export const accessFor = (role, readOnly) => {
   const r = role || "none";

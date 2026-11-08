@@ -8,6 +8,9 @@ import { normaliseCrm, isVoidInvoice, isCollectionJob, invoiceTotals, isPaid, gb
 import { NAVY, GOLD, RED, uid, prettyDate, prettyDateTime } from "../lib/core.js";
 import { Icon } from "./crm/ui.jsx";
 import { loadDrops, saveDrop, shrinkPhoto, loadEvents, logEvent } from "../data/drops.js";
+import { runsOn, loadState } from "../lib/loading.js";
+import { loadLoading } from "../data/loading.js";
+import LoadingMobile from "./LoadingMobile.jsx";
 import { outwardCode, tidyPostcode, googleNavHref, appleNavHref, isApple } from "../lib/addressCheck.js";
 
 const GREEN = "#28713e";
@@ -21,8 +24,11 @@ const cardS = { background: "#fff", border: "1px solid #e6e9ef", borderRadius: 1
 const field = { width: "100%", boxSizing: "border-box", fontFamily: "inherit", fontSize: 16, padding: "12px 12px", borderRadius: 10, border: "1px solid #d5d9e0", background: "#fff", color: NAVY };
 const label = { display: "block", fontSize: 12, fontWeight: 800, letterSpacing: 0.5, textTransform: "uppercase", color: "#8593a8", margin: "14px 0 6px" };
 
-export default function DriverApp({ me }) {
-  const driver = me.driverName || (me.fullName || "").split(" ")[0] || "";
+export default function DriverApp({ me, warehouse }) {
+  // warehouse logins on a phone get the loading side for every van; drivers get their own runs
+  const driver = warehouse ? "" : me.driverName || (me.fullName || "").split(" ")[0] || "";
+  const who = me.email || me.fullName || driver || "warehouse";
+  const [mode, setMode] = useState(warehouse ? "loading" : "deliveries");
   const [crm, setCrm] = useState(null);
   const [err, setErr] = useState("");
   const [view, setView] = useState(null); // null = home · a yyyy-mm-dd = that day's runs · "fuel"
@@ -65,12 +71,31 @@ export default function DriverApp({ me }) {
       )}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontWeight: 800, fontSize: 17 }}>{title}</div>
-        <div style={{ fontSize: 12, color: "#aeb9cf", fontWeight: 600 }}>{driver ? driver + " · " : ""}Deck Kingdom</div>
+        <div style={{ fontSize: 12, color: "#aeb9cf", fontWeight: 600 }}>{driver ? driver + " · " : warehouse ? "Warehouse · " : ""}Deck Kingdom</div>
       </div>
       <button type="button" onClick={load} title="Refresh" style={{ border: "none", background: "rgba(255,255,255,.12)", color: "#fff", borderRadius: 10, height: 40, padding: "0 12px", fontFamily: "inherit", fontWeight: 700, cursor: "pointer" }}>↻</button>
     </div>
   );
 
+  // Loading | Deliveries switch under the header (drivers)
+  const tabs = warehouse ? null : (
+    <div style={{ display: "flex", gap: 6, padding: "10px 14px 0", position: "sticky", top: 68, zIndex: 4, background: "#f3f5f8" }}>
+      {[["loading", "Loading"], ["deliveries", "Deliveries"]].map(([k, l]) => (
+        <button key={k} type="button" onClick={() => { setMode(k); setView(null); }}
+          style={{ flex: 1, borderRadius: 12, padding: "11px 8px", fontFamily: "inherit", fontWeight: 800, fontSize: 15, cursor: "pointer", border: "1px solid " + (mode === k ? NAVY : "#d5d9e0"), background: mode === k ? NAVY : "#fff", color: mode === k ? "#fff" : NAVY }}>{l}</button>
+      ))}
+    </div>
+  );
+  if (mode === "loading") {
+    return (
+      <div style={page}>
+        <LoadingMobile key={loads} crm={crm} driver={warehouse ? null : driver} who={who} header={header} nav={tabs} />
+        {warehouse && <div style={{ padding: "0 14px" }}><button type="button" onClick={() => signOut().then(() => window.location.reload())}
+          style={{ marginTop: 10, width: "100%", border: "1px solid #d5d9e0", background: "#fff", borderRadius: 12, padding: 12, fontFamily: "inherit", fontWeight: 700, color: "#5a6a85", cursor: "pointer" }}>Sign out</button>
+          <a href="?full=1" style={{ display: "block", textAlign: "center", marginTop: 12, fontSize: 13, fontWeight: 700, color: "#185FA5" }}>Open the full ops system</a></div>}
+      </div>
+    );
+  }
   if (!driver) {
     return (
       <div style={page}>{header("Driver")}
@@ -86,6 +111,7 @@ export default function DriverApp({ me }) {
   return (
     <div style={page}>
       {header("Hi " + driver)}
+      {tabs}
       <div style={{ padding: 14 }}>
         {err && <div style={{ ...cardS, borderColor: RED, color: RED, fontWeight: 700 }}>{err}</div>}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
@@ -156,6 +182,13 @@ function DayRuns({ date, stops, crm, header, onBack, driver }) {
   const [departs, setDeparts] = useState({});
   const [resets, setResets] = useState({}); // run -> time the office reset it (older ticks / set-offs don't count)
   const [evErr, setEvErr] = useState("");
+  const [loadData, setLoadData] = useState(null);
+  const [loadErr, setLoadErr] = useState("");
+  useEffect(() => {
+    let live = true;
+    loadLoading([date]).then((d) => live && setLoadData(d)).catch((e) => live && setLoadErr(/load_|relation|column/.test(String(e && e.message)) ? "Loading isn't switched on yet — ask the office to run loading.sql." : "Couldn't check the loading report — check your signal and tap ↻."));
+    return () => { live = false; };
+  }, [date]);
   const [leaving, setLeaving] = useState("");
   useEffect(() => {
     let live = true;
@@ -245,7 +278,14 @@ function DayRuns({ date, stops, crm, header, onBack, driver }) {
       setTickErr("Couldn't save that tick — check your signal and tap it again.");
     });
   };
-  const runState = (r) => { const l = need[r] || []; const n = evs ? l.filter((k) => tk(k, r)).length : 0; return { total: l.length, done: n, open: !!evs && !evErr && n === l.length }; };
+  // deliveries open only once the run's loading report is closed (loaded + double-checked)
+  const loadRuns = crm ? runsOn(crm, date, driver) : [];
+  const runState = (r) => {
+    const run = loadRuns.find((x) => x.runNo === String(r || ""));
+    if (!run) return { total: 0, done: 0, open: !!evs && !evErr && !!loadData, rep: null };
+    const st = loadState(run, loadData && loadData.counts[run.key], loadData && loadData.reports[run.key]);
+    return { total: st.total, done: st.loaded + st.allocated, open: !!loadData && !loadErr && st.complete, rep: loadData && loadData.reports[run.key], st };
+  };
   // stops open one at a time; a drop waiting on a pick-up is skipped until that pick-up is checked
   const byRun = {};
   driven.forEach((x) => (byRun[x.obj.runNo || ""] = byRun[x.obj.runNo || ""] || []).push(x));
@@ -297,6 +337,7 @@ function DayRuns({ date, stops, crm, header, onBack, driver }) {
     <div style={page}>
       {header(title, onBack)}
       <div style={{ padding: 14 }}>
+        {loadErr && <div style={{ ...cardS, borderColor: "#f4b9c1", background: "#fdf3f4", color: RED, fontWeight: 700, fontSize: 13.5 }}>🔒 {loadErr}</div>}
         {(evErr || tickErr) && <div style={{ ...cardS, borderColor: "#f4b9c1", background: "#fdf3f4", color: RED, fontWeight: 700, fontSize: 13.5 }}>🔒 {evErr || tickErr}</div>}
         {dropsErr && <div style={{ ...cardS, borderColor: "#f4d78f", background: "#fff8e6", color: "#6b5305", fontWeight: 700, fontSize: 13.5 }}>{dropsErr}</div>}
         {stops.length === 0 && <div style={{ ...cardS, textAlign: "center", color: "#8593a8", fontWeight: 700 }}>Nothing planned for you on {prettyDate(date)}.</div>}
@@ -313,7 +354,7 @@ function DayRuns({ date, stops, crm, header, onBack, driver }) {
               </div>
               {rs.open && !setOffDone(runKey) ? (
                 <div style={{ background: "#f1faf4", border: "1px solid #bfe3ca", borderRadius: 10, padding: "10px 12px" }}>
-                  <div style={{ color: GREEN, fontSize: 13.5, fontWeight: 800 }}>✓ {rs.total ? "Everything's on the van" : "Ready to go"}</div>
+                  <div style={{ color: GREEN, fontSize: 13.5, fontWeight: 800 }}>✓ {rs.rep && rs.rep.completedAt ? "Loaded & double-checked by " + String(rs.rep.completedBy || "").split("@")[0] + " at " + new Date(rs.rep.completedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : "Ready to go"}</div>
                   <button type="button" onClick={() => setOff(runKey, o.van, o.driver)} disabled={!!leaving}
                     style={{ marginTop: 8, width: "100%", border: "none", borderRadius: 12, padding: 14, fontFamily: "inherit", fontWeight: 800, fontSize: 17, background: NAVY, color: "#fff", cursor: "pointer" }}>
                     {leaving === runKey ? "Setting off…" : "▶ Set off on " + (o.runNo ? "run " + o.runNo : "this run")}
@@ -326,8 +367,8 @@ function DayRuns({ date, stops, crm, header, onBack, driver }) {
                 </div>
               ) : (
                 <div style={{ background: "#fff8e6", border: "1px solid #f4d78f", color: "#6b5305", borderRadius: 10, padding: "9px 12px", fontSize: 13.5, fontWeight: 700 }}>
-                  <div style={{ fontWeight: 800 }}>🔒 Load check: {rs.done} of {rs.total} ticked</div>
-                  <div style={{ marginTop: 3, fontWeight: 600 }}>Tick every item as you check it's on the van. Parts coming on a pick-up tick themselves once it's collected. Then tap Set off to open your first stop.</div>
+                  <div style={{ fontWeight: 800 }}>🔒 Waiting for the van to be loaded: {rs.done} of {rs.total} lines on</div>
+                  <div style={{ marginTop: 3, fontWeight: 600 }}>Your stops open once the loading report for this run is closed — everything counted on, double-checked and photographed (Loading tab). Then tap Set off.</div>
                   <div style={{ height: 6, background: "#f4e3b5", borderRadius: 4, marginTop: 7, overflow: "hidden" }}><div style={{ height: "100%", width: (100 * rs.done / Math.max(1, rs.total)) + "%", background: GOLD }} /></div>
                 </div>
               )}
@@ -376,7 +417,7 @@ function DayRuns({ date, stops, crm, header, onBack, driver }) {
           const owed = !isPaid(o) ? invoiceTotals(o).total : 0;
           const wait = !isDone && !coll ? waitingOn(x) : [];
           const lines = invLines(o);
-          const loading = !isDone && !coll && !rs.open;
+          const loading = false; // counting on happens in the Loading tab now
           // parts on a pick-up for this job that don't match one of its lines
           const extra = pickupFor(o).filter((p) => !lines.some(({ l }) => same(l, p.it)));
           return (
