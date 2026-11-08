@@ -4,6 +4,7 @@ import LoginScreen from "./modules/LoginScreen.jsx";
 import { storageMode } from "./data/storage.js";
 import { getSession, onAuthChange, getMyAccess, getSessionEmail } from "./data/auth.js";
 import DriverApp from "./modules/DriverApp.jsx";
+import { phoneAppParams } from "./modules/DriverPicker.jsx";
 
 function AuthGate() {
   const [session, setSession] = useState(undefined);
@@ -38,6 +39,12 @@ function Routed() {
   // warehouse on a phone: the loading app for every van (?full=1 opens the whole system)
   const phone = typeof window !== "undefined" && window.matchMedia && window.matchMedia("(max-width: 760px)").matches;
   if (me.role === "warehouse" && phone && !/[?&]full=1/.test(window.location.search)) return <DriverApp warehouse me={{ fullName: me.full_name || "", email: getSessionEmail() || "" }} />;
+  // admin / manager: the driver screen as any driver (or the loading app) - for runs, loading and testing
+  const pa = (me.role === "admin" || me.role === "manager") ? phoneAppParams() : null;
+  if (pa) {
+    const myName = me.driver_name || (me.full_name || "").split(" ")[0] || "";
+    return <DriverApp key={pa.app + ":" + (pa.driver || "")} warehouse={pa.app === "loading"} switcher={{ current: pa, myName }} me={{ fullName: me.full_name || "", driverName: pa.driver || "", email: getSessionEmail() || "" }} />;
+  }
   return <ImportPlanner />;
 }
 
@@ -72,5 +79,7 @@ export default function App() {
   // local/offline version: ?as=driver&driver=Brian previews the driver phone screen
   let localDriver = "", localWarehouse = false;
   try { const q = new URLSearchParams(window.location.search); if (q.get("as") === "driver") localDriver = q.get("driver") || "Brian"; if (q.get("as") === "warehouse") localWarehouse = true; } catch (e) { /* ignore */ }
+  const pa = storageMode === "supabase" ? null : phoneAppParams();
+  if (pa) return <ErrorBoundary><DriverApp warehouse={pa.app === "loading"} switcher={{ current: pa, myName: "Jon" }} me={{ fullName: "Jon", driverName: pa.driver || "", email: "jon" }} /></ErrorBoundary>;
   return <ErrorBoundary>{storageMode === "supabase" ? <AuthGate /> : localDriver ? <DriverApp me={{ driverName: localDriver }} /> : localWarehouse ? <DriverApp warehouse me={{ fullName: "Warehouse" }} /> : <ImportPlanner />}</ErrorBoundary>;
 }

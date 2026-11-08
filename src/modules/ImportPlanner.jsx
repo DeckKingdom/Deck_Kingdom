@@ -3,6 +3,7 @@ import * as XLSX from "xlsx";
 import { storage, storageMode } from "../data/storage.js";
 import { useDropSync, DropAlert } from "./crm/DropSync.jsx";
 import { useShortLoads, ShortLoadAlert, shortIssueOf } from "./crm/ShortLoads.jsx";
+import DriverPicker from "./DriverPicker.jsx";
 import { loadLoading } from "../data/loading.js";
 import { canCheck } from "../lib/loading.js";
 import { useTrackingAlerts, TrackingAlertPop } from "./crm/TrackingAlerts.jsx";
@@ -272,6 +273,8 @@ export default function ImportPlanner() {
     const t = setInterval(pull, 90000);
     return () => { live = false; clearInterval(t); };
   }, [!!crm, access.role, tab, shortLoads.reports]);
+  const [phonePick, setPhonePick] = useState(false); // admin / manager: open the driver or loading app
+  const canPhoneApps = storageMode !== "supabase" || access.role === "admin" || access.role === "manager";
   // vans loaded and waiting for a second person to double-check: blue count on Loading
   const [checkCount, setCheckCount] = useState(0);
   useEffect(() => {
@@ -1249,6 +1252,11 @@ export default function ImportPlanner() {
 
   const sideFooter = (open) => (
     <div>
+      {canPhoneApps && open && (
+        <button onClick={() => { setSideOpen(false); setPhonePick(true); }} style={{ display: "block", width: "calc(100% - 22px)", margin: "0 11px 10px", padding: "8px 10px", borderRadius: 8, border: "1px solid " + GOLD, background: "transparent", color: GOLD, fontFamily: "inherit", fontWeight: 800, fontSize: 12.5, cursor: "pointer", textAlign: "left" }}>
+          🚚 Driver / loading app
+        </button>
+      )}
       {storageMode === "supabase" && open && (
         <div style={{ color: "#5f729a", fontSize: 11, fontWeight: 700, padding: "0 11px 6px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={getSessionEmail() || ""}>
           {getSessionEmail()}
@@ -1398,6 +1406,12 @@ export default function ImportPlanner() {
           <button onClick={() => setSideOpen(true)} title="Menu" aria-label="Menu"
             style={{ width: 38, height: 38, borderRadius: 8, border: "1px solid #33466b", background: "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flex: "none", padding: 0 }}>
             <Icon name="menu" size={18} stroke="#fff" />
+          </button>
+        )}
+        {isPhone && canPhoneApps && (
+          <button onClick={() => setPhonePick(true)} title="Driver / loading app" aria-label="Driver or loading app"
+            style={{ height: 38, borderRadius: 8, border: "1px solid " + GOLD, background: GOLD, color: NAVY, fontFamily: "inherit", fontWeight: 800, fontSize: 13, cursor: "pointer", flex: "none", padding: "0 10px", order: 99 }}>
+            🚚 Driver app
           </button>
         )}
         {/* back arrow + page name: back to this section's list (or to Imports from a shipment) */}
@@ -2861,6 +2875,7 @@ export default function ImportPlanner() {
       {crm && !dropSync.alerts.length && !shortLoads.alerts.length && trackAlerts.alerts.length > 0 && (
         <TrackingAlertPop alerts={trackAlerts.alerts} onDismiss={trackAlerts.dismiss} onOpen={() => setTab("tracking")} />
       )}
+      {phonePick && <DriverPicker crm={crm} myName={(access.name || "").split(" ")[0] || (storageMode === "supabase" ? "" : "Jon")} onClose={() => setPhonePick(false)} />}
       {crm && !dropSync.alerts.length && shortLoads.alerts.length > 0 && (
         <ShortLoadAlert alerts={shortLoads.alerts} crm={crm} onDismiss={shortLoads.dismiss} onFollowUp={followUpFromLoad} onOpenJob={(id) => openInvoice(id)}
           onOpenLoading={(rep) => { try { sessionStorage.setItem("dk-load-day", rep.date); } catch (e) { /* */ } shortLoads.dismiss(rep); setTab("loading"); }} />

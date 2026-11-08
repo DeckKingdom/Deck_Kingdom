@@ -11,6 +11,7 @@ import { loadDrops, saveDrop, shrinkPhoto, loadEvents, logEvent } from "../data/
 import { runsOn, loadState, canCheck, shortName } from "../lib/loading.js";
 import { loadLoading } from "../data/loading.js";
 import LoadingMobile from "./LoadingMobile.jsx";
+import DriverPicker from "./DriverPicker.jsx";
 import { outwardCode, tidyPostcode, googleNavHref, appleNavHref, isApple } from "../lib/addressCheck.js";
 
 const GREEN = "#28713e";
@@ -24,7 +25,9 @@ const cardS = { background: "#fff", border: "1px solid #e6e9ef", borderRadius: 1
 const field = { width: "100%", boxSizing: "border-box", fontFamily: "inherit", fontSize: 16, padding: "12px 12px", borderRadius: 10, border: "1px solid #d5d9e0", background: "#fff", color: NAVY };
 const label = { display: "block", fontSize: 12, fontWeight: 800, letterSpacing: 0.5, textTransform: "uppercase", color: "#8593a8", margin: "14px 0 6px" };
 
-export default function DriverApp({ me, warehouse }) {
+// switcher: { current, myName } when an admin / manager opened this from the office system
+export default function DriverApp({ me, warehouse, switcher }) {
+  const [picking, setPicking] = useState(false);
   // warehouse logins on a phone get the loading side for every van; drivers get their own runs
   const driver = warehouse ? "" : me.driverName || (me.fullName || "").split(" ")[0] || "";
   const who = me.email || me.fullName || driver || "warehouse";
@@ -71,8 +74,10 @@ export default function DriverApp({ me, warehouse }) {
       )}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontWeight: 800, fontSize: 17 }}>{title}</div>
-        <div style={{ fontSize: 12, color: "#aeb9cf", fontWeight: 600 }}>{driver ? driver + " · " : warehouse ? "Warehouse · " : ""}Deck Kingdom</div>
+        <div style={{ fontSize: 12, color: "#aeb9cf", fontWeight: 600 }}>{switcher ? (driver ? "Viewing as " + driver : "Loading · all vans") + " · you" : (driver ? driver + " · " : warehouse ? "Warehouse · " : "") + "Deck Kingdom"}</div>
       </div>
+      {switcher && <button type="button" onClick={() => setPicking(true)} title="Switch driver / app" style={{ border: "none", background: GOLD, color: NAVY, borderRadius: 10, height: 40, padding: "0 10px", fontFamily: "inherit", fontWeight: 800, fontSize: 13, cursor: "pointer" }}>⇄ Switch</button>}
+      {picking && <DriverPicker crm={crm} myName={switcher.myName} current={switcher.current} onClose={() => setPicking(false)} />}
       <button type="button" onClick={load} title="Refresh" style={{ border: "none", background: "rgba(255,255,255,.12)", color: "#fff", borderRadius: 10, height: 40, padding: "0 12px", fontFamily: "inherit", fontWeight: 700, cursor: "pointer" }}>↻</button>
     </div>
   );
