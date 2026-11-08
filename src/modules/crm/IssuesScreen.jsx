@@ -1,5 +1,5 @@
 // Delivery issues: every drop or pick-up the driver couldn't finish cleanly - items left over,
-// payment not taken, or a note. Each stays LIVE until it's sorted: by hand ("Mark sorted"), or on
+// payment not taken, or a note - and every van that was loaded short. Each stays LIVE until it's sorted: by hand ("Mark sorted"), or on
 // its own once the follow-up job is delivered and / or the job shows paid.
 import { useEffect, useMemo, useState } from "react";
 import { NAVY, RED, GOLD, prettyDateTime } from "../../lib/core.js";
@@ -8,6 +8,7 @@ import { ListHero, HeroStat, Chip, card, sect, lbl, inp, btn, goldBtn, Modal, Se
 import { loadAllDrops, dropLeft, payMissed, updateDrops } from "../../data/drops.js";
 import DropPhotos from "./DropPhotos.jsx";
 import { shortPickupMail } from "../../lib/supplierMail.js";
+import { shortIssueOf, ShortLoadPage } from "./ShortLoads.jsx";
 
 const dayLabel = (s) => (s ? new Date(s + "T00:00:00").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }) : "");
 
@@ -27,12 +28,13 @@ export function issueOf(r, crm) {
   return { parts, live, auto, inv, col, fu, left };
 }
 
-export default function IssuesScreen({ crm, updateCrm, me, openInvoice, openCollection, newFollowUpFromDrop, canEdit, onLiveCount }) {
+export default function IssuesScreen({ crm, updateCrm, me, openInvoice, openCollection, newFollowUpFromDrop, canEdit, onLiveCount, shortLoads, onLoadFollowUp }) {
   const [rows, setRows] = useState(null);
   const [err, setErr] = useState("");
   const [tab, setTab] = useState("live");
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(null);
+  const [openLoad, setOpenLoad] = useState(null);
   const [reload, setReload] = useState(0);
   useEffect(() => {
     let live = true;
@@ -47,26 +49,32 @@ export default function IssuesScreen({ crm, updateCrm, me, openInvoice, openColl
     .sort((a, b) => String(b.r.at).localeCompare(String(a.r.at))), [rows, crm.invoices, crm.collections]);
   const nameOf = (x) => (x.r.collectionId ? ((x.col && x.col.supplier) || "Supplier") + " pick-up" : ((x.inv && custById[x.inv.customerId]) || {}).name || "Customer");
   const refOf = (x) => (x.r.collectionId ? "COL-" + ((x.col && x.col.collectionNo) || "?") : "#" + ((x.inv && x.inv.invNo) || x.r.invNo || "?"));
+  const loads = useMemo(() => ((shortLoads && shortLoads.reports) || []).map((rep) => ({ rep, ...shortIssueOf(rep, crm) })), [shortLoads && shortLoads.reports, crm.invoices]);
+  const liveLoads = loads.filter((x) => x.live);
+  const loadList = loads.filter((x) => (tab === "live" ? x.live : !x.live)).filter((x) => !q.trim() || [x.rep.van, x.rep.driver, x.rep.notes, "short load", ...x.jobs.flatMap((j) => [j.customer, "#" + j.invNo])].some((v) => String(v || "").toLowerCase().includes(q.trim().toLowerCase())));
+  const curLoad = openLoad && loads.find((x) => x.rep.id === openLoad);
   const liveOnes = issues.filter((x) => x.live);
   const list = issues.filter((x) => (tab === "live" ? x.live : !x.live)).filter((x) => !q.trim() || [nameOf(x), refOf(x), x.r.driver, x.r.notes].some((v) => String(v || "").toLowerCase().includes(q.trim().toLowerCase())));
   const cur = open && issues.find((x) => x.r.id === open);
-  useEffect(() => { if (rows && onLiveCount) onLiveCount(liveOnes.length); }, [rows, liveOnes.length]);
+  useEffect(() => { if (rows && onLiveCount) onLiveCount(liveOnes.length + liveLoads.length); }, [rows, liveOnes.length, liveLoads.length]);
+  const entries = [...list.map((x) => ({ at: String(x.r.at), x })), ...loadList.map((l) => ({ at: String(l.rep.completedAt || l.rep.date), l }))].sort((a, b) => b.at.localeCompare(a.at));
   const oldest = liveOnes.length ? liveOnes[liveOnes.length - 1] : null;
   const ageDays = (x) => Math.floor((Date.now() - new Date(x.r.at).getTime()) / 86400000);
 
   return (
     <div style={{ maxWidth: 1320, margin: "0 auto", padding: "18px 18px 40px" }}>
       <ListHero title="Delivery issues" sub="Drops and pick-ups the drivers couldn't finish cleanly — live until they're sorted. Updates every minute.">
-        <HeroStat label="Live" value={rows ? liveOnes.length : "…"} tone={liveOnes.length ? "#ff9aa8" : undefined} onClick={() => setTab("live")} sub={oldest ? "oldest " + ageDays(oldest) + " day" + (ageDays(oldest) === 1 ? "" : "s") : ""} />
+        <HeroStat label="Live" value={rows ? liveOnes.length + liveLoads.length : "…"} tone={liveOnes.length + liveLoads.length ? "#ff9aa8" : undefined} onClick={() => setTab("live")} sub={oldest ? "oldest " + ageDays(oldest) + " day" + (ageDays(oldest) === 1 ? "" : "s") : ""} />
         <HeroStat label="Items still to deliver" value={rows ? liveOnes.filter((x) => x.parts.some((p) => p.kind === "left" && !p.sorted)).length : "…"} />
+        <HeroStat label="Vans loaded short" value={rows ? liveLoads.length : "…"} />
         <HeroStat label="Payments owed" value={rows ? gbp(liveOnes.filter((x) => x.parts.some((p) => p.kind === "pay" && !p.sorted)).reduce((t, x) => t + Number(x.r.payment.owed || 0), 0)) : "…"} />
-        <HeroStat label="Sorted" value={rows ? issues.length - liveOnes.length : "…"} onClick={() => setTab("sorted")} />
+        <HeroStat label="Sorted" value={rows ? issues.length - liveOnes.length + loads.length - liveLoads.length : "…"} onClick={() => setTab("sorted")} />
       </ListHero>
 
       <div style={{ ...card, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "12px 16px" }}>
         {[["live", "Live"], ["sorted", "Sorted"]].map(([k, l]) => (
           <button key={k} onClick={() => setTab(k)} style={{ ...btn, padding: "7px 14px", fontSize: 13, background: tab === k ? (k === "live" ? RED : NAVY) : "#fff", color: tab === k ? "#fff" : NAVY, borderColor: tab === k ? (k === "live" ? RED : NAVY) : "#d5d9e0" }}>
-            {l} {rows ? (k === "live" ? liveOnes.length : issues.length - liveOnes.length) : ""}
+            {l} {rows ? (k === "live" ? liveOnes.length + liveLoads.length : issues.length - liveOnes.length + loads.length - liveLoads.length) : ""}
           </button>
         ))}
         <span style={{ flex: 1 }} />
@@ -75,9 +83,27 @@ export default function IssuesScreen({ crm, updateCrm, me, openInvoice, openColl
 
       {err && <div style={{ ...card, borderColor: "#f4d78f", background: "#fff8e6", color: "#6b5305", fontWeight: 700 }}>{err}</div>}
       {!rows && !err && <div style={{ ...card, textAlign: "center", color: "#8593a8", fontWeight: 600 }}>Loading…</div>}
-      {rows && list.length === 0 && <div style={{ ...card, textAlign: "center", color: tab === "live" ? "#28713e" : "#8593a8", fontWeight: 700 }}>{tab === "live" ? "✓ No live delivery issues." : "Nothing sorted yet."}</div>}
+      {rows && entries.length === 0 && <div style={{ ...card, textAlign: "center", color: tab === "live" ? "#28713e" : "#8593a8", fontWeight: 700 }}>{tab === "live" ? "✓ No live delivery issues." : "Nothing sorted yet."}</div>}
 
-      {list.map((x) => (
+      {entries.map(({ x, l }) => l ? (
+        <div key={"load:" + l.rep.id} onClick={() => setOpenLoad(l.rep.id)}
+          style={{ ...card, cursor: "pointer", display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap", padding: "12px 16px", borderLeft: "6px solid " + (l.live ? RED : "#3FA55C") }}>
+          <div style={{ minWidth: 190 }}>
+            <div style={{ fontWeight: 800, fontSize: 15, color: "#8a5a00" }}>🚚 Short load · {l.rep.van || "No van"}</div>
+            <div style={{ fontSize: 12.5, fontWeight: 600, color: "#5a6a85" }}>{dayLabel(l.rep.date)} · {l.rep.driver}{l.rep.runNo ? " · Run " + l.rep.runNo : ""} · loaded by {String(l.rep.completedBy || "").split("@")[0]}</div>
+          </div>
+          <div style={{ flex: 1, display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {l.jobs.map((j) => (
+              <Chip key={j.invId} tone={j.sorted ? "green" : "red"} title={j.items.map((i) => i.missing + "× " + i.text).join(", ")}>
+                {j.sorted ? "✓ " : ""}{j.customer} #{j.invNo} — {j.items.reduce((t, i) => t + (Number(i.missing) || 0), 0)} missing{j.fu ? " · follow-up #" + j.fu.invNo + (j.sorted ? " delivered" : "") : ""}
+              </Chip>
+            ))}
+            {l.rep.notes && <Chip tone="gold" title={l.rep.notes}>Reason given</Chip>}
+          </div>
+          {l.live ? <Chip tone="red" style={{ fontSize: 12.5 }}>LIVE</Chip>
+            : <Chip tone="green" style={{ fontSize: 12.5 }} title={l.rep.resolution || ""}>{l.rep.resolvedAt ? (/^Posted/.test(l.rep.resolution) ? "📮 Posted " : "Sorted ") + dayLabel(String(l.rep.resolvedAt).slice(0, 10)) : "Sorted itself"}</Chip>}
+        </div>
+      ) : (
         <div key={x.r.id} onClick={() => setOpen(x.r.id)}
           style={{ ...card, cursor: "pointer", display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap", padding: "12px 16px", borderLeft: "6px solid " + (x.live ? RED : "#3FA55C") }}>
           <div style={{ minWidth: 190 }}>
@@ -99,6 +125,8 @@ export default function IssuesScreen({ crm, updateCrm, me, openInvoice, openColl
 
       {cur && <IssuePage crm={crm} x={cur} name={nameOf(cur)} refNo={refOf(cur)} me={me} canEdit={canEdit} onClose={() => setOpen(null)} onChanged={() => setReload((n) => n + 1)}
         openInvoice={openInvoice} openCollection={openCollection} newFollowUpFromDrop={newFollowUpFromDrop} />}
+      {curLoad && <ShortLoadPage crm={crm} rep={curLoad.rep} canEdit={canEdit} onClose={() => setOpenLoad(null)} onOpenJob={openInvoice}
+        onFollowUp={(rep, j) => onLoadFollowUp && onLoadFollowUp(rep, j)} onResolve={shortLoads.resolve} onReopen={shortLoads.reopen} />}
     </div>
   );
 }

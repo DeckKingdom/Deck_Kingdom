@@ -24,6 +24,13 @@ create table if not exists public.load_reports (
   updated_at timestamptz not null default now()
 );
 create index if not exists load_reports_date on public.load_reports (run_date);
+-- closed with items missing: what's short, and the office's follow-up (like a delivery issue)
+alter table public.load_reports add column if not exists short_lines jsonb not null default '[]'::jsonb;
+alter table public.load_reports add column if not exists alert_state text not null default '';  -- '' | open | dismissed
+alter table public.load_reports add column if not exists resolved_at text not null default '';
+alter table public.load_reports add column if not exists resolved_by text not null default '';
+alter table public.load_reports add column if not exists resolution text not null default '';
+alter table public.load_reports add column if not exists followups jsonb not null default '{}'::jsonb; -- job id -> follow-up job no.
 
 create table if not exists public.load_lines (
   report_id text not null,
@@ -36,6 +43,8 @@ create table if not exists public.load_lines (
   loaded_at timestamptz not null default now(),
   primary key (report_id, item_key)
 );
+-- accessories packed in a box rather than counted loose; "boxes:<job id>" rows hold the box count
+alter table public.load_lines add column if not exists boxed boolean not null default false;
 create index if not exists load_lines_date on public.load_lines (run_date);
 
 alter table public.load_reports enable row level security;

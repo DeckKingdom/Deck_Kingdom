@@ -66,3 +66,15 @@ export function loadState(run, counts, report) {
   const complete = total === 0 || !!(report && report.status === "complete");
   return { loaded, part, todo, allocated, unscheduled, total, ready, complete };
 }
+
+// what's missing from a van: [{ invId, invNo, customer, key, text, colour, qty, loaded, missing, why }]
+export function shortLinesOf(run, counts) {
+  const out = [];
+  run.lines.forEach((x) => {
+    const base = { invId: x.inv.id, invNo: x.inv.invNo, customer: x.customer, key: x.key, idx: x.idx, code: x.line.code || "", text: x.line.description || x.line.code, colour: x.line.colour || "", qty: x.qty };
+    if (x.src) { if (!x.src.scheduled) out.push({ ...base, loaded: 0, missing: x.qty, why: "On COL-" + x.src.col.collectionNo + " - pick-up not booked" }); return; }
+    const c = (counts || {})[x.key], got = c ? Number(c.qtyLoaded) || 0 : 0;
+    if (got < x.qty) out.push({ ...base, loaded: got, missing: x.qty - got, why: got ? "Part loaded" : "Not loaded" });
+  });
+  return out;
+}

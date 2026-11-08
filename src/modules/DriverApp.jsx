@@ -284,7 +284,7 @@ function DayRuns({ date, stops, crm, header, onBack, driver }) {
     const run = loadRuns.find((x) => x.runNo === String(r || ""));
     if (!run) return { total: 0, done: 0, open: !!evs && !evErr && !!loadData, rep: null };
     const st = loadState(run, loadData && loadData.counts[run.key], loadData && loadData.reports[run.key]);
-    return { total: st.total, done: st.loaded + st.allocated, open: !!loadData && !loadErr && st.complete, rep: loadData && loadData.reports[run.key], st };
+    return { total: st.total, done: st.loaded + st.allocated, open: !!loadData && !loadErr && st.complete, rep: loadData && loadData.reports[run.key], st, counts: (loadData && loadData.counts[run.key]) || {} };
   };
   // stops open one at a time; a drop waiting on a pick-up is skipped until that pick-up is checked
   const byRun = {};
@@ -354,6 +354,7 @@ function DayRuns({ date, stops, crm, header, onBack, driver }) {
               </div>
               {rs.open && !setOffDone(runKey) ? (
                 <div style={{ background: "#f1faf4", border: "1px solid #bfe3ca", borderRadius: 10, padding: "10px 12px" }}>
+                  {rs.rep && (rs.rep.shortLines || []).length > 0 && <div style={{ color: RED, fontSize: 13.5, fontWeight: 800, marginBottom: 4 }}>⚠ The van went out short — {rs.rep.shortLines.reduce((t, m) => t + (Number(m.missing) || 0), 0)} item{rs.rep.shortLines.reduce((t, m) => t + (Number(m.missing) || 0), 0) === 1 ? "" : "s"} not loaded (marked on each drop). The office knows.</div>}
                   <div style={{ color: GREEN, fontSize: 13.5, fontWeight: 800 }}>✓ {rs.rep && rs.rep.completedAt ? "Loaded & double-checked by " + String(rs.rep.completedBy || "").split("@")[0] + " at " + new Date(rs.rep.completedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : "Ready to go"}</div>
                   <button type="button" onClick={() => setOff(runKey, o.van, o.driver)} disabled={!!leaving}
                     style={{ marginTop: 8, width: "100%", border: "none", borderRadius: 12, padding: 14, fontFamily: "inherit", fontWeight: 800, fontSize: 17, background: NAVY, color: "#fff", cursor: "pointer" }}>
@@ -443,12 +444,15 @@ function DayRuns({ date, stops, crm, header, onBack, driver }) {
                     const k = o.id + ":" + i;
                     const ps = src ? pickedState(src) : null;
                     const on = src ? ps === "ok" : tk(k, runKey);
+                    const miss = !isDone && rs.rep ? (rs.rep.shortLines || []).find((m) => m.key === k) : null;
                     const row = (
                       <>
                         {(loading || src) && <span style={{ ...tickBox(on), ...(src && !on ? { borderStyle: "dashed", borderColor: ps === "short" ? RED : "#8fb3d9" } : {}) }}>{on ? "✓" : ps === "short" ? "!" : ""}</span>}
                         <b style={{ minWidth: 34, textAlign: "right" }}>{l.qty}×</b>
                         <span style={{ flex: 1, color: loading && on ? "#8593a8" : NAVY, textDecoration: loading && on && !src ? "line-through" : "none" }}>
                           {l.description || l.code}{l.colour ? <span style={{ color: "#5a6a85" }}> · {l.colour}</span> : null}
+                          {miss && <span style={{ display: "block", fontSize: 12, fontWeight: 800, color: RED }}>⚠ {miss.loaded ? "Only " + miss.loaded + " of " + miss.qty + " loaded" : "Not loaded"} — {miss.missing} not on the van</span>}
+                          {!isDone && rs.counts[k] && rs.counts[k].boxed && <span style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#8a5a00" }}>📦 Packed in an accessory box</span>}
                           {src && <span style={{ display: "block", fontSize: 12, fontWeight: 700, color: ps === "short" ? RED : ps === "ok" ? GREEN : "#185FA5" }}>
                             {ps === "ok" ? "✓ Collected on COL-" + src.cs.obj.collectionNo : ps === "short" ? "Short at the " + (src.cs.obj.supplier || "supplier") + " pick-up" : "Comes on the " + (src.cs.obj.supplier || "supplier") + " pick-up (COL-" + src.cs.obj.collectionNo + ") — ticks itself once collected"}
                           </span>}
@@ -470,6 +474,7 @@ function DayRuns({ date, stops, crm, header, onBack, driver }) {
                     );
                   })}
                 </div>
+                {!isDone && rs.counts && rs.counts["boxes:" + o.id] && Number(rs.counts["boxes:" + o.id].qtyLoaded) > 0 && <div style={{ marginTop: 8, background: "#fff6dd", border: "1px solid #f0d58c", borderRadius: 8, padding: "8px 10px", fontSize: 14, fontWeight: 800, color: "#6b5305" }}>📦 {rs.counts["boxes:" + o.id].qtyLoaded} accessory box{Number(rs.counts["boxes:" + o.id].qtyLoaded) === 1 ? "" : "es"} for this drop</div>}
                 {o.jobNotes && <div style={{ marginTop: 8, background: "#fff8e6", borderRadius: 8, padding: "8px 10px", fontSize: 13.5, fontWeight: 600 }}>{o.jobNotes}</div>}
                 {owed > 0 && <div style={{ marginTop: 8, background: "#fde8ea", color: RED, borderRadius: 8, padding: "8px 10px", fontSize: 14, fontWeight: 800 }}>Payment to take: {gbp(owed)}</div>}
                 {isCur && completeBtn(x, "Complete this drop", !addr)}

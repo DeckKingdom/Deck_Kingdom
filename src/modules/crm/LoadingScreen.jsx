@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { NAVY, GOLD, RED, prettyDateTime } from "../../lib/core.js";
 import { ListHero, HeroStat, Chip, card, sect, lbl, inp, btn, goldBtn, Modal, Icon } from "./ui.jsx";
-import { runsOn, loadState } from "../../lib/loading.js";
-import { loadLoading, setLoaded, completeReport, reopenReport, clearLoading, loadPhotoUrl } from "../../data/loading.js";
+import { runsOn, loadState, shortLinesOf } from "../../lib/loading.js";
+import { loadLoading, setLoaded, setBoxes, boxKey, completeReport, reopenReport, clearLoading, loadPhotoUrl } from "../../data/loading.js";
 import { shrinkPhoto } from "../../data/drops.js";
 
 const pad = (n) => String(n).padStart(2, "0");
@@ -59,20 +59,22 @@ export default function LoadingScreen({ crm, me, canEdit, canManage, openInvoice
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 12 }}>
         {states.map(({ r, st }) => {
           const rep = data && data.reports[r.key];
-          const tone = st.complete ? GREEN : st.unscheduled ? RED : st.loaded || st.part ? "#a06d00" : NAVY;
+          const short = st.complete && rep && (rep.shortLines || []).length;
+          const tone = short ? RED : st.complete ? GREEN : st.unscheduled ? RED : st.loaded || st.part ? "#a06d00" : NAVY;
           return (
             <button key={r.key} onClick={() => setOpenKey(r.key)}
               style={{ ...card, margin: 0, textAlign: "left", fontFamily: "inherit", color: NAVY, cursor: "pointer", borderTop: "5px solid " + tone }}>
               <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
                 <b style={{ fontSize: 17, flex: 1 }}>{r.van || "No van"}</b>
-                <Chip tone={st.complete ? "green" : st.unscheduled ? "red" : st.loaded || st.part ? "amber" : "grey"}>{st.complete ? "Loaded ✓" : st.loaded || st.part ? "Part loaded" : "Not started"}</Chip>
+                <Chip tone={short ? "red" : st.complete ? "green" : st.unscheduled ? "red" : st.loaded || st.part ? "amber" : "grey"}>{short ? "Went out short ⚠" : st.complete ? "Loaded ✓" : st.loaded || st.part ? "Part loaded" : "Not started"}</Chip>
               </div>
               <div style={{ fontSize: 13, fontWeight: 700, color: "#5a6a85", marginTop: 2 }}>{r.driver}{r.runNo ? " · Run " + r.runNo : ""} · {r.jobs.length} drop{r.jobs.length === 1 ? "" : "s"}{r.pickups.length ? " · " + r.pickups.length + " pick-up" + (r.pickups.length === 1 ? "" : "s") : ""}</div>
               <div style={{ fontSize: 12.5, fontWeight: 600, color: "#8593a8", marginTop: 6 }}>
                 {st.complete && rep && rep.completedAt ? "Closed by " + String(rep.completedBy || "").split("@")[0] + " at " + hm(rep.completedAt) + ((rep.photoPaths || []).length ? " · " + rep.photoPaths.length + " photo" + (rep.photoPaths.length === 1 ? "" : "s") : "")
                   : st.loaded + " of " + st.total + " lines on" + (st.part ? " · " + st.part + " part" : "") + (st.allocated ? " · " + st.allocated + " on pick-ups" : "")}
               </div>
-              {st.unscheduled > 0 && <div style={{ fontSize: 12.5, fontWeight: 800, color: RED, marginTop: 4 }}>{st.unscheduled} line{st.unscheduled === 1 ? "" : "s"} on a pick-up with no date / driver</div>}
+              {short > 0 && <div style={{ fontSize: 12.5, fontWeight: 800, color: RED, marginTop: 4 }}>⚠ {short} line{short === 1 ? "" : "s"} missing — see Delivery issues</div>}
+              {!st.complete && st.unscheduled > 0 && <div style={{ fontSize: 12.5, fontWeight: 800, color: RED, marginTop: 4 }}>{st.unscheduled} line{st.unscheduled === 1 ? "" : "s"} on a pick-up with no date / driver</div>}
               {!st.complete && st.total > 0 && <div style={{ height: 6, background: "#eef1f6", borderRadius: 4, marginTop: 8, overflow: "hidden" }}><div style={{ height: "100%", width: (100 * (st.loaded + st.allocated) / st.total) + "%", background: GOLD }} /></div>}
             </button>
           );
@@ -80,13 +82,14 @@ export default function LoadingScreen({ crm, me, canEdit, canManage, openInvoice
       </div>
 
       {cur && <RunReport run={cur} data={data} me={me} canEdit={canEdit} canManage={canManage} onClose={() => setOpenKey(null)} onChanged={() => setN((x) => x + 1)}
-        setCount={(item, q) => setLoaded(cur, item, q, me).then((row) => setData((d) => ({ ...d, counts: { ...d.counts, [cur.key]: { ...(d.counts[cur.key] || {}), [item.key]: row } } })))}
+        setBoxCount={(invId, b) => setBoxes(cur, invId, b, me).then((row) => setData((d) => ({ ...d, counts: { ...d.counts, [cur.key]: { ...(d.counts[cur.key] || {}), [boxKey(invId)]: row } } })))}
+        setCount={(item, q) => setLoaded(cur, item, q, me, { boxed: !!((data && data.counts[cur.key] || {})[item.key] || {}).boxed }).then((row) => setData((d) => ({ ...d, counts: { ...d.counts, [cur.key]: { ...(d.counts[cur.key] || {}), [item.key]: row } } })))}
         openInvoice={openInvoice} openCollection={openCollection} />}
     </div>
   );
 }
 
-function RunReport({ run, data, me, canEdit, canManage, onClose, onChanged, setCount, openInvoice, openCollection }) {
+function RunReport({ run, data, me, canEdit, canManage, onClose, onChanged, setCount, setBoxCount, openInvoice, openCollection }) {
   const counts = (data && data.counts[run.key]) || {};
   const rep = data && data.reports[run.key];
   const st = loadState(run, counts, rep);
@@ -103,6 +106,9 @@ function RunReport({ run, data, me, canEdit, canManage, onClose, onChanged, setC
       {locked && rep && (
         <div style={{ background: "#f1faf4", border: "1px solid #bfe3ca", borderRadius: 10, padding: "10px 14px", marginBottom: 12 }}>
           <div style={{ color: GREEN, fontWeight: 800, fontSize: 14 }}>✓ Loaded and double-checked by {String(rep.completedBy || "").split("@")[0]} · {prettyDateTime(rep.completedAt)}</div>
+          {(rep.shortLines || []).length > 0 && (
+            <div style={{ marginTop: 6, color: RED, fontWeight: 800, fontSize: 13 }}>⚠ Went out short: {rep.shortLines.map((m) => m.missing + "× " + m.text + " (#" + m.invNo + ")").join(", ")}{rep.resolvedAt ? " · sorted" + (rep.resolution ? " — " + rep.resolution : "") : " · live on Delivery issues"}</div>
+          )}
           {rep.notes && <div style={{ fontSize: 13, fontWeight: 600, color: "#5a6a85", marginTop: 3 }}>{rep.notes}</div>}
           {(rep.photoPaths || []).length > 0 && (
             <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
@@ -127,7 +133,7 @@ function RunReport({ run, data, me, canEdit, canManage, onClose, onChanged, setC
                 <tr key={x.key} style={{ borderTop: "1px solid #f0f2f6" }}>
                   <td style={td}>{x.inv.dropNo || "—"}</td>
                   <td style={td}><button className="dk-title-link" onClick={() => openInvoice(x.inv.id)} style={{ fontWeight: 700, color: NAVY }}>{x.customer}</button> <span style={{ color: "#8593a8", fontSize: 12 }}>#{x.inv.invNo}</span></td>
-                  <td style={td}>{x.line.description || x.line.code}{x.line.colour ? <span style={{ color: "#5a6a85" }}> · {x.line.colour}</span> : null}</td>
+                  <td style={td}>{x.line.description || x.line.code}{x.line.colour ? <span style={{ color: "#5a6a85" }}> · {x.line.colour}</span> : null}{c && c.boxed ? <span style={{ color: "#8a5a00", fontWeight: 700, fontSize: 12 }}> · 📦 in box</span> : null}</td>
                   <td style={tdR}>{x.qty}</td>
                   <td style={tdR}>
                     {x.src ? <span style={{ color: "#aab3c2" }}>—</span>
@@ -151,13 +157,30 @@ function RunReport({ run, data, me, canEdit, canManage, onClose, onChanged, setC
           </tbody>
         </table>
       </div>
+      {run.jobs.some((j) => !j.deliveryCompleted) && (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10, alignItems: "center" }}>
+          <span style={{ fontSize: 12.5, fontWeight: 800, color: "#5a6a85" }}>📦 Accessory boxes:</span>
+          {run.jobs.filter((j) => !j.deliveryCompleted).map((j) => {
+            const nb = counts[boxKey(j.id)] ? counts[boxKey(j.id)].qtyLoaded : 0;
+            const name = (run.lines.find((x) => x.inv.id === j.id) || {}).customer || "#" + j.invNo;
+            return (
+              <span key={j.id} style={{ display: "inline-flex", gap: 6, alignItems: "center", border: "1px solid #e6e9ef", borderRadius: 8, padding: "3px 8px", fontSize: 12.5, fontWeight: 700 }}>
+                {name}
+                {!locked && canEdit && <button style={{ ...btn, padding: "1px 8px" }} disabled={nb <= 0} onClick={() => setBoxCount(j.id, nb - 1).catch((e) => setMsg(String(e.message || e)))}>−</button>}
+                <b>{nb}</b>
+                {!locked && canEdit && <button style={{ ...btn, padding: "1px 8px" }} onClick={() => setBoxCount(j.id, nb + 1).catch((e) => setMsg(String(e.message || e)))}>+</button>}
+              </span>
+            );
+          })}
+        </div>
+      )}
       {msg && <div style={{ marginTop: 10, fontSize: 13, fontWeight: 700, color: RED }}>{msg}</div>}
       <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap", alignItems: "center" }}>
         {!locked && <span style={{ fontSize: 12.5, fontWeight: 700, color: st.ready ? GREEN : "#8593a8" }}>{st.ready ? "Everything's on or booked on a pick-up — ready to close." : [st.todo && st.todo + " not loaded", st.part && st.part + " part loaded", st.unscheduled && st.unscheduled + " pick-up not booked"].filter(Boolean).join(" · ")}</span>}
         <span style={{ flex: 1 }} />
         {canManage && (rep || Object.keys(counts).length > 0) && <button style={{ ...btn, color: RED }} disabled={busy} onClick={() => act(() => clearLoading(run.key))} title="Wipe the counts and the report for this run">Clear loading</button>}
         {locked && canEdit && <button style={{ ...btn, color: RED, borderColor: "#ecc4cb" }} disabled={busy} onClick={() => act(() => reopenReport(run.key))} title="The driver's deliveries lock again until it's closed again">Reopen report</button>}
-        {!locked && canEdit && run.lines.length > 0 && <button style={{ ...goldBtn, color: NAVY, opacity: st.ready ? 1 : 0.45 }} disabled={!st.ready} onClick={() => setClosing(true)}>Double-check & close</button>}
+        {!locked && canEdit && run.lines.length > 0 && <button style={st.ready ? { ...goldBtn, color: NAVY } : { ...btn, color: "#8a5a00", borderColor: "#e7c46a", background: "#fff6dd", fontWeight: 800 }} onClick={() => setClosing(true)}>{st.ready ? "Double-check & close" : "⚠ Close with items missing"}</button>}
         <button style={btn} onClick={onClose}>Close</button>
       </div>
       {closing && <CloseModal run={run} counts={counts} me={me} onClose={() => setClosing(false)} onDone={() => { setClosing(false); onChanged(); }} />}
@@ -171,24 +194,42 @@ function CloseModal({ run, counts, me, onClose, onDone }) {
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
-  const all = run.lines.every((x) => got[x.key]);
-  const ok = all && files.length > 0;
+  const short = shortLinesOf(run, counts);
+  const missingAll = new Set(short.filter((m) => !m.loaded).map((m) => m.key));
+  const toCheck = run.lines.filter((x) => !missingAll.has(x.key));
+  const boxRows = [...new Map(run.lines.map((x) => [x.inv.id, x])).values()].map((x) => ({ key: boxKey(x.inv.id), x, n: counts[boxKey(x.inv.id)] ? counts[boxKey(x.inv.id)].qtyLoaded : 0 })).filter((b) => b.n > 0);
+  const all = toCheck.every((x) => got[x.key]) && boxRows.every((b) => got[b.key]);
+  const reasonOk = !short.length || notes.trim().length >= 3;
+  const ok = all && files.length > 0 && reasonOk;
   return (
     <Modal title={"Double-check · " + (run.van || run.driver)} onClose={() => !busy && onClose()} width={640} z={90}>
+      {short.length > 0 && (
+        <div style={{ background: "#fdf3f4", border: "1px solid #f4b9c1", borderRadius: 10, padding: "10px 14px", marginBottom: 10 }}>
+          <div style={{ color: RED, fontWeight: 800 }}>⚠ This van is going out short — the office gets an alert to raise a job or post the parts</div>
+          {short.map((m) => <div key={m.key} style={{ fontSize: 12.5, fontWeight: 600, marginTop: 3 }}><b>{m.missing}×</b> {m.text}{m.colour ? " · " + m.colour : ""} <span style={{ color: RED }}>· {m.customer} #{m.invNo} · {m.why}</span></div>)}
+        </div>
+      )}
       <div style={{ fontSize: 13, fontWeight: 600, color: "#5a6a85", marginBottom: 8 }}>Go round the van and tick each line as you see it — then add a photo of the loaded van.</div>
       <div style={{ maxHeight: "44vh", overflowY: "auto" }}>
-        {run.lines.map((x) => (
+        {boxRows.map((b) => (
+          <label key={b.key} style={{ display: "flex", gap: 10, alignItems: "center", padding: "7px 0", borderBottom: "1px solid #f0f2f6", fontSize: 13.5, cursor: "pointer" }}>
+            <input type="checkbox" checked={!!got[b.key]} onChange={() => setGot((g) => ({ ...g, [b.key]: !g[b.key] }))} style={{ width: 18, height: 18 }} />
+            <b>{b.n}×</b> <span style={{ flex: 1 }}>📦 accessory box{b.n === 1 ? "" : "es"} <span style={{ color: "#8593a8", fontSize: 12 }}>· {b.x.customer}</span></span>
+          </label>
+        ))}
+        {toCheck.map((x) => (
           <label key={x.key} style={{ display: "flex", gap: 10, alignItems: "center", padding: "7px 0", borderBottom: "1px solid #f0f2f6", fontSize: 13.5, cursor: "pointer" }}>
             <input type="checkbox" checked={!!got[x.key]} onChange={() => setGot((g) => ({ ...g, [x.key]: !g[x.key] }))} style={{ width: 18, height: 18 }} />
             <b>{x.qty}×</b> <span style={{ flex: 1 }}>{x.line.description || x.line.code}{x.line.colour ? " · " + x.line.colour : ""} <span style={{ color: x.src ? BLUE : "#8593a8", fontSize: 12 }}>· {x.customer}{x.src ? " · pick-up COL-" + x.src.col.collectionNo : ""}</span></span>
           </label>
         ))}
       </div>
-      <span style={{ ...lbl, marginTop: 12 }}>Photos of the loaded van</span>
+      <span style={{ ...lbl, marginTop: 12 }}>Photos of the loaded van <span style={{ color: RED, textTransform: "none" }}>— required</span></span>
       <input type="file" accept="image/*" multiple onChange={(e) => setFiles([...files, ...Array.from(e.target.files || [])])} />
       {files.length > 0 && <div style={{ fontSize: 12.5, fontWeight: 700, color: GREEN, marginTop: 4 }}>{files.length} photo{files.length === 1 ? "" : "s"} added</div>}
-      <span style={{ ...lbl, marginTop: 12 }}>Notes</span>
-      <input style={inp} value={notes} onChange={(e) => setNotes(e.target.value)} />
+      <span style={{ ...lbl, marginTop: 12 }}>{short.length ? <>Why is it going out short? <span style={{ color: RED, textTransform: "none" }}>— required</span></> : "Notes"}</span>
+      <input style={inp} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder={short.length ? "e.g. boards out of stock - due Thursday" : ""} />
+      {!ok && <div style={{ fontSize: 12.5, fontWeight: 700, color: "#8593a8", marginTop: 6 }}>{!all ? "Tick every line that's on the van." : !files.length ? "Add a photo of the loaded van." : "Say why it's going out short."}</div>}
       {msg && <div style={{ marginTop: 10, fontSize: 13, fontWeight: 700, color: RED }}>{msg}</div>}
       <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 14 }}>
         <button style={btn} disabled={busy} onClick={onClose}>Cancel</button>
@@ -196,12 +237,13 @@ function CloseModal({ run, counts, me, onClose, onDone }) {
           setBusy(true); setMsg("");
           try {
             const blobs = []; for (const f of files) blobs.push(await shrinkPhoto(f));
-            const checked = run.lines.map((x) => ({ key: x.key, qty: x.qty, loaded: x.src ? 0 : (counts[x.key] ? counts[x.key].qtyLoaded : 0), pickup: x.src ? "COL-" + x.src.col.collectionNo : "", text: x.line.description || x.line.code, job: x.inv.invNo }));
-            await completeReport(run, { checked, photos: blobs, notes: notes.trim(), who: me });
+            const checked = run.lines.map((x) => ({ key: x.key, qty: x.qty, loaded: x.src ? 0 : (counts[x.key] ? counts[x.key].qtyLoaded : 0), boxed: !!(counts[x.key] && counts[x.key].boxed), pickup: x.src ? "COL-" + x.src.col.collectionNo : "", text: x.line.description || x.line.code, job: x.inv.invNo }))
+              .concat(boxRows.map((b) => ({ key: b.key, boxes: b.n, text: b.n + " accessory box" + (b.n === 1 ? "" : "es"), job: b.x.inv.invNo })));
+            await completeReport(run, { checked, photos: blobs, notes: notes.trim(), who: me, shortLines: short });
             onDone();
           } catch (e) { setMsg("Couldn't close it — " + ((e && e.message) || e)); }
           setBusy(false);
-        }}>{busy ? "Closing…" : "Close the loading report"}</button>
+        }}>{busy ? "Closing…" : short.length ? "⚠ Close — going out short" : "Close the loading report"}</button>
       </div>
     </Modal>
   );

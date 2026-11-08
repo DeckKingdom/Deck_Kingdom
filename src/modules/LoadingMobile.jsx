@@ -1,13 +1,15 @@
 // Loading on a phone: pick a day, pick a van, count every line on (any order, part loads fine),
 // then close the loading report - every line re-ticked as a second check, and photos of the van.
+// Accessories packed in boxes: count them as boxed and log how many boxes each job has.
+// A van that goes out short can still be closed, with a reason - the office gets a short-load alert.
 // Drivers see only their own runs; the warehouse sees every van.
 import { useEffect, useState } from "react";
 import { NAVY, GOLD, RED } from "../lib/core.js";
-import { runsOn, loadState } from "../lib/loading.js";
-import { loadLoading, setLoaded, completeReport } from "../data/loading.js";
+import { runsOn, loadState, shortLinesOf } from "../lib/loading.js";
+import { loadLoading, setLoaded, setBoxes, boxKey, completeReport } from "../data/loading.js";
 import { shrinkPhoto } from "../data/drops.js";
 
-const GREEN = "#28713e", BLUE = "#185FA5";
+const GREEN = "#28713e", BLUE = "#185FA5", AMBER = "#a06d00";
 const pad = (n) => String(n).padStart(2, "0");
 const ymd = (d) => d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
 const hm = (t) => (t ? new Date(t).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : "");
@@ -41,7 +43,8 @@ export default function LoadingMobile({ crm, driver, who, header, onBack, nav })
     if (!run) return <div>{header("Loading", () => setRunKey(null))}<div style={{ padding: 14 }}><div style={cardS}>This run isn't on the schedule any more.</div></div></div>;
     return <LoadRun run={run} data={data} who={who} header={header} err={err}
       onBack={() => { setRunKey(null); refresh(); }}
-      onCount={(item, q) => setLoaded(run, item, q, who).then((row) => setData((d) => ({ ...d, counts: { ...d.counts, [run.key]: { ...(d.counts[run.key] || {}), [item.key]: row } } })))}
+      onCount={(item, q, boxed) => setLoaded(run, item, q, who, { boxed }).then((row) => setData((d) => ({ ...d, counts: { ...d.counts, [run.key]: { ...(d.counts[run.key] || {}), [item.key]: row } } })))}
+      onBoxes={(invId, b) => setBoxes(run, invId, b, who).then((row) => setData((d) => ({ ...d, counts: { ...d.counts, [run.key]: { ...(d.counts[run.key] || {}), [boxKey(invId)]: row } } })))}
       onClosed={(rep) => setData((d) => ({ ...d, reports: { ...d.reports, [run.key]: { ...rep, id: run.key } } }))} />;
   }
 
@@ -57,17 +60,18 @@ export default function LoadingMobile({ crm, driver, who, header, onBack, nav })
           {runs.map((r) => {
             const st = stateOf(r);
             const rep = data && data.reports[r.key];
-            const tone = st.complete ? GREEN : st.loaded || st.part ? "#a06d00" : NAVY;
+            const short = st.complete && rep && (rep.shortLines || []).length;
+            const tone = short ? RED : st.complete ? GREEN : st.loaded || st.part ? AMBER : NAVY;
             return (
               <button key={r.key} type="button" onClick={() => setRunKey(r.key)}
                 style={{ ...cardS, width: "100%", textAlign: "left", fontFamily: "inherit", color: NAVY, cursor: "pointer", borderLeft: "6px solid " + tone, display: "block" }}>
                 <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
                   <b style={{ fontSize: 17, flex: 1 }}>{r.van || "No van"}</b>
-                  <span style={{ fontSize: 12, fontWeight: 800, color: tone }}>{st.complete ? "✓ LOADED" : st.loaded || st.part ? "PART LOADED" : "NOT STARTED"}</span>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: tone }}>{short ? "⚠ WENT OUT SHORT" : st.complete ? "✓ LOADED" : st.loaded || st.part ? "PART LOADED" : "NOT STARTED"}</span>
                 </div>
                 <div style={{ fontSize: 13, fontWeight: 700, color: "#5a6a85", marginTop: 2 }}>{r.driver}{r.runNo ? " · Run " + r.runNo : ""} · {r.jobs.length} drop{r.jobs.length === 1 ? "" : "s"}{r.pickups.length ? " · " + r.pickups.length + " pick-up" + (r.pickups.length === 1 ? "" : "s") : ""}</div>
                 <div style={{ fontSize: 12.5, fontWeight: 600, color: "#8593a8", marginTop: 4 }}>
-                  {st.complete && rep && rep.completedAt ? "Closed by " + String(rep.completedBy || "").split("@")[0] + " at " + hm(rep.completedAt)
+                  {st.complete && rep && rep.completedAt ? "Closed by " + String(rep.completedBy || "").split("@")[0] + " at " + hm(rep.completedAt) + (short ? " · " + short + " line" + (short === 1 ? "" : "s") + " missing" : "")
                     : st.loaded + " of " + st.total + " lines on" + (st.part ? " · " + st.part + " part" : "") + (st.allocated ? " · " + st.allocated + " on pick-ups" : "") + (st.unscheduled ? " · " + st.unscheduled + " pick-up not booked" : "")}
                 </div>
                 {!st.complete && st.total > 0 && <div style={{ height: 6, background: "#eef1f6", borderRadius: 4, marginTop: 8, overflow: "hidden" }}><div style={{ height: "100%", width: (100 * (st.loaded + st.allocated) / st.total) + "%", background: GOLD }} /></div>}
@@ -107,7 +111,7 @@ export default function LoadingMobile({ crm, driver, who, header, onBack, nav })
 }
 
 // ===== one van: count each line on =====
-function LoadRun({ run, data, who, header, err, onBack, onCount, onClosed }) {
+function LoadRun({ run, data, who, header, err, onBack, onCount, onBoxes, onClosed }) {
   const counts = (data && data.counts[run.key]) || {};
   const rep = data && data.reports[run.key];
   const st = loadState(run, counts, rep);
@@ -129,7 +133,10 @@ function LoadRun({ run, data, who, header, err, onBack, onCount, onClosed }) {
         {(err || msg) && <div style={{ ...cardS, borderColor: "#f4b9c1", background: "#fdf3f4", color: RED, fontWeight: 700 }}>{err || msg}</div>}
         <div style={{ ...cardS, background: locked ? "#f1faf4" : "#fff", borderColor: locked ? "#bfe3ca" : "#e6e9ef" }}>
           {locked ? (
-            <div style={{ color: GREEN, fontWeight: 800 }}>✓ Loading report closed by {String(rep.completedBy || "").split("@")[0]} at {hm(rep.completedAt)} — the driver's deliveries are open. Ask the office to reopen it if something changes.</div>
+            <>
+              <div style={{ color: GREEN, fontWeight: 800 }}>✓ Loading report closed by {String(rep.completedBy || "").split("@")[0]} at {hm(rep.completedAt)} — the driver's deliveries are open. Ask the office to reopen it if something changes.</div>
+              {(rep.shortLines || []).length > 0 && <div style={{ marginTop: 8, color: RED, fontWeight: 800, fontSize: 13.5 }}>⚠ Went out short — {rep.shortLines.length} line{rep.shortLines.length === 1 ? "" : "s"} missing. The office has been alerted.</div>}
+            </>
           ) : (
             <>
               <div style={{ fontWeight: 800 }}>{st.loaded} of {st.total} lines on the van{st.allocated ? " · " + st.allocated + " coming on pick-ups" : ""}</div>
@@ -169,31 +176,49 @@ function LoadRun({ run, data, who, header, err, onBack, onCount, onClosed }) {
                   style={{ display: "flex", gap: 10, alignItems: "center", width: "100%", border: "none", borderTop: "1px solid #f3f5f8", background: "none", fontFamily: "inherit", color: NAVY, textAlign: "left", fontSize: 14.5, padding: "10px 0", cursor: locked ? "default" : "pointer" }}>
                   <span style={{ ...tickBox(full), ...(part ? { borderColor: GOLD, background: "#fff6dd", color: "#a06d00" } : {}) }}>{full ? "✓" : part ? "½" : ""}</span>
                   <span style={{ flex: 1 }}><b>{x.qty}×</b> {x.line.description || x.line.code}{x.line.colour ? <span style={{ color: "#5a6a85" }}> · {x.line.colour}</span> : null}</span>
-                  <span style={{ fontSize: 13, fontWeight: 800, color: full ? GREEN : part ? "#a06d00" : "#aab3c2", whiteSpace: "nowrap" }}>{got} / {x.qty}</span>
+                  <span style={{ fontSize: 13, fontWeight: 800, color: full ? GREEN : part ? AMBER : "#aab3c2", whiteSpace: "nowrap", textAlign: "right" }}>{got} / {x.qty}{c && c.boxed ? <span style={{ display: "block", fontSize: 11, color: "#8a5a00" }}>📦 in box</span> : null}</span>
                 </button>
               );
             })}
+            <BoxRow n={counts[boxKey(g.inv.id)] ? counts[boxKey(g.inv.id)].qtyLoaded : 0} locked={locked}
+              onSet={(b) => { setMsg(""); onBoxes(g.inv.id, b).catch(() => setMsg("Couldn't save the box count — check your signal and try again.")); }} />
           </div>
         ))}
         {!locked && run.lines.length > 0 && (
           <>
-            <button type="button" disabled={!st.ready} onClick={() => setClosing(true)} style={{ ...bigBtn(st.ready, NAVY), marginTop: 6 }}>{st.ready ? "Close the loading report" : "🔒 Close the loading report"}</button>
-            {!st.ready && <div style={{ marginTop: 6, fontSize: 12.5, fontWeight: 700, color: "#8593a8", textAlign: "center" }}>
-              {[st.todo ? st.todo + " line" + (st.todo === 1 ? "" : "s") + " not loaded" : "", st.part ? st.part + " part loaded" : "", st.unscheduled ? st.unscheduled + " pick-up" + (st.unscheduled === 1 ? "" : "s") + " not booked" : ""].filter(Boolean).join(" · ")} — the report closes once everything's on or booked on a pick-up.
+            <button type="button" onClick={() => setClosing(true)} style={{ ...bigBtn(true, st.ready ? NAVY : AMBER), marginTop: 6 }}>{st.ready ? "Close the loading report" : "⚠ Close with items missing"}</button>
+            {!st.ready && <div style={{ marginTop: 6, fontSize: 12.5, fontWeight: 700, color: AMBER, textAlign: "center" }}>
+              {[st.todo ? st.todo + " line" + (st.todo === 1 ? "" : "s") + " not loaded" : "", st.part ? st.part + " part loaded" : "", st.unscheduled ? st.unscheduled + " pick-up" + (st.unscheduled === 1 ? "" : "s") + " not booked" : ""].filter(Boolean).join(" · ")} — finish loading if you can. If the van has to go short, close it with a reason and the office will sort the missing parts.
             </div>}
           </>
         )}
       </div>
       {counting && <CountSheet item={counting} current={counts[counting.key] ? counts[counting.key].qtyLoaded : null}
         onClose={() => setCounting(null)}
-        onSave={(q) => { setCounting(null); setMsg(""); onCount(counting, q).catch(() => setMsg("Couldn't save that count — check your signal and try again.")); }} />}
+        boxed={!!(counts[counting.key] && counts[counting.key].boxed)}
+        onSave={(q, bx) => { setCounting(null); setMsg(""); onCount(counting, q, bx).catch(() => setMsg("Couldn't save that count — check your signal and try again.")); }} />}
+    </div>
+  );
+}
+
+// how many accessory boxes this job has on the van
+function BoxRow({ n, locked, onSet }) {
+  const b = (on) => ({ width: 40, height: 40, borderRadius: 10, border: "1px solid #d5d9e0", background: "#fff", color: on ? NAVY : "#c4cbd6", fontFamily: "inherit", fontWeight: 900, fontSize: 20, cursor: on ? "pointer" : "default" });
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 0 2px", borderTop: "1px solid #f3f5f8" }}>
+      <span style={{ fontSize: 20 }}>📦</span>
+      <span style={{ flex: 1, fontSize: 14, fontWeight: 700 }}>Accessory boxes<span style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: "#8593a8" }}>Screws, clips, fixings etc. packed together</span></span>
+      {!locked && <button type="button" disabled={n <= 0} onClick={() => onSet(n - 1)} style={b(n > 0)}>−</button>}
+      <b style={{ minWidth: 26, textAlign: "center", fontSize: 18, color: n ? NAVY : "#aab3c2" }}>{n}</b>
+      {!locked && <button type="button" onClick={() => onSet(n + 1)} style={b(true)}>+</button>}
     </div>
   );
 }
 
 // type the count - no "all" button, so it has to be counted
-function CountSheet({ item, current, onClose, onSave }) {
+function CountSheet({ item, current, boxed: wasBoxed, onClose, onSave }) {
   const [v, setV] = useState("");
+  const [boxed, setBoxed] = useState(!!wasBoxed);
   const q = v === "" ? null : Number(v);
   const over = q !== null && q > item.qty;
   return (
@@ -205,10 +230,14 @@ function CountSheet({ item, current, onClose, onSave }) {
         <input autoFocus inputMode="numeric" value={v} placeholder="Count them and type the number" onChange={(e) => setV(e.target.value.replace(/[^\d]/g, ""))}
           style={{ ...field, fontSize: 26, fontWeight: 800, textAlign: "center", borderColor: over ? RED : "#d5d9e0" }} />
         {over && <div style={{ marginTop: 6, fontSize: 13, fontWeight: 700, color: RED }}>That's more than the {item.qty} on the job — check the count.</div>}
-        {q !== null && !over && q < item.qty && <div style={{ marginTop: 6, fontSize: 13, fontWeight: 700, color: "#a06d00" }}>Part load — {item.qty - q} still to go on.</div>}
+        {q !== null && !over && q < item.qty && <div style={{ marginTop: 6, fontSize: 13, fontWeight: 700, color: AMBER }}>Part load — {item.qty - q} still to go on.</div>}
+        <button type="button" onClick={() => setBoxed((x) => !x)} style={{ display: "flex", gap: 10, alignItems: "center", width: "100%", marginTop: 12, padding: "11px 12px", borderRadius: 10, border: "1px solid " + (boxed ? "#e7c46a" : "#d5d9e0"), background: boxed ? "#fff6dd" : "#fff", fontFamily: "inherit", color: NAVY, fontWeight: 700, fontSize: 14.5, textAlign: "left", cursor: "pointer" }}>
+          <span style={{ ...tickBox(boxed), ...(boxed ? { borderColor: GOLD, background: GOLD, color: NAVY } : {}) }}>{boxed ? "✓" : ""}</span>
+          📦 Packed in an accessory box
+        </button>
         <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
           <button type="button" onClick={onClose} style={{ ...bigBtn(true, "#fff"), color: NAVY, border: "1px solid #d5d9e0", flex: 1 }}>Cancel</button>
-          <button type="button" disabled={q === null || over} onClick={() => onSave(q)} style={{ ...bigBtn(q !== null && !over), flex: 2 }}>Save count</button>
+          <button type="button" disabled={q === null || over} onClick={() => onSave(q, boxed)} style={{ ...bigBtn(q !== null && !over), flex: 2 }}>Save count</button>
         </div>
       </div>
     </div>
@@ -222,16 +251,24 @@ function CloseReport({ run, counts, who, header, onBack, onClosed }) {
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
-  const all = run.lines.every((x) => got[x.key]);
-  const ok = all && photos.length > 0;
+  const short = shortLinesOf(run, counts);
+  const missingAll = new Set(short.filter((m) => !m.loaded).map((m) => m.key));
+  // re-tick what's actually on (or booked on a pick-up), plus each job's accessory boxes
+  const toCheck = run.lines.filter((x) => !missingAll.has(x.key)).map((x) => ({ key: x.key, x, part: short.find((m) => m.key === x.key) }));
+  const jobs = [...new Map(run.lines.map((x) => [x.inv.id, x])).values()];
+  const boxRows = jobs.map((x) => ({ key: boxKey(x.inv.id), x, n: counts[boxKey(x.inv.id)] ? counts[boxKey(x.inv.id)].qtyLoaded : 0 })).filter((b) => b.n > 0);
+  const all = toCheck.every((t) => got[t.key]) && boxRows.every((b) => got[b.key]);
+  const reasonOk = !short.length || notes.trim().length >= 3;
+  const ok = all && photos.length > 0 && reasonOk;
   const save = async () => {
     if (!ok || busy) return;
     setBusy(true); setMsg("");
     try {
       const blobs = [];
       for (const p of photos) blobs.push(await shrinkPhoto(p.file));
-      const checked = run.lines.map((x) => ({ key: x.key, qty: x.qty, loaded: x.src ? 0 : (counts[x.key] ? counts[x.key].qtyLoaded : 0), pickup: x.src ? "COL-" + x.src.col.collectionNo : "", text: x.line.description || x.line.code, job: x.inv.invNo }));
-      const rep = await completeReport(run, { checked, photos: blobs, notes: notes.trim(), who });
+      const checked = run.lines.map((x) => ({ key: x.key, qty: x.qty, loaded: x.src ? 0 : (counts[x.key] ? counts[x.key].qtyLoaded : 0), boxed: !!(counts[x.key] && counts[x.key].boxed), pickup: x.src ? "COL-" + x.src.col.collectionNo : "", text: x.line.description || x.line.code, job: x.inv.invNo }))
+        .concat(boxRows.map((b) => ({ key: b.key, boxes: b.n, text: b.n + " accessory box" + (b.n === 1 ? "" : "es"), job: b.x.inv.invNo })));
+      const rep = await completeReport(run, { checked, photos: blobs, notes: notes.trim(), who, shortLines: short });
       onClosed(rep);
     } catch (e) { setMsg("Couldn't close it — " + ((e && e.message) || e) + ". Check your signal and try again."); }
     setBusy(false);
@@ -240,22 +277,48 @@ function CloseReport({ run, counts, who, header, onBack, onClosed }) {
     <div>
       {header("Double-check · " + (run.van || run.driver), onBack)}
       <div style={{ padding: 14 }}>
+        {short.length > 0 && (
+          <div style={{ ...cardS, borderColor: "#f4b9c1", background: "#fdf3f4" }}>
+            <div style={{ fontWeight: 800, fontSize: 16, color: RED }}>⚠ This van is going out short</div>
+            <div style={{ fontSize: 12.5, fontWeight: 600, color: "#5a6a85", marginTop: 3 }}>The office gets an alert with this list so they can raise a job or post the missing parts.</div>
+            {short.map((m) => (
+              <div key={m.key} style={{ padding: "8px 0", borderTop: "1px solid #f4dfe2", fontSize: 14 }}>
+                <b>{m.missing}×</b> {m.text}{m.colour ? <span style={{ color: "#5a6a85" }}> · {m.colour}</span> : null}
+                <span style={{ display: "block", fontSize: 12, fontWeight: 700, color: RED }}>{m.customer} · #{m.invNo} · {m.why}{m.loaded ? " (" + m.loaded + " of " + m.qty + " on)" : ""}</span>
+              </div>
+            ))}
+          </div>
+        )}
         <div style={cardS}>
           <div style={{ fontWeight: 800, fontSize: 16 }}>Go round the van again and tick each line as you see it</div>
           <div style={{ fontSize: 12.5, fontWeight: 600, color: "#5a6a85", marginTop: 3 }}>This is the second check — don't tick from memory.</div>
-          {run.lines.map((x) => {
+          {toCheck.map(({ x, part }) => {
             const on = !!got[x.key];
+            const c = counts[x.key];
             return (
               <button key={x.key} type="button" onClick={() => setGot((g) => ({ ...g, [x.key]: !g[x.key] }))}
                 style={{ display: "flex", gap: 10, alignItems: "center", width: "100%", border: "none", borderBottom: "1px solid #f3f5f8", background: "none", fontFamily: "inherit", color: NAVY, textAlign: "left", fontSize: 14.5, padding: "10px 0", cursor: "pointer" }}>
                 <span style={tickBox(on)}>{on ? "✓" : ""}</span>
-                <span style={{ flex: 1 }}><b>{x.qty}×</b> {x.line.description || x.line.code}{x.line.colour ? <span style={{ color: "#5a6a85" }}> · {x.line.colour}</span> : null}
-                  <span style={{ display: "block", fontSize: 12, fontWeight: 700, color: x.src ? BLUE : "#8593a8" }}>{x.customer} · #{x.inv.invNo}{x.src ? " · on pick-up COL-" + x.src.col.collectionNo : ""}</span>
+                <span style={{ flex: 1 }}><b>{part ? part.loaded + " of " + x.qty : x.qty}×</b> {x.line.description || x.line.code}{x.line.colour ? <span style={{ color: "#5a6a85" }}> · {x.line.colour}</span> : null}
+                  <span style={{ display: "block", fontSize: 12, fontWeight: 700, color: x.src ? BLUE : part ? AMBER : "#8593a8" }}>{x.customer} · #{x.inv.invNo}{x.src ? " · on pick-up COL-" + x.src.col.collectionNo : ""}{c && c.boxed ? " · 📦 in a box" : ""}{part ? " · part load" : ""}</span>
                 </span>
               </button>
             );
           })}
-          <span style={label}>Photos of the loaded van <span style={{ textTransform: "none", fontWeight: 600 }}>— at least one</span></span>
+          {boxRows.map((b) => {
+            const on = !!got[b.key];
+            return (
+              <button key={b.key} type="button" onClick={() => setGot((g) => ({ ...g, [b.key]: !g[b.key] }))}
+                style={{ display: "flex", gap: 10, alignItems: "center", width: "100%", border: "none", borderBottom: "1px solid #f3f5f8", background: "none", fontFamily: "inherit", color: NAVY, textAlign: "left", fontSize: 14.5, padding: "10px 0", cursor: "pointer" }}>
+                <span style={tickBox(on)}>{on ? "✓" : ""}</span>
+                <span style={{ flex: 1 }}><b>{b.n}×</b> 📦 accessory box{b.n === 1 ? "" : "es"}
+                  <span style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#8593a8" }}>{b.x.customer} · #{b.x.inv.invNo}</span>
+                </span>
+              </button>
+            );
+          })}
+          {toCheck.length + boxRows.length === 0 && <div style={{ padding: "10px 0", fontSize: 13.5, fontWeight: 700, color: "#8593a8" }}>Nothing on the van to re-check.</div>}
+          <span style={label}>Photos of the loaded van <span style={{ textTransform: "none", fontWeight: 600, color: RED }}>— required, at least one</span></span>
           {photos.length > 0 && (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginBottom: 8 }}>
               {photos.map((p, k) => (
@@ -273,11 +336,11 @@ function CloseReport({ run, counts, who, header, onBack, onClosed }) {
               📷 {photos.length ? "Add another photo (" + photos.length + ")" : "Take a photo of the loaded van"}
             </label>
           )}
-          <span style={label}>Notes (optional)</span>
-          <textarea style={{ ...field, minHeight: 60, resize: "vertical" }} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="e.g. trims strapped to the roof rack" />
+          <span style={label}>{short.length ? <>Why is it going out short? <span style={{ textTransform: "none", fontWeight: 600, color: RED }}>— required</span></> : "Notes (optional)"}</span>
+          <textarea style={{ ...field, minHeight: 60, resize: "vertical", borderColor: short.length && !reasonOk ? "#f4b9c1" : "#d5d9e0" }} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder={short.length ? "e.g. boards out of stock - due Thursday" : "e.g. trims strapped to the roof rack"} />
           {msg && <div style={{ marginTop: 10, color: RED, fontWeight: 700 }}>{msg}</div>}
-          <button type="button" disabled={!ok || busy} onClick={save} style={{ ...bigBtn(ok), marginTop: 14 }}>{busy ? "Closing…" : "Close the loading report"}</button>
-          {!ok && <div style={{ marginTop: 6, fontSize: 12.5, fontWeight: 700, color: "#8593a8", textAlign: "center" }}>{!all ? "Tick every line again." : "Add a photo of the loaded van."}</div>}
+          <button type="button" disabled={!ok || busy} onClick={save} style={{ ...bigBtn(ok, short.length ? AMBER : GREEN), marginTop: 14 }}>{busy ? "Closing…" : short.length ? "⚠ Close — van going out short" : "Close the loading report"}</button>
+          {!ok && <div style={{ marginTop: 6, fontSize: 12.5, fontWeight: 700, color: "#8593a8", textAlign: "center" }}>{!all ? "Tick every line again." : !photos.length ? "Add a photo of the loaded van." : "Say why it's going out short."}</div>}
           <div style={{ marginTop: 6, fontSize: 12.5, fontWeight: 600, color: "#8593a8", textAlign: "center" }}>Closing it opens the driver's deliveries for this run.</div>
         </div>
       </div>

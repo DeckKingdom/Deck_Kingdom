@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import * as XLSX from "xlsx";
 import { storage, storageMode } from "../data/storage.js";
 import { useDropSync, DropAlert } from "./crm/DropSync.jsx";
+import { useShortLoads, ShortLoadAlert, shortIssueOf } from "./crm/ShortLoads.jsx";
 import { useTrackingAlerts, TrackingAlertPop } from "./crm/TrackingAlerts.jsx";
 import { fleetSettings } from "../lib/tracking.js";
 import { signOut, getSessionEmail, getMyAccess } from "../data/auth.js";
@@ -253,18 +254,22 @@ export default function ImportPlanner() {
   // pop-up alerts: admin logins (plus anyone named in the tracking rates), on a desktop - never phones
   const alertsMine = !!crm && !isPhone && (storageMode !== "supabase" || access.role === "admin" || String(getSessionEmail() || "").toLowerCase() === String(fleetSettings(crm).alertsTo || "").toLowerCase());
   const dropSync = useDropSync({ crm, updateCrm: updateCrmRaw, me: storageMode === "supabase" ? getSessionEmail() || "" : "", enabled: !!crm && access.canEdit, alertsOn: alertsMine });
+  // vans loaded short: alert + Delivery issues
+  const shortLoads = useShortLoads({ enabled: !!crm && (access.canTab("issues") || alertsMine), alertsOn: alertsMine, me: storageMode === "supabase" ? getSessionEmail() || "" : "" });
   // live delivery issues, for the red count on the menu
   const [issueCount, setIssueCount] = useState(0);
   const crmRefForIssues = useRef(crm);
   crmRefForIssues.current = crm;
+  const loadsRef = useRef([]);
+  loadsRef.current = shortLoads.reports;
   useEffect(() => {
     if (!crm || !access.canTab("issues")) return;
     let live = true;
-    const pull = () => loadAllDrops().then((l) => { const c = crmRefForIssues.current; if (live && c) setIssueCount(l.filter((r) => !r.voidedAt && issueOf(r, c).live).length); }).catch(() => {});
+    const pull = () => loadAllDrops().then((l) => { const c = crmRefForIssues.current; if (live && c) setIssueCount(l.filter((r) => !r.voidedAt && issueOf(r, c).live).length + loadsRef.current.filter((x) => shortIssueOf(x, c).live).length); }).catch(() => {});
     pull();
     const t = setInterval(pull, 90000);
     return () => { live = false; clearInterval(t); };
-  }, [!!crm, access.role, tab]);
+  }, [!!crm, access.role, tab, shortLoads.reports]);
   const trackAlerts = useTrackingAlerts({ crm, enabled: alertsMine && access.canTab("tracking") });
   const [selCustomerId, setSelCustomerId] = useState(null);
   const [selInvoiceId, setSelInvoiceId] = useState(null);
@@ -550,6 +555,32 @@ export default function ImportPlanner() {
         setTab("invoices");
       },
     });
+  };
+  // van went out short: a no-charge follow-up job for that job's missing parts
+  const followUpFromLoad = (rep, j) => {
+    const o = (crm.invoices || []).find((x) => x.id === j.invId);
+    if (!o) return;
+    const n = blankInvoice(o.customerId, o.siteId);
+    n.invNo = nextNumber(crm.invoices, "invNo", crm.numbering.invoice);
+    n.raisedBy = me;
+    n.orderRef = "Follow-up to #" + (o.invNo || "—");
+    n.jobNotes = "Follow-up to #" + (o.invNo || "—") + " — not loaded on " + (rep.van || "the van") + " for " + prettyDate(rep.date) + (rep.notes ? ". Loader: " + rep.notes : "");
+    n.deliveryCharge = 0;
+    n.discountPct = "";
+    n.paymentDate = todayStr();
+    n.lines = j.items.map((x) => {
+      const l = (o.lines || [])[x.idx] || {};
+      return { ...blankLine(), code: l.code || x.code || "", description: l.description || x.text || "", colour: l.colour || x.colour || "", qty: x.missing, price: 0 };
+    });
+    if (!n.lines.length) n.lines = [blankLine()];
+    updateCrm((c) => {
+      c.invoices.unshift(n);
+      c.numbering.invoice = (Number(n.invNo) || 0) + 1;
+      return c;
+    });
+    shortLoads.followedUp(rep, j.invId, n.invNo).catch(() => {});
+    setSelInvoiceId(n.id);
+    setTab("invoices");
   };
   // driver closed a job with items left over: a no-charge follow-up job carrying what's still to deliver
   const followUpFromDrop = (r, o, left) => {
@@ -1470,7 +1501,7 @@ export default function ImportPlanner() {
         (!crm ? (
           <div style={{ padding: 40, textAlign: "center", color: "#5a6a85", fontWeight: 600 }}>Loading delivery issues…</div>
         ) : (
-          <IssuesScreen crm={crm} updateCrm={updateCrm} me={me} openInvoice={openInvoice} openCollection={openCollection} newFollowUpFromDrop={followUpFromDrop} canEdit={access.canEdit} onLiveCount={setIssueCount} />
+          <IssuesScreen crm={crm} updateCrm={updateCrm} me={me} openInvoice={openInvoice} openCollection={openCollection} newFollowUpFromDrop={followUpFromDrop} canEdit={access.canEdit} onLiveCount={setIssueCount} shortLoads={shortLoads} onLoadFollowUp={followUpFromLoad} />
         ))}
 
       {tab === "completions" && access.canTab("completions") &&
@@ -2811,8 +2842,12 @@ export default function ImportPlanner() {
         );
       })()}
 
-      {crm && !dropSync.alerts.length && trackAlerts.alerts.length > 0 && (
+      {crm && !dropSync.alerts.length && !shortLoads.alerts.length && trackAlerts.alerts.length > 0 && (
         <TrackingAlertPop alerts={trackAlerts.alerts} onDismiss={trackAlerts.dismiss} onOpen={() => setTab("tracking")} />
+      )}
+      {crm && !dropSync.alerts.length && shortLoads.alerts.length > 0 && (
+        <ShortLoadAlert alerts={shortLoads.alerts} crm={crm} onDismiss={shortLoads.dismiss} onFollowUp={followUpFromLoad} onOpenJob={(id) => openInvoice(id)}
+          onOpenLoading={(rep) => { try { sessionStorage.setItem("dk-load-day", rep.date); } catch (e) { /* */ } shortLoads.dismiss(rep); setTab("loading"); }} />
       )}
       {crm && dropSync.alerts.length > 0 && (
         <DropAlert alerts={dropSync.alerts} crm={crm} onDismiss={dropSync.dismiss} onFollowUp={followUpFromDrop}
