@@ -7,6 +7,7 @@ import { gbp } from "../../lib/crmCore.js";
 import { ListHero, HeroStat, Chip, card, sect, lbl, inp, btn, goldBtn, Modal, SearchBox } from "./ui.jsx";
 import { loadAllDrops, dropLeft, payMissed, updateDrops } from "../../data/drops.js";
 import DropPhotos from "./DropPhotos.jsx";
+import { shortPickupMail } from "../../lib/supplierMail.js";
 
 const dayLabel = (s) => (s ? new Date(s + "T00:00:00").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }) : "");
 
@@ -17,7 +18,8 @@ export function issueOf(r, crm) {
   const col = r.collectionId ? (crm.collections || []).find((x) => x.id === r.collectionId) : null;
   const fu = r.followupInvNo ? (crm.invoices || []).find((x) => String(x.invNo) === String(r.followupInvNo)) : null;
   const parts = [];
-  if (left.length) parts.push({ kind: "left", sorted: !!(fu && fu.deliveryCompleted), text: left.reduce((t, x) => t + x.remaining, 0) + " item" + (left.reduce((t, x) => t + x.remaining, 0) === 1 ? "" : "s") + (r.collectionId ? " not collected" : " still to deliver"), how: fu ? (fu.deliveryCompleted ? "follow-up #" + fu.invNo + " delivered" : "follow-up #" + fu.invNo + (fu.deliveryDate ? " booked " + dayLabel(fu.deliveryDate) : " raised, no date yet")) : "no follow-up yet" });
+  if (left.length && r.collectionId) parts.push({ kind: "left", sorted: false, text: left.reduce((t, x) => t + x.remaining, 0) + " item" + (left.reduce((t, x) => t + x.remaining, 0) === 1 ? "" : "s") + " not collected", how: r.supplierEmailedAt ? "supplier emailed " + dayLabel(String(r.supplierEmailedAt).slice(0, 10)) : "supplier not told yet" });
+  else if (left.length) parts.push({ kind: "left", sorted: !!(fu && fu.deliveryCompleted), text: left.reduce((t, x) => t + x.remaining, 0) + " item" + (left.reduce((t, x) => t + x.remaining, 0) === 1 ? "" : "s") + (r.collectionId ? " not collected" : " still to deliver"), how: fu ? (fu.deliveryCompleted ? "follow-up #" + fu.invNo + " delivered" : "follow-up #" + fu.invNo + (fu.deliveryDate ? " booked " + dayLabel(fu.deliveryDate) : " raised, no date yet")) : "no follow-up yet" });
   if (payMissed(r)) parts.push({ kind: "pay", sorted: !!(inv && inv.paymentDate), text: gbp(Number(r.payment.owed)) + " payment not taken", how: inv && inv.paymentDate ? "paid " + dayLabel(inv.paymentDate) + (inv.paymentType ? " · " + inv.paymentType : "") : "still owed" });
   if (String(r.notes || "").trim()) parts.push({ kind: "note", sorted: false, text: "Driver's note", how: "" });
   const auto = parts.some((p) => p.kind !== "note") && parts.filter((p) => p.kind !== "note").every((p) => p.sorted);
@@ -89,18 +91,19 @@ export default function IssuesScreen({ crm, updateCrm, me, openInvoice, openColl
               </Chip>
             ))}
           </div>
+          {x.r.collectionId && x.r.supplierEmailedAt && <Chip tone="blue" title={"Supplier emailed " + prettyDateTime(x.r.supplierEmailedAt)}>✉ Supplier emailed</Chip>}
           {x.live ? <Chip tone="red" style={{ fontSize: 12.5 }}>LIVE</Chip>
             : <Chip tone="green" style={{ fontSize: 12.5 }} title={x.r.resolvedAt ? "Sorted by " + String(x.r.resolvedBy || "").split("@")[0] + (x.r.resolution ? ": " + x.r.resolution : "") : "Sorted itself"}>{x.r.resolvedAt ? "Sorted " + dayLabel(String(x.r.resolvedAt).slice(0, 10)) : "Sorted itself"}</Chip>}
         </div>
       ))}
 
-      {cur && <IssuePage x={cur} name={nameOf(cur)} refNo={refOf(cur)} me={me} canEdit={canEdit} onClose={() => setOpen(null)} onChanged={() => setReload((n) => n + 1)}
+      {cur && <IssuePage crm={crm} x={cur} name={nameOf(cur)} refNo={refOf(cur)} me={me} canEdit={canEdit} onClose={() => setOpen(null)} onChanged={() => setReload((n) => n + 1)}
         openInvoice={openInvoice} openCollection={openCollection} newFollowUpFromDrop={newFollowUpFromDrop} />}
     </div>
   );
 }
 
-function IssuePage({ x, name, refNo, me, canEdit, onClose, onChanged, openInvoice, openCollection, newFollowUpFromDrop }) {
+function IssuePage({ crm, x, name, refNo, me, canEdit, onClose, onChanged, openInvoice, openCollection, newFollowUpFromDrop }) {
   const r = x.r;
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
@@ -132,13 +135,13 @@ function IssuePage({ x, name, refNo, me, canEdit, onClose, onChanged, openInvoic
             </div>
           ))}
           <div style={{ fontSize: 12, color: "#8593a8", fontWeight: 600, marginTop: 8 }}>
-            Sorts itself once {[x.parts.some((p) => p.kind === "left") && "the follow-up job is delivered", x.parts.some((p) => p.kind === "pay") && "the job shows paid"].filter(Boolean).join(" and ") || "someone marks it sorted"}{x.parts.some((p) => p.kind === "note") && x.parts.length > 1 ? "" : ""}.
+            {r.collectionId ? "Mark it sorted once the missing items have been collected or replaced" : <>Sorts itself once {[x.parts.some((p) => p.kind === "left") && "the follow-up job is delivered", x.parts.some((p) => p.kind === "pay") && "the job shows paid"].filter(Boolean).join(" and ") || "someone marks it sorted"}</>}.
           </div>
           {r.resolvedAt && <div style={{ marginTop: 10, background: "#f1faf4", border: "1px solid #bfe3ca", borderRadius: 8, padding: "8px 12px", fontSize: 13, fontWeight: 700, color: "#28713e" }}>Sorted by {String(r.resolvedBy || "").split("@")[0]} · {prettyDateTime(r.resolvedAt)}{r.resolution ? " — " + r.resolution : ""}</div>}
           {x.live && canEdit && (
             <div style={{ marginTop: 14 }}>
               <span style={lbl}>How was it sorted? (optional)</span>
-              <input style={inp} value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. customer happy, trims credited" />
+              <input style={inp} value={note} onChange={(e) => setNote(e.target.value)} placeholder={r.collectionId ? "e.g. collected on COL-14" : "e.g. customer happy, trims credited"} />
             </div>
           )}
         </div>
@@ -147,6 +150,15 @@ function IssuePage({ x, name, refNo, me, canEdit, onClose, onChanged, openInvoic
       <div style={{ display: "flex", gap: 8, marginTop: 16, flexWrap: "wrap" }}>
         {x.inv && <button style={btn} onClick={() => { onClose(); openInvoice(x.inv.id); }}>Open job</button>}
         {x.col && <button style={btn} onClick={() => { onClose(); openCollection(x.col.id); }}>Open collection</button>}
+        {x.col && x.left.length > 0 && (() => {
+          const m = shortPickupMail(x.col, r, crm);
+          if (!m.href) return <span title={"No email address for " + (x.col.supplier || "this supplier") + " — add one on the supplier record"} style={{ ...btn, opacity: 0.5, cursor: "default" }}>✉ Email supplier</span>;
+          return <a href={m.href} target="_blank" rel="noopener noreferrer" onClick={() => updateDrops([r.id], { supplier_emailed_at: new Date().toISOString() }).then(onChanged).catch(() => {})}
+            title={(r.supplierEmailedAt ? "Emailed " + prettyDateTime(r.supplierEmailedAt) + " — click to email again. " : "") + "Opens Gmail to " + m.email + " listing what wasn't ready"}
+            style={{ ...btn, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 6, background: r.supplierEmailedAt ? "#e9f6ee" : "#185FA5", color: r.supplierEmailedAt ? "#28713e" : "#fff", borderColor: r.supplierEmailedAt ? "#bfe3ca" : "#185FA5" }}>
+            ✉ {r.supplierEmailedAt ? "Supplier emailed " + new Date(r.supplierEmailedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "Email supplier"}
+          </a>;
+        })()}
         {x.fu && <button style={btn} onClick={() => { onClose(); openInvoice(x.fu.id); }}>Open follow-up #{x.fu.invNo}</button>}
         {canEdit && x.inv && x.left.length > 0 && !x.fu && <button style={{ ...goldBtn, color: NAVY }} onClick={() => { onClose(); newFollowUpFromDrop(r, x.inv, x.left); }}>Raise follow-up job</button>}
         <span style={{ flex: 1 }} />

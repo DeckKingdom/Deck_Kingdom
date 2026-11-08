@@ -10,6 +10,7 @@ import { applyInvoiceStockDeduction, explodeInvoiceLines, blankMovement, today, 
 import { addDays, NAVY, GOLD, RED, prettyDateTime } from "../../lib/core.js";
 import { Modal, btn, goldBtn } from "./ui.jsx";
 import DropPhotos from "./DropPhotos.jsx";
+import { shortPickupMail } from "../../lib/supplierMail.js";
 
 const DAYS_BACK = 14;
 
@@ -186,6 +187,7 @@ export function DropAlert({ alerts, crm, onDismiss, onFollowUp, onOpenJob, onOpe
           <div style={{ marginTop: 10 }}><DropPhotos conf={r} height={260} /></div>
         </div>
         <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", flexWrap: "wrap", padding: "14px 24px 20px", borderTop: "1px solid #eef1f6" }}>
+          {pickup && col && left.length > 0 && (() => { const m = shortPickupMail(col, r, crm); return m.href ? <a href={m.href} target="_blank" rel="noopener noreferrer" onClick={() => updateDrops([r.id], { supplier_emailed_at: new Date().toISOString() }).catch(() => {})} style={{ ...btn, padding: "11px 18px", fontSize: 14.5, textDecoration: "none", background: "#185FA5", borderColor: "#185FA5", color: "#fff" }}>✉ Email supplier</a> : null; })()}
           {pickup ? (col && <button style={{ ...btn, padding: "11px 18px", fontSize: 14.5 }} onClick={() => onOpenCollection(col.id)}>Open collection</button>)
             : (inv && <button style={{ ...btn, padding: "11px 18px", fontSize: 14.5 }} onClick={() => onOpenJob(inv.id)}>Open job</button>)}
           <span style={{ flex: 1 }} />

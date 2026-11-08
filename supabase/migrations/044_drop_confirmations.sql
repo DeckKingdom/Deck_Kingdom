@@ -35,6 +35,7 @@ alter table public.drop_confirmations add column if not exists followup_inv_no t
 alter table public.drop_confirmations add column if not exists resolved_at text not null default '';
 alter table public.drop_confirmations add column if not exists resolved_by text not null default '';
 alter table public.drop_confirmations add column if not exists resolution text not null default '';
+alter table public.drop_confirmations add column if not exists supplier_emailed_at text not null default ''; -- short pick-up: supplier told
 -- every photo the driver took (photo_path is the first)
 alter table public.drop_confirmations add column if not exists photo_paths jsonb not null default '[]'::jsonb;
 -- payment taken on the doorstep: { owed, collected, method }

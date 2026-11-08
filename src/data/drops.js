@@ -5,7 +5,7 @@ import { getSupabase } from "./supabaseClient.js";
 
 const LOCAL = "dk-drop-confirmations";
 const localAll = () => { try { return JSON.parse(localStorage.getItem(LOCAL) || "[]"); } catch (e) { return []; } };
-const fromRow = (r) => ({ id: r.id, at: r.at, driver: r.driver, kind: r.kind || "job", invoiceId: r.invoice_id || "", collectionId: r.collection_id || "", invNo: r.inv_no, date: r.delivery_date, items: r.items || [], photoPath: r.photo_path, notes: r.notes, lat: r.lat, lng: r.lng, appliedAt: r.applied_at || "", alertState: r.alert_state || "", alertBy: r.alert_by || "", followupInvNo: r.followup_inv_no || "", payment: r.payment || {}, voidedAt: r.voided_at || "", resolvedAt: r.resolved_at || "", resolvedBy: r.resolved_by || "", resolution: r.resolution || "", photoPaths: Array.isArray(r.photo_paths) && r.photo_paths.length ? r.photo_paths : [r.photo_path].filter(Boolean) });
+const fromRow = (r) => ({ id: r.id, at: r.at, driver: r.driver, kind: r.kind || "job", invoiceId: r.invoice_id || "", collectionId: r.collection_id || "", invNo: r.inv_no, date: r.delivery_date, items: r.items || [], photoPath: r.photo_path, notes: r.notes, lat: r.lat, lng: r.lng, appliedAt: r.applied_at || "", alertState: r.alert_state || "", alertBy: r.alert_by || "", followupInvNo: r.followup_inv_no || "", payment: r.payment || {}, voidedAt: r.voided_at || "", resolvedAt: r.resolved_at || "", resolvedBy: r.resolved_by || "", resolution: r.resolution || "", supplierEmailedAt: r.supplier_emailed_at || "", photoPaths: Array.isArray(r.photo_paths) && r.photo_paths.length ? r.photo_paths : [r.photo_path].filter(Boolean) });
 
 export const dropsReady = () => storageMode === "supabase";
 
@@ -97,7 +97,7 @@ export async function updateDrops(ids, patch) {
     if (error) throw error;
     return;
   }
-  const camel = { applied_at: "appliedAt", alert_state: "alertState", alert_by: "alertBy", followup_inv_no: "followupInvNo", voided_at: "voidedAt", voided_by: "voidedBy", resolved_at: "resolvedAt", resolved_by: "resolvedBy", resolution: "resolution" };
+  const camel = { applied_at: "appliedAt", alert_state: "alertState", alert_by: "alertBy", followup_inv_no: "followupInvNo", voided_at: "voidedAt", voided_by: "voidedBy", resolved_at: "resolvedAt", resolved_by: "resolvedBy", resolution: "resolution", supplier_emailed_at: "supplierEmailedAt" };
   const p = {}; Object.keys(patch).forEach((k) => (p[camel[k] || k] = patch[k]));
   try { localStorage.setItem(LOCAL, JSON.stringify(localAll().map((r) => (ids.includes(r.id) ? { ...r, ...p } : r)))); } catch (e) { /* preview only */ }
 }
