@@ -8,7 +8,7 @@ import { normaliseCrm, isVoidInvoice, isCollectionJob, invoiceTotals, isPaid, gb
 import { NAVY, GOLD, RED, uid, prettyDate, prettyDateTime } from "../lib/core.js";
 import { Icon } from "./crm/ui.jsx";
 import { loadDrops, saveDrop, shrinkPhoto, loadEvents, logEvent } from "../data/drops.js";
-import { runsOn, loadState } from "../lib/loading.js";
+import { runsOn, loadState, canCheck, shortName } from "../lib/loading.js";
 import { loadLoading } from "../data/loading.js";
 import LoadingMobile from "./LoadingMobile.jsx";
 import { outwardCode, tidyPostcode, googleNavHref, appleNavHref, isApple } from "../lib/addressCheck.js";
@@ -105,7 +105,7 @@ export default function DriverApp({ me, warehouse }) {
   }
 
   if (view === "fuel") return <FuelForm driver={driver} vans={(crm && crm.vans) || []} header={header} onBack={() => setView(null)} />;
-  if (view) return <DayRuns key={view + ":" + loads} driver={driver} date={view} stops={byDay[view] || []} crm={crm} header={header} onBack={() => setView(null)} />;
+  if (view) return <DayRuns key={view + ":" + loads} driver={driver} who={who} onCheckLoad={() => { setMode("loading"); setView(null); }} date={view} stops={byDay[view] || []} crm={crm} header={header} onBack={() => setView(null)} />;
 
   // ===== home: 7 day buttons + fuel =====
   return (
@@ -164,7 +164,7 @@ function NavButtons({ dest, onNav, done }) {
 }
 const navBtn = { flex: 1, textAlign: "center", border: "1px solid #185FA5", borderRadius: 10, padding: "11px 8px", fontWeight: 800, fontSize: 15, textDecoration: "none" };
 
-function DayRuns({ date, stops, crm, header, onBack, driver }) {
+function DayRuns({ date, stops, crm, header, onBack, driver, who, onCheckLoad }) {
   const d = new Date(date + "T00:00:00");
   const title = d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
   const custById = {}, siteById = {};
@@ -355,7 +355,7 @@ function DayRuns({ date, stops, crm, header, onBack, driver }) {
               {rs.open && !setOffDone(runKey) ? (
                 <div style={{ background: "#f1faf4", border: "1px solid #bfe3ca", borderRadius: 10, padding: "10px 12px" }}>
                   {rs.rep && (rs.rep.shortLines || []).length > 0 && <div style={{ color: RED, fontSize: 13.5, fontWeight: 800, marginBottom: 4 }}>⚠ The van went out short — {rs.rep.shortLines.reduce((t, m) => t + (Number(m.missing) || 0), 0)} item{rs.rep.shortLines.reduce((t, m) => t + (Number(m.missing) || 0), 0) === 1 ? "" : "s"} not loaded (marked on each drop). The office knows.</div>}
-                  <div style={{ color: GREEN, fontSize: 13.5, fontWeight: 800 }}>✓ {rs.rep && rs.rep.completedAt ? "Loaded & double-checked by " + String(rs.rep.completedBy || "").split("@")[0] + " at " + new Date(rs.rep.completedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : "Ready to go"}</div>
+                  <div style={{ color: GREEN, fontSize: 13.5, fontWeight: 800 }}>✓ {rs.rep && rs.rep.completedAt ? "Loaded by " + shortName(rs.rep.completedBy) + (rs.rep.checkedBy ? " · double-checked by " + shortName(rs.rep.checkedBy) + " at " + new Date(rs.rep.checkedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : "") : "Ready to go"}</div>
                   <button type="button" onClick={() => setOff(runKey, o.van, o.driver)} disabled={!!leaving}
                     style={{ marginTop: 8, width: "100%", border: "none", borderRadius: 12, padding: 14, fontFamily: "inherit", fontWeight: 800, fontSize: 17, background: NAVY, color: "#fff", cursor: "pointer" }}>
                     {leaving === runKey ? "Setting off…" : "▶ Set off on " + (o.runNo ? "run " + o.runNo : "this run")}
@@ -367,11 +367,23 @@ function DayRuns({ date, stops, crm, header, onBack, driver }) {
                   ✓ {departs[runKey] ? "Set off " + new Date(departs[runKey].at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) + " — " : rs.total ? "Everything's on the van — " : ""}{(byRun[runKey] || []).every(done) ? "all stops confirmed" : "stops open one at a time"}
                 </div>
               ) : (
+                rs.st && rs.st.submitted ? (
+                <div style={{ background: "#eef5fd", border: "1px solid #c6dcf3", color: "#185FA5", borderRadius: 10, padding: "9px 12px", fontSize: 13.5, fontWeight: 700 }}>
+                  <div style={{ fontWeight: 800 }}>🔒 Loaded by {shortName(rs.rep.completedBy)} — waiting for a double-check</div>
+                  {canCheck(rs.rep, who) ? (
+                    <>
+                      <div style={{ marginTop: 3, fontWeight: 600, color: "#5a6a85" }}>Nobody else has checked it yet. Go round the van and tick every line yourself — your stops open as soon as it's checked.</div>
+                      <button type="button" onClick={onCheckLoad} style={{ marginTop: 8, width: "100%", border: "none", borderRadius: 12, padding: 13, fontFamily: "inherit", fontWeight: 800, fontSize: 16, background: "#185FA5", color: "#fff", cursor: "pointer" }}>👀 Double-check the van myself</button>
+                    </>
+                  ) : <div style={{ marginTop: 3, fontWeight: 600, color: "#5a6a85" }}>Someone else has to check it — ask the warehouse or the office.</div>}
+                </div>
+                ) : (
                 <div style={{ background: "#fff8e6", border: "1px solid #f4d78f", color: "#6b5305", borderRadius: 10, padding: "9px 12px", fontSize: 13.5, fontWeight: 700 }}>
                   <div style={{ fontWeight: 800 }}>🔒 Waiting for the van to be loaded: {rs.done} of {rs.total} lines on</div>
-                  <div style={{ marginTop: 3, fontWeight: 600 }}>Your stops open once the loading report for this run is closed — everything counted on, double-checked and photographed (Loading tab). Then tap Set off.</div>
+                  <div style={{ marginTop: 3, fontWeight: 600 }}>Your stops open once the van is loaded, photographed and double-checked by a second person (Loading tab). Then tap Set off.</div>
                   <div style={{ height: 6, background: "#f4e3b5", borderRadius: 4, marginTop: 7, overflow: "hidden" }}><div style={{ height: "100%", width: (100 * rs.done / Math.max(1, rs.total)) + "%", background: GOLD }} /></div>
                 </div>
+                )
               )}
             </div>
           )) : null;

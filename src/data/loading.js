@@ -6,7 +6,7 @@ const LR = "dk-load-reports", LL = "dk-load-lines";
 const lget = (k) => { try { return JSON.parse(localStorage.getItem(k) || "[]"); } catch (e) { return []; } };
 const lset = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* */ } };
 const repFromRow = (r) => ({ id: r.id, date: r.run_date, driver: r.driver, runNo: r.run_no, van: r.van, status: r.status, completedAt: r.completed_at, completedBy: r.completed_by, checked: r.checked || [], photoPaths: r.photo_paths || [], notes: r.notes || "", updatedAt: r.updated_at,
-  shortLines: r.short_lines || [], alertState: r.alert_state || "", resolvedAt: r.resolved_at || "", resolvedBy: r.resolved_by || "", resolution: r.resolution || "", followups: r.followups || {} });
+  shortLines: r.short_lines || [], alertState: r.alert_state || "", resolvedAt: r.resolved_at || "", resolvedBy: r.resolved_by || "", resolution: r.resolution || "", followups: r.followups || {}, checkedBy: r.checked_by || "", checkedAt: r.checked_at || "", sentBack: r.sent_back || "" });
 const lineFromRow = (r) => ({ reportId: r.report_id, itemKey: r.item_key, qtyNeeded: Number(r.qty_needed) || 0, qtyLoaded: Number(r.qty_loaded) || 0, loadedBy: r.loaded_by, loadedAt: r.loaded_at, boxed: !!r.boxed });
 
 export const loadingReady = () => true;
@@ -60,7 +60,8 @@ export async function setLoaded(run, item, qty, who, opts = {}) {
 export const boxKey = (invId) => "boxes:" + invId;
 export const setBoxes = (run, invId, n, who) => setLoaded(run, { key: boxKey(invId), qty: 0 }, n, who);
 
-// close the report: the double-check list, photos of the loaded van, notes
+// the loader submits the report: what's on, photos of the loaded van, notes (a reason if short).
+// It then waits for someone else to double-check it.
 export async function completeReport(run, { checked, photos, notes, who, shortLines = [] }) {
   const at = new Date().toISOString();
   if (storageMode === "supabase") {
@@ -73,27 +74,41 @@ export async function completeReport(run, { checked, photos, notes, who, shortLi
       if (up.error) throw new Error("photo " + (n + 1) + ": " + up.error.message);
       paths.push(path);
     }
-    const { error } = await sb.from("load_reports").upsert({ id: run.key, run_date: run.date, driver: run.driver, run_no: run.runNo, van: run.van || "", status: "complete", completed_at: at, completed_by: who || "", checked, photo_paths: paths, notes: notes || "", updated_at: at,
-      short_lines: shortLines, alert_state: shortLines.length ? "open" : "", resolved_at: "", resolved_by: "", resolution: "" });
+    const { error } = await sb.from("load_reports").upsert({ id: run.key, run_date: run.date, driver: run.driver, run_no: run.runNo, van: run.van || "", status: "submitted", completed_at: at, completed_by: who || "", checked, photo_paths: paths, notes: notes || "", updated_at: at,
+      short_lines: shortLines, alert_state: shortLines.length ? "open" : "", resolved_at: "", resolved_by: "", resolution: "", checked_by: "", checked_at: "", sent_back: "" });
     if (error) throw error;
-    return { id: run.key, status: "complete", completedAt: at, completedBy: who, checked, photoPaths: paths, notes, shortLines, alertState: shortLines.length ? "open" : "" };
+    return { id: run.key, status: "submitted", checkedBy: "", checkedAt: "", sentBack: "", completedAt: at, completedBy: who, checked, photoPaths: paths, notes, shortLines, alertState: shortLines.length ? "open" : "" };
   }
   const urls = [];
   for (const b of photos) urls.push(await new Promise((res) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(b); }));
-  const rep = { id: run.key, date: run.date, driver: run.driver, runNo: run.runNo, van: run.van, status: "complete", completedAt: at, completedBy: who, checked, photoPaths: urls, notes, shortLines, alertState: shortLines.length ? "open" : "", resolvedAt: "", followups: {} };
+  const rep = { id: run.key, date: run.date, driver: run.driver, runNo: run.runNo, van: run.van, status: "submitted", checkedBy: "", checkedAt: "", sentBack: "", completedAt: at, completedBy: who, checked, photoPaths: urls, notes, shortLines, alertState: shortLines.length ? "open" : "", resolvedAt: "", followups: {} };
   lset(LR, [...lget(LR).filter((r) => r.id !== run.key), rep]);
   return rep;
 }
 
-// office: open a closed report again (the counts stay; it needs closing again)
-export async function reopenReport(id) {
+// a second person (not whoever loaded it) has been round the van: the driver's deliveries open
+export async function checkReport(id, who) {
+  const at = new Date().toISOString();
   if (storageMode === "supabase") {
     const sb = await getSupabase();
-    const { error } = await sb.from("load_reports").update({ status: "open", completed_at: "", completed_by: "", checked: [], updated_at: new Date().toISOString() }).eq("id", id);
+    const { error } = await sb.from("load_reports").update({ status: "complete", checked_by: who || "", checked_at: at, updated_at: at }).eq("id", id).eq("status", "submitted");
+    if (error) throw error;
+    return { status: "complete", checkedBy: who || "", checkedAt: at };
+  }
+  lset(LR, lget(LR).map((r) => (r.id === id ? { ...r, status: "complete", checkedBy: who || "", checkedAt: at } : r)));
+  return { status: "complete", checkedBy: who || "", checkedAt: at };
+}
+
+// office (or the checker, with a reason): open a report again (the counts stay; it needs submitting again)
+export async function reopenReport(id, why = "") {
+  const p = { status: "open", completed_at: "", completed_by: "", checked: [], checked_by: "", checked_at: "", sent_back: why || "", alert_state: "", short_lines: [], updated_at: new Date().toISOString() };
+  if (storageMode === "supabase") {
+    const sb = await getSupabase();
+    const { error } = await sb.from("load_reports").update(p).eq("id", id);
     if (error) throw error;
     return;
   }
-  lset(LR, lget(LR).map((r) => (r.id === id ? { ...r, status: "open", completedAt: "", completedBy: "", checked: [] } : r)));
+  lset(LR, lget(LR).map((r) => (r.id === id ? { ...r, status: "open", completedAt: "", completedBy: "", checked: [], checkedBy: "", checkedAt: "", sentBack: why || "", alertState: "", shortLines: [] } : r)));
 }
 
 // office: wipe loading (one run, or everything) - counts and reports
@@ -127,10 +142,10 @@ export async function loadShortLoads(days = 60) {
   let reps;
   if (storageMode === "supabase") {
     const sb = await getSupabase();
-    const { data, error } = await sb.from("load_reports").select("*").eq("status", "complete").gte("run_date", from);
+    const { data, error } = await sb.from("load_reports").select("*").in("status", ["submitted", "complete"]).gte("run_date", from);
     if (error) throw error;
     reps = (data || []).map(repFromRow);
-  } else reps = lget(LR).filter((r) => r.status === "complete" && r.date >= from);
+  } else reps = lget(LR).filter((r) => (r.status === "complete" || r.status === "submitted") && r.date >= from);
   return reps.filter((r) => (r.shortLines || []).length);
 }
 // office: { alert_state, resolved_at, resolved_by, resolution, followups }

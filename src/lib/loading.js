@@ -53,7 +53,8 @@ export function runsOn(crm, date, onlyDriver) {
   return out.sort((a, b) => lc(a.van || a.driver).localeCompare(lc(b.van || b.driver)) || lc(a.driver).localeCompare(lc(b.driver)) || a.runNo.localeCompare(b.runNo));
 }
 
-// where a run's loading stands: { loaded, part, todo, allocated, unscheduled, total, ready, complete }
+// where a run's loading stands: { loaded, part, todo, allocated, unscheduled, total, ready, submitted, complete }
+// submitted = loaded and photographed, waiting for a second person to double-check; complete = checked
 export function loadState(run, counts, report) {
   let loaded = 0, part = 0, todo = 0, allocated = 0, unscheduled = 0;
   run.lines.forEach((x) => {
@@ -64,7 +65,14 @@ export function loadState(run, counts, report) {
   const total = run.lines.length;
   const ready = part === 0 && todo === 0 && unscheduled === 0; // everything on the van or booked on a pick-up
   const complete = total === 0 || !!(report && report.status === "complete");
-  return { loaded, part, todo, allocated, unscheduled, total, ready, complete };
+  const submitted = !complete && !!(report && report.status === "submitted");
+  return { loaded, part, todo, allocated, unscheduled, total, ready, submitted, complete };
+}
+// can this person do the double-check? (anyone but whoever loaded and submitted it)
+export const canCheck = (report, who) => !!report && report.status === "submitted" && lc(report.completedBy) !== lc(who);
+export const shortName = (e) => {
+  const s = String(e || "").split("@")[0];
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : "";
 }
 
 // what's missing from a van: [{ invId, invNo, customer, key, text, colour, qty, loaded, missing, why }]

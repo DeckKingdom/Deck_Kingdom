@@ -3,6 +3,8 @@ import * as XLSX from "xlsx";
 import { storage, storageMode } from "../data/storage.js";
 import { useDropSync, DropAlert } from "./crm/DropSync.jsx";
 import { useShortLoads, ShortLoadAlert, shortIssueOf } from "./crm/ShortLoads.jsx";
+import { loadLoading } from "../data/loading.js";
+import { canCheck } from "../lib/loading.js";
 import { useTrackingAlerts, TrackingAlertPop } from "./crm/TrackingAlerts.jsx";
 import { fleetSettings } from "../lib/tracking.js";
 import { signOut, getSessionEmail, getMyAccess } from "../data/auth.js";
@@ -270,6 +272,20 @@ export default function ImportPlanner() {
     const t = setInterval(pull, 90000);
     return () => { live = false; clearInterval(t); };
   }, [!!crm, access.role, tab, shortLoads.reports]);
+  // vans loaded and waiting for a second person to double-check: blue count on Loading
+  const [checkCount, setCheckCount] = useState(0);
+  useEffect(() => {
+    if (!crm || !access.canTab("loading") || !access.canEdit) return;
+    let live = true;
+    const who = storageMode === "supabase" ? getSessionEmail() || "" : "";
+    const pull = () => {
+      const ds = Array.from({ length: 7 }, (_, k) => { const d = new Date(); d.setDate(d.getDate() + k - 1); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); });
+      loadLoading(ds).then((d) => live && setCheckCount(Object.values(d.reports).filter((r) => canCheck(r, who)).length)).catch(() => {});
+    };
+    pull();
+    const t = setInterval(pull, 60000);
+    return () => { live = false; clearInterval(t); };
+  }, [!!crm, access.role, tab]);
   const trackAlerts = useTrackingAlerts({ crm, enabled: alertsMine && access.canTab("tracking") });
   const [selCustomerId, setSelCustomerId] = useState(null);
   const [selInvoiceId, setSelInvoiceId] = useState(null);
@@ -1374,7 +1390,7 @@ export default function ImportPlanner() {
         );
       })()}
       <div style={{ display: "flex", alignItems: "stretch" }}>
-      <Sidebar phone={isPhone} tab={tab} setTab={navTo} open={sideOpen} footer={sideFooter} onNew={access.canEdit ? (t) => { if (isPhone) setSideOpen(false); sideNew(t); } : null} canNew={(t) => (["overview", "vans", "purchases", "suppliers"].includes(t) ? access.canManage : access.canEdit)} onToggle={() => setSideOpen((o) => !o)} allow={access.canTab} badges={{ issues: issueCount }} />
+      <Sidebar phone={isPhone} tab={tab} setTab={navTo} open={sideOpen} footer={sideFooter} onNew={access.canEdit ? (t) => { if (isPhone) setSideOpen(false); sideNew(t); } : null} canNew={(t) => (["overview", "vans", "purchases", "suppliers"].includes(t) ? access.canManage : access.canEdit)} onToggle={() => setSideOpen((o) => !o)} allow={access.canTab} badges={{ issues: issueCount, loading: checkCount }} />
       <div style={{ flex: 1, minWidth: 0 }}>
 
       <div ref={headerRef} className="no-print" style={{ background: NAVY, padding: isPhone ? "8px 10px" : "10px 16px", display: "flex", alignItems: "center", gap: isPhone ? 6 : 10, position: "sticky", top: 0, zIndex: 25, boxShadow: "0 2px 8px rgba(11,31,63,0.25)" }}>

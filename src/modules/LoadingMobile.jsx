@@ -1,12 +1,13 @@
 // Loading on a phone: pick a day, pick a van, count every line on (any order, part loads fine),
-// then close the loading report - every line re-ticked as a second check, and photos of the van.
+// photograph the van and submit the loading report. Someone else (another loader, the office or the
+// driver) then goes round the van ticking every line - only then do the driver's deliveries open.
 // Accessories packed in boxes: count them as boxed and log how many boxes each job has.
-// A van that goes out short can still be closed, with a reason - the office gets a short-load alert.
+// A van that goes out short can still be submitted, with a reason - the office gets a short-load alert.
 // Drivers see only their own runs; the warehouse sees every van.
 import { useEffect, useState } from "react";
 import { NAVY, GOLD, RED } from "../lib/core.js";
-import { runsOn, loadState, shortLinesOf } from "../lib/loading.js";
-import { loadLoading, setLoaded, setBoxes, boxKey, completeReport } from "../data/loading.js";
+import { runsOn, loadState, shortLinesOf, canCheck, shortName } from "../lib/loading.js";
+import { loadLoading, setLoaded, setBoxes, boxKey, completeReport, checkReport, reopenReport, loadPhotoUrl } from "../data/loading.js";
 import { shrinkPhoto } from "../data/drops.js";
 
 const GREEN = "#28713e", BLUE = "#185FA5", AMBER = "#a06d00";
@@ -42,7 +43,7 @@ export default function LoadingMobile({ crm, driver, who, header, onBack, nav })
     const run = runsFor(day).find((r) => r.key === runKey);
     if (!run) return <div>{header("Loading", () => setRunKey(null))}<div style={{ padding: 14 }}><div style={cardS}>This run isn't on the schedule any more.</div></div></div>;
     return <LoadRun run={run} data={data} who={who} header={header} err={err}
-      onBack={() => { setRunKey(null); refresh(); }}
+      onBack={() => { setRunKey(null); refresh(); }} onChanged={refresh}
       onCount={(item, q, boxed) => setLoaded(run, item, q, who, { boxed }).then((row) => setData((d) => ({ ...d, counts: { ...d.counts, [run.key]: { ...(d.counts[run.key] || {}), [item.key]: row } } })))}
       onBoxes={(invId, b) => setBoxes(run, invId, b, who).then((row) => setData((d) => ({ ...d, counts: { ...d.counts, [run.key]: { ...(d.counts[run.key] || {}), [boxKey(invId)]: row } } })))}
       onClosed={(rep) => setData((d) => ({ ...d, reports: { ...d.reports, [run.key]: { ...rep, id: run.key } } }))} />;
@@ -61,17 +62,18 @@ export default function LoadingMobile({ crm, driver, who, header, onBack, nav })
             const st = stateOf(r);
             const rep = data && data.reports[r.key];
             const short = st.complete && rep && (rep.shortLines || []).length;
-            const tone = short ? RED : st.complete ? GREEN : st.loaded || st.part ? AMBER : NAVY;
+            const chk = st.submitted && canCheck(rep, who);
+            const tone = short ? RED : st.complete ? GREEN : st.submitted ? BLUE : st.loaded || st.part ? AMBER : NAVY;
             return (
               <button key={r.key} type="button" onClick={() => setRunKey(r.key)}
                 style={{ ...cardS, width: "100%", textAlign: "left", fontFamily: "inherit", color: NAVY, cursor: "pointer", borderLeft: "6px solid " + tone, display: "block" }}>
                 <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
                   <b style={{ fontSize: 17, flex: 1 }}>{r.van || "No van"}</b>
-                  <span style={{ fontSize: 12, fontWeight: 800, color: tone }}>{short ? "⚠ WENT OUT SHORT" : st.complete ? "✓ LOADED" : st.loaded || st.part ? "PART LOADED" : "NOT STARTED"}</span>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: tone }}>{st.submitted ? (chk ? "👀 CHECK NEEDED" : "WAITING FOR A CHECK") : short ? "⚠ WENT OUT SHORT" : st.complete ? "✓ LOADED & CHECKED" : st.loaded || st.part ? "PART LOADED" : "NOT STARTED"}</span>
                 </div>
                 <div style={{ fontSize: 13, fontWeight: 700, color: "#5a6a85", marginTop: 2 }}>{r.driver}{r.runNo ? " · Run " + r.runNo : ""} · {r.jobs.length} drop{r.jobs.length === 1 ? "" : "s"}{r.pickups.length ? " · " + r.pickups.length + " pick-up" + (r.pickups.length === 1 ? "" : "s") : ""}</div>
                 <div style={{ fontSize: 12.5, fontWeight: 600, color: "#8593a8", marginTop: 4 }}>
-                  {st.complete && rep && rep.completedAt ? "Closed by " + String(rep.completedBy || "").split("@")[0] + " at " + hm(rep.completedAt) + (short ? " · " + short + " line" + (short === 1 ? "" : "s") + " missing" : "")
+                  {st.submitted ? "Loaded by " + shortName(rep.completedBy) + " at " + hm(rep.completedAt) + (chk ? " — tap to double-check it" : " — someone else needs to double-check it") : st.complete && rep && rep.completedAt ? "Loaded by " + shortName(rep.completedBy) + (rep.checkedBy ? " · checked by " + shortName(rep.checkedBy) : "") + (short ? " · " + short + " line" + (short === 1 ? "" : "s") + " missing" : "")
                     : st.loaded + " of " + st.total + " lines on" + (st.part ? " · " + st.part + " part" : "") + (st.allocated ? " · " + st.allocated + " on pick-ups" : "") + (st.unscheduled ? " · " + st.unscheduled + " pick-up not booked" : "")}
                 </div>
                 {!st.complete && st.total > 0 && <div style={{ height: 6, background: "#eef1f6", borderRadius: 4, marginTop: 8, overflow: "hidden" }}><div style={{ height: "100%", width: (100 * (st.loaded + st.allocated) / st.total) + "%", background: GOLD }} /></div>}
@@ -94,13 +96,14 @@ export default function LoadingMobile({ crm, driver, who, header, onBack, nav })
           {dates.map((d, k) => {
             const runs = runsFor(d);
             const done = runs.filter((r) => stateOf(r).complete).length;
+            const toCheck = runs.filter((r) => canCheck(data && data.reports[r.key], who)).length;
             const first = k === 0;
             const dd = new Date(d + "T00:00:00");
             return (
               <button key={d} type="button" onClick={() => setDay(d)}
                 style={{ gridColumn: first ? "span 2" : undefined, minHeight: first ? 92 : 80, borderRadius: 16, border: "1px solid " + (first ? GOLD : "#e6e9ef"), background: first ? GOLD : "#fff", color: NAVY, fontFamily: "inherit", textAlign: "left", padding: "12px 14px", cursor: "pointer", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
                 <span style={{ fontWeight: 800, fontSize: first ? 19 : 16 }}>{k === 0 ? "Today" : k === 1 ? "Tomorrow" : dd.toLocaleDateString("en-GB", { weekday: "long" })} ({runs.length} van{runs.length === 1 ? "" : "s"})</span>
-                <span style={{ fontSize: 12.5, fontWeight: 700, color: first ? NAVY : "#8593a8" }}>{dd.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}{runs.length ? " · " + done + " loaded" : ""}</span>
+                <span style={{ fontSize: 12.5, fontWeight: 700, color: first ? NAVY : "#8593a8" }}>{dd.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}{runs.length ? " · " + done + " loaded" : ""}{toCheck ? <b style={{ color: BLUE }}> · {toCheck} to check</b> : null}</span>
               </button>
             );
           })}
@@ -111,16 +114,19 @@ export default function LoadingMobile({ crm, driver, who, header, onBack, nav })
 }
 
 // ===== one van: count each line on =====
-function LoadRun({ run, data, who, header, err, onBack, onCount, onBoxes, onClosed }) {
+function LoadRun({ run, data, who, header, err, onBack, onChanged, onCount, onBoxes, onClosed }) {
   const counts = (data && data.counts[run.key]) || {};
   const rep = data && data.reports[run.key];
   const st = loadState(run, counts, rep);
   const [counting, setCounting] = useState(null); // line being counted
   const [closing, setClosing] = useState(false);
+  const [checking, setChecking] = useState(false);
   const [msg, setMsg] = useState("");
-  const locked = st.complete && run.lines.length > 0;
+  const locked = (st.complete || st.submitted) && run.lines.length > 0;
+  const mayCheck = canCheck(rep, who);
 
-  if (closing) return <CloseReport run={run} counts={counts} who={who} header={header} onBack={() => setClosing(false)} onClosed={(r) => { onClosed(r); setClosing(false); }} />;
+  if (closing) return <SubmitReport run={run} counts={counts} who={who} header={header} onBack={() => setClosing(false)} onClosed={(r) => { onClosed(r); setClosing(false); }} />;
+  if (checking && rep) return <CheckReport run={run} counts={counts} rep={{ ...rep, id: run.key }} who={who} header={header} onBack={() => setChecking(false)} onDone={() => { setChecking(false); onChanged(); }} />;
 
   // group lines by job, last drop first (it goes on the van first)
   const groups = [];
@@ -131,10 +137,23 @@ function LoadRun({ run, data, who, header, err, onBack, onCount, onBoxes, onClos
       {header(runName(run), onBack)}
       <div style={{ padding: 14 }}>
         {(err || msg) && <div style={{ ...cardS, borderColor: "#f4b9c1", background: "#fdf3f4", color: RED, fontWeight: 700 }}>{err || msg}</div>}
-        <div style={{ ...cardS, background: locked ? "#f1faf4" : "#fff", borderColor: locked ? "#bfe3ca" : "#e6e9ef" }}>
+        {!locked && rep && rep.sentBack && <div style={{ ...cardS, borderColor: "#f4b9c1", background: "#fdf3f4", color: RED, fontWeight: 800 }}>↩ Sent back after the double-check — {rep.sentBack}. Fix the counts and submit again.</div>}
+        {st.submitted && rep && (
+          <div style={{ ...cardS, background: "#eef5fd", borderColor: "#c6dcf3" }}>
+            <div style={{ color: BLUE, fontWeight: 800 }}>Loaded by {shortName(rep.completedBy)} at {hm(rep.completedAt)} — waiting for a double-check</div>
+            {mayCheck ? (
+              <>
+                <div style={{ fontSize: 12.5, fontWeight: 600, color: "#5a6a85", marginTop: 3 }}>Go round the van and tick every line as you see it. The driver's deliveries open once you confirm.</div>
+                <button type="button" onClick={() => setChecking(true)} style={{ ...bigBtn(true, BLUE), marginTop: 10 }}>👀 Double-check this van</button>
+              </>
+            ) : <div style={{ fontSize: 12.5, fontWeight: 600, color: "#5a6a85", marginTop: 3 }}>You loaded it, so someone else has to check it — another loader, the office or the driver.</div>}
+            {(rep.shortLines || []).length > 0 && <div style={{ marginTop: 8, color: RED, fontWeight: 800, fontSize: 13.5 }}>⚠ Going out short — {rep.shortLines.length} line{rep.shortLines.length === 1 ? "" : "s"} missing. The office has been alerted.</div>}
+          </div>
+        )}
+        <div style={{ ...cardS, display: st.submitted ? "none" : "block", background: locked ? "#f1faf4" : "#fff", borderColor: locked ? "#bfe3ca" : "#e6e9ef" }}>
           {locked ? (
             <>
-              <div style={{ color: GREEN, fontWeight: 800 }}>✓ Loading report closed by {String(rep.completedBy || "").split("@")[0]} at {hm(rep.completedAt)} — the driver's deliveries are open. Ask the office to reopen it if something changes.</div>
+              <div style={{ color: GREEN, fontWeight: 800 }}>✓ Loaded by {shortName(rep.completedBy)}{rep.checkedBy ? " and double-checked by " + shortName(rep.checkedBy) + " at " + hm(rep.checkedAt) : ""} — the driver's deliveries are open. Ask the office to reopen it if something changes.</div>
               {(rep.shortLines || []).length > 0 && <div style={{ marginTop: 8, color: RED, fontWeight: 800, fontSize: 13.5 }}>⚠ Went out short — {rep.shortLines.length} line{rep.shortLines.length === 1 ? "" : "s"} missing. The office has been alerted.</div>}
             </>
           ) : (
@@ -186,9 +205,9 @@ function LoadRun({ run, data, who, header, err, onBack, onCount, onBoxes, onClos
         ))}
         {!locked && run.lines.length > 0 && (
           <>
-            <button type="button" onClick={() => setClosing(true)} style={{ ...bigBtn(true, st.ready ? NAVY : AMBER), marginTop: 6 }}>{st.ready ? "Close the loading report" : "⚠ Close with items missing"}</button>
+            <button type="button" onClick={() => setClosing(true)} style={{ ...bigBtn(true, st.ready ? NAVY : AMBER), marginTop: 6 }}>{st.ready ? "Submit the loading report" : "⚠ Submit with items missing"}</button>
             {!st.ready && <div style={{ marginTop: 6, fontSize: 12.5, fontWeight: 700, color: AMBER, textAlign: "center" }}>
-              {[st.todo ? st.todo + " line" + (st.todo === 1 ? "" : "s") + " not loaded" : "", st.part ? st.part + " part loaded" : "", st.unscheduled ? st.unscheduled + " pick-up" + (st.unscheduled === 1 ? "" : "s") + " not booked" : ""].filter(Boolean).join(" · ")} — finish loading if you can. If the van has to go short, close it with a reason and the office will sort the missing parts.
+              {[st.todo ? st.todo + " line" + (st.todo === 1 ? "" : "s") + " not loaded" : "", st.part ? st.part + " part loaded" : "", st.unscheduled ? st.unscheduled + " pick-up" + (st.unscheduled === 1 ? "" : "s") + " not booked" : ""].filter(Boolean).join(" · ")} — finish loading if you can. If the van has to go short, submit it with a reason and the office will sort the missing parts.
             </div>}
           </>
         )}
@@ -244,106 +263,152 @@ function CountSheet({ item, current, boxed: wasBoxed, onClose, onSave }) {
   );
 }
 
-// ===== close: second check of every line + photos of the loaded van =====
-function CloseReport({ run, counts, who, header, onBack, onClosed }) {
-  const [got, setGot] = useState({});
+// ===== submit: the loader's photos (+ a reason if it's short) - no re-tick, a second person does that =====
+function SubmitReport({ run, counts, who, header, onBack, onClosed }) {
   const [photos, setPhotos] = useState([]);
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const short = shortLinesOf(run, counts);
-  const missingAll = new Set(short.filter((m) => !m.loaded).map((m) => m.key));
-  // re-tick what's actually on (or booked on a pick-up), plus each job's accessory boxes
-  const toCheck = run.lines.filter((x) => !missingAll.has(x.key)).map((x) => ({ key: x.key, x, part: short.find((m) => m.key === x.key) }));
-  const jobs = [...new Map(run.lines.map((x) => [x.inv.id, x])).values()];
-  const boxRows = jobs.map((x) => ({ key: boxKey(x.inv.id), x, n: counts[boxKey(x.inv.id)] ? counts[boxKey(x.inv.id)].qtyLoaded : 0 })).filter((b) => b.n > 0);
-  const all = toCheck.every((t) => got[t.key]) && boxRows.every((b) => got[b.key]);
   const reasonOk = !short.length || notes.trim().length >= 3;
-  const ok = all && photos.length > 0 && reasonOk;
+  const ok = photos.length > 0 && reasonOk;
   const save = async () => {
     if (!ok || busy) return;
     setBusy(true); setMsg("");
     try {
       const blobs = [];
       for (const p of photos) blobs.push(await shrinkPhoto(p.file));
-      const checked = run.lines.map((x) => ({ key: x.key, qty: x.qty, loaded: x.src ? 0 : (counts[x.key] ? counts[x.key].qtyLoaded : 0), boxed: !!(counts[x.key] && counts[x.key].boxed), pickup: x.src ? "COL-" + x.src.col.collectionNo : "", text: x.line.description || x.line.code, job: x.inv.invNo }))
-        .concat(boxRows.map((b) => ({ key: b.key, boxes: b.n, text: b.n + " accessory box" + (b.n === 1 ? "" : "es"), job: b.x.inv.invNo })));
-      const rep = await completeReport(run, { checked, photos: blobs, notes: notes.trim(), who, shortLines: short });
+      const rep = await completeReport(run, { checked: checkedList(run, counts), photos: blobs, notes: notes.trim(), who, shortLines: short });
       onClosed(rep);
-    } catch (e) { setMsg("Couldn't close it — " + ((e && e.message) || e) + ". Check your signal and try again."); }
+    } catch (e) { setMsg("Couldn't submit it — " + ((e && e.message) || e) + ". Check your signal and try again."); }
     setBusy(false);
   };
   return (
     <div>
-      {header("Double-check · " + (run.van || run.driver), onBack)}
+      {header("Submit loading · " + (run.van || run.driver), onBack)}
       <div style={{ padding: 14 }}>
-        {short.length > 0 && (
-          <div style={{ ...cardS, borderColor: "#f4b9c1", background: "#fdf3f4" }}>
-            <div style={{ fontWeight: 800, fontSize: 16, color: RED }}>⚠ This van is going out short</div>
-            <div style={{ fontSize: 12.5, fontWeight: 600, color: "#5a6a85", marginTop: 3 }}>The office gets an alert with this list so they can raise a job or post the missing parts.</div>
-            {short.map((m) => (
-              <div key={m.key} style={{ padding: "8px 0", borderTop: "1px solid #f4dfe2", fontSize: 14 }}>
-                <b>{m.missing}×</b> {m.text}{m.colour ? <span style={{ color: "#5a6a85" }}> · {m.colour}</span> : null}
-                <span style={{ display: "block", fontSize: 12, fontWeight: 700, color: RED }}>{m.customer} · #{m.invNo} · {m.why}{m.loaded ? " (" + m.loaded + " of " + m.qty + " on)" : ""}</span>
-              </div>
-            ))}
-          </div>
-        )}
+        {short.length > 0 && <ShortCard short={short} />}
         <div style={cardS}>
-          <div style={{ fontWeight: 800, fontSize: 16 }}>Go round the van again and tick each line as you see it</div>
-          <div style={{ fontSize: 12.5, fontWeight: 600, color: "#5a6a85", marginTop: 3 }}>This is the second check — don't tick from memory.</div>
-          {toCheck.map(({ x, part }) => {
-            const on = !!got[x.key];
-            const c = counts[x.key];
-            return (
-              <button key={x.key} type="button" onClick={() => setGot((g) => ({ ...g, [x.key]: !g[x.key] }))}
-                style={{ display: "flex", gap: 10, alignItems: "center", width: "100%", border: "none", borderBottom: "1px solid #f3f5f8", background: "none", fontFamily: "inherit", color: NAVY, textAlign: "left", fontSize: 14.5, padding: "10px 0", cursor: "pointer" }}>
-                <span style={tickBox(on)}>{on ? "✓" : ""}</span>
-                <span style={{ flex: 1 }}><b>{part ? part.loaded + " of " + x.qty : x.qty}×</b> {x.line.description || x.line.code}{x.line.colour ? <span style={{ color: "#5a6a85" }}> · {x.line.colour}</span> : null}
-                  <span style={{ display: "block", fontSize: 12, fontWeight: 700, color: x.src ? BLUE : part ? AMBER : "#8593a8" }}>{x.customer} · #{x.inv.invNo}{x.src ? " · on pick-up COL-" + x.src.col.collectionNo : ""}{c && c.boxed ? " · 📦 in a box" : ""}{part ? " · part load" : ""}</span>
-                </span>
-              </button>
-            );
-          })}
-          {boxRows.map((b) => {
-            const on = !!got[b.key];
-            return (
-              <button key={b.key} type="button" onClick={() => setGot((g) => ({ ...g, [b.key]: !g[b.key] }))}
-                style={{ display: "flex", gap: 10, alignItems: "center", width: "100%", border: "none", borderBottom: "1px solid #f3f5f8", background: "none", fontFamily: "inherit", color: NAVY, textAlign: "left", fontSize: 14.5, padding: "10px 0", cursor: "pointer" }}>
-                <span style={tickBox(on)}>{on ? "✓" : ""}</span>
-                <span style={{ flex: 1 }}><b>{b.n}×</b> 📦 accessory box{b.n === 1 ? "" : "es"}
-                  <span style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#8593a8" }}>{b.x.customer} · #{b.x.inv.invNo}</span>
-                </span>
-              </button>
-            );
-          })}
-          {toCheck.length + boxRows.length === 0 && <div style={{ padding: "10px 0", fontSize: 13.5, fontWeight: 700, color: "#8593a8" }}>Nothing on the van to re-check.</div>}
+          <div style={{ fontWeight: 800, fontSize: 16 }}>Photograph the loaded van</div>
+          <div style={{ fontSize: 12.5, fontWeight: 600, color: "#5a6a85", marginTop: 3 }}>Then someone else — another loader, the office or the driver — goes round the van to double-check it before the driver can set off.</div>
           <span style={label}>Photos of the loaded van <span style={{ textTransform: "none", fontWeight: 600, color: RED }}>— required, at least one</span></span>
-          {photos.length > 0 && (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginBottom: 8 }}>
-              {photos.map((p, k) => (
-                <div key={p.url} style={{ position: "relative", aspectRatio: "1", borderRadius: 10, overflow: "hidden", border: "1px solid #e6e9ef" }}>
-                  <img src={p.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-                  <button type="button" onClick={() => setPhotos((l) => l.filter((_, i) => i !== k))} style={{ position: "absolute", top: 4, right: 4, width: 26, height: 26, borderRadius: 99, border: "none", background: "rgba(11,31,63,.75)", color: "#fff", fontWeight: 800 }}>×</button>
-                </div>
-              ))}
-            </div>
-          )}
-          {photos.length < 10 && (
-            <label style={{ ...field, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, minHeight: 54, cursor: "pointer", fontWeight: 800, borderStyle: "dashed", textAlign: "center" }}>
-              <input type="file" accept="image/*" capture="environment" style={{ display: "none" }}
-                onChange={(e) => { const f = e.target.files && e.target.files[0]; if (f) setPhotos((l) => [...l, { file: f, url: URL.createObjectURL(f) }]); e.target.value = ""; }} />
-              📷 {photos.length ? "Add another photo (" + photos.length + ")" : "Take a photo of the loaded van"}
-            </label>
-          )}
+          <PhotoPicker photos={photos} setPhotos={setPhotos} />
           <span style={label}>{short.length ? <>Why is it going out short? <span style={{ textTransform: "none", fontWeight: 600, color: RED }}>— required</span></> : "Notes (optional)"}</span>
           <textarea style={{ ...field, minHeight: 60, resize: "vertical", borderColor: short.length && !reasonOk ? "#f4b9c1" : "#d5d9e0" }} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder={short.length ? "e.g. boards out of stock - due Thursday" : "e.g. trims strapped to the roof rack"} />
           {msg && <div style={{ marginTop: 10, color: RED, fontWeight: 700 }}>{msg}</div>}
-          <button type="button" disabled={!ok || busy} onClick={save} style={{ ...bigBtn(ok, short.length ? AMBER : GREEN), marginTop: 14 }}>{busy ? "Closing…" : short.length ? "⚠ Close — van going out short" : "Close the loading report"}</button>
-          {!ok && <div style={{ marginTop: 6, fontSize: 12.5, fontWeight: 700, color: "#8593a8", textAlign: "center" }}>{!all ? "Tick every line again." : !photos.length ? "Add a photo of the loaded van." : "Say why it's going out short."}</div>}
-          <div style={{ marginTop: 6, fontSize: 12.5, fontWeight: 600, color: "#8593a8", textAlign: "center" }}>Closing it opens the driver's deliveries for this run.</div>
+          <button type="button" disabled={!ok || busy} onClick={save} style={{ ...bigBtn(ok, short.length ? AMBER : GREEN), marginTop: 14 }}>{busy ? "Submitting…" : short.length ? "⚠ Submit — van going out short" : "Submit for double-check"}</button>
+          {!ok && <div style={{ marginTop: 6, fontSize: 12.5, fontWeight: 700, color: "#8593a8", textAlign: "center" }}>{!photos.length ? "Add a photo of the loaded van." : "Say why it's going out short."}</div>}
         </div>
       </div>
     </div>
   );
 }
+
+// ===== double-check: a different person ticks every line as they see it on the van =====
+function CheckReport({ run, counts, rep, who, header, onBack, onDone }) {
+  const [got, setGot] = useState({});
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [back, setBack] = useState(null); // reason text when sending it back
+  const [urls, setUrls] = useState({});
+  useEffect(() => { (rep.photoPaths || []).forEach((p) => loadPhotoUrl(p).then((u) => setUrls((m) => ({ ...m, [p]: u }))).catch(() => {})); }, [rep.id]);
+  const short = rep.shortLines || [];
+  const missingAll = new Set(short.filter((m) => !m.loaded).map((m) => m.key));
+  const toCheck = run.lines.filter((x) => !missingAll.has(x.key)).map((x) => ({ x, part: short.find((m) => m.key === x.key) }));
+  const boxRows = boxRowsOf(run, counts);
+  const all = toCheck.every((t) => got[t.x.key]) && boxRows.every((b) => got[b.key]);
+  const act = async (fn) => { setBusy(true); setMsg(""); try { await fn(); onDone(); } catch (e) { setMsg("Couldn't save — " + ((e && e.message) || e)); } setBusy(false); };
+  const row = (key, on, body) => (
+    <button key={key} type="button" onClick={() => setGot((g) => ({ ...g, [key]: !g[key] }))}
+      style={{ display: "flex", gap: 10, alignItems: "center", width: "100%", border: "none", borderBottom: "1px solid #f3f5f8", background: "none", fontFamily: "inherit", color: NAVY, textAlign: "left", fontSize: 14.5, padding: "10px 0", cursor: "pointer" }}>
+      <span style={tickBox(on)}>{on ? "✓" : ""}</span><span style={{ flex: 1 }}>{body}</span>
+    </button>
+  );
+  return (
+    <div>
+      {header("Double-check · " + (run.van || run.driver), onBack)}
+      <div style={{ padding: 14 }}>
+        <div style={{ ...cardS, background: "#eef5fd", borderColor: "#c6dcf3" }}>
+          <div style={{ fontWeight: 800, color: BLUE }}>Loaded by {shortName(rep.completedBy)} at {hm(rep.completedAt)}</div>
+          <div style={{ fontSize: 12.5, fontWeight: 600, color: "#5a6a85", marginTop: 3 }}>Go round the van and tick each line as you see it — don't tick from the list.</div>
+          {(rep.photoPaths || []).length > 0 && <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>{rep.photoPaths.map((p) => <a key={p} href={urls[p]} target="_blank" rel="noopener noreferrer" style={{ width: 64, height: 64, borderRadius: 8, overflow: "hidden", background: "#dfe7f1", display: "block" }}>{urls[p] && <img src={urls[p]} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />}</a>)}</div>}
+          {rep.notes && <div style={{ marginTop: 8, fontSize: 13, fontWeight: 600, color: "#6b5305" }}>Loader's note: {rep.notes}</div>}
+        </div>
+        {short.length > 0 && <ShortCard short={short} checked />}
+        <div style={cardS}>
+          {toCheck.map(({ x, part }) => row(x.key, !!got[x.key], <>
+            <b>{part ? part.loaded + " of " + x.qty : x.qty}×</b> {x.line.description || x.line.code}{x.line.colour ? <span style={{ color: "#5a6a85" }}> · {x.line.colour}</span> : null}
+            <span style={{ display: "block", fontSize: 12, fontWeight: 700, color: x.src ? BLUE : part ? AMBER : "#8593a8" }}>{x.customer} · #{x.inv.invNo}{x.src ? " · on pick-up COL-" + x.src.col.collectionNo + " (not on the van yet)" : ""}{counts[x.key] && counts[x.key].boxed ? " · 📦 in a box" : ""}{part ? " · part load" : ""}</span>
+          </>))}
+          {boxRows.map((b) => row(b.key, !!got[b.key], <>
+            <b>{b.n}×</b> 📦 accessory box{b.n === 1 ? "" : "es"}
+            <span style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#8593a8" }}>{b.x.customer} · #{b.x.inv.invNo}</span>
+          </>))}
+          {toCheck.length + boxRows.length === 0 && <div style={{ padding: "10px 0", fontSize: 13.5, fontWeight: 700, color: "#8593a8" }}>Nothing on the van to check.</div>}
+          {msg && <div style={{ marginTop: 10, color: RED, fontWeight: 700 }}>{msg}</div>}
+          {back === null ? (
+            <>
+              <button type="button" disabled={!all || busy} onClick={() => act(() => checkReport(rep.id || run.key, who))} style={{ ...bigBtn(all), marginTop: 14 }}>{busy ? "Saving…" : "✓ Van checked — it's right"}</button>
+              {!all && <div style={{ marginTop: 6, fontSize: 12.5, fontWeight: 700, color: "#8593a8", textAlign: "center" }}>Tick every line as you find it on the van.</div>}
+              <button type="button" onClick={() => setBack("")} style={{ ...bigBtn(true, "#fff"), color: RED, border: "1px solid #f4b9c1", marginTop: 10, fontSize: 15 }}>✗ Something's wrong — send it back</button>
+            </>
+          ) : (
+            <>
+              <span style={label}>What's wrong? <span style={{ textTransform: "none", fontWeight: 600, color: RED }}>— required</span></span>
+              <textarea autoFocus style={{ ...field, minHeight: 60 }} value={back} onChange={(e) => setBack(e.target.value)} placeholder="e.g. only 18 slatted cladding on, not 20" />
+              <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                <button type="button" onClick={() => setBack(null)} style={{ ...bigBtn(true, "#fff"), color: NAVY, border: "1px solid #d5d9e0", flex: 1, fontSize: 15 }}>Cancel</button>
+                <button type="button" disabled={back.trim().length < 3 || busy} onClick={() => act(() => reopenReport(rep.id || run.key, shortName(who) + ": " + back.trim()))} style={{ ...bigBtn(back.trim().length >= 3, RED), flex: 2, fontSize: 15 }}>Send back to the loader</button>
+              </div>
+            </>
+          )}
+          <div style={{ marginTop: 8, fontSize: 12.5, fontWeight: 600, color: "#8593a8", textAlign: "center" }}>Confirming opens the driver's deliveries for this run.</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ShortCard({ short, checked }) {
+  return (
+    <div style={{ ...cardS, borderColor: "#f4b9c1", background: "#fdf3f4" }}>
+      <div style={{ fontWeight: 800, fontSize: 16, color: RED }}>⚠ This van is going out short</div>
+      <div style={{ fontSize: 12.5, fontWeight: 600, color: "#5a6a85", marginTop: 3 }}>{checked ? "The office has been alerted to raise a job or post the missing parts." : "The office gets an alert with this list so they can raise a job or post the missing parts."}</div>
+      {short.map((m) => (
+        <div key={m.key} style={{ padding: "8px 0", borderTop: "1px solid #f4dfe2", fontSize: 14 }}>
+          <b>{m.missing}×</b> {m.text}{m.colour ? <span style={{ color: "#5a6a85" }}> · {m.colour}</span> : null}
+          <span style={{ display: "block", fontSize: 12, fontWeight: 700, color: RED }}>{m.customer} · #{m.invNo} · {m.why}{m.loaded ? " (" + m.loaded + " of " + m.qty + " on)" : ""}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function PhotoPicker({ photos, setPhotos }) {
+  return (
+    <>
+      {photos.length > 0 && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginBottom: 8 }}>
+          {photos.map((p, k) => (
+            <div key={p.url} style={{ position: "relative", aspectRatio: "1", borderRadius: 10, overflow: "hidden", border: "1px solid #e6e9ef" }}>
+              <img src={p.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+              <button type="button" onClick={() => setPhotos((l) => l.filter((_, i) => i !== k))} style={{ position: "absolute", top: 4, right: 4, width: 26, height: 26, borderRadius: 99, border: "none", background: "rgba(11,31,63,.75)", color: "#fff", fontWeight: 800 }}>×</button>
+            </div>
+          ))}
+        </div>
+      )}
+      {photos.length < 10 && (
+        <label style={{ ...field, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, minHeight: 54, cursor: "pointer", fontWeight: 800, borderStyle: "dashed", textAlign: "center" }}>
+          <input type="file" accept="image/*" capture="environment" style={{ display: "none" }}
+            onChange={(e) => { const f = e.target.files && e.target.files[0]; if (f) setPhotos((l) => [...l, { file: f, url: URL.createObjectURL(f) }]); e.target.value = ""; }} />
+          📷 {photos.length ? "Add another photo (" + photos.length + ")" : "Take a photo of the loaded van"}
+        </label>
+      )}
+    </>
+  );
+}
+
+const boxRowsOf = (run, counts) => [...new Map(run.lines.map((x) => [x.inv.id, x])).values()]
+  .map((x) => ({ key: boxKey(x.inv.id), x, n: counts[boxKey(x.inv.id)] ? Number(counts[boxKey(x.inv.id)].qtyLoaded) || 0 : 0 })).filter((b) => b.n > 0);
+const checkedList = (run, counts) => run.lines.map((x) => ({ key: x.key, qty: x.qty, loaded: x.src ? 0 : (counts[x.key] ? counts[x.key].qtyLoaded : 0), boxed: !!(counts[x.key] && counts[x.key].boxed), pickup: x.src ? "COL-" + x.src.col.collectionNo : "", text: x.line.description || x.line.code, job: x.inv.invNo }))
+  .concat(boxRowsOf(run, counts).map((b) => ({ key: b.key, boxes: b.n, text: b.n + " accessory box" + (b.n === 1 ? "" : "es"), job: b.x.inv.invNo })));

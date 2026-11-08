@@ -1,10 +1,10 @@
 -- Deck Kingdom Ops - loading the vans (Nov 2026)
 -- Run once in Supabase: SQL Editor -> New query -> paste -> Run. Safe to run again.
 --
--- Whoever loads a van counts every line on (part loads allowed, any order). The loading report for
--- a run only closes once every line is on the van - or booked on a supplier pick-up - and the
--- loader has double-checked each line again and photographed the van. The driver's deliveries
--- don't open until that report is closed. Drivers only see the loading for their own runs.
+-- Whoever loads a van counts every line on (part loads allowed, any order), photographs the van and
+-- submits the loading report. A DIFFERENT person (another loader, the office - or the driver) then
+-- double-checks the van and confirms it; only then do the driver's deliveries open. A van can go
+-- out short with a reason - the office gets a short-load alert. Drivers only see their own runs.
 
 create or replace function public.dk_driver_is(p_driver text) returns boolean language sql stable security definer set search_path = public as
 $$ select public.dk_my_driver() <> '' and lower(trim(p_driver)) = lower(public.dk_my_driver()) $$;
@@ -15,7 +15,7 @@ create table if not exists public.load_reports (
   driver text not null default '',
   run_no text not null default '',
   van text not null default '',
-  status text not null default 'open', -- open | complete
+  status text not null default 'open', -- open | submitted (loaded, waiting for a second person) | complete (double-checked)
   completed_at text not null default '',
   completed_by text not null default '',
   checked jsonb not null default '[]'::jsonb,     -- the double-check: every line re-ticked at close
@@ -31,6 +31,10 @@ alter table public.load_reports add column if not exists resolved_at text not nu
 alter table public.load_reports add column if not exists resolved_by text not null default '';
 alter table public.load_reports add column if not exists resolution text not null default '';
 alter table public.load_reports add column if not exists followups jsonb not null default '{}'::jsonb; -- job id -> follow-up job no.
+-- the second person's double-check (completed_* = whoever loaded and submitted it)
+alter table public.load_reports add column if not exists checked_by text not null default '';
+alter table public.load_reports add column if not exists checked_at text not null default '';
+alter table public.load_reports add column if not exists sent_back text not null default ''; -- why the checker sent it back
 
 create table if not exists public.load_lines (
   report_id text not null,
