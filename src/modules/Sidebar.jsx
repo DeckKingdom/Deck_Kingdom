@@ -162,7 +162,7 @@ export default function Sidebar({ tab, setTab, open, footer, onNew, canNew, onTo
                     {!open && badges[t] > 0 && <span style={{ position: "absolute", top: -4, right: -6, width: 9, height: 9, borderRadius: 99, background: "#e5394f", border: "2px solid " + NAVY }} />}
                   </span>
                   {open && <span style={{ whiteSpace: "nowrap" }}>{label}</span>}
-                  {open && badges[t] > 0 && <span title={badges[t] + " live"} style={{ marginLeft: "auto", minWidth: 20, height: 20, padding: "0 6px", borderRadius: 99, background: "#e5394f", color: "#fff", fontSize: 11.5, fontWeight: 800, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>{badges[t]}</span>}
+                  {open && badges[t] > 0 && <span title={badges[t] + (t === "samples" ? " to send" : " live")} style={{ marginLeft: "auto", marginRight: canAdd && onNew && (!canNew || canNew(t)) ? 30 : 0, minWidth: 20, height: 20, padding: "0 6px", borderRadius: 99, background: "#e5394f", color: "#fff", fontSize: 11.5, fontWeight: 800, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>{badges[t]}</span>}
                 </button>
                 {open && canAdd && onNew && (!canNew || canNew(t)) && (
                   <button

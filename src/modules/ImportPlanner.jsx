@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import * as XLSX from "xlsx";
 import { storage, storageMode } from "../data/storage.js";
 import { useDropSync, DropAlert } from "./crm/DropSync.jsx";
@@ -31,6 +31,7 @@ import {
   money,
   int,
 } from "../lib/core.js";
+import { sampleStatus } from "../lib/crmCore.js";
 import { blankInvoice, blankLine, blankQuote, blankSample, blankSampleItem, nextNumber, TRADE_COUNTER, vanReminders, syncCatalogue, renameSkus, syncOpenPicks, colourTidyPlan, syncSampleConversions, cleanCode, codeSource, PRODUCT_SOURCES, suggestDescription, suggestCode, codeFollowsName, dueScheduledFor, setTaskDone, describeSchedule, today as todayStr, newPurchaseFor } from "../lib/crmCore.js";
 import { useCrm } from "./crm/useCrm.js";
 import CustomersScreen from "./crm/CustomersScreen.jsx";
@@ -273,6 +274,8 @@ export default function ImportPlanner() {
     const t = setInterval(pull, 90000);
     return () => { live = false; clearInterval(t); };
   }, [!!crm, access.role, tab, shortLoads.reports]);
+  // samples waiting to be posted: red count on Samples
+  const samplesToSend = useMemo(() => (crm && crm.samples ? crm.samples.filter((x) => { try { return sampleStatus(x, crm) === "To send"; } catch (e) { return false; } }).length : 0), [crm && crm.samples, crm && crm.invoices]);
   const [phonePick, setPhonePick] = useState(false); // admin / manager: open the driver or loading app
   const canPhoneApps = storageMode !== "supabase" || access.role === "admin" || access.role === "manager";
   // vans loaded and waiting for a second person to double-check: blue count on Loading
@@ -1398,7 +1401,7 @@ export default function ImportPlanner() {
         );
       })()}
       <div style={{ display: "flex", alignItems: "stretch" }}>
-      <Sidebar phone={isPhone} tab={tab} setTab={navTo} open={sideOpen} footer={sideFooter} onNew={access.canEdit ? (t) => { if (isPhone) setSideOpen(false); sideNew(t); } : null} canNew={(t) => (["overview", "vans", "purchases", "suppliers"].includes(t) ? access.canManage : access.canEdit)} onToggle={() => setSideOpen((o) => !o)} allow={access.canTab} badges={{ issues: issueCount, loading: checkCount }} />
+      <Sidebar phone={isPhone} tab={tab} setTab={navTo} open={sideOpen} footer={sideFooter} onNew={access.canEdit ? (t) => { if (isPhone) setSideOpen(false); sideNew(t); } : null} canNew={(t) => (["overview", "vans", "purchases", "suppliers"].includes(t) ? access.canManage : access.canEdit)} onToggle={() => setSideOpen((o) => !o)} allow={access.canTab} badges={{ issues: issueCount, loading: checkCount, samples: samplesToSend }} />
       <div style={{ flex: 1, minWidth: 0 }}>
 
       <div ref={headerRef} className="no-print" style={{ background: NAVY, padding: isPhone ? "8px 10px" : "10px 16px", display: "flex", alignItems: "center", gap: isPhone ? 6 : 10, position: "sticky", top: 0, zIndex: 25, boxShadow: "0 2px 8px rgba(11,31,63,0.25)" }}>
