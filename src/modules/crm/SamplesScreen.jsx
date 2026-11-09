@@ -352,7 +352,17 @@ export default function SamplesScreen({ money = true, crm, updateCrm, askConfirm
                               </button>
                             ) : <span style={{ color: "#aab3c2" }}>—</span>}
                           </td>
-                          <td style={{ ...tdc, textAlign: "right" }}>
+                          <td style={{ ...tdc, textAlign: "right", whiteSpace: "nowrap" }}>
+                            {st === "To send" && (
+                              <button title="Mark as sent today - the follow-up is booked in" onClick={(e) => {
+                                e.stopPropagation();
+                                updateCrm((d) => {
+                                  const y = (d.samples || []).find((z) => z.id === x.id);
+                                  if (y) { y.dispatchedDate = y.dispatchedDate || today(); if (!y.followUpDate) y.followUpDate = addDays(y.dispatchedDate, SAMPLE_FOLLOWUP_DAYS); }
+                                  return d;
+                                });
+                              }} style={{ height: 30, padding: "0 12px", marginRight: 6, borderRadius: 8, border: "1px solid #3FA55C", background: "#3FA55C", color: "#fff", fontFamily: "inherit", fontWeight: 800, fontSize: 12.5, cursor: "pointer", verticalAlign: "middle" }}>✓ Sent</button>
+                            )}
                             <button style={abtn} title="Open" onClick={(e) => { e.stopPropagation(); setSelId(x.id); }}><Icon name="pen" /></button>
                           </td>
                         </tr>
