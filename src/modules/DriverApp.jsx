@@ -11,7 +11,7 @@ import { loadDrops, saveDrop, shrinkPhoto, loadEvents, logEvent } from "../data/
 import { runsOn, loadState, canCheck, shortName } from "../lib/loading.js";
 import { loadLoading } from "../data/loading.js";
 import LoadingMobile from "./LoadingMobile.jsx";
-import DriverPicker from "./DriverPicker.jsx";
+import DriverPicker, { openPhoneApp } from "./DriverPicker.jsx";
 import { outwardCode, tidyPostcode, googleNavHref, appleNavHref, isApple } from "../lib/addressCheck.js";
 
 const GREEN = "#28713e";
@@ -74,9 +74,10 @@ export default function DriverApp({ me, warehouse, switcher }) {
       )}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontWeight: 800, fontSize: 17 }}>{title}</div>
-        <div style={{ fontSize: 12, color: "#aeb9cf", fontWeight: 600 }}>{switcher ? (driver ? "Viewing as " + driver : "Loading · all vans") + " · you" : (driver ? driver + " · " : warehouse ? "Warehouse · " : "") + "Deck Kingdom"}</div>
+        <div style={{ fontSize: 12, color: "#aeb9cf", fontWeight: 600 }}>{switcher ? (driver ? "Viewing as " + driver : "Loading · all vans") : (driver ? driver + " · " : warehouse ? "Warehouse · " : "") + "Deck Kingdom"}</div>
       </div>
-      {switcher && <button type="button" onClick={() => setPicking(true)} title="Switch driver / app" style={{ border: "none", background: GOLD, color: NAVY, borderRadius: 10, height: 40, padding: "0 10px", fontFamily: "inherit", fontWeight: 800, fontSize: 13, cursor: "pointer" }}>⇄ Switch</button>}
+      {switcher && <button type="button" onClick={() => setPicking(true)} title="Switch driver / app" style={{ border: "none", background: GOLD, color: NAVY, borderRadius: 10, height: 40, padding: "0 10px", flex: "none", fontFamily: "inherit", fontWeight: 800, fontSize: 13, cursor: "pointer" }}>⇄ Switch</button>}
+      {switcher && <button type="button" onClick={() => openPhoneApp(null)} title="Back to the office system" aria-label="Back to the office system" style={{ border: "none", background: "rgba(255,255,255,.12)", color: "#fff", borderRadius: 10, width: 40, height: 40, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", flex: "none" }}><Icon name="home" stroke="#fff" /></button>}
       {picking && <DriverPicker crm={crm} myName={switcher.myName} current={switcher.current} onClose={() => setPicking(false)} />}
       <button type="button" onClick={load} title="Refresh" style={{ border: "none", background: "rgba(255,255,255,.12)", color: "#fff", borderRadius: 10, height: 40, padding: "0 12px", fontFamily: "inherit", fontWeight: 700, cursor: "pointer" }}>↻</button>
     </div>
@@ -95,7 +96,7 @@ export default function DriverApp({ me, warehouse, switcher }) {
     return (
       <div style={page}>
         <LoadingMobile key={loads} crm={crm} driver={warehouse ? null : driver} who={who} header={header} nav={tabs} />
-        {warehouse && <div style={{ padding: "0 14px" }}><button type="button" onClick={() => signOut().then(() => window.location.reload())}
+        {warehouse && !switcher && <div style={{ padding: "0 14px" }}><button type="button" onClick={() => signOut().then(() => window.location.reload())}
           style={{ marginTop: 10, width: "100%", border: "1px solid #d5d9e0", background: "#fff", borderRadius: 12, padding: 12, fontFamily: "inherit", fontWeight: 700, color: "#5a6a85", cursor: "pointer" }}>Sign out</button>
           <a href="?full=1" style={{ display: "block", textAlign: "center", marginTop: 12, fontSize: 13, fontWeight: 700, color: "#185FA5" }}>Open the full ops system</a></div>}
       </div>
@@ -137,8 +138,9 @@ export default function DriverApp({ me, warehouse, switcher }) {
             <span style={{ fontSize: 12.5, fontWeight: 700, color: "#aeb9cf" }}>Log a fill-up</span>
           </button>
         </div>
-        <button type="button" onClick={() => signOut().then(() => window.location.reload())}
-          style={{ marginTop: 22, width: "100%", border: "1px solid #d5d9e0", background: "#fff", borderRadius: 12, padding: 12, fontFamily: "inherit", fontWeight: 700, color: "#5a6a85", cursor: "pointer" }}>Sign out</button>
+        {switcher ? <button type="button" onClick={() => openPhoneApp(null)}
+          style={{ marginTop: 22, width: "100%", border: "1px solid #d5d9e0", background: "#fff", borderRadius: 12, padding: 12, fontFamily: "inherit", fontWeight: 800, color: NAVY, cursor: "pointer" }}>🏠 Back to the office system</button> : <button type="button" onClick={() => signOut().then(() => window.location.reload())}
+          style={{ marginTop: 22, width: "100%", border: "1px solid #d5d9e0", background: "#fff", borderRadius: 12, padding: 12, fontFamily: "inherit", fontWeight: 700, color: "#5a6a85", cursor: "pointer" }}>Sign out</button>}
       </div>
     </div>
   );
@@ -388,7 +390,7 @@ function DayRuns({ date, stops, crm, header, onBack, driver, who, onCheckLoad })
                 ) : (
                 <div style={{ background: "#fff8e6", border: "1px solid #f4d78f", color: "#6b5305", borderRadius: 10, padding: "9px 12px", fontSize: 13.5, fontWeight: 700 }}>
                   <div style={{ fontWeight: 800 }}>🔒 Waiting for the van to be loaded: {rs.done} of {rs.total} lines on</div>
-                  <div style={{ marginTop: 3, fontWeight: 600 }}>Your stops open once the van is loaded, photographed and double-checked by a second person (Loading tab). Then tap Set off.</div>
+                  <div style={{ marginTop: 3, fontWeight: 600 }}>Your stops open once the van is loaded, photographed and double-checked by a second person (Loading tab).</div>
                   <div style={{ height: 6, background: "#f4e3b5", borderRadius: 4, marginTop: 7, overflow: "hidden" }}><div style={{ height: "100%", width: (100 * rs.done / Math.max(1, rs.total)) + "%", background: GOLD }} /></div>
                 </div>
                 )

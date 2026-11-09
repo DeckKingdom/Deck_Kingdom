@@ -54,10 +54,10 @@ export default function DriverPicker({ crm, myName, current, onClose }) {
       <div onClick={(e) => e.stopPropagation()} style={{ background: "#f3f5f8", width: "100%", maxWidth: 520, maxHeight: "88vh", overflowY: "auto", borderRadius: "18px 18px 0 0", padding: "18px 14px 26px", boxSizing: "border-box" }}>
         <div style={{ fontWeight: 800, fontSize: 18, color: NAVY, margin: "0 2px 4px" }}>Phone apps</div>
         <div style={{ fontSize: 12.5, fontWeight: 600, color: "#5a6a85", margin: "0 2px 12px" }}>Open the driver screen as anyone, or load the vans. Anything you confirm is recorded under your login.</div>
+        {current && row("office", false, "🏠", "Back to the office system", "The full ops screens", () => openPhoneApp(null))}
         {row("load", cur("loading"), "📦", "Loading", "Every van, any day", () => openPhoneApp("loading"))}
         <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 0.5, textTransform: "uppercase", color: "#8593a8", margin: "10px 2px 6px" }}>Driver screen as…</div>
         {names.map((n) => row("d" + n, cur("driver", n), "🚚", n + (isMe(n) ? " (me)" : ""), isMe(n) ? "Your own runs" : "See exactly what " + n + " sees", () => openPhoneApp("driver", n)))}
-        {current && row("office", false, "🏠", "Back to the office system", "The full ops screens", () => openPhoneApp(null))}
         <button type="button" onClick={onClose} style={{ width: "100%", marginTop: 6, border: "1px solid #d5d9e0", background: "#fff", borderRadius: 12, padding: 12, fontFamily: "inherit", fontWeight: 700, color: "#5a6a85", cursor: "pointer" }}>Cancel</button>
       </div>
     </div>
