@@ -266,10 +266,17 @@ function DayRuns({ date, stops, crm, header, onBack, driver, who, onCheckLoad })
     if (navAt(x)) return;
     const ev = { id: uid(), driver, date, runNo: x.obj.runNo || "", kind: "nav", itemKey: "nav:" + sid(x), van: app };
     setEvs((l) => [...(l || []), { ...ev, at: new Date().toISOString() }]);
-    const pos = (p) => logEvent({ ...ev, lat: p && p.coords.latitude, lng: p && p.coords.longitude, acc: p && p.coords.accuracy }).catch(() => {
-      setEvs((l) => (l || []).filter((e) => e.id !== ev.id));
-      setTickErr("Couldn't record the journey starting — check your signal and tap Navigate again.");
-    });
+    // first Navigate on a run = leaving the yard: record the set-off time for tracking
+    const r = x.obj.runNo || "";
+    const leavingNow = !setOffDone(r);
+    const pos = (p) => {
+      const where = { lat: p && p.coords.latitude, lng: p && p.coords.longitude, acc: p && p.coords.accuracy };
+      if (leavingNow) logEvent({ id: uid(), driver, date, runNo: r, van: x.obj.van || "", kind: "depart", ...where }).then((e) => setDeparts((m) => ({ ...m, [r]: e }))).catch(() => {});
+      logEvent({ ...ev, ...where }).catch(() => {
+        setEvs((l) => (l || []).filter((e) => e.id !== ev.id));
+        setTickErr("Couldn't record the journey starting — check your signal and tap Navigate again.");
+      });
+    };
     if (navigator.geolocation) navigator.geolocation.getCurrentPosition(pos, () => pos(null), { timeout: 6000, maximumAge: 120000 });
     else pos(null);
   };
@@ -295,7 +302,7 @@ function DayRuns({ date, stops, crm, header, onBack, driver, who, onCheckLoad })
   const byRun = {};
   driven.forEach((x) => (byRun[x.obj.runNo || ""] = byRun[x.obj.runNo || ""] || []).push(x));
   const setOffDone = (r) => !!departs[r] || (byRun[r] || []).some((x) => drops[sid(x)]);
-  const currentOf = (r) => (runState(r).open && setOffDone(r) ? (byRun[r] || []).find((x) => !done(x) && !waitingOn(x).length) || null : null);
+  const currentOf = (r) => (runState(r).open ? (byRun[r] || []).find((x) => !done(x) && !waitingOn(x).length) || null : null);
   const stopName = (x) => (x.kind === "col" ? "the " + (x.obj.supplier || "supplier") + " pick-up" : "drop " + (x.obj.dropNo || "") + " (" + ((custById[x.obj.customerId] || {}).name || "#" + x.obj.invNo) + ")");
 
   if (completing) {
@@ -361,11 +368,7 @@ function DayRuns({ date, stops, crm, header, onBack, driver, who, onCheckLoad })
                 <div style={{ background: "#f1faf4", border: "1px solid #bfe3ca", borderRadius: 10, padding: "10px 12px" }}>
                   {rs.rep && (rs.rep.shortLines || []).length > 0 && <div style={{ color: RED, fontSize: 13.5, fontWeight: 800, marginBottom: 4 }}>⚠ The van went out short — {rs.rep.shortLines.reduce((t, m) => t + (Number(m.missing) || 0), 0)} item{rs.rep.shortLines.reduce((t, m) => t + (Number(m.missing) || 0), 0) === 1 ? "" : "s"} not loaded (marked on each drop). The office knows.</div>}
                   <div style={{ color: GREEN, fontSize: 13.5, fontWeight: 800 }}>✓ {rs.rep && rs.rep.completedAt ? "Loaded by " + shortName(rs.rep.completedBy) + (rs.rep.checkedBy ? " · double-checked by " + shortName(rs.rep.checkedBy) + " at " + new Date(rs.rep.checkedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : "") : "Ready to go"}</div>
-                  <button type="button" onClick={() => setOff(runKey, o.van, o.driver)} disabled={!!leaving}
-                    style={{ marginTop: 8, width: "100%", border: "none", borderRadius: 12, padding: 14, fontFamily: "inherit", fontWeight: 800, fontSize: 17, background: NAVY, color: "#fff", cursor: "pointer" }}>
-                    {leaving === runKey ? "Setting off…" : "▶ Set off on " + (o.runNo ? "run " + o.runNo : "this run")}
-                  </button>
-                  <div style={{ marginTop: 6, fontSize: 12, fontWeight: 600, color: "#5a6a85", textAlign: "center" }}>Tap as you leave the yard — your first stop opens.</div>
+                  <div style={{ marginTop: 4, fontSize: 12.5, fontWeight: 600, color: "#5a6a85" }}>Tap Navigate on your first stop as you leave the yard.</div>
                 </div>
               ) : rs.open ? (
                 <div style={{ background: "#f1faf4", border: "1px solid #bfe3ca", color: GREEN, borderRadius: 10, padding: "9px 12px", fontSize: 13.5, fontWeight: 800 }}>

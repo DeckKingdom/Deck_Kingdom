@@ -15,7 +15,11 @@ export default function InstallHint() {
     let seen = "";
     try { seen = localStorage.getItem(KEY) || ""; } catch (e) { /* */ }
     const phone = window.matchMedia && window.matchMedia("(max-width: 760px)").matches;
-    if (phone && !isStandalone() && !seen) { const t = setTimeout(() => setShow(true), 2500); return () => clearTimeout(t); }
+    if (phone && !isStandalone() && !seen) {
+      // shows for 20s so it never sits over a button for long; comes back next visit until dismissed
+      const t = setTimeout(() => setShow(true), 2500), t2 = setTimeout(() => setShow(false), 22500);
+      return () => { clearTimeout(t); clearTimeout(t2); };
+    }
   }, []);
   useEffect(() => { const f = () => bump((n) => n + 1); window.addEventListener("beforeinstallprompt", f); return () => window.removeEventListener("beforeinstallprompt", f); }, []);
   if (!show) return null;
