@@ -13,10 +13,21 @@ export const phoneAppParams = () => {
   return null;
 };
 
+// installed app: reopen on the last driver / loading screen you picked ("Back to the office" clears it)
+export const LAST_APP = "dk-phone-app";
+export const resumePhoneApp = () => {
+  try {
+    if (window.location.search) return;
+    const standalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+    const last = localStorage.getItem(LAST_APP);
+    if (standalone && last) window.location.replace(window.location.pathname + "?" + last);
+  } catch (e) { /* */ }
+};
 export const openPhoneApp = (app, driver) => {
   const q = new URLSearchParams();
   if (app) { q.set("app", app); if (driver) q.set("driver", driver); }
   const s = q.toString();
+  try { if (s) localStorage.setItem(LAST_APP, s); else localStorage.removeItem(LAST_APP); } catch (e) { /* */ }
   window.location.href = window.location.pathname + (s ? "?" + s : "");
 };
 

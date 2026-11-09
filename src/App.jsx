@@ -4,7 +4,8 @@ import LoginScreen from "./modules/LoginScreen.jsx";
 import { storageMode } from "./data/storage.js";
 import { getSession, onAuthChange, getMyAccess, getSessionEmail } from "./data/auth.js";
 import DriverApp from "./modules/DriverApp.jsx";
-import { phoneAppParams } from "./modules/DriverPicker.jsx";
+import { phoneAppParams, resumePhoneApp } from "./modules/DriverPicker.jsx";
+import InstallHint from "./modules/InstallHint.jsx";
 
 function AuthGate() {
   const [session, setSession] = useState(undefined);
@@ -75,11 +76,13 @@ class ErrorBoundary extends Component {
   }
 }
 
+resumePhoneApp();
+
 export default function App() {
   // local/offline version: ?as=driver&driver=Brian previews the driver phone screen
   let localDriver = "", localWarehouse = false;
   try { const q = new URLSearchParams(window.location.search); if (q.get("as") === "driver") localDriver = q.get("driver") || "Brian"; if (q.get("as") === "warehouse") localWarehouse = true; } catch (e) { /* ignore */ }
   const pa = storageMode === "supabase" ? null : phoneAppParams();
-  if (pa) return <ErrorBoundary><DriverApp warehouse={pa.app === "loading"} switcher={{ current: pa, myName: "Jon" }} me={{ fullName: "Jon", driverName: pa.driver || "", email: "jon" }} /></ErrorBoundary>;
-  return <ErrorBoundary>{storageMode === "supabase" ? <AuthGate /> : localDriver ? <DriverApp me={{ driverName: localDriver }} /> : localWarehouse ? <DriverApp warehouse me={{ fullName: "Warehouse" }} /> : <ImportPlanner />}</ErrorBoundary>;
+  if (pa) return <ErrorBoundary><DriverApp warehouse={pa.app === "loading"} switcher={{ current: pa, myName: "Jon" }} me={{ fullName: "Jon", driverName: pa.driver || "", email: "jon" }} /><InstallHint /></ErrorBoundary>;
+  return <ErrorBoundary>{storageMode === "supabase" ? <AuthGate /> : localDriver ? <DriverApp me={{ driverName: localDriver }} /> : localWarehouse ? <DriverApp warehouse me={{ fullName: "Warehouse" }} /> : <ImportPlanner />}<InstallHint /></ErrorBoundary>;
 }
