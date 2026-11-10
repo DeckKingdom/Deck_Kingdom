@@ -8,6 +8,7 @@ import { NAVY, GOLD, prettyDate, daysBetween } from "../../lib/core.js";
 import {
   FOLLOWUP_FLAGS, today, isSaleInvoice, onSchedule, gbp,
   reviewSettingsOf, reviewText, reviewExclusion, customerDupeGroups, personKeyOf,
+  reviewNext, nudgeDue, NUDGE_AFTER_DAYS,
 } from "../../lib/crmCore.js";
 import { Icon, Tg, card, sect, lbl, inp, btn, goldBtn, Modal, ListHero, HeroStat, SearchBox, FilterPills } from "./ui.jsx";
 import { waNumber, getWaMode } from "./CustomersScreen.jsx";
@@ -29,8 +30,7 @@ export const reviewStage = (i) => {
   return "To ask";
 };
 const STAGE_TONES = { "To ask": "#C64545", "Awaiting review": "#E8912D", "Review in": "#2E7D4F", Posted: NAVY };
-// which message a job needs next, and which flag sending it ticks
-const STAGE_MSG = { "To ask": ["ask", "reviewRequested"], "Awaiting review": ["ask", ""], "Review in": ["photos", "photosRequested"], Posted: ["thanks", ""] };
+const MSG_NAMES = { ask: "review ask", nudge: "nudge", photos: "photo ask", thanks: "thank-you" };
 
 const gmailTo = (to, subject, body) => "https://mail.google.com/mail/?view=cm&fs=1&to=" + encodeURIComponent(to) + "&su=" + encodeURIComponent(subject) + "&body=" + encodeURIComponent(body);
 const gmailBcc = (list, subject, body) => "https://mail.google.com/mail/?view=cm&fs=1&bcc=" + encodeURIComponent(list.join(",")) + "&su=" + encodeURIComponent(subject) + "&body=" + encodeURIComponent(body);
@@ -78,6 +78,18 @@ export default function ReviewsScreen({ crm, updateCrm, askConfirm, openInvoice,
       if (!t) return c;
       if (!t.flags) t.flags = {};
       t.flags[k] = force === undefined ? !t.flags[k] : force;
+      if (k === "reviewRequested" && t.flags[k] && !t.reviewAskedAt) t.reviewAskedAt = today(); // the nudge clock starts at the ask
+      return c;
+    });
+  // what sending this stage's message records on the job
+  const stampSend = (invId, kind) =>
+    updateCrm((c) => {
+      const t = c.invoices.find((i) => i.id === invId);
+      if (!t) return c;
+      if (!t.flags) t.flags = {};
+      if (kind === "ask") { t.flags.reviewRequested = true; if (!t.reviewAskedAt) t.reviewAskedAt = today(); }
+      if (kind === "nudge") t.reviewNudgedAt = today();
+      if (kind === "photos") t.flags.photosRequested = true;
       return c;
     });
   const saveRs = (next) => updateCrm((c) => { c.reviewSettings = next; return c; });
@@ -104,6 +116,7 @@ export default function ReviewsScreen({ crm, updateCrm, askConfirm, openInvoice,
     return n;
   }, [pool]);
   const photosAsked = useMemo(() => pool.filter((i) => (i.flags || {}).photosRequested).length, [pool]);
+  const nudgesDue = useMemo(() => pool.filter((i) => nudgeDue(i, tod)).length, [pool, tod]);
   const toPost = useMemo(() => pool.filter((i) => (i.flags || {}).reviewReceived && !(i.flags || {}).socialPosted).length, [pool]);
 
   const exclOf = (i) => reviewExclusion(i, custById[i.customerId], rs, issueIds);
@@ -120,19 +133,23 @@ export default function ReviewsScreen({ crm, updateCrm, askConfirm, openInvoice,
   });
   // on the To-ask view, excluded jobs drop out (toggle to see them greyed)
   const excluded = filter === "To ask" ? stageRows.filter((i) => exclOf(i)) : [];
-  const rows = filter === "To ask" && !showExcl ? stageRows.filter((i) => !exclOf(i)) : stageRows;
+  let rows = filter === "To ask" && !showExcl ? stageRows.filter((i) => !exclOf(i)) : stageRows;
+  // awaiting view: jobs due their nudge float to the top
+  if (filter === "Awaiting review") rows = [...rows].sort((a, b) => (nudgeDue(b, tod) ? 1 : 0) - (nudgeDue(a, tod) ? 1 : 0));
 
-  // ----- bulk asks (To ask view): one person once, their preferred channel -----
+  // ----- bulk sends: asks on the To-ask pile, week-later nudges on Awaiting review -----
+  // One person once (duplicates and repeat jobs collapse), their preferred channel.
+  const bulkKind = filter === "To ask" ? "ask" : filter === "Awaiting review" ? "nudge" : null;
   const bulk = useMemo(() => {
-    if (filter !== "To ask") return null;
+    if (!bulkKind) return null;
     const seen = new Set();
     const email = [], wa = [], noContact = [];
     let collapsed = 0;
     stageRows.forEach((i) => {
-      if (exclOf(i)) return;
+      if (exclOf(i) || reviewNext(i, tod) !== bulkKind) return;
       const c = custById[i.customerId];
       const key = personKeyOf(c);
-      if (seen.has(key)) { collapsed++; return; } // duplicate account / repeat job: one ask per person
+      if (seen.has(key)) { collapsed++; return; }
       seen.add(key);
       const ch = channelOf(c);
       if (ch === "email") email.push({ i, c });
@@ -140,23 +157,28 @@ export default function ReviewsScreen({ crm, updateCrm, askConfirm, openInvoice,
       else noContact.push({ i, c });
     });
     return { email, wa, noContact, collapsed };
-  }, [filter, stageRows, custById, rs, issueIds]);
+  }, [bulkKind, stageRows, custById, rs, issueIds, tod]);
 
-  const markAsked = (list) =>
+  const markSent = (list, kind) =>
     askConfirm &&
     askConfirm({
-      message: "Mark " + list.length + " job" + (list.length === 1 ? "" : "s") + " as review asked?",
-      confirmLabel: "Mark asked",
+      message: "Mark " + list.length + " job" + (list.length === 1 ? "" : "s") + " as " + (kind === "nudge" ? "nudged? They won't be chased again." : "review asked? The one-week nudge clock starts now."),
+      confirmLabel: kind === "nudge" ? "Mark nudged" : "Mark asked",
       action: () =>
         updateCrm((c) => {
           const ids = new Set(list.map((x) => x.i.id));
-          c.invoices.forEach((t) => { if (ids.has(t.id)) { if (!t.flags) t.flags = {}; t.flags.reviewRequested = true; } });
+          c.invoices.forEach((t) => {
+            if (!ids.has(t.id)) return;
+            if (!t.flags) t.flags = {};
+            if (kind === "nudge") t.reviewNudgedAt = today();
+            else { t.flags.reviewRequested = true; if (!t.reviewAskedAt) t.reviewAskedAt = today(); }
+          });
           return c;
         }),
     });
 
-  const bulkEmailHref = bulk && bulk.email.length
-    ? gmailBcc(bulk.email.map(({ c }) => String(c.email).trim()), rs.email.ask.subject, reviewText(rs.email.ask.body, null, rs.link))
+  const bulkEmailHref = bulk && bulk.email.length && bulkKind
+    ? gmailBcc(bulk.email.map(({ c }) => String(c.email).trim()), rs.email[bulkKind].subject, reviewText(rs.email[bulkKind].body, null, rs.link))
     : "";
 
   const pillBadge = (f) => STAGE_TONES[f] || "#8593a8";
@@ -174,7 +196,7 @@ export default function ReviewsScreen({ crm, updateCrm, askConfirm, openInvoice,
         }
       >
         <HeroStat label="To ask" value={counts["To ask"]} sub="Delivered, not asked yet" tone={counts["To ask"] ? "#f2a6b1" : GOLD} onClick={() => setFilter("To ask")} />
-        <HeroStat label="Awaiting review" value={counts["Awaiting review"]} sub="Asked — nothing in yet" onClick={() => setFilter("Awaiting review")} />
+        <HeroStat label="Awaiting review" value={counts["Awaiting review"]} sub={nudgesDue ? nudgesDue + " due a nudge (week since the ask)" : "Asked — nothing in yet"} tone={nudgesDue ? "#f2a6b1" : undefined} onClick={() => setFilter("Awaiting review")} />
         <HeroStat label="Reviews in" value={counts["Review in"] + counts["Posted"]} sub={pool.length ? Math.round(((counts["Review in"] + counts["Posted"]) / pool.length) * 100) + "% of delivered jobs" : "—"} onClick={() => setFilter("Review in")} />
         <HeroStat label="Photos asked" value={photosAsked} sub={toPost ? toPost + " still to post" : "Customer photos requested"} />
         <HeroStat label="Possible duplicates" value={dupeGroups.length} sub={dupeGroups.length ? "Same person, more than one account" : "No doubles spotted"} tone={dupeGroups.length ? "#f2c66d" : GOLD} onClick={() => setDupes(true)} />
@@ -196,9 +218,9 @@ export default function ReviewsScreen({ crm, updateCrm, askConfirm, openInvoice,
           <div style={{ background: "#f8f9fb", border: "1px solid #e6e9ef", borderRadius: 10, padding: "10px 13px", marginBottom: 12 }}>
             <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
               {bulk.email.length > 0 && (
-                <a href={bulkEmailHref} target="_blank" rel="noreferrer" onClick={() => markAsked(bulk.email)}
+                <a href={bulkEmailHref} target="_blank" rel="noreferrer" onClick={() => markSent(bulk.email, bulkKind)}
                   style={{ ...goldBtn, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 7 }}>
-                  <Icon name="mail" stroke={NAVY} size={14} />Email all ({bulk.email.length})
+                  <Icon name="mail" stroke={NAVY} size={14} />{bulkKind === "nudge" ? "Email the nudges" : "Email all"} ({bulk.email.length})
                 </a>
               )}
               {bulk.wa.length > 0 && (
@@ -230,9 +252,9 @@ export default function ReviewsScreen({ crm, updateCrm, askConfirm, openInvoice,
                 <div style={{ fontSize: 11.5, fontWeight: 700, color: "#8593a8" }}>WhatsApp can't bulk-send — tap each one, the message opens ready to go, and the job ticks itself:</div>
                 {bulk.wa.map(({ i, c }) => (
                   <div key={i.id} style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13, fontWeight: 600 }}>
-                    {(i.flags || {}).reviewRequested
-                      ? <span style={chip("#e9f6ee", "#28713e")}>asked ✓</span>
-                      : <a href={waHref(c.mobile, reviewText(rs.wa.ask, c, rs.link))} onClick={() => setFlag(i.id, "reviewRequested", true)}
+                    {reviewNext(i, tod) !== bulkKind
+                      ? <span style={chip("#e9f6ee", "#28713e")}>{bulkKind === "nudge" ? "nudged" : "asked"} ✓</span>
+                      : <a href={waHref(c.mobile, reviewText(rs.wa[bulkKind], c, rs.link))} onClick={() => stampSend(i.id, bulkKind)}
                           style={{ ...chip("#25D36622", "#0b6b4f"), textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 5 }}>
                           <Icon name="wa" stroke="#128C7E" size={12} />Send
                         </a>}
@@ -269,7 +291,7 @@ export default function ReviewsScreen({ crm, updateCrm, askConfirm, openInvoice,
                 const days = del ? daysBetween(del, tod) : null;
                 const st = reviewStage(i);
                 const excl = exclOf(i);
-                const [msgKind, tickFlag] = STAGE_MSG[st];
+                const msgKind = reviewNext(i, tod);
                 const mob = c && waNumber(c.mobile) ? c.mobile : "";
                 const em = c && /@/.test(String(c.email || "")) ? String(c.email).trim() : "";
                 const optedOut = c && rs.optOut.includes(c.id);
@@ -295,19 +317,31 @@ export default function ReviewsScreen({ crm, updateCrm, askConfirm, openInvoice,
                       {/* the message this stage needs, on the channels we hold for them */}
                       {excl ? (
                         <span style={chip("#f1f3f7", "#8593a8")} title={"Left out of bulk asks: " + excl}>{excl}</span>
+                      ) : msgKind === "" ? (
+                        // the cadence says leave them be — show where it's up to
+                        st === "Awaiting review" ? (
+                          i.reviewNudgedAt
+                            ? <span style={chip("#f1f3f7", "#8593a8")} title="Asked and nudged once — the cadence stops here">nudged {prettyDate(i.reviewNudgedAt)}</span>
+                            : <span style={chip("#fdf3e4", "#8a5a14")} title={"Nudge unlocks " + NUDGE_AFTER_DAYS + " days after the ask"}>asked {i.reviewAskedAt ? prettyDate(i.reviewAskedAt) : ""} · wait</span>
+                        ) : st === "Review in" ? (
+                          <span style={chip("#e9f6ee", "#28713e")}>photos asked</span>
+                        ) : (
+                          <span style={{ color: "#aab3c2", fontWeight: 700 }}>—</span>
+                        )
                       ) : (
                         <>
+                          {msgKind === "nudge" && <span style={{ ...chip("#C64545", "#fff"), marginRight: 6 }}>nudge due</span>}
                           {mob && (
-                            <a href={waHref(mob, reviewText(rs.wa[msgKind], c, rs.link))} onClick={() => tickFlag && setFlag(i.id, tickFlag, true)}
-                              title={"WhatsApp the " + (msgKind === "ask" ? "review ask" : msgKind === "photos" ? "photo ask" : "thank-you") + " to " + mob}
+                            <a href={waHref(mob, reviewText(rs.wa[msgKind], c, rs.link))} onClick={() => stampSend(i.id, msgKind)}
+                              title={"WhatsApp the " + MSG_NAMES[msgKind] + " to " + mob}
                               style={{ display: "inline-flex", width: 26, height: 26, borderRadius: 8, background: "#25D36622", alignItems: "center", justifyContent: "center", marginRight: 4 }}>
                               <Icon name="wa" stroke="#128C7E" size={14} />
                             </a>
                           )}
                           {em && (
                             <a href={gmailTo(em, rs.email[msgKind].subject, reviewText(rs.email[msgKind].body, c, rs.link))} target="_blank" rel="noreferrer"
-                              onClick={() => tickFlag && setFlag(i.id, tickFlag, true)}
-                              title={"Email the " + (msgKind === "ask" ? "review ask" : msgKind === "photos" ? "photo ask" : "thank-you") + " to " + em}
+                              onClick={() => stampSend(i.id, msgKind)}
+                              title={"Email the " + MSG_NAMES[msgKind] + " to " + em}
                               style={{ display: "inline-flex", width: 26, height: 26, borderRadius: 8, background: "#eef1f6", alignItems: "center", justifyContent: "center" }}>
                               <Icon name="mail" stroke="#3b4c6b" size={14} />
                             </a>
@@ -370,7 +404,7 @@ function ReviewSettings({ rs, onSave, onClose }) {
         <span style={lbl}>Google review link</span>
         <input style={{ ...inp, width: "100%", boxSizing: "border-box" }} value={d.link} onChange={(e) => setD((x) => ({ ...x, link: e.target.value.trim() }))} />
       </label>
-      {[["ask", "Review ask — after delivery"], ["photos", "Photo ask — once the review's in"], ["thanks", "Thank you — once it's posted"]].map(([k, title]) => (
+      {[["ask", "Review ask — after delivery"], ["nudge", "Nudge — a week after the ask, once, then stop"], ["photos", "Photo ask — only to customers whose review came in"], ["thanks", "Thank you — once it's posted"]].map(([k, title]) => (
         <div key={k} style={{ marginBottom: 14, borderTop: "1px solid #eef1f6", paddingTop: 10 }}>
           <p style={{ ...sect, marginBottom: 6 }}>{title}</p>
           <span style={lbl}>Email subject</span>

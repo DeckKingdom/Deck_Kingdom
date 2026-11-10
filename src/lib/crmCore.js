@@ -180,6 +180,8 @@ export const blankInvoice = (customerId, siteId) => ({
   deliveryDate: "",
   deliveryTime: "",
   deliveryCompleted: false,
+  reviewAskedAt: "",
+  reviewNudgedAt: "",
   paymentType: "",
   paymentDate: "",
   deliveryCharge: "",
@@ -2932,6 +2934,10 @@ export const REVIEW_DEFAULTS = {
       subject: "We'd love a photo of the finished job",
       body: "Hi {name},\n\nThank you for the lovely review! If you have any photos of the finished project we'd love to share them on our socials — we can credit you or keep it anonymous, whichever you prefer. Just reply to this email with the pictures.\n\nThanks,\nDeck Kingdom",
     },
+    nudge: {
+      subject: "No rush — the review link again",
+      body: "Hi {name},\n\nJust a gentle one — if you've had a chance to finish the job, we'd still love a quick Google review when you get a minute:\n{link}\n\nNo rush at all, and thanks again for your order.\n\nDeck Kingdom",
+    },
     thanks: {
       subject: "Thank you!",
       body: "Hi {name},\n\nThank you so much for the review and the photos — they've made our day.\n\nIf you ever need anything else for the garden, you know where we are.\n\nDeck Kingdom",
@@ -2939,6 +2945,7 @@ export const REVIEW_DEFAULTS = {
   },
   wa: {
     ask: "Hi {name}, it's Deck Kingdom — thanks again for your order, hope you're enjoying it! If you've got a minute, a quick Google review would mean a lot to us: {link} — and if you've snapped any photos of the finished job we'd love to see them!",
+    nudge: "Hi {name}, no rush at all — just popping the review link back to the top of your chats in case it got buried: {link} Thanks again!",
     photos: "Hi {name}, thanks so much for the review! If you've got any photos of the finished job we'd love to share them on our socials — just send them over on here.",
     thanks: "Thank you {name} — the review and photos are brilliant! If you ever need anything else for the garden, you know where we are.",
   },
@@ -2953,6 +2960,7 @@ export const reviewSettingsOf = (crm) => {
     link: s.link !== undefined && s.link !== "" ? s.link : REVIEW_DEFAULTS.link,
     email: {
       ask: { ...REVIEW_DEFAULTS.email.ask, ...(e.ask || {}) },
+      nudge: { ...REVIEW_DEFAULTS.email.nudge, ...(e.nudge || {}) },
       photos: { ...REVIEW_DEFAULTS.email.photos, ...(e.photos || {}) },
       thanks: { ...REVIEW_DEFAULTS.email.thanks, ...(e.thanks || {}) },
     },
@@ -3007,3 +3015,20 @@ export const customerDupeGroups = (crm) => {
 };
 // one key per person, so bulk asks never message the same person twice
 export const personKeyOf = (c) => dupeMobileKey(c) || dupeEmailKey(c) || dupeNameKey(c) || ("id:" + ((c && c.id) || ""));
+
+// ----- the ask cadence: ask -> one nudge at 7 days -> stop -----
+// Photos are only ever a second ask, to people who did leave a review
+// (the first ask already mentions photos in passing).
+export const NUDGE_AFTER_DAYS = 7;
+// what the cadence wants next for a job: "ask" | "nudge" | "photos" | "thanks" | "" (leave them be)
+export const reviewNext = (inv, tod) => {
+  const f = inv.flags || {};
+  if (f.socialPosted) return "thanks";
+  if (f.reviewReceived) return f.photosRequested ? "" : "photos";
+  if (!f.reviewRequested) return "ask";
+  if (inv.reviewNudgedAt) return ""; // nudged once already — no third poke
+  const asked = inv.reviewAskedAt;
+  if (asked && daysBetween(asked, tod) >= NUDGE_AFTER_DAYS) return "nudge";
+  return ""; // asked recently — give them time
+};
+export const nudgeDue = (inv, tod) => reviewNext(inv, tod) === "nudge";

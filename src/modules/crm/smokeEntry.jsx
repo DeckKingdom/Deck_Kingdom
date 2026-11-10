@@ -10,7 +10,7 @@ import VansScreen from "./VansScreen.jsx";
 import QuotesScreen from "./QuotesScreen.jsx";
 import SamplesScreen from "./SamplesScreen.jsx";
 import ReviewsScreen, { reviewStage } from "./ReviewsScreen.jsx";
-import { reviewSettingsOf, reviewExclusion, reviewText, customerDupeGroups, personKeyOf } from "../../lib/crmCore.js";
+import { reviewSettingsOf, reviewExclusion, reviewText, customerDupeGroups, personKeyOf, reviewNext } from "../../lib/crmCore.js";
 import TasksScreen from "./TasksScreen.jsx";
 import PurchasesScreen from "./PurchasesScreen.jsx";
 import { syncCatalogue, renameSkus, skuFor, codeSource, numericSku, skuLists, masterKey, colourSeg, skuSource } from "../../lib/crmCore.js";
@@ -103,6 +103,17 @@ export default function run(React, renderToString) {
     assert(groups.length === 1 && groups[0].length === 2, "duplicate by mobile spotted, got " + JSON.stringify(groups.map((g) => g.length)));
     assert(personKeyOf(cust) === personKeyOf(dupe), "same person key for bulk collapse");
     crm.customers.pop();
+    // the cadence: ask -> wait -> one nudge at 7 days -> stop; photos only once the review's in
+    const tod = today();
+    const old = new Date(Date.now() - 8 * 86400000).toISOString().slice(0, 10);
+    assert(reviewNext({ flags: {} }, tod) === "ask", "fresh job: ask");
+    assert(reviewNext({ flags: { reviewRequested: true }, reviewAskedAt: tod }, tod) === "", "just asked: wait");
+    assert(reviewNext({ flags: { reviewRequested: true }, reviewAskedAt: old }, tod) === "nudge", "week on: nudge due");
+    assert(reviewNext({ flags: { reviewRequested: true }, reviewAskedAt: old, reviewNudgedAt: tod }, tod) === "", "nudged once: stop");
+    assert(reviewNext({ flags: { reviewReceived: true } }, tod) === "photos", "review in: photo ask");
+    assert(reviewNext({ flags: { reviewReceived: true, photosRequested: true } }, tod) === "", "photos asked: done");
+    assert(reviewNext({ flags: { socialPosted: true } }, tod) === "thanks", "posted: thank-you");
+    assert(reviewSettingsOf(crm).wa.nudge.includes("{link}") && reviewSettingsOf(crm).email.nudge.subject, "nudge templates present");
   }
   html = renderToString(React.createElement(HomeScreen, { data: { products: [], shipments: [] }, crm, updateCrm: noop, me: "", askConfirm: noop, setTab: noop, addShipment: noop, newInvoice: noop }));
   assert(html.includes("Today") && html.includes("Financial overview") && html.includes("Sales this month") && html.includes("Deliveries · next 4 days") && html.includes("Projects"), "home: tasks + reports");
