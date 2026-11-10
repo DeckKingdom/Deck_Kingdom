@@ -397,7 +397,7 @@ const isPostedJob = (inv) => /evri|post|courier|parcel|royal ?mail|dpd|\bups\b|\
 const isTudaJob = (inv) => /\btg\b|tuda/i.test((inv && inv.jobType) || "");
 
 // email Tuda Grass the delivery notes for the jobs they're couriering for us (opens Gmail ready to send)
-const TudaMailButton = ({ jobs, crm, siteById, custById, date, onSent }) => {
+const TudaMailButton = ({ jobs, crm, siteById, custById, date, onSent, label }) => {
   const tudas = (crm.suppliers || []).filter((x) => /tuda/i.test(x.name || ""));
   const sup = tudas.find((x) => x.email) || tudas[0];
   const email = sup && sup.email ? String(sup.email).trim() : "";
@@ -423,13 +423,13 @@ const TudaMailButton = ({ jobs, crm, siteById, custById, date, onSent }) => {
     jobs.map(note).join("\n\n") +
     "\n\nPlease send tracking when dispatched. Any problems, call us on 0161 399 1837.\n\nKind regards,\nDeck Kingdom";
   const href = "https://mail.google.com/mail/?view=cm&fs=1&to=" + encodeURIComponent(email) + "&su=" + encodeURIComponent("Delivery note" + (jobs.length === 1 ? " #" + jobs[0].invNo : "s · " + jobs.map((j) => "#" + j.invNo).join(", ")) + " – Deck Kingdom" + (when ? " – " + when : "")) + "&body=" + encodeURIComponent(body);
-  const st = { display: "inline-flex", alignItems: "center", gap: 5, marginLeft: 10, borderRadius: 7, padding: "3px 9px", fontSize: 11.5, fontWeight: 800, textDecoration: "none", whiteSpace: "nowrap" };
+  const st = { display: "inline-flex", alignItems: "center", gap: 5, borderRadius: 7, padding: "3px 9px", fontSize: 11.5, fontWeight: 800, textDecoration: "none", whiteSpace: "nowrap" };
   if (!email) return <span title="Add an email address to the Tuda Grass supplier record" style={{ ...st, background: "#f0f2f6", color: "#aab3c2" }}><Icon name="mail" stroke="#aab3c2" size={12} />Tuda · no email</span>;
   return (
     <a href={href} target="_blank" rel="noopener noreferrer" onClick={(e) => { e.stopPropagation(); onSent(); }}
       title={(sent ? "Emailed — click to email again. " : "") + "Email the delivery note" + (jobs.length === 1 ? "" : "s") + " for " + jobs.map((j) => "#" + j.invNo).join(", ") + " to " + email}
       style={{ ...st, background: sent ? "#3FA55C26" : "#185FA51a", color: sent ? "#28713e" : "#185FA5" }}>
-      <Icon name="mail" stroke={sent ? "#28713e" : "#185FA5"} size={12} />{sent ? "✓ Sent to Tuda" : "Email Tuda delivery note" + (jobs.length === 1 ? "" : "s")}
+      <Icon name="mail" stroke={sent ? "#28713e" : "#185FA5"} size={12} />{sent ? "✓ Delivery note sent" : label || "Email delivery note"}
     </a>
   );
 };
@@ -914,6 +914,7 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
     g.rows.sort((a, b) =>
       runRank(g.date, runKey(a)) - runRank(g.date, runKey(b)) ||
       runKey(a).localeCompare(runKey(b)) ||
+      (runKey(a) === "1|posted" ? String(a.obj.jobType || "").localeCompare(String(b.obj.jobType || "")) : 0) ||
       numOr(a.obj.dropNo, 999) - numOr(b.obj.dropNo, 999) ||
       pcKey(a).localeCompare(pcKey(b), "en", { numeric: true }) ||
       (a.time || "").localeCompare(b.time || "")));
@@ -996,6 +997,12 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
         {isCollectionJob(i) ? (
           // customer collects from the warehouse: no driver, run, drop or van
           <span style={{ gridColumn: "span 4", fontSize: 12, fontWeight: 700, color: "#9a7408", paddingLeft: 8 }}>Collecting from the warehouse</span>
+        ) : isPostedJob(i) ? (
+          // going by post / courier: no driver, run, drop or van; Tuda couriers get their delivery note emailed
+          <span style={{ gridColumn: "span 4", display: "flex", alignItems: "center", paddingLeft: 8, fontSize: 12, fontWeight: 700, color: "#5a6a85" }}>
+            {isTudaJob(i) ? <TudaMailButton jobs={[i]} crm={crm} siteById={siteById} custById={custById} date={i.deliveryDate} label="Email delivery note"
+              onSent={() => setInv(i.id, (t) => (t.supplierEmailedAt = new Date().toISOString()))} /> : "Going by " + (i.jobType || "post")}
+          </span>
         ) : <>
           <PillSelect value={i.driver || ""} options={DRIVERS} placeholder="Driver" onChange={(v) => pickDriver("inv", i, v)} />
           <PillSelect value={i.runNo || ""} options={RUN_NOS} placeholder="Run" labelOf={(o) => "Run " + o} short={phone ? undefined : (o) => "Run " + o} onChange={(v) => setInv(i.id, (t) => (t.runNo = v))} />
@@ -1433,7 +1440,6 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
                   const loose = key === "2|collections"; // collections not in a run yet
                   const custGroup = key === "3|customer"; // customers collecting from the warehouse
                   const postGroup = key === "1|posted"; // going by post / courier
-                  const tgJobs = postGroup ? sameRun.filter((x) => x.kind === "inv" && isTudaJob(x.obj)).map((x) => x.obj) : [];
                   const nDrops = sameRun.filter((x) => x.kind === "inv").length, nPicks = sameRun.length - nDrops;
                   const runKg = sameRun.reduce((t, x) => t + ((x.kind === "inv" ? invoiceLoadKg(x.obj, crm) : collKg(x.obj)) || 0), 0);
                   const canMove = key.startsWith("0|") && new Set(g.rows.map(runKey).filter((x) => x.startsWith("0|"))).size > 1;
@@ -1446,8 +1452,6 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
                       <span style={{ fontWeight: 600, color: "#5a6a85", fontSize: 12, whiteSpace: "nowrap" }}>
                         {[nDrops ? nDrops + (custGroup ? " collecting" : " drop" + (nDrops === 1 ? "" : "s")) : "", nPicks ? nPicks + " pick-up" + (nPicks === 1 ? "" : "s") : "", runKg && !loose ? Math.round(runKg).toLocaleString("en-GB") + " kg" : ""].filter(Boolean).join(" · ")}
                       </span>
-                      {tgJobs.length > 0 && <TudaMailButton jobs={tgJobs} crm={crm} siteById={siteById} custById={custById} date={g.date}
-                        onSent={() => tgJobs.forEach((j) => setInv(j.id, (t) => (t.supplierEmailedAt = new Date().toISOString())))} />}
                       {!loose && <PrintMenu title="Print or save this run's paperwork" send={sendOptions(sameRun, g.date)} onSavePhone={saveDriverPhone} jobs={sameRun.some((x) => x.kind === "inv")} collCount={sameRun.filter((x) => x.kind === "col").length} onPick={(kk) => printJobs(sameRun.filter((x) => x.kind === "inv").map((x) => x.obj), kk, dayLabel(g.date) + " · " + (custGroup ? "Customer collections" : (e.obj.runNo ? "Run " + e.obj.runNo : "No run") + (e.obj.driver ? " · " + e.obj.driver : "")), sameRun.filter((x) => x.kind === "col").map((x) => x.obj))} />}
                     </div>
                   ) : key !== prevKey ? (
@@ -1468,8 +1472,6 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
                           <span style={{ fontWeight: 600, color: "#5a6a85" }}>
                             {custGroup ? nDrops + " collecting from the warehouse" : postGroup ? nDrops + " to send" : [nDrops ? nDrops + " drop" + (nDrops === 1 ? "" : "s") : "", nPicks ? nPicks + " pick-up" + (nPicks === 1 ? "" : "s") : ""].filter(Boolean).join(" · ")}
                           </span>
-                          {tgJobs.length > 0 && <TudaMailButton jobs={tgJobs} crm={crm} siteById={siteById} custById={custById} date={g.date}
-                            onSent={() => tgJobs.forEach((j) => setInv(j.id, (t) => (t.supplierEmailedAt = new Date().toISOString())))} />}
                         </span>
                       </span>
                       {loose ? <span style={{ gridColumn: "10 / -1" }} /> : <>
