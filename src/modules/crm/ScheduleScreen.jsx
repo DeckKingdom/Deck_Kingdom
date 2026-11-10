@@ -580,10 +580,12 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
     const t = setInterval(pull, 120000);
     return () => { live = false; clearInterval(t); };
   }, []);
-  // names open their pop-over on click only; the parts dot still previews on hover ("peek") — moving into it keeps it open, clicking pins it
+  // names and the parts dot preview their pop-over on hover ("peek", after a short pause so it doesn't flash up
+  // while the mouse passes over) — moving into it keeps it open, clicking pins it
   const peekT = useRef({});
   const peekCancel = () => { clearTimeout(peekT.current.open); clearTimeout(peekT.current.close); };
-  const peekOpen = (p) => { peekCancel(); peekT.current.open = setTimeout(() => setPop((cur) => (cur && !cur.peek ? cur : { ...p, peek: true })), 220); };
+  const peekOpen = (p, wait = 220) => { peekCancel(); peekT.current.open = setTimeout(() => setPop((cur) => (cur && !cur.peek ? cur : { ...p, peek: true })), wait); };
+  const NAME_WAIT = 650; // ms the mouse has to rest on a name before its pop-over shows
   const peekClose = () => { clearTimeout(peekT.current.open); clearTimeout(peekT.current.close); peekT.current.close = setTimeout(() => setPop((cur) => (cur && cur.peek ? null : cur)), 250); };
   // Picking a driver fills in the run and the next drop: a driver's first pick of the day is run 1;
   // picking them again straight away keeps that run; picking them again after someone else was picked starts their next run.
@@ -916,7 +918,7 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
         </div>
         <div style={{ minWidth: 0, position: "relative" }}>
           <div style={{ display: "flex", gap: 7, alignItems: "center", minWidth: 0 }}>
-            <button className="dk-title-link" onClick={(e) => { peekCancel(); setPop({ id: i.id, rect: e.currentTarget.parentNode.parentNode.getBoundingClientRect() }); }}
+            <button className="dk-title-link" onMouseEnter={(e) => peekOpen({ id: i.id, rect: e.currentTarget.parentNode.parentNode.getBoundingClientRect() }, NAME_WAIT)} onMouseLeave={peekClose} onClick={(e) => { peekCancel(); setPop({ id: i.id, rect: e.currentTarget.parentNode.parentNode.getBoundingClientRect() }); }}
               title={c ? c.name : ""} style={{ fontWeight: 700, fontSize: 13.5, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
               {short16(c ? c.name || "Unnamed" : "No customer")}
             </button>
@@ -1009,7 +1011,7 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
               style={{ width: 26, height: 26, borderRadius: 999, border: "2px solid " + (done ? "#3FA55C" : "#b8c0cc"), background: "#fff", padding: 0, boxSizing: "border-box", cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", flex: "none" }}>
               {done && <span style={{ width: 12, height: 12, borderRadius: 999, background: "#3FA55C" }} />}
             </button>
-            <button className="dk-title-link" onClick={(e) => setPop({ id: i.id, rect: e.currentTarget.getBoundingClientRect() })}
+            <button className="dk-title-link" onMouseEnter={(e) => peekOpen({ id: i.id, rect: e.currentTarget.getBoundingClientRect() }, NAME_WAIT)} onMouseLeave={peekClose} onClick={(e) => setPop({ id: i.id, rect: e.currentTarget.getBoundingClientRect() })}
               style={{ fontWeight: 700, fontSize: 15, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, flex: 1, textAlign: "left" }}>
               {c ? c.name || "Unnamed" : "No customer"}
             </button>
@@ -1057,7 +1059,7 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
               style={{ width: 26, height: 26, borderRadius: 999, border: "2px solid " + (c.collected ? "#3FA55C" : "#b8c0cc"), background: "#fff", padding: 0, boxSizing: "border-box", cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", flex: "none" }}>
               {c.collected && <span style={{ width: 12, height: 12, borderRadius: 999, background: "#3FA55C" }} />}
             </button>
-            <button className="dk-title-link" onClick={(e) => setPop({ id: c.id, kind: "col", rect: e.currentTarget.getBoundingClientRect() })}
+            <button className="dk-title-link" onMouseEnter={(e) => peekOpen({ id: c.id, kind: "col", rect: e.currentTarget.getBoundingClientRect() }, NAME_WAIT)} onMouseLeave={peekClose} onClick={(e) => setPop({ id: c.id, kind: "col", rect: e.currentTarget.getBoundingClientRect() })}
               style={{ fontWeight: 700, fontSize: 15, color: COLLECTION_BLUE, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, flex: 1, textAlign: "left" }}>
               {c.supplier || "Supplier"} · pick-up
             </button>
@@ -1108,7 +1110,7 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
           </button>
         </div>
         <div style={{ minWidth: 0, position: "relative", display: "flex", gap: 6, alignItems: "center" }}>
-          <button className="dk-title-link" onClick={(e) => { peekCancel(); setPop({ id: c.id, kind: "col", rect: e.currentTarget.parentNode.getBoundingClientRect() }); }}
+          <button className="dk-title-link" onMouseEnter={(e) => peekOpen({ id: c.id, kind: "col", rect: e.currentTarget.parentNode.getBoundingClientRect() }, NAME_WAIT)} onMouseLeave={peekClose} onClick={(e) => { peekCancel(); setPop({ id: c.id, kind: "col", rect: e.currentTarget.parentNode.getBoundingClientRect() }); }}
             title={c.supplier || ""} style={{ fontWeight: 700, fontSize: 13.5, color: COLLECTION_BLUE, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "100%", minWidth: 0 }}>
             {short16(c.supplier || "Supplier")}
           </button>
@@ -1147,7 +1149,7 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
                 <span style={{ color: green ? "#28713e" : "#8593a8", fontSize: 11 }}>{lead}</span>
                 {shown.map((x) => (
                   <button key={x.j.id} type="button" className="dk-title-link" title={"Open job #" + (x.j.invNo || "—") + (x.name ? " · " + x.name : "")}
-                    onClick={(e) => setPop({ id: x.j.id, kind: "inv", rect: e.currentTarget.getBoundingClientRect() })}
+                    onMouseEnter={(e) => peekOpen({ id: x.j.id, kind: "inv", rect: e.currentTarget.getBoundingClientRect() }, NAME_WAIT)} onMouseLeave={peekClose} onClick={(e) => setPop({ id: x.j.id, kind: "inv", rect: e.currentTarget.getBoundingClientRect() })}
                     style={{ fontSize: 12, fontWeight: 700, color: ink }}>{label(x)}</button>
                 ))}
                 {rest.length > 0 && (
@@ -1182,7 +1184,7 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
       return (
         <div style={{ position: "relative" }}>
           <button className="dk-title-link" draggable title="Drag onto a day or into a run, or click to keep the details open"
-            onClick={(ev) => { peekCancel(); setPop({ id: c.id, kind: "col", rect: ev.currentTarget.parentNode.getBoundingClientRect(), side: "left" }); }}
+            onMouseEnter={(ev) => peekOpen({ id: c.id, kind: "col", rect: ev.currentTarget.parentNode.getBoundingClientRect(), side: "left" }, NAME_WAIT)} onMouseLeave={peekClose} onClick={(ev) => { peekCancel(); setPop({ id: c.id, kind: "col", rect: ev.currentTarget.parentNode.getBoundingClientRect(), side: "left" }); }}
             onDragStart={(ev) => { ev.dataTransfer.setData("text/plain", "col:" + c.id); ev.dataTransfer.effectAllowed = "move"; setDragId("col:" + c.id); peekCancel(); setPop(null); }}
             onDragEnd={endDrag}
             style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "2px 8px", width: "100%", padding: "8px 0", borderBottom: "1px solid #f0f2f6", textAlign: "left" }}>
@@ -1204,7 +1206,7 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
         <button className="dk-title-link" draggable title="Drag onto a day to book it, or click to keep the details open"
           onDragStart={(ev) => { ev.dataTransfer.setData("text/plain", i.id); ev.dataTransfer.effectAllowed = "move"; setDragId(i.id); peekCancel(); setPop(null); }}
           onDragEnd={() => { setDragId(null); setOverDate(null); }}
-          onClick={(ev) => { peekCancel(); setPop({ id: i.id, rect: ev.currentTarget.parentNode.getBoundingClientRect(), side: "left" }); }}
+          onMouseEnter={(ev) => peekOpen({ id: i.id, rect: ev.currentTarget.parentNode.getBoundingClientRect(), side: "left" }, NAME_WAIT)} onMouseLeave={peekClose} onClick={(ev) => { peekCancel(); setPop({ id: i.id, rect: ev.currentTarget.parentNode.getBoundingClientRect(), side: "left" }); }}
           style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "2px 8px", width: "100%", padding: "8px 0", borderBottom: "1px solid #f0f2f6", textAlign: "left", alignItems: "center" }}>
           <span style={{ display: "flex", gap: 6, alignItems: "center", minWidth: 0 }}>
             <b style={{ fontSize: 13, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c ? c.name || "Unnamed" : "No customer"}</b>
