@@ -391,6 +391,49 @@ const PartsIcon = ({ info, onEnter, onLeave, onClick }) => {
   );
 };
 
+// going by post or courier rather than on a van run
+const isPostedJob = (inv) => /evri|post|courier|parcel|royal ?mail|dpd|\bups\b|\btg\b/i.test((inv && inv.jobType) || "");
+// Tuda Grass send it out for us (Courier TG)
+const isTudaJob = (inv) => /\btg\b|tuda/i.test((inv && inv.jobType) || "");
+
+// email Tuda Grass the delivery notes for the jobs they're couriering for us (opens Gmail ready to send)
+const TudaMailButton = ({ jobs, crm, siteById, custById, date, onSent }) => {
+  const tudas = (crm.suppliers || []).filter((x) => /tuda/i.test(x.name || ""));
+  const sup = tudas.find((x) => x.email) || tudas[0];
+  const email = sup && sup.email ? String(sup.email).trim() : "";
+  const sent = jobs.every((j) => j.supplierEmailedAt);
+  const when = date ? new Date(date + "T00:00:00").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" }) : "";
+  const note = (j) => {
+    const cu = custById[j.customerId] || {}, st = siteById[j.siteId] || {};
+    const name = st.contact || cu.name || "";
+    const seen = new Set();
+    const addr = [st.name, st.address || cu.address, st.town || cu.town, st.postcode || cu.postcode]
+      .flatMap((x) => String(x || "").split(/\n|,/)).map((x) => x.trim()).filter((x) => x && !seen.has(x.toLowerCase()) && seen.add(x.toLowerCase()));
+    const phone = st.mobile || st.landline || cu.mobile || cu.phone || "";
+    const lines = (j.lines || []).filter((l) => Number(l.qty) && (l.description || l.code));
+    const qw = Math.max(1, ...lines.map((l) => String(l.qty).length));
+    return (j.invNo ? "Our ref: #" + j.invNo + "\n" : "") +
+      "Deliver to: " + [name, ...addr].filter(Boolean).join(", ") + "\n" +
+      (phone ? "Contact: " + phone + "\n" : "") +
+      lines.map((l) => "  " + "\u2007".repeat(qw - String(l.qty).length) + l.qty + " × " + (l.description || l.code) + (l.colour && !String(l.description || "").toLowerCase().includes(String(l.colour).toLowerCase()) ? " – " + l.colour : "")).join("\n") +
+      (j.deliveryNotes || j.jobNotes ? "\nNotes: " + (j.deliveryNotes || j.jobNotes) : "");
+  };
+  const body = "Hi" + (sup && sup.contact ? " " + String(sup.contact).split(/\s+/)[0] : "") + ",\n\n" +
+    "Please could you send out the following direct to our customer" + (jobs.length === 1 ? "" : "s") + (when ? " for " + when : "") + ":\n\n" +
+    jobs.map(note).join("\n\n") +
+    "\n\nPlease send tracking when dispatched. Any problems, call us on 0161 399 1837.\n\nKind regards,\nDeck Kingdom";
+  const href = "https://mail.google.com/mail/?view=cm&fs=1&to=" + encodeURIComponent(email) + "&su=" + encodeURIComponent("Delivery note" + (jobs.length === 1 ? " #" + jobs[0].invNo : "s · " + jobs.map((j) => "#" + j.invNo).join(", ")) + " – Deck Kingdom" + (when ? " – " + when : "")) + "&body=" + encodeURIComponent(body);
+  const st = { display: "inline-flex", alignItems: "center", gap: 5, marginLeft: 10, borderRadius: 7, padding: "3px 9px", fontSize: 11.5, fontWeight: 800, textDecoration: "none", whiteSpace: "nowrap" };
+  if (!email) return <span title="Add an email address to the Tuda Grass supplier record" style={{ ...st, background: "#f0f2f6", color: "#aab3c2" }}><Icon name="mail" stroke="#aab3c2" size={12} />Tuda · no email</span>;
+  return (
+    <a href={href} target="_blank" rel="noopener noreferrer" onClick={(e) => { e.stopPropagation(); onSent(); }}
+      title={(sent ? "Emailed — click to email again. " : "") + "Email the delivery note" + (jobs.length === 1 ? "" : "s") + " for " + jobs.map((j) => "#" + j.invNo).join(", ") + " to " + email}
+      style={{ ...st, background: sent ? "#3FA55C26" : "#185FA51a", color: sent ? "#28713e" : "#185FA5" }}>
+      <Icon name="mail" stroke={sent ? "#28713e" : "#185FA5"} size={12} />{sent ? "✓ Sent to Tuda" : "Email Tuda delivery note" + (jobs.length === 1 ? "" : "s")}
+    </a>
+  );
+};
+
 // the email's item lines, one block per drop, with the qty and destination in lined-up columns.
 // Gmail writes plain text in Arial, so the gaps are measured in that font and padded with spaces.
 const mailLines = (groups) => {
@@ -853,7 +896,8 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
   // run number first (every driver's run 1, then run 2 …), then driver, then drop
   // a supplier collection with a run or driver sits inside that run; without one it waits under "Supplier collections"
   // customers collecting from the warehouse go last, in their own group
-  const runKey = (e) => (e.kind === "inv" && isCollectionJob(e.obj) ? "3|customer" : e.kind === "col" && !e.obj.runNo && !e.obj.driver ? "2|collections" : "0|" + String(numOr(e.obj.runNo, 99)).padStart(2, "0") + "|" + (e.obj.driver ? "0" + e.obj.driver : "1"));
+  // jobs going by post / courier (Evri, Post Office, Courier TG …) group together, after the van runs
+  const runKey = (e) => (e.kind === "inv" && isCollectionJob(e.obj) ? "3|customer" : e.kind === "inv" && isPostedJob(e.obj) ? "1|posted" : e.kind === "col" && !e.obj.runNo && !e.obj.driver ? "2|collections" : "0|" + String(numOr(e.obj.runNo, 99)).padStart(2, "0") + "|" + (e.obj.driver ? "0" + e.obj.driver : "1"));
   // postcode order for jobs without a drop number (e.g. after Reset day); no postcode goes last
   const pcKey = (e) => {
     const p = e.kind === "col" ? e.obj.postcode : ((siteById[e.obj.siteId] || {}).postcode || (custById[e.obj.customerId] || {}).postcode);
@@ -1388,6 +1432,8 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
                   const sameRun = g.rows.filter((x) => runKey(x) === key);
                   const loose = key === "2|collections"; // collections not in a run yet
                   const custGroup = key === "3|customer"; // customers collecting from the warehouse
+                  const postGroup = key === "1|posted"; // going by post / courier
+                  const tgJobs = postGroup ? sameRun.filter((x) => x.kind === "inv" && isTudaJob(x.obj)).map((x) => x.obj) : [];
                   const nDrops = sameRun.filter((x) => x.kind === "inv").length, nPicks = sameRun.length - nDrops;
                   const runKg = sameRun.reduce((t, x) => t + ((x.kind === "inv" ? invoiceLoadKg(x.obj, crm) : collKg(x.obj)) || 0), 0);
                   const canMove = key.startsWith("0|") && new Set(g.rows.map(runKey).filter((x) => x.startsWith("0|"))).size > 1;
@@ -1395,11 +1441,13 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
                   const head = key === prevKey ? null : phone ? (
                     <div style={{ display: "flex", alignItems: "center", gap: 8, margin: k ? "14px 0 6px" : "4px 0 6px", background: "#dce2ec", borderRadius: 10, padding: "8px 12px", fontSize: 13, color: NAVY }}>
                       <b style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {custGroup ? "Customer collections" : loose ? "Supplier collections" : (e.obj.runNo ? "Run " + e.obj.runNo : "No run yet") + " · " + (e.obj.driver || "no driver yet")}
+                        {custGroup ? "Customer collections" : postGroup ? "Post & courier" : loose ? "Supplier collections" : (e.obj.runNo ? "Run " + e.obj.runNo : "No run yet") + " · " + (e.obj.driver || "no driver yet")}
                       </b>
                       <span style={{ fontWeight: 600, color: "#5a6a85", fontSize: 12, whiteSpace: "nowrap" }}>
                         {[nDrops ? nDrops + (custGroup ? " collecting" : " drop" + (nDrops === 1 ? "" : "s")) : "", nPicks ? nPicks + " pick-up" + (nPicks === 1 ? "" : "s") : "", runKg && !loose ? Math.round(runKg).toLocaleString("en-GB") + " kg" : ""].filter(Boolean).join(" · ")}
                       </span>
+                      {tgJobs.length > 0 && <TudaMailButton jobs={tgJobs} crm={crm} siteById={siteById} custById={custById} date={g.date}
+                        onSent={() => tgJobs.forEach((j) => setInv(j.id, (t) => (t.supplierEmailedAt = new Date().toISOString())))} />}
                       {!loose && <PrintMenu title="Print or save this run's paperwork" send={sendOptions(sameRun, g.date)} onSavePhone={saveDriverPhone} jobs={sameRun.some((x) => x.kind === "inv")} collCount={sameRun.filter((x) => x.kind === "col").length} onPick={(kk) => printJobs(sameRun.filter((x) => x.kind === "inv").map((x) => x.obj), kk, dayLabel(g.date) + " · " + (custGroup ? "Customer collections" : (e.obj.runNo ? "Run " + e.obj.runNo : "No run") + (e.obj.driver ? " · " + e.obj.driver : "")), sameRun.filter((x) => x.kind === "col").map((x) => x.obj))} />}
                     </div>
                   ) : key !== prevKey ? (
@@ -1416,14 +1464,16 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
                       <span style={{ gridColumn: "1 / span 9", display: "flex", alignItems: "stretch" }}>
                         <span style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "#dce2ec", padding: canMove ? "0 14px 0 8px" : "0 14px" }}>
                           {canMove && <span aria-hidden style={{ color: "#8593a8", fontSize: 13, letterSpacing: -2, marginRight: 2 }}>⋮⋮</span>}
-                          <b>{custGroup ? "Customer collections" : loose ? "Supplier collections" : (e.obj.runNo ? "Run " + e.obj.runNo : "No run yet") + " · " + (e.obj.driver || "no driver yet")}</b>
+                          <b>{custGroup ? "Customer collections" : postGroup ? "Post & courier" : loose ? "Supplier collections" : (e.obj.runNo ? "Run " + e.obj.runNo : "No run yet") + " · " + (e.obj.driver || "no driver yet")}</b>
                           <span style={{ fontWeight: 600, color: "#5a6a85" }}>
-                            {custGroup ? nDrops + " collecting from the warehouse" : [nDrops ? nDrops + " drop" + (nDrops === 1 ? "" : "s") : "", nPicks ? nPicks + " pick-up" + (nPicks === 1 ? "" : "s") : ""].filter(Boolean).join(" · ")}
+                            {custGroup ? nDrops + " collecting from the warehouse" : postGroup ? nDrops + " to send" : [nDrops ? nDrops + " drop" + (nDrops === 1 ? "" : "s") : "", nPicks ? nPicks + " pick-up" + (nPicks === 1 ? "" : "s") : ""].filter(Boolean).join(" · ")}
                           </span>
+                          {tgJobs.length > 0 && <TudaMailButton jobs={tgJobs} crm={crm} siteById={siteById} custById={custById} date={g.date}
+                            onSent={() => tgJobs.forEach((j) => setInv(j.id, (t) => (t.supplierEmailedAt = new Date().toISOString())))} />}
                         </span>
                       </span>
                       {loose ? <span style={{ gridColumn: "10 / -1" }} /> : <>
-                        <span style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", fontWeight: 700, color: "#5a6a85" }}>{custGroup ? "Total weight" : "Run weight"}</span>
+                        <span style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", fontWeight: 700, color: "#5a6a85" }}>{custGroup || postGroup ? "Total weight" : "Run weight"}</span>
                         <span title="Run weight — deliveries going out plus pick-ups coming back"
                           style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", paddingRight: 8, fontWeight: 800 }}>
                           {runKg ? Math.round(runKg).toLocaleString("en-GB") + " kg" : "—"}
