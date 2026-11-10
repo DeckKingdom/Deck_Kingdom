@@ -47,9 +47,11 @@ export default function DriverApp({ me, warehouse, switcher }) {
   const [err, setErr] = useState("");
   const [view, setView] = useState(null); // null = home · a yyyy-mm-dd = that day's runs · "fuel"
   const [loads, setLoads] = useState(0); // bumped on refresh so the day view re-checks drops and resets
+  const [todayLoad, setTodayLoad] = useState(null); // today's loading reports, for the Loading tab's count
   const load = async () => {
     setErr("");
     setLoads((n) => n + 1);
+    loadLoading([ymd(new Date())]).then(setTodayLoad).catch(() => {});
     try {
       const r = await crmStorage.get("dk-crm");
       setCrm(normaliseCrm(r && r.value ? JSON.parse(r.value) : {}));
@@ -141,13 +143,18 @@ export default function DriverApp({ me, warehouse, switcher }) {
   // Loading | Deliveries switch under the header (drivers)
   // Loading | Deliveries (if they drive) | Tasks — under the header
   const nTasks = tasksOutstanding(crm, taskWho);
+  // today's vans still to load / check, and today's stops still to do
+  const tKey = ymd(new Date());
+  const nLoad = crm && todayLoad ? runsOn(crm, tKey, allVans ? null : driver).filter((r) => !loadState(r, todayLoad.counts[r.key], todayLoad.reports[r.key]).complete).length : 0;
+  const nDel = driver ? (byDay[tKey] || []).filter((x) => !(x.kind === "col" ? x.obj.collected : x.obj.deliveryCompleted)).length : 0;
+  const counts = { loading: nLoad, deliveries: nDel, tasks: nTasks };
   const tabList = [["loading", "Loading"], ...(driver ? [["deliveries", "Deliveries"]] : []), ["tasks", "Tasks"]];
   const tabs = (
     <div style={{ display: "flex", gap: 6, padding: "10px 14px 0", position: "sticky", top: 68, zIndex: 4, background: "#f3f5f8" }}>
       {tabList.map(([k, l]) => (
         <button key={k} type="button" onClick={() => { setMode(k); setView(null); }}
           style={{ flex: 1, borderRadius: 12, padding: "11px 6px", fontFamily: "inherit", fontWeight: 800, fontSize: 15, cursor: "pointer", border: "1px solid " + (mode === k ? NAVY : "#d5d9e0"), background: mode === k ? NAVY : "#fff", color: mode === k ? "#fff" : NAVY, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-          {l}{k === "tasks" && nTasks > 0 && <span style={{ minWidth: 20, height: 20, borderRadius: 99, background: RED, color: "#fff", fontSize: 11.5, fontWeight: 800, display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "0 5px" }}>{nTasks}</span>}
+          {l}{counts[k] > 0 && <span title={k === "loading" ? "Vans still to load or check today" : k === "deliveries" ? "Stops still to do today" : "Tasks still to do"} style={{ minWidth: 20, height: 20, borderRadius: 99, background: RED, color: "#fff", fontSize: 11.5, fontWeight: 800, display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "0 5px" }}>{counts[k]}</span>}
         </button>
       ))}
     </div>
