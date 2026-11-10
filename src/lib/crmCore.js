@@ -3032,3 +3032,66 @@ export const reviewNext = (inv, tod) => {
   return ""; // asked recently — give them time
 };
 export const nudgeDue = (inv, tod) => reviewNext(inv, tod) === "nudge";
+
+// ----- the weekly review routine, as big pop-up reminders -----
+// Tue morning: group ask email. Thu from 3pm: WhatsApp ask session.
+// Mon: check Google for new reviews, reply, tick them in.
+// Each shows from its moment until dismissed, then stays quiet for the week,
+// and only appears when there's actually something to send or check.
+const reviewHasEmail = (c) => /@/.test(String((c && c.email) || ""));
+const reviewHasMobile = (c) => !!dupeMobileKey(c);
+export const reviewChannel = (c) => {
+  const pref = String((c && c.contactMethod) || "").toLowerCase();
+  if (/whatsapp|text|messenger|phone/.test(pref)) return reviewHasMobile(c) ? "wa" : reviewHasEmail(c) ? "email" : "";
+  return reviewHasEmail(c) ? "email" : reviewHasMobile(c) ? "wa" : "";
+};
+// how much review work is waiting, by channel (one person once, rules applied)
+export const reviewAskCounts = (crm) => {
+  const rs = reviewSettingsOf(crm);
+  const tod = today();
+  const custById = {};
+  (crm.customers || []).forEach((c) => (custById[c.id] = c));
+  const seen = new Set();
+  let email = 0, wa = 0, awaiting = 0, nudges = 0;
+  (crm.invoices || []).forEach((i) => {
+    if (!i.deliveryCompleted || !isSaleInvoice(i) || !onSchedule(i, crm)) return;
+    const f = i.flags || {};
+    if (f.reviewRequested && !f.reviewReceived) awaiting++;
+    const next = reviewNext(i, tod);
+    if (next === "nudge") nudges++;
+    if (next !== "ask") return;
+    const c = custById[i.customerId];
+    if (reviewExclusion(i, c, rs, null)) return;
+    const key = personKeyOf(c);
+    if (seen.has(key)) return;
+    seen.add(key);
+    const ch = reviewChannel(c);
+    if (ch === "email") email++;
+    else if (ch === "wa") wa++;
+  });
+  return { email, wa, awaiting, nudges };
+};
+export const reviewReminders = (crm, now = new Date()) => {
+  const tod = today();
+  const weekStart = mondayOf(tod);
+  const snoozes = (crm && crm.reminders) || {};
+  const wd = (now.getDay() + 6) % 7; // Mon 0 … Sun 6
+  const n = reviewAskCounts(crm);
+  const out = [];
+  const add = (key, label, severity) => {
+    if (!snoozes[key] || snoozes[key] < weekStart) out.push({ key, kind: "review", label, severity: severity || "amber" });
+  };
+  // Monday (any day until done): reply to what came in over the week(end)
+  if (n.awaiting > 0)
+    add("rev:check:" + weekStart, "Reviews — check Google for new ones, reply, and tick them in (" + n.awaiting + " awaiting)");
+  // Tuesday morning: the group ask email
+  if (wd >= 1 && n.email > 0)
+    add("rev:email:" + weekStart, "Reviews — send the Tuesday group ask email (" + n.email + " customer" + (n.email === 1 ? "" : "s") + ")");
+  // Thursday from 3pm: the WhatsApp session
+  if ((wd > 3 || (wd === 3 && now.getHours() >= 15)) && n.wa > 0)
+    add("rev:wa:" + weekStart, "Reviews — WhatsApp ask session (" + n.wa + " to send)");
+  // nudges ride along whenever they're due
+  if (n.nudges > 0)
+    add("rev:nudge:" + weekStart, "Reviews — " + n.nudges + " nudge" + (n.nudges === 1 ? "" : "s") + " due (a week since the ask)", "red");
+  return out;
+};

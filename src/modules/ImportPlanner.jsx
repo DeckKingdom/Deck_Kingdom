@@ -32,7 +32,7 @@ import {
   int,
 } from "../lib/core.js";
 import { sampleStatus } from "../lib/crmCore.js";
-import { blankInvoice, blankLine, blankQuote, blankSample, blankSampleItem, nextNumber, TRADE_COUNTER, vanReminders, syncCatalogue, renameSkus, syncOpenPicks, colourTidyPlan, syncSampleConversions, cleanCode, codeSource, PRODUCT_SOURCES, suggestDescription, suggestCode, codeFollowsName, dueScheduledFor, setTaskDone, describeSchedule, today as todayStr, newPurchaseFor } from "../lib/crmCore.js";
+import { blankInvoice, blankLine, blankQuote, blankSample, blankSampleItem, nextNumber, TRADE_COUNTER, vanReminders, reviewReminders, syncCatalogue, renameSkus, syncOpenPicks, colourTidyPlan, syncSampleConversions, cleanCode, codeSource, PRODUCT_SOURCES, suggestDescription, suggestCode, codeFollowsName, dueScheduledFor, setTaskDone, describeSchedule, today as todayStr, newPurchaseFor } from "../lib/crmCore.js";
 import { useCrm } from "./crm/useCrm.js";
 import CustomersScreen from "./crm/CustomersScreen.jsx";
 import InvoicesScreen from "./crm/InvoicesScreen.jsx";
@@ -535,7 +535,9 @@ export default function ImportPlanner() {
     setTaskPopClosed(true);
   };
 
-  const dueReminders = crm ? vanReminders(crm) : [];
+  const dueReminders = crm ? [...vanReminders(crm), ...reviewReminders(crm)] : [];
+  const remVan = dueReminders.some((r) => r.kind !== "review");
+  const remRev = dueReminders.some((r) => r.kind === "review");
   const snoozeReminders = () => {
     const tod = new Date().toISOString().slice(0, 10);
     updateCrm((c) => {
@@ -2636,9 +2638,9 @@ export default function ImportPlanner() {
         <div style={{ position: "fixed", inset: 0, zIndex: 55, background: "rgba(11,31,63,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
           <div style={{ background: "#fff", borderRadius: 12, width: "100%", maxWidth: 560, overflow: "hidden", boxShadow: "0 24px 70px rgba(11,31,63,0.5)" }}>
             <div style={{ background: "linear-gradient(135deg,#C8102E 0%,#8a0b20 100%)", padding: "18px 22px", display: "flex", alignItems: "center", gap: 12 }}>
-              <span style={{ fontSize: 26 }}>🚐</span>
+              <span style={{ fontSize: 26 }}>{remVan && !remRev ? "🚐" : remRev && !remVan ? "⭐" : "⏰"}</span>
               <div>
-                <div style={{ color: "#fff", fontWeight: 700, fontSize: 18 }}>Van reminders</div>
+                <div style={{ color: "#fff", fontWeight: 700, fontSize: 18 }}>{remVan && !remRev ? "Van reminders" : remRev && !remVan ? "Review routine" : "Reminders"}</div>
                 <div style={{ color: "#ffd8dd", fontSize: 12.5, fontWeight: 600 }}>
                   {dueReminders.length} item{dueReminders.length === 1 ? "" : "s"} need attention
                 </div>
@@ -2653,15 +2655,24 @@ export default function ImportPlanner() {
                 </div>
               ))}
               <p style={{ fontSize: 12, color: "#8593a8", fontWeight: 600, margin: "10px 0 0" }}>
-                Weekly checks come back every Monday until recorded; renewals nag weekly from a month out until the date is moved on.
+                {remVan && "Weekly checks come back every Monday until recorded; renewals nag weekly from a month out until the date is moved on. "}
+                {remRev && "The review routine: Monday — reply and tick in; Tuesday — group ask email; Thursday from 3pm — WhatsApp session. Each stays until dismissed, then rests for the week."}
               </p>
             </div>
             <div style={{ display: "flex", gap: 8, padding: "0 22px 18px", flexWrap: "wrap" }}>
-              <button onClick={() => { setRemindersClosed(true); setTab("vans"); }}
-                style={{ ...btn, background: GOLD, borderColor: GOLD, fontWeight: 700 }}>
-                Go to Vans
-              </button>
-              <button onClick={snoozeReminders} style={btn}>Snooze for a week</button>
+              {remVan && (
+                <button onClick={() => { setRemindersClosed(true); setTab("vans"); }}
+                  style={{ ...btn, background: GOLD, borderColor: GOLD, fontWeight: 700 }}>
+                  Go to Vans
+                </button>
+              )}
+              {remRev && (
+                <button onClick={() => { setRemindersClosed(true); setTab("reviews"); }}
+                  style={{ ...btn, background: remVan ? undefined : GOLD, borderColor: remVan ? undefined : GOLD, fontWeight: 700 }}>
+                  Go to Reviews
+                </button>
+              )}
+              <button onClick={snoozeReminders} style={btn}>Done / snooze this week</button>
               <span style={{ flex: 1 }} />
               <button onClick={() => setRemindersClosed(true)} style={{ ...btn, border: "none", color: "#8593a8" }}>Close</button>
             </div>

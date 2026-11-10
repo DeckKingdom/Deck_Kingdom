@@ -10,7 +10,7 @@ import VansScreen from "./VansScreen.jsx";
 import QuotesScreen from "./QuotesScreen.jsx";
 import SamplesScreen from "./SamplesScreen.jsx";
 import ReviewsScreen, { reviewStage } from "./ReviewsScreen.jsx";
-import { reviewSettingsOf, reviewExclusion, reviewText, customerDupeGroups, personKeyOf, reviewNext } from "../../lib/crmCore.js";
+import { reviewSettingsOf, reviewExclusion, reviewText, customerDupeGroups, personKeyOf, reviewNext, reviewReminders } from "../../lib/crmCore.js";
 import TasksScreen from "./TasksScreen.jsx";
 import PurchasesScreen from "./PurchasesScreen.jsx";
 import { syncCatalogue, renameSkus, skuFor, codeSource, numericSku, skuLists, masterKey, colourSeg, skuSource } from "../../lib/crmCore.js";
@@ -113,6 +113,25 @@ export default function run(React, renderToString) {
     assert(reviewNext({ flags: { reviewReceived: true } }, tod) === "photos", "review in: photo ask");
     assert(reviewNext({ flags: { reviewReceived: true, photosRequested: true } }, tod) === "", "photos asked: done");
     assert(reviewNext({ flags: { socialPosted: true } }, tod) === "thanks", "posted: thank-you");
+    // the weekly routine pop-ups: Tue email, Thu-from-3pm WhatsApp, Mon check
+    {
+      const was = { cm: cust.contactMethod, email: cust.email };
+      cust.contactMethod = "WhatsApp";
+      let rr = reviewReminders(crm, new Date(2026, 10, 12, 16, 0)); // Thu 4pm
+      assert(rr.some((r) => r.key.startsWith("rev:wa:")), "Thu 4pm: WhatsApp session due");
+      rr = reviewReminders(crm, new Date(2026, 10, 12, 10, 0)); // Thu 10am
+      assert(!rr.some((r) => r.key.startsWith("rev:wa:")), "Thu morning: WhatsApp not yet");
+      cust.contactMethod = ""; cust.email = "bob@example.com";
+      rr = reviewReminders(crm, new Date(2026, 10, 10, 9, 0)); // Tue 9am
+      assert(rr.some((r) => r.key.startsWith("rev:email:")), "Tue morning: group email due");
+      rr = reviewReminders(crm, new Date(2026, 10, 9, 9, 0)); // Mon
+      assert(!rr.some((r) => r.key.startsWith("rev:email:")), "Mon: email prompt not yet");
+      inv.flags.reviewRequested = true; inv.reviewAskedAt = tod;
+      rr = reviewReminders(crm, new Date(2026, 10, 9, 9, 0));
+      assert(rr.some((r) => r.key.startsWith("rev:check:")), "awaiting one: Monday check prompt");
+      inv.flags.reviewRequested = false; inv.reviewAskedAt = "";
+      cust.contactMethod = was.cm; cust.email = was.email;
+    }
     assert(reviewSettingsOf(crm).wa.nudge.includes("{link}") && reviewSettingsOf(crm).email.nudge.subject, "nudge templates present");
   }
   html = renderToString(React.createElement(HomeScreen, { data: { products: [], shipments: [] }, crm, updateCrm: noop, me: "", askConfirm: noop, setTab: noop, addShipment: noop, newInvoice: noop }));
