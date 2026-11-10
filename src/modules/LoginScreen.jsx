@@ -49,7 +49,6 @@ export default function LoginScreen() {
           {busy ? "Signing in..." : "Sign in"}
         </button>
         {error && <div style={{ color: "#f2a6b1", fontSize: 13, fontWeight: 600, marginTop: 12 }}>{error}</div>}
-        <div style={{ color: "#5a6a85", fontSize: 11.5, fontWeight: 600, marginTop: 16 }}>Accounts are set up by the office - no self sign-up.</div>
       </div>
     </div>
   );
