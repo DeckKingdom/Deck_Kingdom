@@ -2731,7 +2731,7 @@ export const raiseShortfallCollections = (c, invId, choices, actor) => {
       ["address", "town", "postcode", "contact"].forEach((k) => (coll[k] = sup[k] || ""));
       coll.phone = sup.phone || "";
     }
-    coll.notes = "For job #" + (inv.invNo || "");
+    coll.notes = "For " + jobForLabel(c, inv);
     lines.forEach((x) => {
       const cost = x.row.costGbp === "" || x.row.costGbp === null || x.row.costGbp === undefined ? "" : Number(x.row.costGbp);
       const item = { ...blankCollectionItem(), sku: x.row.sku, description: x.row.name, colour: x.row.colour || "", qty: Number(x.qty), unitCost: cost, assignedInvoiceId: inv.id };
@@ -2824,3 +2824,21 @@ export const releaseCollectionPicks = (c, coll) => {
     reconcilePicks(i, c);
   });
 };
+
+// who a supplier pick-up is for, without the job number: "Kenneth White · S43"
+export const outwardOf = (pc) => {
+  const t = String(pc || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  return t.length >= 5 ? t.slice(0, -3) : t;
+};
+export function jobForLabel(crm, inv) {
+  if (!inv) return "";
+  const cu = (crm.customers || []).find((x) => x.id === inv.customerId);
+  const st = (crm.sites || []).find((x) => x.id === inv.siteId);
+  const out = outwardOf((st && st.postcode) || (cu && cu.postcode) || "");
+  return [(cu && cu.name) || "Customer", out].filter(Boolean).join(" · ");
+}
+// older pick-ups say "For job #5736" in their notes - show the customer + outward postcode instead
+export const collNotesText = (crm, notes) => !crm ? notes || "" : String(notes || "").replace(/For job #\s*(\w+)/g, (m, no) => {
+  const inv = (crm.invoices || []).find((x) => String(x.invNo) === String(no));
+  return inv ? "For " + jobForLabel(crm, inv) : m;
+});

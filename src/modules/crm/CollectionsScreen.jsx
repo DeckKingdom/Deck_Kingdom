@@ -137,7 +137,7 @@ export default function CollectionsScreen({ openProduct, money = true, crm, upda
   };
 
   const tryPrint = () => {
-    if (!printCollectionNote(coll)) setNotice("Printing is blocked in the design preview — it works on the live site.");
+    if (!printCollectionNote(coll, crm)) setNotice("Printing is blocked in the design preview — it works on the live site.");
   };
 
   // ===== list =====

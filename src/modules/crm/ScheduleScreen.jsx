@@ -11,7 +11,7 @@ import {
 import { printJobDocs, runDocsHtml, DOC_KINDS, printPendingList } from "./printDocs.js";
 import { htmlToPdfFile, shareToWhatsApp } from "./pdfShare.js";
 import LinesEditor, { SizeRow, applySize, skuOption, SKU_COLS, SKU_LIST_W } from "./LinesEditor.jsx";
-import { JOB_TYPES, skuIndex, PAYMENT_TYPES, stockCheck, partKey, isColPick, blankPick, blankCollectionItem, itemPending, collectionLineOpen, editCollectionLine, removeCollectionLine, isGrassRoll, sizeLabel, purchaseCost } from "../../lib/crmCore.js";
+import { JOB_TYPES, skuIndex, PAYMENT_TYPES, stockCheck, partKey, isColPick, blankPick, blankCollectionItem, itemPending, collectionLineOpen, editCollectionLine, removeCollectionLine, isGrassRoll, sizeLabel, purchaseCost, outwardOf, collNotesText } from "../../lib/crmCore.js";
 import StockCheck from "./StockCheck.jsx";
 import { loadDrops, dropPhotoUrl } from "../../data/drops.js";
 import { Modal } from "./ui.jsx";
@@ -1141,19 +1141,19 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
             const ink = green ? "#28713e" : "#185FA5";
             const lead = done ? "Processed · for" : c.collected ? (pr.done > 0 ? pr.done + "/" + pr.total + " processed · for" : "Collected · for") : "For";
             if (!jobs.length) return <span style={{ color: green ? "#28713e" : "#5a6a85" }}>{done ? "Processed" : c.collected ? "Collected" : "For a job"}</span>;
-            const label = (x) => "#" + (x.j.invNo || "—") + (x.pc ? " " + x.pc : "");
+            const label = (x) => (x.name || "Customer") + (x.pc ? " · " + outwardOf(x.pc) : "");
             const shown = jobs.length > 2 ? jobs.slice(0, 1) : jobs;
             const rest = jobs.slice(shown.length);
             return (
               <span style={{ display: "inline-flex", gap: 8, alignItems: "center", minWidth: 0, overflow: "hidden", whiteSpace: "nowrap" }}>
                 <span style={{ color: green ? "#28713e" : "#8593a8", fontSize: 11 }}>{lead}</span>
                 {shown.map((x) => (
-                  <button key={x.j.id} type="button" className="dk-title-link" title={"Open job #" + (x.j.invNo || "—") + (x.name ? " · " + x.name : "")}
+                  <button key={x.j.id} type="button" className="dk-title-link" title={"Open " + (x.name || "the job")}
                     onMouseEnter={(e) => peekOpen({ id: x.j.id, kind: "inv", rect: e.currentTarget.getBoundingClientRect() }, NAME_WAIT)} onMouseLeave={peekClose} onClick={(e) => setPop({ id: x.j.id, kind: "inv", rect: e.currentTarget.getBoundingClientRect() })}
                     style={{ fontSize: 12, fontWeight: 700, color: ink }}>{label(x)}</button>
                 ))}
                 {rest.length > 0 && (
-                  <span title={jobs.map((x) => label(x) + (x.name ? " · " + x.name : "")).join("\n")}
+                  <span title={jobs.map((x) => label(x)).join("\n")}
                     style={{ fontSize: 11.5, fontWeight: 800, color: "#5a6a85", background: "#eef1f6", borderRadius: 999, padding: "2px 8px", cursor: "default" }}>+{rest.length} more</span>
                 )}
               </span>
@@ -1678,7 +1678,7 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
                 <span>Items</span><span>{items} pcs</span>
                 <span style={{ color: col.collected ? "#28713e" : "#a05f10" }}>{col.collected ? "Collected" : "Not collected yet"}</span><span />
               </div>
-              {col.notes && <div style={{ marginTop: 8, fontSize: 12.5, fontWeight: 600, color: "#6b5305", background: "#fff8e6", border: "1px solid #f4d78f", borderRadius: 8, padding: "6px 10px" }}>{col.notes}</div>}
+              {col.notes && <div style={{ marginTop: 8, fontSize: 12.5, fontWeight: 600, color: "#6b5305", background: "#fff8e6", border: "1px solid #f4d78f", borderRadius: 8, padding: "6px 10px" }}>{collNotesText(crm, col.notes)}</div>}
               <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10 }}>
                 <button style={goldBtn} onClick={() => { setPop(null); openCollection && openCollection(col.id); }}><Icon name="box" stroke={NAVY} />Open collection</button>
               </div>

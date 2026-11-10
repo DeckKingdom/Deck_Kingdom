@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { crmStorage } from "../data/crmStorage.js";
 import { getSupabase } from "../data/supabaseClient.js";
 import { signOut } from "../data/auth.js";
-import { normaliseCrm, isVoidInvoice, isCollectionJob, invoiceTotals, isPaid, gbp, partKey } from "../lib/crmCore.js";
+import { normaliseCrm, isVoidInvoice, isCollectionJob, invoiceTotals, isPaid, gbp, partKey, collNotesText } from "../lib/crmCore.js";
 import { NAVY, GOLD, RED, uid, prettyDate, prettyDateTime } from "../lib/core.js";
 import { Icon } from "./crm/ui.jsx";
 import { loadDrops, saveDrop, shrinkPhoto, loadEvents, logEvent } from "../data/drops.js";
@@ -424,7 +424,7 @@ function DayRuns({ date, stops, crm, header, onBack, driver, who, onCheckLoad })
                     const r = conf && (conf.items || [])[k];
                     return { qty: it.qty, text: it.description || it.sku, colour: it.colour, mark: r ? (r.short ? "short" : "ok") : null };
                   })} />
-                  {o.notes && <div style={{ marginTop: 8, background: "#fff8e6", borderRadius: 8, padding: "8px 10px", fontSize: 13.5, fontWeight: 600 }}>{o.notes}</div>}
+                  {o.notes && <div style={{ marginTop: 8, background: "#fff8e6", borderRadius: 8, padding: "8px 10px", fontSize: 13.5, fontWeight: 600 }}>{collNotesText(crm, o.notes)}</div>}
                   {isCur && completeBtn(x, "Complete this pick-up", !addr)}
                   {isDone && doneLine(conf, true)}
                 </div>

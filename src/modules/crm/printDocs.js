@@ -1,7 +1,7 @@
 // Printable documents: customer invoice and warehouse/driver job sheet.
 // Opens a print window (browser's Save as PDF gives the PDF). Returns false
 // when the window can't be opened (e.g. inside the design preview sandbox).
-import { invoiceTotals, explodeInvoiceLines, skuIndex, TRADE_COUNTER, sizeLabel } from "../../lib/crmCore.js";
+import { invoiceTotals, explodeInvoiceLines, skuIndex, TRADE_COUNTER, sizeLabel, collNotesText } from "../../lib/crmCore.js";
 const withSize = (x) => (sizeLabel(x) ? ` <span style="color:#5a6a85;font-weight:700">(${sizeLabel(x)})</span>` : "");
 
 const esc = (s) =>
@@ -243,14 +243,14 @@ export function printLoadingBill(inv, cust, site, crm, planner) {
 }
 
 // Driver's collection note for picking goods up from a UK supplier.
-export function printCollectionNote(coll) {
-  const body = collectionBody(coll);
+export function printCollectionNote(coll, crm) {
+  const body = collectionBody(coll, crm);
   return openDoc(shell("Collection note COL-" + (coll.collectionNo || ""), body));
 }
 // suppliers known by a short name on the paperwork
 const SUPPLIER_SHORT = { "tuda grass": "TG" };
 const supplierShort = (n) => SUPPLIER_SHORT[String(n || "").trim().toLowerCase()] || n;
-const collectionBody = (coll) => {
+const collectionBody = (coll, crm) => {
   const items = (coll.items || []).map((it) => `
     <tr><td style="width:26px"><div style="width:16px;height:16px;border:2px solid #0B1F3F;border-radius:4px"></div></td>
     <td><b>${esc(it.sku)}</b></td><td>${esc(it.description)}${it.colour ? " · " + esc(it.colour) : ""}${withSize(it)}</td>
@@ -262,7 +262,7 @@ const collectionBody = (coll) => {
   ${addrBlock("Collection", ["Date: " + pretty(coll.collectDate), coll.collectTime ? "Time: " + coll.collectTime : "", coll.driver ? "Driver: " + coll.driver : "", coll.van ? "Van: " + coll.van : ""])}
   ${addrBlock("Return to", [COMPANY.name, COMPANY.address, COMPANY.phone])}
 </div>
-${coll.notes ? `<div class="note">📝 ${esc(coll.notes)}</div>` : ""}
+${coll.notes ? `<div class="note">📝 ${esc(collNotesText(crm, coll.notes))}</div>` : ""}
 <table><tr><th></th><th>SKU</th><th>Description</th><th class="r">Qty to collect</th></tr>${items}</table>
 <div class="grid" style="margin-top:30px">
   <div class="blk"><h3>Collected by (driver)</h3><div style="border-bottom:1px solid #0B1F3F;height:34px"></div></div>
@@ -308,7 +308,7 @@ export function printJobSheet(inv, cust, site) {
 export const DOC_KINDS = [["loading", "Loading note"], ["delivery", "Delivery note"], ["invoice", "Invoice"]];
 export function printJobDocs(jobs, kinds, { custOf, siteOf, crm, planner, title, colls = [] }) {
   const pages = [];
-  if (kinds.includes("collection")) colls.forEach((c) => pages.push(collectionBody(c)));
+  if (kinds.includes("collection")) colls.forEach((c) => pages.push(collectionBody(c, crm)));
   jobs.forEach((inv) => {
     const c = custOf(inv), st = siteOf(inv);
     kinds.forEach((k) => { if (k !== "collection") pages.push(k === "invoice" ? invoiceBody(inv, c, st) : k === "loading" ? loadingBody(inv, c, st, crm, planner) : jobSheetBody(inv, c, st)); });
@@ -324,7 +324,7 @@ export function printJobDocs(jobs, kinds, { custOf, siteOf, crm, planner, title,
 export function runDocsHtml(rows, kinds, { custOf, siteOf, crm, planner, title }) {
   const pages = [];
   rows.forEach((x) => {
-    if (x.kind === "col") pages.push(collectionBody(x.obj));
+    if (x.kind === "col") pages.push(collectionBody(x.obj, crm));
     else kinds.forEach((k) => pages.push(k === "invoice" ? invoiceBody(x.obj, custOf(x.obj), siteOf(x.obj)) : k === "loading" ? loadingBody(x.obj, custOf(x.obj), siteOf(x.obj), crm, planner) : jobSheetBody(x.obj, custOf(x.obj), siteOf(x.obj))));
   });
   const body = pages.map((p) => `<div class="pdfpage">${p}</div>`).join("");
