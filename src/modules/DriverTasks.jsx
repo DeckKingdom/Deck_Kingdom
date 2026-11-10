@@ -74,6 +74,9 @@ export default function DriverTasks({ crm, who, setCrm, full, canAdd }) {
   );
 }
 
+// first names left off the "who's doing it" list on the phone
+const NOT_ON_PHONE_TASKS = ["martin"];
+
 // ===== a new task from the phone: just me, or a joint task with others =====
 function NewTask({ crm, who, onClose, onSaved }) {
   const [title, setTitle] = useState("");
@@ -84,7 +87,9 @@ function NewTask({ crm, who, onClose, onSaved }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const lc = (x) => String(x || "").toLowerCase();
-  const staff = [...new Map([{ email: who }, ...((crm.staff || []).filter((s) => s.email && s.role !== "none"))].map((s) => [lc(s.email), s])).values()];
+  // people who can't be given tasks from the phone
+  const hidden = (s) => NOT_ON_PHONE_TASKS.includes(lc(String(s.name || "").split(" ")[0])) || NOT_ON_PHONE_TASKS.includes(lc(s.driverName));
+  const staff = [...new Map([{ email: who }, ...((crm.staff || []).filter((s) => s.email && s.role !== "none" && !hidden(s)))].map((s) => [lc(s.email), s])).values()];
   const toggle = (e) => setPeople((l) => (l.includes(e) ? (l.length > 1 ? l.filter((x) => x !== e) : l) : [...l, e]));
   const ok = title.trim().length > 1 && people.length > 0;
   const save = async () => {
