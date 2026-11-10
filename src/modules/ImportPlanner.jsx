@@ -1625,7 +1625,7 @@ export default function ImportPlanner() {
             setFilter={setInvFilter}
           />
         ) : tab === "reviews" ? (
-          <ReviewsScreen crm={crm} updateCrm={updateCrm} openInvoice={openInvoice} goCustomer={goCustomer} />
+          <ReviewsScreen crm={crm} updateCrm={updateCrm} askConfirm={setConfirmBox} openInvoice={openInvoice} goCustomer={goCustomer} />
         ) : (
           <ScheduleScreen headerH={headerH} panels={schedPanels} setPanel={setSchedPanel} onPendingCount={setSchedPending} openProduct={openProduct} money={access.money} crm={crm} updateCrm={updateCrm} askConfirm={setConfirmBox} openInvoice={openInvoice} openCollection={openCollection} me={me} planner={data} goCustomer={goCustomer} newFollowUp={newFollowUp} />
         ))}

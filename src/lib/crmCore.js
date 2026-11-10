@@ -2917,3 +2917,93 @@ export function collectionDropGroups(crm, coll) {
       return { ...g, title: "Return to warehouse" + when, dest: "Warehouse" };
     });
 }
+
+// ===== Reviews & photos: Google-review asks by email / WhatsApp =====
+// Trustpilot is automatic (Woo invites on web orders); this pipeline is for
+// Google reviews and customer photos for the socials.
+export const REVIEW_DEFAULTS = {
+  link: "https://g.page/r/CdsyN1ztmDd0EBM/review", // Google Business "ask for reviews" short link
+  email: {
+    ask: {
+      subject: "How did we do? A quick Google review would mean a lot",
+      body: "Hi {name},\n\nThanks again for your order — we hope you're enjoying it!\n\nIf you have a minute, a quick Google review really helps a small business like ours:\n{link}\n\nAnd if you've taken any photos of the finished job, we'd love to see them — just reply to this email.\n\nThanks,\nDeck Kingdom\n0161 399 1837",
+    },
+    photos: {
+      subject: "We'd love a photo of the finished job",
+      body: "Hi {name},\n\nThank you for the lovely review! If you have any photos of the finished project we'd love to share them on our socials — we can credit you or keep it anonymous, whichever you prefer. Just reply to this email with the pictures.\n\nThanks,\nDeck Kingdom",
+    },
+    thanks: {
+      subject: "Thank you!",
+      body: "Hi {name},\n\nThank you so much for the review and the photos — they've made our day.\n\nIf you ever need anything else for the garden, you know where we are.\n\nDeck Kingdom",
+    },
+  },
+  wa: {
+    ask: "Hi {name}, it's Deck Kingdom — thanks again for your order, hope you're enjoying it! If you've got a minute, a quick Google review would mean a lot to us: {link} — and if you've snapped any photos of the finished job we'd love to see them!",
+    photos: "Hi {name}, thanks so much for the review! If you've got any photos of the finished job we'd love to share them on our socials — just send them over on here.",
+    thanks: "Thank you {name} — the review and photos are brilliant! If you ever need anything else for the garden, you know where we are.",
+  },
+  optOut: [], // customer ids never asked (account-level)
+  skip: [],   // invoice ids left out (job-level)
+  rules: { excludeTrade: false, excludeWeb: true, minTotal: "" },
+};
+export const reviewSettingsOf = (crm) => {
+  const s = (crm && crm.reviewSettings) || {};
+  const e = s.email || {};
+  return {
+    link: s.link !== undefined && s.link !== "" ? s.link : REVIEW_DEFAULTS.link,
+    email: {
+      ask: { ...REVIEW_DEFAULTS.email.ask, ...(e.ask || {}) },
+      photos: { ...REVIEW_DEFAULTS.email.photos, ...(e.photos || {}) },
+      thanks: { ...REVIEW_DEFAULTS.email.thanks, ...(e.thanks || {}) },
+    },
+    wa: { ...REVIEW_DEFAULTS.wa, ...(s.wa || {}) },
+    optOut: Array.isArray(s.optOut) ? s.optOut : [],
+    skip: Array.isArray(s.skip) ? s.skip : [],
+    rules: { ...REVIEW_DEFAULTS.rules, ...(s.rules || {}) },
+  };
+};
+const reviewFirstName = (c) => String((c && (c.contact || c.name)) || "").trim().split(/\s+/)[0] || "";
+export const reviewText = (tpl, cust, link) =>
+  String(tpl || "").split("{name}").join(reviewFirstName(cust) || "there").split("{link}").join(link || "");
+// a website order already gets the Trustpilot invite from Woo
+export const isWebOrder = (i) => !!(i && (i.orderRef || i.webStatus));
+// why a job is left out of bulk asks ("" = included)
+export const reviewExclusion = (inv, cust, rs, issueIds) => {
+  if (!cust) return "no account on the job";
+  if (rs.optOut.includes(cust.id)) return "account opted out";
+  if (rs.skip.includes(inv.id)) return "job skipped";
+  if ((inv.flags || {}).skipReview) return "job skipped";
+  if (issueIds && issueIds.has(inv.id)) return "open delivery issue";
+  if (rs.rules.excludeTrade && cust.trader) return "trade account";
+  if (rs.rules.excludeWeb && isWebOrder(inv)) return "website order (Trustpilot asks)";
+  const min = Number(rs.rules.minTotal);
+  if (min > 0 && invoiceTotals(inv).total < min) return "under " + gbp(min);
+  return "";
+};
+
+// ----- duplicate accounts: same person saved twice -----
+// Two accounts look like the same person when they share a mobile, an email,
+// or the same name at the same postcode. Groups are unioned across all three.
+const dupeMobileKey = (c) => { const d = String((c && c.mobile) || "").replace(/\D/g, ""); return d.length >= 10 ? d.slice(-10) : ""; };
+const dupeEmailKey = (c) => { const e = String((c && c.email) || "").trim().toLowerCase(); return e.includes("@") ? e : ""; };
+const dupeNameKey = (c) => {
+  const n = String((c && c.name) || "").trim().toLowerCase().replace(/\s+/g, " ");
+  const p = String((c && c.postcode) || "").replace(/[^a-z0-9]/gi, "").toLowerCase();
+  return n && p ? n + "|" + p : "";
+};
+export const customerDupeGroups = (crm) => {
+  const parent = {};
+  const find = (x) => (parent[x] === x ? x : (parent[x] = find(parent[x])));
+  const union = (a, b) => { const ra = find(a), rb = find(b); if (ra !== rb) parent[rb] = ra; };
+  const list = (crm.customers || []);
+  list.forEach((c) => (parent[c.id] = c.id));
+  [dupeMobileKey, dupeEmailKey, dupeNameKey].forEach((fn) => {
+    const seen = {};
+    list.forEach((c) => { const k = fn(c); if (!k) return; if (seen[k]) union(seen[k], c.id); else seen[k] = c.id; });
+  });
+  const groups = {};
+  list.forEach((c) => { const r = find(c.id); (groups[r] = groups[r] || []).push(c); });
+  return Object.values(groups).filter((g) => g.length > 1);
+};
+// one key per person, so bulk asks never message the same person twice
+export const personKeyOf = (c) => dupeMobileKey(c) || dupeEmailKey(c) || dupeNameKey(c) || ("id:" + ((c && c.id) || ""));

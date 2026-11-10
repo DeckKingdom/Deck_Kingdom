@@ -41,6 +41,8 @@ const PATHS = {
   menu: <path d="M4 7h16M4 12h16M4 17h16" />,
   chevleft: <path d="M14.5 6l-6 6 6 6" />,
   chevright: <path d="M9.5 6l6 6-6 6" />,
+  slash: <><circle cx="12" cy="12" r="9" /><path d="M5.5 5.5l13 13" /></>,
+  userx: <><circle cx="10" cy="8" r="3.5" /><path d="M4 20c0-3.3 2.7-6 6-6 1.5 0 2.9.6 4 1.5" /><path d="M16.5 15.5l5 5M21.5 15.5l-5 5" /></>,
   lock: <><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V8a4 4 0 018 0v3" /></>,
   refresh: <path d="M4 12a8 8 0 0113.7-5.6L20 9M20 4v5h-5M20 12a8 8 0 01-13.7 5.6L4 15M4 20v-5h5" />,
   clock: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3.5 2" /></>,

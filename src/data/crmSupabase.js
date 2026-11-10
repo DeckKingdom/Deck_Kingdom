@@ -410,6 +410,7 @@ async function loadAll() {
   const reminders = (settingRow("reminders") || {}).value || {};
   const skuListsRow = settingRow("skuLists");
   const sampleEmailsRow = settingRow("sampleEmails");
+  const reviewSettingsRow = settingRow("reviewSettings");
   const dsNotifyRow = settingRow("dsNotify");
   const dsRunOrderRow = settingRow("dsRunOrder");
   const driverPhonesRow = settingRow("driverPhones");
@@ -596,6 +597,7 @@ async function loadAll() {
   const data = { customers, sites, invoices, masterProducts, collections, movements, vans, numbering, reminders, quotes, samples, tasks, taskLog, staff, suppliers, purchases };
   if (skuListsRow && skuListsRow.value) data.skuLists = skuListsRow.value;
   if (sampleEmailsRow && sampleEmailsRow.value) data.sampleEmails = sampleEmailsRow.value;
+  if (reviewSettingsRow && reviewSettingsRow.value) data.reviewSettings = reviewSettingsRow.value;
   if (dsNotifyRow && dsNotifyRow.value) data.dsNotify = dsNotifyRow.value;
   if (dsRunOrderRow && dsRunOrderRow.value) data.dsRunOrder = dsRunOrderRow.value;
   if (driverPhonesRow && driverPhonesRow.value) data.driverPhones = driverPhonesRow.value;
@@ -607,7 +609,7 @@ async function loadAll() {
   const wooRow = settingRow("wooBridgeLast"); // website feed status (written by woo_sync)
   if (wooRow && wooRow.value) data.wooBridge = wooRow.value;
   snapshot = rowsFromData(data);
-  settingsSnapshot = { numbering: JSON.stringify(numbering), reminders: JSON.stringify(reminders), skuLists: skuListsRow ? JSON.stringify(skuListsRow.value) : undefined, sampleEmails: sampleEmailsRow ? JSON.stringify(sampleEmailsRow.value) : undefined, dsNotify: dsNotifyRow ? JSON.stringify(dsNotifyRow.value) : undefined, dsRunOrder: dsRunOrderRow ? JSON.stringify(dsRunOrderRow.value) : undefined, driverPhones: driverPhonesRow ? JSON.stringify(driverPhonesRow.value) : undefined, fleetCosts: fleetCostsRow ? JSON.stringify(fleetCostsRow.value) : undefined };
+  settingsSnapshot = { numbering: JSON.stringify(numbering), reminders: JSON.stringify(reminders), skuLists: skuListsRow ? JSON.stringify(skuListsRow.value) : undefined, sampleEmails: sampleEmailsRow ? JSON.stringify(sampleEmailsRow.value) : undefined, dsNotify: dsNotifyRow ? JSON.stringify(dsNotifyRow.value) : undefined, dsRunOrder: dsRunOrderRow ? JSON.stringify(dsRunOrderRow.value) : undefined, driverPhones: driverPhonesRow ? JSON.stringify(driverPhonesRow.value) : undefined, fleetCosts: fleetCostsRow ? JSON.stringify(fleetCostsRow.value) : undefined, reviewSettings: reviewSettingsRow ? JSON.stringify(reviewSettingsRow.value) : undefined };
 
   if (!customers.length && !sites.length && !invoices.length && !masterProducts.length && !collections.length && !vans.length && !quotes.length && !samples.length && !tasks.length && !suppliers.length && !purchases.length && !settings.length) return null;
   return data;
@@ -714,6 +716,7 @@ async function saveAll(d) {
   if (d.dsRunOrder) settingsToSave.dsRunOrder = d.dsRunOrder; // the order the runs go out in, per day (Delivery Schedule)
   if (d.fleetCosts) settingsToSave.fleetCosts = d.fleetCosts; // driver tracking: diesel price, mpg, driver rate
   if (d.driverPhones) settingsToSave.driverPhones = d.driverPhones; // drivers' mobiles, for sending them their run on WhatsApp
+  if (d.reviewSettings) settingsToSave.reviewSettings = d.reviewSettings; // Google link, ask templates, opt-outs, bulk rules
   for (const [key, value] of Object.entries(settingsToSave)) {
     const j = JSON.stringify(value);
     if (j !== settingsSnapshot[key]) {

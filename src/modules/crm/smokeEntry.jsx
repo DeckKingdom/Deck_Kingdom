@@ -10,6 +10,7 @@ import VansScreen from "./VansScreen.jsx";
 import QuotesScreen from "./QuotesScreen.jsx";
 import SamplesScreen from "./SamplesScreen.jsx";
 import ReviewsScreen, { reviewStage } from "./ReviewsScreen.jsx";
+import { reviewSettingsOf, reviewExclusion, reviewText, customerDupeGroups, personKeyOf } from "../../lib/crmCore.js";
 import TasksScreen from "./TasksScreen.jsx";
 import PurchasesScreen from "./PurchasesScreen.jsx";
 import { syncCatalogue, renameSkus, skuFor, codeSource, numericSku, skuLists, masterKey, colourSeg, skuSource } from "../../lib/crmCore.js";
@@ -85,6 +86,24 @@ export default function run(React, renderToString) {
   assert(reviewStage({ flags: { reviewRequested: true } }) === "Awaiting review" && reviewStage({ flags: { reviewReceived: true } }) === "Review in" && reviewStage({ flags: { socialPosted: true } }) === "Posted", "review stages from flags");
   html = renderToString(React.createElement(ReviewsScreen, props));
   assert(html.includes("Reviews &amp; Photos") && html.includes("Bob") && html.includes("To ask"), "reviews worklist shows the delivered job");
+  // bulk exclusion rules + duplicate detection
+  {
+    const rs0 = reviewSettingsOf(crm);
+    assert(rs0.link.includes("g.page"), "google link default");
+    assert(reviewExclusion(inv, cust, rs0, null) === "", "delivered job is askable");
+    assert(reviewExclusion(inv, cust, { ...rs0, optOut: [cust.id] }, null) === "account opted out", "opt-out excludes");
+    assert(reviewExclusion(inv, cust, { ...rs0, skip: [inv.id] }, null) === "job skipped", "skip excludes");
+    assert(reviewExclusion(inv, cust, { ...rs0, rules: { ...rs0.rules, excludeTrade: true } }, null) === "trade account", "trade rule");
+    assert(reviewExclusion({ ...inv, orderRef: "WC-1" }, cust, rs0, null).includes("Trustpilot"), "web orders excluded by default");
+    assert(reviewExclusion(inv, cust, { ...rs0, rules: { ...rs0.rules, minTotal: "2000" } }, null).includes("under"), "min value rule");
+    assert(reviewText("Hi {name}: {link}", cust, "L") === "Hi Bob: L", "template fill");
+    const dupe = { ...blankCustomer(), name: "Robert Smith", postcode: "OL6 6UG", mobile: "07577776775" }; // same mobile as Bob
+    crm.customers.push(dupe);
+    const groups = customerDupeGroups(crm);
+    assert(groups.length === 1 && groups[0].length === 2, "duplicate by mobile spotted, got " + JSON.stringify(groups.map((g) => g.length)));
+    assert(personKeyOf(cust) === personKeyOf(dupe), "same person key for bulk collapse");
+    crm.customers.pop();
+  }
   html = renderToString(React.createElement(HomeScreen, { data: { products: [], shipments: [] }, crm, updateCrm: noop, me: "", askConfirm: noop, setTab: noop, addShipment: noop, newInvoice: noop }));
   assert(html.includes("Today") && html.includes("Financial overview") && html.includes("Sales this month") && html.includes("Deliveries · next 4 days") && html.includes("Projects"), "home: tasks + reports");
   html = renderToString(React.createElement(ActivityScreen, { crm, data: { products: [], shipments: [] }, storageMode: "local" }));
