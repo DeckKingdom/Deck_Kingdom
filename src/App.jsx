@@ -37,9 +37,15 @@ function Routed() {
   }, []);
   if (me === undefined) return <div style={{ fontFamily: "Quicksand, sans-serif", background: "#0B1F3F", minHeight: "100vh" }} />;
   if (me.role === "driver") return <DriverApp me={{ fullName: me.full_name || "", driverName: me.driver_name || "", email: getSessionEmail() || "" }} />;
-  // warehouse on a phone: the loading app for every van (?full=1 opens the whole system)
-  const phone = typeof window !== "undefined" && window.matchMedia && window.matchMedia("(max-width: 760px)").matches;
-  if (me.role === "warehouse" && phone && !/[?&]full=1/.test(window.location.search)) return <DriverApp warehouse me={{ fullName: me.full_name || "", driverName: me.driver_name || "", email: getSessionEmail() || "" }} />;
+  // warehouse logins only ever get the phone app (on any device): Loading for every van, plus
+  // Deliveries for their own runs if they also drive ("Also drives as" in Users & access)
+  if (me.role === "warehouse") return (
+    <div style={{ minHeight: "100vh", background: "#dfe4ec" }}>
+      <div style={{ maxWidth: 560, margin: "0 auto", boxShadow: "0 0 30px rgba(11,31,63,.08)" }}>
+        <DriverApp warehouse me={{ fullName: me.full_name || "", driverName: me.driver_name || "", email: getSessionEmail() || "" }} />
+      </div>
+    </div>
+  );
   // admin / manager: the driver screen as any driver (or the loading app) - for runs, loading and testing
   const pa = (me.role === "admin" || me.role === "manager") ? phoneAppParams() : null;
   if (pa) {

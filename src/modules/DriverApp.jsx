@@ -152,8 +152,7 @@ export default function DriverApp({ me, warehouse, switcher }) {
       <div style={page}>
         <LoadingMobile key={loads} crm={crm} driver={allVans ? null : driver} who={who} header={header} nav={tabs} />
         {warehouse && !switcher && <div style={{ padding: "0 14px" }}><button type="button" onClick={() => signOut().then(() => window.location.reload())}
-          style={{ marginTop: 10, width: "100%", border: "1px solid #d5d9e0", background: "#fff", borderRadius: 12, padding: 12, fontFamily: "inherit", fontWeight: 700, color: "#5a6a85", cursor: "pointer" }}>Sign out</button>
-          <a href="?full=1" style={{ display: "block", textAlign: "center", marginTop: 12, fontSize: 13, fontWeight: 700, color: "#185FA5" }}>Open the full ops system</a></div>}
+          style={{ marginTop: 10, width: "100%", border: "1px solid #d5d9e0", background: "#fff", borderRadius: 12, padding: 12, fontFamily: "inherit", fontWeight: 700, color: "#5a6a85", cursor: "pointer" }}>Sign out</button></div>}
       </div>
     );
   }
