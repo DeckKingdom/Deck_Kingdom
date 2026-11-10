@@ -5,15 +5,23 @@ import { NAVY, GOLD, RED, prettyDate } from "../lib/core.js";
 import { today, dailyTasksFor, isDailyDone, dueScheduledFor, projectsFor, setTaskDone } from "../lib/crmCore.js";
 import { tickTask } from "../data/taskTicks.js";
 
-export default function DriverTasks({ crm, who, setCrm }) {
+// outstanding: due scheduled jobs + today's daily items not yet ticked (for the tab's count)
+export const tasksOutstanding = (crm, who) => {
+  if (!crm || !who) return 0;
+  const d = today();
+  return dueScheduledFor(crm, who, d).length + dailyTasksFor(crm, who, d).filter((t) => !isDailyDone(crm, t, d, who)).length;
+};
+
+export default function DriverTasks({ crm, who, setCrm, full }) {
   const [busy, setBusy] = useState("");
   const [err, setErr] = useState("");
-  if (!crm || !who) return null;
+  if (!crm) return null;
+  if (!who) return full ? <div style={{ background: "#fff", border: "1px solid #e6e9ef", borderRadius: 16, padding: 16, color: "#5a6a85", fontWeight: 600 }}>This login isn't linked to anyone's tasks.</div> : null;
   const d = today();
   const daily = dailyTasksFor(crm, who, d);
   const due = dueScheduledFor(crm, who, d);
   const projects = projectsFor(crm, who).slice(0, 6);
-  if (!daily.length && !due.length && !projects.length) return null;
+  if (!daily.length && !due.length && !projects.length) return full ? <div style={{ background: "#fff", border: "1px solid #e6e9ef", borderRadius: 16, padding: "22px 16px", textAlign: "center", color: "#5a6a85", fontWeight: 700 }}>✓ Nothing on your list today</div> : null;
   const doneDaily = daily.filter((t) => isDailyDone(crm, t, d, who)).length;
 
   const tick = async (t, period, done, perUser) => {
@@ -36,7 +44,7 @@ export default function DriverTasks({ crm, who, setCrm }) {
   );
   const head = (t, n) => <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 0.5, textTransform: "uppercase", color: "#8593a8", margin: "12px 0 2px" }}>{t}{n ? " · " + n : ""}</div>;
   return (
-    <div style={{ background: "#fff", border: "1px solid #e6e9ef", borderRadius: 16, padding: "12px 14px", marginTop: 14 }}>
+    <div style={{ background: "#fff", border: "1px solid #e6e9ef", borderRadius: 16, padding: "12px 14px", marginTop: full ? 0 : 14 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <b style={{ flex: 1, fontSize: 17, color: NAVY }}>My tasks</b>
         {daily.length > 0 && <span style={{ fontSize: 12.5, fontWeight: 800, color: doneDaily === daily.length ? "#28713e" : "#8a5a00" }}>{doneDaily}/{daily.length} done today</span>}

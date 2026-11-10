@@ -12,7 +12,7 @@ import { runsOn, loadState, canCheck, shortName } from "../lib/loading.js";
 import { loadLoading } from "../data/loading.js";
 import LoadingMobile from "./LoadingMobile.jsx";
 import DriverPicker, { openPhoneApp } from "./DriverPicker.jsx";
-import DriverTasks from "./DriverTasks.jsx";
+import DriverTasks, { tasksOutstanding } from "./DriverTasks.jsx";
 import { outwardCode, tidyPostcode, googleNavHref, appleNavHref, isApple } from "../lib/addressCheck.js";
 
 const GREEN = "#28713e";
@@ -139,14 +139,28 @@ export default function DriverApp({ me, warehouse, switcher }) {
   );
 
   // Loading | Deliveries switch under the header (drivers)
-  const tabs = !driver ? null : (
+  // Loading | Deliveries (if they drive) | Tasks — under the header
+  const nTasks = tasksOutstanding(crm, taskWho);
+  const tabList = [["loading", "Loading"], ...(driver ? [["deliveries", "Deliveries"]] : []), ["tasks", "Tasks"]];
+  const tabs = (
     <div style={{ display: "flex", gap: 6, padding: "10px 14px 0", position: "sticky", top: 68, zIndex: 4, background: "#f3f5f8" }}>
-      {[["loading", "Loading"], ["deliveries", "Deliveries"]].map(([k, l]) => (
+      {tabList.map(([k, l]) => (
         <button key={k} type="button" onClick={() => { setMode(k); setView(null); }}
-          style={{ flex: 1, borderRadius: 12, padding: "11px 8px", fontFamily: "inherit", fontWeight: 800, fontSize: 15, cursor: "pointer", border: "1px solid " + (mode === k ? NAVY : "#d5d9e0"), background: mode === k ? NAVY : "#fff", color: mode === k ? "#fff" : NAVY }}>{l}</button>
+          style={{ flex: 1, borderRadius: 12, padding: "11px 6px", fontFamily: "inherit", fontWeight: 800, fontSize: 15, cursor: "pointer", border: "1px solid " + (mode === k ? NAVY : "#d5d9e0"), background: mode === k ? NAVY : "#fff", color: mode === k ? "#fff" : NAVY, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+          {l}{k === "tasks" && nTasks > 0 && <span style={{ minWidth: 20, height: 20, borderRadius: 99, background: RED, color: "#fff", fontSize: 11.5, fontWeight: 800, display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "0 5px" }}>{nTasks}</span>}
+        </button>
       ))}
     </div>
   );
+  if (mode === "tasks") {
+    return (
+      <div style={page}>
+        {header("My tasks")}
+        {tabs}
+        <div style={{ padding: 14 }}><DriverTasks crm={crm} who={taskWho} setCrm={setCrm} full /></div>
+      </div>
+    );
+  }
   if (mode === "loading") {
     return (
       <div style={page}>
@@ -192,7 +206,6 @@ export default function DriverApp({ me, warehouse, switcher }) {
             <span style={{ fontSize: 12.5, fontWeight: 700, color: "#aeb9cf" }}>Log a fill-up</span>
           </button>
         </div>
-        <DriverTasks crm={crm} who={taskWho} setCrm={setCrm} />
         {switcher ? <button type="button" onClick={() => openPhoneApp(null)}
           style={{ marginTop: 22, width: "100%", border: "1px solid #d5d9e0", background: "#fff", borderRadius: 12, padding: 12, fontFamily: "inherit", fontWeight: 800, color: NAVY, cursor: "pointer" }}>🏠 Back to the office system</button> : <button type="button" onClick={() => signOut().then(() => window.location.reload())}
           style={{ marginTop: 22, width: "100%", border: "1px solid #d5d9e0", background: "#fff", borderRadius: 12, padding: 12, fontFamily: "inherit", fontWeight: 700, color: "#5a6a85", cursor: "pointer" }}>Sign out</button>}
