@@ -1,7 +1,7 @@
 // Printable documents: customer invoice and warehouse/driver job sheet.
 // Opens a print window (browser's Save as PDF gives the PDF). Returns false
 // when the window can't be opened (e.g. inside the design preview sandbox).
-import { invoiceTotals, explodeInvoiceLines, skuIndex, TRADE_COUNTER, sizeLabel, collNotesText } from "../../lib/crmCore.js";
+import { invoiceTotals, explodeInvoiceLines, skuIndex, TRADE_COUNTER, sizeLabel, collNotesText, outwardOf } from "../../lib/crmCore.js";
 const withSize = (x) => (sizeLabel(x) ? ` <span style="color:#5a6a85;font-weight:700">(${sizeLabel(x)})</span>` : "");
 
 const esc = (s) =>
@@ -251,19 +251,43 @@ export function printCollectionNote(coll, crm) {
 const SUPPLIER_SHORT = { "tuda grass": "TG" };
 const supplierShort = (n) => SUPPLIER_SHORT[String(n || "").trim().toLowerCase()] || n;
 const collectionBody = (coll, crm) => {
-  const items = (coll.items || []).map((it) => `
+  // lines grouped by the drop they're for (drop order), each tagged with that drop's outward postcode
+  const invs = (crm && crm.invoices) || [];
+  const pcOf = (inv) => {
+    if (!inv || !crm) return "";
+    const st = (crm.sites || []).find((x) => x.id === inv.siteId), cu = (crm.customers || []).find((x) => x.id === inv.customerId);
+    return outwardOf((st && st.postcode) || (cu && cu.postcode) || "");
+  };
+  const groups = new Map();
+  (coll.items || []).forEach((it) => {
+    const k = it.assignedInvoiceId || "";
+    if (!groups.has(k)) {
+      const inv = k ? invs.find((x) => x.id === k) : null;
+      groups.set(k, { inv, pc: pcOf(inv), drop: inv ? Number(inv.dropNo) || 0 : 0, items: [] });
+    }
+    groups.get(k).items.push(it);
+  });
+  const ordered = [...groups.values()].sort((a, b) => (!a.inv) - (!b.inv) || (a.drop || 99) - (b.drop || 99) || a.pc.localeCompare(b.pc));
+  const many = ordered.length > 1;
+  const items = ordered.map((g) => {
+    const title = g.inv ? [g.drop ? "Drop " + g.drop : "Drop", g.pc].filter(Boolean).join(" · ") : "For stock";
+    return (many || g.inv ? `<tr><td colspan="5" style="background:#f3f5f8;font-weight:800;font-size:12px;letter-spacing:.4px;text-transform:uppercase;padding:7px 10px">${esc(title)}</td></tr>` : "") +
+      g.items.map((it) => `
     <tr><td style="width:26px"><div style="width:16px;height:16px;border:2px solid #0B1F3F;border-radius:4px"></div></td>
+    <td style="white-space:nowrap;font-weight:800">${esc(g.pc || "—")}</td>
     <td><b>${esc(it.sku)}</b></td><td>${esc(it.description)}${it.colour ? " · " + esc(it.colour) : ""}${withSize(it)}</td>
     <td class="r big">${esc(it.qty)}</td></tr>`).join("");
+  }).join("");
+  // notes without the "For <customer>" line - the drops above say who it's for
+  const notes = String(collNotesText(crm, coll.notes) || "").split(/\n/).filter((l) => l.trim() && !/^\s*For /.test(l)).join(" · ");
   return `<div class="pg pg-collection">` + head("Collection note", "COL-" + (coll.collectionNo || "—"), pretty(coll.collectDate || coll.date), true) + `
 <div class="grid">
   ${addrBlock("Collect from", [supplierShort(coll.supplier), coll.address, [coll.town, coll.postcode].filter(Boolean).join(" ")])}
   ${addrBlock("Supplier contact", [coll.contact, coll.phone])}
   ${addrBlock("Collection", ["Date: " + pretty(coll.collectDate), coll.collectTime ? "Time: " + coll.collectTime : "", coll.driver ? "Driver: " + coll.driver : "", coll.van ? "Van: " + coll.van : ""])}
-  ${addrBlock("Return to", [COMPANY.name, COMPANY.address, COMPANY.phone])}
 </div>
-${coll.notes ? `<div class="note">📝 ${esc(collNotesText(crm, coll.notes))}</div>` : ""}
-<table><tr><th></th><th>SKU</th><th>Description</th><th class="r">Qty to collect</th></tr>${items}</table>
+${notes ? `<div class="note">📝 ${esc(notes)}</div>` : ""}
+<table><tr><th></th><th>Drop</th><th>SKU</th><th>Description</th><th class="r">Qty to collect</th></tr>${items}</table>
 <div class="grid" style="margin-top:30px">
   <div class="blk"><h3>Collected by (driver)</h3><div style="border-bottom:1px solid #0B1F3F;height:34px"></div></div>
   <div class="blk"><h3>Released by (supplier)</h3><div style="border-bottom:1px solid #0B1F3F;height:34px"></div></div>
