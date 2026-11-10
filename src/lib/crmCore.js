@@ -2928,7 +2928,7 @@ export const REVIEW_DEFAULTS = {
   email: {
     ask: {
       subject: "How did we do? A quick Google review would mean a lot",
-      body: "Hi {name},\n\nHope you're happy with your recent {order} order and everything went smoothly!\n\nIf you've got a minute to leave us a quick Google review, we'd really appreciate it. It makes a big difference to a business like ours 👍\n\n⭐ {link}\n\nAlso, if you've got any photos of the finished project (or even a before and after), we'd love to see them! Just reply to this email with them attached.\n\nThanks again,\nJon\nDeck Kingdom · 0161 399 1837",
+      body: "Hi {name},\n\nHope you're well and happy with your recent {order} order. Hopefully everything went smoothly!\n\nIf you have a spare minute to leave us a quick Google review, we'd really appreciate it… it all helps 👌\n\n⭐ {link}\n\nAlso, if you have any photos of the finished project (or even better a before and after) we'd love to see them! Just reply to this email with them attached — they're really useful to show other customers the finished product.\n\nThanks again\nJon\nDeck Kingdom · 0161 399 1837",
     },
     photos: {
       subject: "We'd love a photo of the finished job",
@@ -2944,7 +2944,7 @@ export const REVIEW_DEFAULTS = {
     },
   },
   wa: {
-    ask: "Hi {name},\n\nHope you're happy with your recent {order} order and everything went smoothly!\n\nIf you've got a minute to leave us a quick Google review, we'd really appreciate it. It makes a big difference to a business like ours 👍\n\n⭐ {link}\n\nAlso, if you've got any photos of the finished project (or even a before and after), we'd love to see them! Feel free to send them straight over on here.\n\nThanks again,\nJon\nDeck Kingdom",
+    ask: "Hi {name},\n\nHope you're well and happy with your recent {order} order. Hopefully everything went smoothly!\n\nIf you have a spare minute to leave us a quick Google review, we'd really appreciate it… it all helps 👌\n\n⭐ {link}\n\nAlso, if you have any photos of the finished project (or even better a before and after) we'd love to see them! Feel free to send them straight over on here — they're really useful to show other customers the finished product.\n\nThanks again\nJon\nDeck Kingdom",
     nudge: "Hi {name}, no rush at all — just popping the review link back to the top of your chats in case it got buried: {link} Thanks again!",
     photos: "Hi {name}, thanks so much for the review! If you've got any photos of the finished job we'd love to share them on our socials — just send them over on here.",
     thanks: "Thank you {name} — the review and photos are brilliant! If you ever need anything else for the garden, you know where we are.",
