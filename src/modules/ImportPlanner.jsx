@@ -1355,6 +1355,7 @@ export default function ImportPlanner() {
         input.dk-pallets::-webkit-outer-spin-button, input.dk-pallets::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
         input.dk-pallets { -moz-appearance: textfield; appearance: textfield; }
         .dk-sticky-table thead th { position: sticky; top: 0; background: #fff; z-index: 4; }
+        .dk-bin:hover svg { stroke: ${RED}; }
         /* ===== phones ===== */
         @media (max-width: 760px) {
           /* page wrappers and cards: less padding so content gets the width */
@@ -1623,7 +1624,7 @@ export default function ImportPlanner() {
             setFilter={setInvFilter}
           />
         ) : (
-          <ScheduleScreen headerH={headerH} panels={schedPanels} setPanel={setSchedPanel} onPendingCount={setSchedPending} openProduct={openProduct} money={access.money} crm={crm} updateCrm={updateCrm} openInvoice={openInvoice} openCollection={openCollection} me={me} planner={data} goCustomer={goCustomer} newFollowUp={newFollowUp} />
+          <ScheduleScreen headerH={headerH} panels={schedPanels} setPanel={setSchedPanel} onPendingCount={setSchedPending} openProduct={openProduct} money={access.money} crm={crm} updateCrm={updateCrm} askConfirm={setConfirmBox} openInvoice={openInvoice} openCollection={openCollection} me={me} planner={data} goCustomer={goCustomer} newFollowUp={newFollowUp} />
         ))}
 
       {(tab === "stock" || tab === "collections") &&

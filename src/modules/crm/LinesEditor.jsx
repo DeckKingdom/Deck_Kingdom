@@ -255,7 +255,7 @@ export default function LinesEditor({ doc, edit, crm, readOnly, toolbar, onOpenP
         <table className="dk-t" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 700 }}>
           <thead>
             <tr>
-              {["Code", ...(sized ? ["Length × width (m)"] : []), "Qty", "Description", "Colour", "Price £ inc VAT", "Line £", ""].map((h, i, all) => (
+              {["Code", ...(sized ? ["Length × width (m)"] : []), "Description", "Colour", "Qty", "Price £ inc VAT", "Line £", ""].map((h, i, all) => (
                 <th key={i} style={{ textAlign: h.startsWith("Price") || h === "Line £" ? "right" : "left", fontSize: 11, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", padding: "8px 6px", borderBottom: "2px solid #e6e9ef", whiteSpace: "nowrap" }}>{h}</th>
               ))}
             </tr>
@@ -266,9 +266,9 @@ export default function LinesEditor({ doc, edit, crm, readOnly, toolbar, onOpenP
                   <tr key={l.id}>
                     <td style={{ ...td, fontWeight: 700, padding: "9px 6px" }}>{readableFor(bySku, l.code) || l.code || "—"}</td>
                     {sized && <td style={{ ...td, fontWeight: 700, color: "#5a6a85", whiteSpace: "nowrap" }}>{sizeLabel(l) || ""}</td>}
-                    <td style={td}>{l.qty}</td>
                     <td style={td}>{l.description}</td>
                     <td style={td}>{l.colour}</td>
+                    <td style={td}>{l.qty}</td>
                     <td style={{ ...td, textAlign: "right" }}>{(Number(l.price) || 0).toFixed(2)}</td>
                     <td style={{ ...td, textAlign: "right", fontWeight: 700 }}>{lineTotal(l)}</td>
                     <td style={td} />
@@ -285,9 +285,6 @@ export default function LinesEditor({ doc, edit, crm, readOnly, toolbar, onOpenP
                         {needsSize(l) ? <SizeRow inline compact line={l} onSize={(k, v) => edit((x) => { const y = x.lines.find((z) => z.id === l.id); if (y) applySize(y, k, v); })} /> : null}
                       </td>
                     )}
-                    <td style={{ ...td, width: 74 }}>
-                      <QtyCell value={l.qty} onChange={(v) => setLine(l.id, "qty", v)} />
-                    </td>
                     <td style={{ ...td, minWidth: 200 }}>
                       {/* grass rolls: length x width sit in line, to the right of the description */}
                       <input style={inp} value={l.description} {...selectAllProps} onChange={(e) => setLine(l.id, "description", e.target.value)} />
@@ -299,6 +296,9 @@ export default function LinesEditor({ doc, edit, crm, readOnly, toolbar, onOpenP
                         y.colour = colour;
                         if (sku) y.code = sku; // each colour has its own SKU, so the code follows the colour
                       })} />
+                    </td>
+                    <td style={{ ...td, width: 74 }}>
+                      <QtyCell value={l.qty} onChange={(v) => setLine(l.id, "qty", v)} />
                     </td>
                     <td style={{ ...td, width: 100 }}>
                       <input style={numInp} inputMode="decimal" value={l.price} {...selectAllProps} onChange={(e) => setLine(l.id, "price", e.target.value)} />

@@ -11,7 +11,7 @@ import {
 import { printJobDocs, runDocsHtml, DOC_KINDS, printPendingList } from "./printDocs.js";
 import { htmlToPdfFile, shareToWhatsApp } from "./pdfShare.js";
 import LinesEditor, { SizeRow, applySize, skuOption, SKU_COLS, SKU_LIST_W } from "./LinesEditor.jsx";
-import { JOB_TYPES, skuIndex, PAYMENT_TYPES, stockCheck, partKey, isColPick, blankPick, blankCollectionItem, itemPending, collectionLineOpen, editCollectionLine, removeCollectionLine, isGrassRoll, sizeLabel, purchaseCost, outwardOf, collNotesText, mergeablePickups, mergePickups, collectionDropGroups } from "../../lib/crmCore.js";
+import { JOB_TYPES, skuIndex, PAYMENT_TYPES, stockCheck, partKey, isColPick, blankPick, blankCollectionItem, itemPending, collectionLineOpen, editCollectionLine, removeCollectionLine, isGrassRoll, sizeLabel, purchaseCost, outwardOf, collNotesText, mergeablePickups, mergePickups, collectionDropGroups, releaseInvoiceLinks, releaseCollectionPicks } from "../../lib/crmCore.js";
 import StockCheck from "./StockCheck.jsx";
 import { loadDrops, dropPhotoUrl } from "../../data/drops.js";
 import { Modal } from "./ui.jsx";
@@ -38,7 +38,7 @@ const short16 = (t) => (String(t).length > 16 ? String(t).slice(0, 15).trimEnd()
 // stripe · done · customer · postcode · source · job type · driver · run · drop · van · weight · date+time · payment · [prep · follow-up] · update · days
 // sized to fit a ~1300px board without scrolling; spare width is shared out between the columns
 // stripe · done · customer · postcode · source · job type tab · driver · run · drop · van · weight · date+time · payment · (prep · follow-up) · update · days
-const dsCols = (prep) => "4px 46px 122px 60px 52px 56px 86px 62px 44px 78px 72px 120px 192px " + (prep ? "162px 162px " : "") + "136px 38px";
+const dsCols = (prep) => "4px 46px 122px 60px 52px 56px 86px 62px 44px 78px 72px 120px 192px " + (prep ? "162px 162px " : "") + "136px 38px 22px";
 // short labels so the job type is a small tab (it's normally set on the invoice already)
 const JOB_SHORT = { Pending: "PEND", Delivery: "DEL", "Customer Collection": "COLL", Evri: "EVRI", "Post Office": "PO", "Courier TG": "TG", Returns: "RTN" };
 const jobShort = (t) => JOB_SHORT[t] || (/^deliver/i.test(t || "") ? "DEL" : /collect/i.test(t || "") ? "COLL" : String(t || "").replace(/[^A-Za-z]/g, "").slice(0, 4).toUpperCase());
@@ -526,7 +526,7 @@ const SlaChip = ({ days, done }) => (
   </span>
 );
 
-export default function ScheduleScreen({ headerH = 0, panels = { pending: true, loading: false }, setPanel = () => {}, onPendingCount, openProduct, money = true, crm, updateCrm, openInvoice, openCollection, me, planner, goCustomer, newFollowUp }) {
+export default function ScheduleScreen({ headerH = 0, panels = { pending: true, loading: false }, setPanel = () => {}, onPendingCount, openProduct, money = true, crm, updateCrm, askConfirm, openInvoice, openCollection, me, planner, goCustomer, newFollowUp }) {
   const [printMsg, setPrintMsg] = useState("");
   const phone = usePhone();
   // ===== send a driver their run on WhatsApp: drops in order, address, phone, what's going, notes, money to take =====
@@ -950,6 +950,37 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
     });
 
   // one job on the board: name · postcode · source, then editable pills
+  // delete straight off the board — the same confirm as deleting from the invoice / collection screens
+  const removeJob = (i) => askConfirm && askConfirm({
+    message: "Delete invoice #" + (i.invNo || "—") + "? This can't be undone." + (i.quoteId ? " The quote it came from will reopen as Accepted." : ""),
+    confirmLabel: "Delete",
+    danger: true,
+    action: () => updateCrm((c) => {
+      releaseInvoiceLinks(c, c.invoices.find((x) => x.id === i.id));
+      c.invoices = c.invoices.filter((x) => x.id !== i.id);
+      return c;
+    }),
+  });
+  const removePickup = (col) => askConfirm && askConfirm({
+    message: "Delete collection COL-" + (col.collectionNo || "—") + " from " + (col.supplier || "supplier") + "?" + (collectionProgress(col).done ? " Lines already in stock or on jobs keep their records." : ""),
+    confirmLabel: "Delete",
+    danger: true,
+    action: () => updateCrm((c) => {
+      releaseCollectionPicks(c, col); // jobs it was raised for go back to their stock check
+      c.collections = (c.collections || []).filter((y) => y.id !== col.id);
+      return c;
+    }),
+  });
+  const BinBtn = ({ title, onClick }) => (
+    <div style={{ display: "flex", justifyContent: "flex-end" }}>
+      <button type="button" className="dk-bin" title={title}
+        onClick={(ev) => { ev.stopPropagation(); onClick(); }}
+        style={{ border: "none", background: "transparent", cursor: "pointer", padding: 2, lineHeight: 0 }}>
+        <Icon name="bin" stroke="#aab3c2" size={14} />
+      </button>
+    </div>
+  );
+
   const Row = ({ i }) => {
     const [hover, setHover] = useState(false);
     const c = custById[i.customerId];
@@ -1057,6 +1088,7 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
           );
         })()}
         <div style={{ textAlign: "right" }}><SlaChip days={days} done={i.deliveryCompleted} /></div>
+        <BinBtn title={"Delete job #" + (i.invNo || "—") + " — asks first"} onClick={() => removeJob(i)} />
       </div>
     );
   };
@@ -1248,6 +1280,7 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
         <div style={{ display: "flex", justifyContent: "flex-end" }}>
           <PrintMenu jobs={false} collCount={1} send={sendOptions([{ kind: "col", obj: c }], c.collectDate)} onSavePhone={saveDriverPhone} title="Print or save the collection note" onPick={(kk) => printJobs([], kk, "Collection note COL-" + (c.collectionNo || ""), [c])} />
         </div>
+        <BinBtn title={"Delete collection COL-" + (c.collectionNo || "—") + " — asks first"} onClick={() => removePickup(c)} />
       </div>
     );
   };
@@ -1255,7 +1288,7 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
   // column titles under each day
   const ColHeads = () => (
     <div style={{ display: "grid", gridTemplateColumns: dsCols(showPrep), gap: 10, alignItems: "center", padding: "0 12px 4px 0" }}>
-      {["", "Done", "Customer", "Postcode", "Source", "Driver", "Run", "Drop", "Van", "Weight", "Date · time", ...(showPrep ? ["Prep", "Follow-up"] : []), "Update", "Days"].map((h, k, all) => (
+      {["", "Done", "Customer", "Postcode", "Source", "Driver", "Run", "Drop", "Van", "Weight", "Date · time", ...(showPrep ? ["Prep", "Follow-up"] : []), "Update", "Days", ""].map((h, k, all) => (
         <span key={k} style={{ fontSize: 10.5, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", whiteSpace: "nowrap", textAlign: h === "Weight" || h === "Days" ? "right" : "left" }}>{h}</span>
       ))}
     </div>
@@ -1887,7 +1920,7 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
         const t = invoiceTotals(i);
         const addr = s ? [s.name !== s.address ? s.name : "", s.address, s.town, s.postcode] : c ? [c.address, c.town, c.postcode] : [];
         const contact = [(s && s.contact) || (c && c.contact), (s && (s.mobile || s.landline)) || (c && (c.mobile || c.landline))].filter(Boolean).join(" · ");
-        // wide enough for the line editor (code · qty · description · colour · price)
+        // wide enough for the line editor (code · description · colour · qty · price)
         const PW = Math.min(1120, window.innerWidth - 40), PH = Math.min(window.innerHeight - 20, 780);
         const top = Math.min(pop.rect.bottom + 6, window.innerHeight - PH - 10);
         return (
