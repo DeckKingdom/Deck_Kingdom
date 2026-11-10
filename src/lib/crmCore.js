@@ -2881,3 +2881,25 @@ export function mergePickups(c, keepId, fromIds) {
   c.collections = c.collections.filter((x) => !gone.has(x.id));
   return c;
 }
+
+// a pick-up's lines grouped by the drop they're for, in drop order: [{ title: "Drop 2 · SK6", pc, items }]
+export function collectionDropGroups(crm, coll) {
+  const invs = (crm && crm.invoices) || [];
+  const pcOf = (inv) => {
+    if (!inv || !crm) return "";
+    const st = (crm.sites || []).find((x) => x.id === inv.siteId), cu = (crm.customers || []).find((x) => x.id === inv.customerId);
+    return outwardOf((st && st.postcode) || (cu && cu.postcode) || "");
+  };
+  const groups = new Map();
+  (coll.items || []).forEach((it) => {
+    const k = it.assignedInvoiceId || "";
+    if (!groups.has(k)) {
+      const inv = k ? invs.find((x) => x.id === k) : null;
+      groups.set(k, { inv, pc: pcOf(inv), drop: inv ? Number(inv.dropNo) || 0 : 0, items: [] });
+    }
+    groups.get(k).items.push(it);
+  });
+  return [...groups.values()]
+    .sort((a, b) => (!a.inv) - (!b.inv) || (a.drop || 99) - (b.drop || 99) || a.pc.localeCompare(b.pc))
+    .map((g) => ({ ...g, title: g.inv ? [g.drop ? "Drop " + g.drop : "Drop", g.pc].filter(Boolean).join(" · ") : "For stock" }));
+}

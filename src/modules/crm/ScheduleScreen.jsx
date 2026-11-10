@@ -11,7 +11,7 @@ import {
 import { printJobDocs, runDocsHtml, DOC_KINDS, printPendingList } from "./printDocs.js";
 import { htmlToPdfFile, shareToWhatsApp } from "./pdfShare.js";
 import LinesEditor, { SizeRow, applySize, skuOption, SKU_COLS, SKU_LIST_W } from "./LinesEditor.jsx";
-import { JOB_TYPES, skuIndex, PAYMENT_TYPES, stockCheck, partKey, isColPick, blankPick, blankCollectionItem, itemPending, collectionLineOpen, editCollectionLine, removeCollectionLine, isGrassRoll, sizeLabel, purchaseCost, outwardOf, collNotesText, mergeablePickups, mergePickups } from "../../lib/crmCore.js";
+import { JOB_TYPES, skuIndex, PAYMENT_TYPES, stockCheck, partKey, isColPick, blankPick, blankCollectionItem, itemPending, collectionLineOpen, editCollectionLine, removeCollectionLine, isGrassRoll, sizeLabel, purchaseCost, outwardOf, collNotesText, mergeablePickups, mergePickups, collectionDropGroups } from "../../lib/crmCore.js";
 import StockCheck from "./StockCheck.jsx";
 import { loadDrops, dropPhotoUrl } from "../../data/drops.js";
 import { Modal } from "./ui.jsx";
@@ -399,7 +399,8 @@ const CollMailButton = ({ c, crm, onSent }) => {
   const when = c.collectDate ? new Date(c.collectDate + "T00:00:00").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" }) : "";
   const body = "Hi" + (c.contact ? " " + String(c.contact).split(/\s+/)[0] : "") + ",\n\n" +
     "Deck Kingdom will be collecting the following" + (when ? " on " + when + (c.collectTime ? " (" + c.collectTime + ")" : "") : "") + ":\n\n" +
-    (c.items || []).map((it) => "  " + (it.qty || "?") + " × " + (it.description || it.sku || "") + (it.colour ? " – " + it.colour : "")).join("\n") +
+    collectionDropGroups(crm, c).map((g) => g.title.toUpperCase() + "\n" +
+      g.items.map((it) => "  " + (it.qty || "?") + " × " + (it.description || it.sku || "") + (it.colour ? " – " + it.colour : "") + (g.pc ? "   → " + g.pc : "")).join("\n")).join("\n\n") +
     "\n\nOur reference: COL-" + (c.collectionNo || "") + (c.driver ? "\nDriver: " + c.driver : "") + (c.van ? "\nVan: " + c.van : "") +
     "\n\nPlease could you have these ready. Any problems, call us on 0161 399 1837.\n\nKind regards,\nDeck Kingdom";
   const href = "https://mail.google.com/mail/?view=cm&fs=1&to=" + encodeURIComponent(email) + "&su=" + encodeURIComponent("Collection COL-" + (c.collectionNo || "") + " – Deck Kingdom" + (when ? " – " + when : "")) + "&body=" + encodeURIComponent(body);

@@ -1,7 +1,7 @@
 // Printable documents: customer invoice and warehouse/driver job sheet.
 // Opens a print window (browser's Save as PDF gives the PDF). Returns false
 // when the window can't be opened (e.g. inside the design preview sandbox).
-import { invoiceTotals, explodeInvoiceLines, skuIndex, TRADE_COUNTER, sizeLabel, collNotesText, outwardOf } from "../../lib/crmCore.js";
+import { invoiceTotals, explodeInvoiceLines, skuIndex, TRADE_COUNTER, sizeLabel, collNotesText, collectionDropGroups } from "../../lib/crmCore.js";
 const withSize = (x) => (sizeLabel(x) ? ` <span style="color:#5a6a85;font-weight:700">(${sizeLabel(x)})</span>` : "");
 
 const esc = (s) =>
@@ -252,25 +252,10 @@ const SUPPLIER_SHORT = { "tuda grass": "TG" };
 const supplierShort = (n) => SUPPLIER_SHORT[String(n || "").trim().toLowerCase()] || n;
 const collectionBody = (coll, crm) => {
   // lines grouped by the drop they're for (drop order), each tagged with that drop's outward postcode
-  const invs = (crm && crm.invoices) || [];
-  const pcOf = (inv) => {
-    if (!inv || !crm) return "";
-    const st = (crm.sites || []).find((x) => x.id === inv.siteId), cu = (crm.customers || []).find((x) => x.id === inv.customerId);
-    return outwardOf((st && st.postcode) || (cu && cu.postcode) || "");
-  };
-  const groups = new Map();
-  (coll.items || []).forEach((it) => {
-    const k = it.assignedInvoiceId || "";
-    if (!groups.has(k)) {
-      const inv = k ? invs.find((x) => x.id === k) : null;
-      groups.set(k, { inv, pc: pcOf(inv), drop: inv ? Number(inv.dropNo) || 0 : 0, items: [] });
-    }
-    groups.get(k).items.push(it);
-  });
-  const ordered = [...groups.values()].sort((a, b) => (!a.inv) - (!b.inv) || (a.drop || 99) - (b.drop || 99) || a.pc.localeCompare(b.pc));
+  const ordered = collectionDropGroups(crm, coll);
   const many = ordered.length > 1;
   const items = ordered.map((g) => {
-    const title = g.inv ? [g.drop ? "Drop " + g.drop : "Drop", g.pc].filter(Boolean).join(" · ") : "For stock";
+    const title = g.title;
     return (many || g.inv ? `<tr><td colspan="4" style="background:#f3f5f8;font-weight:800;font-size:12px;letter-spacing:.4px;text-transform:uppercase;padding:7px 10px">${esc(title)}</td></tr>` : "") +
       g.items.map((it) => `
     <tr><td style="width:26px"><div style="width:16px;height:16px;border:2px solid #0B1F3F;border-radius:4px"></div></td>
