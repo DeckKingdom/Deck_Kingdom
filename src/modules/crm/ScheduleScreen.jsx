@@ -647,8 +647,7 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
   const peekT = useRef({});
   const peekCancel = () => { clearTimeout(peekT.current.open); clearTimeout(peekT.current.close); };
   const peekOpen = (p, wait = 220) => { peekCancel(); peekT.current.open = setTimeout(() => setPop((cur) => (cur && !cur.peek ? cur : { ...p, peek: true })), wait); };
-  const POP_SHIFT = 340; // pop-overs open to the right of the name + postcode columns so the names stay visible
-  const NAME_WAIT = 650; // ms the mouse has to rest on a name before its pop-over shows
+  const NAME_WAIT = 450; // ms the mouse has to rest on a name before its pop-over shows
   const peekClose = () => { clearTimeout(peekT.current.open); clearTimeout(peekT.current.close); peekT.current.close = setTimeout(() => setPop((cur) => (cur && cur.peek ? null : cur)), 250); };
   // Picking a driver fills in the run and the next drop: a driver's first pick of the day is run 1;
   // picking them again straight away keeps that run; picking them again after someone else was picked starts their next run.
@@ -1685,7 +1684,7 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
             {!pop.peek && <div onMouseDown={() => setPop(null)} style={{ position: "fixed", inset: 0, zIndex: 70 }} />}
             <div onMouseEnter={() => pop.peek && clearTimeout(peekT.current.close)} onMouseLeave={() => pop.peek && peekClose()}
               onMouseDown={() => { if (pop.peek) { peekCancel(); setPop({ ...pop, peek: false }); } }}
-              style={{ position: "fixed", ...(phone ? { left: 8, right: 8, top: 62, width: "auto", maxHeight: "calc(100dvh - 74px)" } : { left: pop.side === "left" ? Math.max(10, pop.rect.left - PW - 24) : Math.max(10, Math.min(pop.rect.left + POP_SHIFT, window.innerWidth - PW - 20)), top: Math.max(10, pop.side === "left" ? Math.min(pop.rect.top - 60, window.innerHeight - PH - 10) : top), width: PW, maxHeight: PH }), zIndex: 71, overflowY: "auto",
+              style={{ position: "fixed", ...(phone ? { left: 8, right: 8, top: 62, width: "auto", maxHeight: "calc(100dvh - 74px)" } : { left: pop.side === "left" ? Math.max(10, pop.rect.left - PW - 24) : Math.max(10, Math.round((window.innerWidth - PW) / 2)), top: Math.max(10, pop.side === "left" ? Math.min(pop.rect.top - 60, window.innerHeight - PH - 10) : top), width: PW, maxHeight: PH }), zIndex: 71, overflowY: "auto",
               background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, boxShadow: "0 14px 40px rgba(11,31,63,.28)", padding: "14px 18px", boxSizing: "border-box" }}>
               <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 6 }}>
                 <button type="button" className="dk-title-link" onClick={goCol} title="Open the collection" style={{ fontSize: 15, fontWeight: 700, color: COLLECTION_BLUE }}>{col.supplier || "Supplier"}</button>
@@ -1896,7 +1895,7 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
             {!pop.peek && <div onMouseDown={() => setPop(null)} style={{ position: "fixed", inset: 0, zIndex: 70 }} />}
             <div onMouseEnter={() => pop.peek && clearTimeout(peekT.current.close)} onMouseLeave={() => pop.peek && peekClose()}
               onMouseDown={() => { if (pop.peek) { peekCancel(); setPop({ ...pop, peek: false }); } }}
-              style={{ position: "fixed", ...(phone ? { left: 8, right: 8, top: 62, width: "auto", maxHeight: "calc(100dvh - 74px)" } : { left: pop.side === "left" ? Math.max(10, pop.rect.left - PW - 24) : Math.max(10, Math.min(pop.rect.left + POP_SHIFT, window.innerWidth - PW - 20)), top: Math.max(10, pop.side === "left" ? Math.min(pop.rect.top - 60, window.innerHeight - PH - 10) : top), width: PW, maxHeight: PH }), zIndex: 71, overflowY: "auto",
+              style={{ position: "fixed", ...(phone ? { left: 8, right: 8, top: 62, width: "auto", maxHeight: "calc(100dvh - 74px)" } : { left: pop.side === "left" ? Math.max(10, pop.rect.left - PW - 24) : Math.max(10, Math.round((window.innerWidth - PW) / 2)), top: Math.max(10, pop.side === "left" ? Math.min(pop.rect.top - 60, window.innerHeight - PH - 10) : top), width: PW, maxHeight: PH }), zIndex: 71, overflowY: "auto",
               background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, boxShadow: "0 14px 40px rgba(11,31,63,.28)", padding: "14px 18px", boxSizing: "border-box" }}>
               {(() => {
                 const stamp = [
