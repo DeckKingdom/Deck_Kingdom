@@ -3039,11 +3039,22 @@ export const nudgeDue = (inv, tod) => reviewNext(inv, tod) === "nudge";
 // Each shows from its moment until dismissed, then stays quiet for the week,
 // and only appears when there's actually something to send or check.
 const reviewHasEmail = (c) => /@/.test(String((c && c.email) || ""));
-const reviewHasMobile = (c) => !!dupeMobileKey(c);
+// the best WhatsApp-able number we hold: the mobile field first, but older
+// records sometimes have the mobile sat in the landline field
+const ukMobile = (v) => {
+  let d = String(v || "").replace(/\D/g, "");
+  if (d.startsWith("00")) d = d.slice(2);
+  if (d.startsWith("0")) d = "44" + d.slice(1);
+  return /^447\d{9}$/.test(d);
+};
+export const mobileOf = (c) => (!c ? "" : ukMobile(c.mobile) ? String(c.mobile) : ukMobile(c.phone) ? String(c.phone) : "");
+// WhatsApp converts far better than email, so it wins whenever we hold a real
+// mobile — email only for an explicit Email preference, or when there's no mobile
 export const reviewChannel = (c) => {
   const pref = String((c && c.contactMethod) || "").toLowerCase();
-  if (/whatsapp|text|messenger|phone/.test(pref)) return reviewHasMobile(c) ? "wa" : reviewHasEmail(c) ? "email" : "";
-  return reviewHasEmail(c) ? "email" : reviewHasMobile(c) ? "wa" : "";
+  const mob = mobileOf(c), em = reviewHasEmail(c);
+  if (/email/.test(pref)) return em ? "email" : mob ? "wa" : "";
+  return mob ? "wa" : em ? "email" : "";
 };
 // how much review work is waiting, by channel (one person once, rules applied)
 export const reviewAskCounts = (crm) => {

@@ -8,7 +8,7 @@ import { NAVY, GOLD, prettyDate, daysBetween } from "../../lib/core.js";
 import {
   FOLLOWUP_FLAGS, today, isSaleInvoice, onSchedule, gbp,
   reviewSettingsOf, reviewText, reviewExclusion, customerDupeGroups, personKeyOf,
-  reviewNext, nudgeDue, NUDGE_AFTER_DAYS,
+  reviewNext, nudgeDue, NUDGE_AFTER_DAYS, reviewChannel, mobileOf,
 } from "../../lib/crmCore.js";
 import { Icon, Tg, card, sect, lbl, inp, btn, goldBtn, Modal, ListHero, HeroStat, SearchBox, FilterPills } from "./ui.jsx";
 import { waNumber, getWaMode } from "./CustomersScreen.jsx";
@@ -36,13 +36,9 @@ const gmailTo = (to, subject, body) => "https://mail.google.com/mail/?view=cm&fs
 const gmailBcc = (list, subject, body) => "https://mail.google.com/mail/?view=cm&fs=1&bcc=" + encodeURIComponent(list.join(",")) + "&su=" + encodeURIComponent(subject) + "&body=" + encodeURIComponent(body);
 const waHref = (mobile, text) => (getWaMode() === "web" ? "https://web.whatsapp.com/send?phone=" : "whatsapp://send?phone=") + waNumber(mobile) + "&text=" + encodeURIComponent(text);
 
-// which channel a bulk ask uses for this account: their preference first, then whatever we hold
-const channelOf = (c) => {
-  const pref = String((c && c.contactMethod) || "").toLowerCase();
-  const hasWa = !!waNumber(c && c.mobile), hasEm = /@/.test(String((c && c.email) || ""));
-  if (/whatsapp|text|messenger|phone/.test(pref)) return hasWa ? "wa" : hasEm ? "email" : "";
-  return hasEm ? "email" : hasWa ? "wa" : "";
-};
+// which channel a bulk ask uses: WhatsApp whenever we hold a real mobile
+// (it converts far better); email only by stated preference or as the fallback
+const channelOf = reviewChannel;
 
 const chip = (bg, fg) => ({ fontSize: 11, fontWeight: 800, color: fg, background: bg, borderRadius: 999, padding: "2px 8px", whiteSpace: "nowrap" });
 const linkBtn = { border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit", padding: 0 };
@@ -254,12 +250,12 @@ export default function ReviewsScreen({ crm, updateCrm, askConfirm, openInvoice,
                   <div key={i.id} style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13, fontWeight: 600 }}>
                     {reviewNext(i, tod) !== bulkKind
                       ? <span style={chip("#e9f6ee", "#28713e")}>{bulkKind === "nudge" ? "nudged" : "asked"} ✓</span>
-                      : <a href={waHref(c.mobile, reviewText(rs.wa[bulkKind], c, rs.link))} onClick={() => stampSend(i.id, bulkKind)}
+                      : <a href={waHref(mobileOf(c), reviewText(rs.wa[bulkKind], c, rs.link))} onClick={() => stampSend(i.id, bulkKind)}
                           style={{ ...chip("#25D36622", "#0b6b4f"), textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 5 }}>
                           <Icon name="wa" stroke="#128C7E" size={12} />Send
                         </a>}
                     <span style={{ fontWeight: 700 }}>{c.name}</span>
-                    <span style={{ color: "#8593a8" }}>#{i.invNo} · {c.mobile}</span>
+                    <span style={{ color: "#8593a8" }}>#{i.invNo} · {mobileOf(c)}</span>
                   </div>
                 ))}
               </div>
@@ -292,7 +288,7 @@ export default function ReviewsScreen({ crm, updateCrm, askConfirm, openInvoice,
                 const st = reviewStage(i);
                 const excl = exclOf(i);
                 const msgKind = reviewNext(i, tod);
-                const mob = c && waNumber(c.mobile) ? c.mobile : "";
+                const mob = mobileOf(c); // the mobile field, or a mobile parked in the landline field
                 const em = c && /@/.test(String(c.email || "")) ? String(c.email).trim() : "";
                 const optedOut = c && rs.optOut.includes(c.id);
                 const dim = excl ? { opacity: 0.55 } : null;

@@ -10,7 +10,7 @@ import VansScreen from "./VansScreen.jsx";
 import QuotesScreen from "./QuotesScreen.jsx";
 import SamplesScreen from "./SamplesScreen.jsx";
 import ReviewsScreen, { reviewStage } from "./ReviewsScreen.jsx";
-import { reviewSettingsOf, reviewExclusion, reviewText, customerDupeGroups, personKeyOf, reviewNext, reviewReminders } from "../../lib/crmCore.js";
+import { reviewSettingsOf, reviewExclusion, reviewText, customerDupeGroups, personKeyOf, reviewNext, reviewReminders, reviewChannel } from "../../lib/crmCore.js";
 import TasksScreen from "./TasksScreen.jsx";
 import PurchasesScreen from "./PurchasesScreen.jsx";
 import { syncCatalogue, renameSkus, skuFor, codeSource, numericSku, skuLists, masterKey, colourSeg, skuSource } from "../../lib/crmCore.js";
@@ -121,7 +121,12 @@ export default function run(React, renderToString) {
       assert(rr.some((r) => r.key.startsWith("rev:wa:")), "Thu 4pm: WhatsApp session due");
       rr = reviewReminders(crm, new Date(2026, 10, 12, 10, 0)); // Thu 10am
       assert(!rr.some((r) => r.key.startsWith("rev:wa:")), "Thu morning: WhatsApp not yet");
+      // WhatsApp-first: holding a mobile beats holding an email, unless they asked for Email
       cust.contactMethod = ""; cust.email = "bob@example.com";
+      assert(reviewChannel(cust) === "wa", "no preference + mobile: WhatsApp wins");
+      assert(reviewChannel({ email: "x@y.com", mobile: "", phone: "07951 728 742" }) === "wa", "mobile parked in the landline field found");
+      assert(reviewChannel({ email: "x@y.com", mobile: "", phone: "0161 320 9664" }) === "email", "real landline: email");
+      cust.contactMethod = "Email";
       rr = reviewReminders(crm, new Date(2026, 10, 10, 9, 0)); // Tue 9am
       assert(rr.some((r) => r.key.startsWith("rev:email:")), "Tue morning: group email due");
       rr = reviewReminders(crm, new Date(2026, 10, 9, 9, 0)); // Mon
