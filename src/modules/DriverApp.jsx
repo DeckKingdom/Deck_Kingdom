@@ -34,6 +34,9 @@ export default function DriverApp({ me, warehouse, switcher }) {
   // Loading for every van, Deliveries for their own runs.
   const driver = warehouse ? me.driverName || "" : me.driverName || (me.fullName || "").split(" ")[0] || "";
   const allVans = warehouse || !!switcher; // who loads every van, not just their own
+  const who = me.email || me.fullName || driver || "warehouse";
+  const [mode, setMode] = useState(warehouse ? "loading" : "deliveries");
+  const [crm, setCrm] = useState(null);
   // whose tasks: your own - or, when the office is viewing as a driver, that driver's login
   const taskWho = (() => {
     if (!switcher) return me.email || "";
@@ -41,9 +44,6 @@ export default function DriverApp({ me, warehouse, switcher }) {
     const s = ((crm && crm.staff) || []).find((x) => lc(x.driverName) === lc(driver)) || ((crm && crm.staff) || []).find((x) => lc(String(x.name || "").split(" ")[0]) === lc(driver));
     return s ? s.email : "";
   })();
-  const who = me.email || me.fullName || driver || "warehouse";
-  const [mode, setMode] = useState(warehouse ? "loading" : "deliveries");
-  const [crm, setCrm] = useState(null);
   const [err, setErr] = useState("");
   const [view, setView] = useState(null); // null = home · a yyyy-mm-dd = that day's runs · "fuel"
   const [loads, setLoads] = useState(0); // bumped on refresh so the day view re-checks drops and resets
