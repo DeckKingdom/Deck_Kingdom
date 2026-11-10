@@ -384,7 +384,8 @@ async function loadAll() {
     (async () => {
       // staff logins, for assigning tasks (read-only here)
       try {
-        const { data, error } = await sb.from("profiles").select("email, full_name, role");
+        let { data, error } = await sb.from("profiles").select("email, full_name, role, driver_name");
+        if (error) ({ data, error } = await sb.from("profiles").select("email, full_name, role"));
         return error ? [] : data || [];
       } catch (e) {
         return [];
@@ -575,7 +576,7 @@ async function loadAll() {
     return t;
   });
   const taskLog = ((taskData && taskData.lg) || []).map((r) => ({ id: r.id, taskId: r.task_id, period: nv(r.period), doneBy: nv(r.done_by), doneAt: nv(r.done_at) }));
-  const staff = (staffRows || []).filter((r) => r.email).map((r) => ({ email: r.email, name: nv(r.full_name), role: nv(r.role) }));
+  const staff = (staffRows || []).filter((r) => r.email).map((r) => ({ email: r.email, name: nv(r.full_name), role: nv(r.role), driverName: nv(r.driver_name) }));
 
   const suppliers = ((purchData && purchData.sp) || []).map((r) => {
     const x = { id: r.id, active: r.active !== false, modifiedBy: nv(r.modified_by), updatedAt: r.updated_at || "" };

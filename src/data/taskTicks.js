@@ -11,7 +11,7 @@ export async function tickTask({ taskId, period, who, done, perUser }) {
   if (storageMode === "supabase") {
     const sb = await getSupabase();
     if (done) {
-      const { error } = await sb.from("task_log").upsert({ id: uid(), task_id: taskId, period, done_by: who || "", done_at: new Date().toISOString(), position: 0 });
+      const { error } = await sb.from("task_log").insert({ id: uid(), task_id: taskId, period, done_by: who || "", done_at: new Date().toISOString(), position: 0 });
       if (error) throw error;
       return;
     }

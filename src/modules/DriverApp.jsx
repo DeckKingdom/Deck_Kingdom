@@ -34,6 +34,13 @@ export default function DriverApp({ me, warehouse, switcher }) {
   // Loading for every van, Deliveries for their own runs.
   const driver = warehouse ? me.driverName || "" : me.driverName || (me.fullName || "").split(" ")[0] || "";
   const allVans = warehouse || !!switcher; // who loads every van, not just their own
+  // whose tasks: your own - or, when the office is viewing as a driver, that driver's login
+  const taskWho = (() => {
+    if (!switcher) return me.email || "";
+    const lc = (x) => String(x || "").trim().toLowerCase();
+    const s = ((crm && crm.staff) || []).find((x) => lc(x.driverName) === lc(driver)) || ((crm && crm.staff) || []).find((x) => lc(String(x.name || "").split(" ")[0]) === lc(driver));
+    return s ? s.email : "";
+  })();
   const who = me.email || me.fullName || driver || "warehouse";
   const [mode, setMode] = useState(warehouse ? "loading" : "deliveries");
   const [crm, setCrm] = useState(null);
@@ -128,7 +135,6 @@ export default function DriverApp({ me, warehouse, switcher }) {
       {switcher && <button type="button" onClick={() => openPhoneApp(null)} title="Back to the office system" aria-label="Back to the office system" style={{ border: "none", background: "rgba(255,255,255,.12)", color: "#fff", borderRadius: 10, width: 40, height: 40, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", flex: "none" }}><Icon name="home" stroke="#fff" /></button>}
       {picking && <DriverPicker crm={crm} myName={switcher.myName} current={switcher.current} onClose={() => setPicking(false)} />}
       {pullBadge}
-      <button type="button" onClick={refresh} title="Refresh (or pull the screen down)" style={{ border: "none", background: "rgba(255,255,255,.12)", color: "#fff", borderRadius: 10, height: 40, padding: "0 12px", fontFamily: "inherit", fontWeight: 700, cursor: "pointer" }}><span style={{ display: "inline-block", animation: refreshing ? "dkspin .8s linear infinite" : "none" }}>↻</span></button>
     </div>
   );
 
@@ -187,7 +193,7 @@ export default function DriverApp({ me, warehouse, switcher }) {
             <span style={{ fontSize: 12.5, fontWeight: 700, color: "#aeb9cf" }}>Log a fill-up</span>
           </button>
         </div>
-        <DriverTasks crm={crm} who={me.email || ""} setCrm={setCrm} />
+        <DriverTasks crm={crm} who={taskWho} setCrm={setCrm} />
         {switcher ? <button type="button" onClick={() => openPhoneApp(null)}
           style={{ marginTop: 22, width: "100%", border: "1px solid #d5d9e0", background: "#fff", borderRadius: 12, padding: 12, fontFamily: "inherit", fontWeight: 800, color: NAVY, cursor: "pointer" }}>🏠 Back to the office system</button> : <button type="button" onClick={() => signOut().then(() => window.location.reload())}
           style={{ marginTop: 22, width: "100%", border: "1px solid #d5d9e0", background: "#fff", borderRadius: 12, padding: 12, fontFamily: "inherit", fontWeight: 700, color: "#5a6a85", cursor: "pointer" }}>Sign out</button>}
