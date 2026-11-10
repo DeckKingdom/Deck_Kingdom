@@ -391,6 +391,25 @@ const PartsIcon = ({ info, onEnter, onLeave, onClick }) => {
   );
 };
 
+// the email's item lines, one block per drop, with the qty and destination in lined-up columns.
+// Gmail writes plain text in Arial, so the gaps are measured in that font and padded with spaces.
+const mailLines = (groups) => {
+  let ctx = null;
+  try { ctx = document.createElement("canvas").getContext("2d"); ctx.font = "13px Arial"; } catch (e) { /* */ }
+  const w = (t) => (ctx ? ctx.measureText(t).width : t.length * 6.5);
+  const FIG = "\u2007"; // figure space: same width as a digit, so the quantities right-align
+  const rows = groups.map((g) => g.items.map((it) => ({ q: String(it.qty || "?"), d: (it.description || it.sku || "") + (it.colour ? " – " + it.colour : ""), to: g.dest ? "→ " + g.dest : "" })));
+  const all = rows.flat();
+  const qLen = Math.max(1, ...all.map((r) => r.q.length));
+  const col = Math.max(0, ...all.map((r) => w(r.d))) + 24, sp = w(" ") || 3.6;
+  const line = (r) => {
+    const head = FIG.repeat(qLen - r.q.length) + r.q + " × " + r.d;
+    if (!r.to) return head;
+    return head + " ".repeat(Math.max(2, Math.round((col - w(r.d)) / sp))) + r.to;
+  };
+  return rows.map((block) => block.map(line).join("\n")).join("\n\n");
+};
+
 // email the collection note to the supplier (opens Gmail ready to send); goes green once emailed
 const CollMailButton = ({ c, crm, onSent }) => {
   const sup = (crm.suppliers || []).find((x) => x.id === c.supplierId) || (crm.suppliers || []).find((x) => (x.name || "").toLowerCase() === String(c.supplier || "").toLowerCase());
@@ -399,8 +418,7 @@ const CollMailButton = ({ c, crm, onSent }) => {
   const when = c.collectDate ? new Date(c.collectDate + "T00:00:00").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" }) : "";
   const body = "Hi" + (c.contact ? " " + String(c.contact).split(/\s+/)[0] : "") + ",\n\n" +
     "Deck Kingdom will be collecting the following" + (when ? " on " + when + (c.collectTime ? " (" + c.collectTime + ")" : "") : "") + ":\n\n" +
-    collectionDropGroups(crm, c).map((g) => g.title.toUpperCase() + "\n" +
-      g.items.map((it) => "  " + (it.qty || "?") + " × " + (it.description || it.sku || "") + (it.colour ? " – " + it.colour : "") + (g.dest ? "   → " + g.dest : "")).join("\n")).join("\n\n") +
+    mailLines(collectionDropGroups(crm, c)) +
     "\n\nOur reference: COL-" + (c.collectionNo || "") + (c.driver ? "\nDriver: " + c.driver : "") + (c.van ? "\nVan: " + c.van : "") +
     "\n\nPlease could you have these ready. Any problems, call us on 0161 399 1837.\n\nKind regards,\nDeck Kingdom";
   const href = "https://mail.google.com/mail/?view=cm&fs=1&to=" + encodeURIComponent(email) + "&su=" + encodeURIComponent("Collection COL-" + (c.collectionNo || "") + " – Deck Kingdom" + (when ? " – " + when : "")) + "&body=" + encodeURIComponent(body);
