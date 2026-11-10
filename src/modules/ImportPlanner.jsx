@@ -2656,7 +2656,7 @@ export default function ImportPlanner() {
               ))}
               <p style={{ fontSize: 12, color: "#8593a8", fontWeight: 600, margin: "10px 0 0" }}>
                 {remVan && "Weekly checks come back every Monday until recorded; renewals nag weekly from a month out until the date is moved on. "}
-                {remRev && "The review routine: Monday — reply and tick in; Tuesday — group ask email; Thursday from 3pm — WhatsApp session. Each stays until dismissed, then rests for the week."}
+                {remRev && "Tuesday is review day: morning — reply to new reviews, tick them in, send the group email; from 3pm — the WhatsApp session with any nudges. Each stays until dismissed, then rests for the week."}
               </p>
             </div>
             <div style={{ display: "flex", gap: 8, padding: "0 22px 18px", flexWrap: "wrap" }}>

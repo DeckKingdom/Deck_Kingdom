@@ -3092,17 +3092,17 @@ export const reviewReminders = (crm, now = new Date()) => {
   const add = (key, label, severity) => {
     if (!snoozes[key] || snoozes[key] < weekStart) out.push({ key, kind: "review", label, severity: severity || "amber" });
   };
-  // Monday (any day until done): reply to what came in over the week(end)
-  if (n.awaiting > 0)
-    add("rev:check:" + weekStart, "Reviews — check Google for new ones, reply, and tick them in (" + n.awaiting + " awaiting)");
-  // Tuesday morning: the group ask email
-  if (wd >= 1 && n.email > 0)
-    add("rev:email:" + weekStart, "Reviews — send the Tuesday group ask email (" + n.email + " customer" + (n.email === 1 ? "" : "s") + ")");
-  // Thursday from 3pm: the WhatsApp session
-  if ((wd > 3 || (wd === 3 && now.getHours() >= 15)) && n.wa > 0)
-    add("rev:wa:" + weekStart, "Reviews — WhatsApp ask session (" + n.wa + " to send)");
-  // nudges ride along whenever they're due
-  if (n.nudges > 0)
-    add("rev:nudge:" + weekStart, "Reviews — " + n.nudges + " nudge" + (n.nudges === 1 ? "" : "s") + " due (a week since the ask)", "red");
+  // Tuesday is review day. Morning: reply to what's come in and tick it in,
+  // then send the group email. From 3pm: the WhatsApp session, nudges folded in.
+  const tueAm = wd >= 1;
+  const tuePm = wd > 1 || (wd === 1 && now.getHours() >= 15);
+  if (tueAm && n.awaiting > 0)
+    add("rev:check:" + weekStart, "Review day — check Google for new reviews, reply, and tick them in (" + n.awaiting + " awaiting)");
+  if (tueAm && n.email > 0)
+    add("rev:email:" + weekStart, "Review day — send the group ask email (" + n.email + " customer" + (n.email === 1 ? "" : "s") + ")");
+  if (tuePm && n.wa > 0)
+    add("rev:wa:" + weekStart, "Review day — WhatsApp ask session (" + n.wa + " to send)");
+  if (tuePm && n.nudges > 0)
+    add("rev:nudge:" + weekStart, "Review day — " + n.nudges + " nudge" + (n.nudges === 1 ? "" : "s") + " due, send with the WhatsApp session", "red");
   return out;
 };

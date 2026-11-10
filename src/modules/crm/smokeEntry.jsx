@@ -117,10 +117,12 @@ export default function run(React, renderToString) {
     {
       const was = { cm: cust.contactMethod, email: cust.email };
       cust.contactMethod = "WhatsApp";
-      let rr = reviewReminders(crm, new Date(2026, 10, 12, 16, 0)); // Thu 4pm
-      assert(rr.some((r) => r.key.startsWith("rev:wa:")), "Thu 4pm: WhatsApp session due");
-      rr = reviewReminders(crm, new Date(2026, 10, 12, 10, 0)); // Thu 10am
-      assert(!rr.some((r) => r.key.startsWith("rev:wa:")), "Thu morning: WhatsApp not yet");
+      let rr = reviewReminders(crm, new Date(2026, 10, 10, 16, 0)); // Tue 4pm
+      assert(rr.some((r) => r.key.startsWith("rev:wa:")), "Tue 4pm: WhatsApp session due");
+      rr = reviewReminders(crm, new Date(2026, 10, 10, 10, 0)); // Tue 10am
+      assert(!rr.some((r) => r.key.startsWith("rev:wa:")), "Tue morning: WhatsApp not yet");
+      rr = reviewReminders(crm, new Date(2026, 10, 11, 10, 0)); // Wed 10am (missed Tuesday)
+      assert(rr.some((r) => r.key.startsWith("rev:wa:")), "missed Tuesday rolls forward");
       // WhatsApp-first: holding a mobile beats holding an email, unless they asked for Email
       cust.contactMethod = ""; cust.email = "bob@example.com";
       assert(reviewChannel(cust) === "wa", "no preference + mobile: WhatsApp wins");
@@ -132,8 +134,10 @@ export default function run(React, renderToString) {
       rr = reviewReminders(crm, new Date(2026, 10, 9, 9, 0)); // Mon
       assert(!rr.some((r) => r.key.startsWith("rev:email:")), "Mon: email prompt not yet");
       inv.flags.reviewRequested = true; inv.reviewAskedAt = tod;
+      rr = reviewReminders(crm, new Date(2026, 10, 10, 9, 0));
+      assert(rr.some((r) => r.key.startsWith("rev:check:")), "awaiting one: Tuesday check prompt");
       rr = reviewReminders(crm, new Date(2026, 10, 9, 9, 0));
-      assert(rr.some((r) => r.key.startsWith("rev:check:")), "awaiting one: Monday check prompt");
+      assert(!rr.some((r) => r.key.startsWith("rev:check:")), "Monday: nothing yet — review day is Tuesday");
       inv.flags.reviewRequested = false; inv.reviewAskedAt = "";
       cust.contactMethod = was.cm; cust.email = was.email;
     }
