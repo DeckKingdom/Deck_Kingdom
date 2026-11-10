@@ -2975,7 +2975,9 @@ export const reviewText = (tpl, cust, link, order) =>
   String(tpl || "")
     .split("{name}").join(reviewFirstName(cust) || "there")
     .split("{link}").join(link || "")
-    .split("{order}").join(order || "garden materials");
+    // no category recognised: "your recent {order} order" falls back to "your recent order"
+    .split("{order} ").join(order ? order + " " : "")
+    .split("{order}").join(order || "order");
 // a one-line "what they ordered" for the ask message, read off the invoice lines
 const ORDER_WORDS = [
   [/clad/i, "cladding"],

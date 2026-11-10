@@ -105,7 +105,7 @@ export default function run(React, renderToString) {
     assert(reviewExclusion({ ...inv, orderRef: "WC-1" }, cust, rs0, null).includes("Trustpilot"), "web orders excluded by default");
     assert(reviewExclusion(inv, cust, { ...rs0, rules: { ...rs0.rules, minTotal: "2000" } }, null).includes("under"), "min value rule");
     assert(reviewText("Hi {name}: {link}", cust, "L") === "Hi Bob: L", "template fill");
-    assert(reviewText("{order}", cust, "", "decking") === "decking" && reviewText("{order}", cust, "") === "garden materials", "order fill + fallback");
+    assert(reviewText("recent {order} order", cust, "", "decking") === "recent decking order" && reviewText("recent {order} order", cust, "") === "recent order", "order fill + clean fallback");
     assert(orderSummary({ lines: [{ description: "3.6m woodgrain cladding" }, { description: "PLASTIC Decking clips and Screws" }] }) === "cladding", "accessory lines don't steer the summary");
     assert(orderSummary({ lines: [{ description: "Composite Decking Board" }, { description: "Slatted fence panel" }] }) === "decking and fencing", "two-category summary");
     const dupe = { ...blankCustomer(), name: "Robert Smith", postcode: "OL6 6UG", mobile: "07577776775" }; // same mobile as Bob
