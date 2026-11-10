@@ -164,7 +164,7 @@ export default function DriverApp({ me, warehouse, switcher }) {
       <div style={page}>
         {header("My tasks")}
         {tabs}
-        <div style={{ padding: 14 }}><DriverTasks crm={crm} who={taskWho} setCrm={setCrm} full /></div>
+        <div style={{ padding: 14 }}><DriverTasks crm={crm} who={taskWho} setCrm={setCrm} full canAdd /></div>
       </div>
     );
   }

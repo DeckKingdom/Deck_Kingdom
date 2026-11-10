@@ -26,3 +26,37 @@ export async function tickTask({ taskId, period, who, done, perUser }) {
   setTaskDone(c, taskId, period, who, done);
   await crmStorage.set("dk-crm", JSON.stringify(c));
 }
+
+// a new task from the phone (one person or several - joint tasks show on each person's list)
+export async function addTask(t) {
+  if (storageMode === "supabase") {
+    const sb = await getSupabase();
+    const row = {
+      id: t.id, kind: t.kind, title: t.title, notes: t.notes || "", repeat: t.repeat || "workdays", on_date: t.onDate || "",
+      frequency: t.frequency || "weekly", start_date: t.startDate || "", status: t.status || "To do", priority: t.priority || "Normal",
+      due_date: t.dueDate || "", created: t.created || "", created_by: t.createdBy || "",
+      assignees: (t.assignees || []).join(","), rotate: false, active: true, weekday: 0, month_day: 1, position: 0,
+    };
+    const { error } = await sb.from("tasks").insert(row);
+    if (error) throw error;
+    return;
+  }
+  const r = await crmStorage.get("dk-crm");
+  const c = normaliseCrm(r && r.value ? JSON.parse(r.value) : {});
+  c.tasks.push(t);
+  await crmStorage.set("dk-crm", JSON.stringify(c));
+}
+
+// a job (project) marked done / not done from the phone
+export async function setProjectStatus(id, status) {
+  if (storageMode === "supabase") {
+    const sb = await getSupabase();
+    const { error } = await sb.from("tasks").update({ status }).eq("id", id);
+    if (error) throw error;
+    return;
+  }
+  const r = await crmStorage.get("dk-crm");
+  const c = normaliseCrm(r && r.value ? JSON.parse(r.value) : {});
+  c.tasks.forEach((x) => { if (x.id === id) x.status = status; });
+  await crmStorage.set("dk-crm", JSON.stringify(c));
+}
