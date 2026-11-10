@@ -729,7 +729,17 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
   // open on today (or the next day with work booked)
   useEffect(() => {
     const el = todayRef.current;
-    if (el) el.scrollIntoView({ block: "start" });
+    if (!el) return;
+    // clear the sticky header + filter bar, then leave a little of the day before showing above it
+    let cover = 0;
+    document.querySelectorAll("*").forEach((n) => {
+      const cs = getComputedStyle(n);
+      if (cs.position !== "sticky" && cs.position !== "fixed") return;
+      const r = n.getBoundingClientRect(), top = parseFloat(cs.top);
+      if (!isNaN(top) && top < 300 && r.height < 300 && r.width > 300 && r.height > 0) cover = Math.max(cover, top + r.height);
+    });
+    el.style.scrollMarginTop = Math.round(cover + 70) + "px";
+    el.scrollIntoView({ block: "start" });
   }, []);
 
   const custById = useMemo(() => {
