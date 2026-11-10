@@ -343,6 +343,7 @@ export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTa
                           {!who && occurrenceAssignees(t, occ).length ? " · " + occurrenceAssignees(t, occ).map((a) => staffName(crm, a)).join(", ") : ""}
                         </div>
                       </div>
+                      {t.priority === "High" && <Chip tone="red" style={{ fontSize: 10.5 }}>High</Chip>}
                       <Chip tone="amber" style={{ fontSize: 10.5 }}>{t.rotate && (t.assignees || []).length > 1 ? "rota" : "scheduled"}</Chip>
                     </div>
                   ))}
@@ -355,6 +356,7 @@ export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTa
                           <b style={{ fontSize: 14, color: done ? "#8593a8" : NAVY, textDecoration: done ? "line-through" : "none" }}>{t.title}</b>
                           {t.notes && !done && <div style={{ fontSize: 12, color: "#8593a8", fontWeight: 600, marginTop: 1 }}>{t.notes}</div>}
                         </div>
+                        {t.priority === "High" && !done && <Chip tone="red" style={{ fontSize: 10.5 }}>High</Chip>}
                         {t.repeat === "once" && <Chip style={{ fontSize: 10.5 }}>today</Chip>}
                       </div>
                     );

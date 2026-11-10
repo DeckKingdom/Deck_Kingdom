@@ -46,6 +46,16 @@ const addDaysLocal = (d, n) => {
   return x.getFullYear() + "-" + String(x.getMonth() + 1).padStart(2, "0") + "-" + String(x.getDate()).padStart(2, "0");
 };
 
+// Low / Normal / High buttons
+export const PriorityPick = ({ value, onChange }) => (
+  <div style={{ display: "flex", gap: 6 }}>
+    {PRIORITIES.map((p) => {
+      const on = (value || "Normal") === p, col = p === "High" ? RED : p === "Low" ? "#8593a8" : "#a07a10";
+      return <button key={p} type="button" onClick={() => onChange(p)} style={{ flex: 1, border: "1px solid " + (on ? col : "#d5d9e0"), background: on ? col : "#fff", color: on ? "#fff" : NAVY, borderRadius: 8, padding: "7px 0", fontFamily: "inherit", fontWeight: 800, fontSize: 13, cursor: "pointer" }}>{p}</button>;
+    })}
+  </div>
+);
+
 // ===== the editor (new or existing task) =====
 export function TaskModal({ crm, updateCrm, me, draft, onClose, askConfirm }) {
   const [t, setT] = useState(() => JSON.parse(JSON.stringify(draft)));
@@ -120,6 +130,13 @@ export function TaskModal({ crm, updateCrm, me, draft, onClose, askConfirm }) {
         <input style={inp} autoFocus value={t.title} placeholder={t.kind === "daily" ? "e.g. Check the website order inbox" : t.kind === "project" ? "e.g. Photograph the new fencing range" : "e.g. Tidy and sweep the warehouse"}
           onChange={(e) => set("title", e.target.value)} onKeyDown={(e) => e.key === "Enter" && save()} />
       </div>
+
+      {t.kind !== "project" && (
+        <div style={{ marginBottom: 10 }}>
+          <span style={lbl}>Priority</span>
+          <PriorityPick value={t.priority} onChange={(v) => set("priority", v)} />
+        </div>
+      )}
 
       {t.kind === "daily" && (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
@@ -317,6 +334,7 @@ export default function TasksScreen({ crm, updateCrm, askConfirm, me, goHome }) 
                     <tr key={t.id} style={{ opacity: t.active === false ? 0.5 : 1, cursor: "pointer" }} onClick={() => setDraft(t)}>
                       <td style={tdc}>
                         <b title={t.notes || undefined}>{t.title}</b>
+                        {kind !== "project" && t.priority && t.priority !== "Normal" && <Chip tone={PRIORITY_TONES[t.priority]} style={{ marginLeft: 6, fontSize: 10, padding: "1px 7px" }}>{t.priority}</Chip>}
                         {t.notes && <span title={t.notes} style={{ marginLeft: 6, display: "inline-flex", verticalAlign: "middle" }}><Icon name="note" size={13} stroke="#8593a8" /></span>}
                         {t.active === false && <Chip style={{ marginLeft: 6, fontSize: 10, padding: "1px 7px" }}>paused</Chip>}
                       </td>

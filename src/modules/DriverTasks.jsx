@@ -66,9 +66,9 @@ export default function DriverTasks({ crm, who, setCrm, full, canAdd }) {
         {daily.length > 0 && <span style={{ fontSize: 12.5, fontWeight: 800, color: doneDaily === daily.length ? "#28713e" : "#8a5a00" }}>{doneDaily}/{daily.length} done today</span>}
       </div>
       {err && <div style={{ marginTop: 6, color: RED, fontWeight: 700, fontSize: 13 }}>{err}</div>}
-      {due.length > 0 && <>{head("Due")}{due.map(({ task: t, occ, overdueDays }) => row(t.id, false, t.title, overdueDays > 0 ? "Due " + prettyDate(occ.date) + " · " + overdueDays + " day" + (overdueDays === 1 ? "" : "s") + " late" : "Due today", () => tick(t, occ.date, true, false), overdueDays > 0 ? RED : "#8a5a00"))}</>}
-      {daily.length > 0 && <>{head("Today")}{daily.map((t) => { const on = isDailyDone(crm, t, d, who); const w = others(t); return row(t.id, on, t.title, [w.length ? "With " + w.join(", ") : "", t.notes || ""].filter(Boolean).join(" · "), () => tick(t, d, !on, true)); })}</>}
-      {projects.length > 0 && <>{head("Jobs")}{projects.map((t) => { const w = others(t); return row(t.id, t.status === "Done", t.title, [t.status !== "To do" ? t.status : "", t.dueDate ? "by " + prettyDate(t.dueDate) : "", w.length ? "with " + w.join(", ") : "", t.priority === "High" ? "high priority" : ""].filter(Boolean).join(" · "), () => doneProject(t), t.priority === "High" ? RED : undefined); })}</>}
+      {due.length > 0 && <>{head("Due")}{due.map(({ task: t, occ, overdueDays }) => row(t.id, false, (t.priority === "High" ? "❗ " : "") + t.title, (overdueDays > 0 ? "Due " + prettyDate(occ.date) + " · " + overdueDays + " day" + (overdueDays === 1 ? "" : "s") + " late" : "Due today") + (t.priority === "High" ? " · high priority" : ""), () => tick(t, occ.date, true, false), overdueDays > 0 || t.priority === "High" ? RED : "#8a5a00"))}</>}
+      {daily.length > 0 && <>{head("Today")}{daily.map((t) => { const on = isDailyDone(crm, t, d, who); const w = others(t); return row(t.id, on, (t.priority === "High" && !on ? "❗ " : "") + t.title, [t.priority === "High" ? "high priority" : t.priority === "Low" ? "low priority" : "", w.length ? "with " + w.join(", ") : "", t.notes || ""].filter(Boolean).join(" · "), () => tick(t, d, !on, true), t.priority === "High" && !on ? RED : undefined); })}</>}
+      {projects.length > 0 && <>{head("Jobs")}{projects.map((t) => { const w = others(t); return row(t.id, t.status === "Done", (t.priority === "High" ? "❗ " : "") + t.title, [t.status !== "To do" ? t.status : "", t.dueDate ? "by " + prettyDate(t.dueDate) : "", w.length ? "with " + w.join(", ") : "", t.priority === "High" ? "high priority" : ""].filter(Boolean).join(" · "), () => doneProject(t), t.priority === "High" ? RED : undefined); })}</>}
     </div>
     </>
   );
@@ -84,6 +84,7 @@ function NewTask({ crm, who, onClose, onSaved }) {
   const [when, setWhen] = useState("today"); // today | daily | job
   const [due, setDue] = useState("");
   const [people, setPeople] = useState([String(who).toLowerCase()]);
+  const [priority, setPriority] = useState("Normal");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const lc = (x) => String(x || "").toLowerCase();
@@ -96,7 +97,7 @@ function NewTask({ crm, who, onClose, onSaved }) {
     if (!ok || busy) return;
     setBusy(true); setErr("");
     const t = { ...blankTask(when === "job" ? "project" : "daily"), id: uid(), title: title.trim(), notes: notes.trim(), assignees: people,
-      repeat: when === "daily" ? "workdays" : "once", onDate: today(), dueDate: when === "job" ? due : "", createdBy: who, created: today() };
+      repeat: when === "daily" ? "workdays" : "once", onDate: today(), dueDate: when === "job" ? due : "", createdBy: who, created: today(), priority };
     try { await addTask(t); onSaved(t); } catch (e) { setErr("Couldn't save it — " + ((e && e.message) || e)); }
     setBusy(false);
   };
@@ -114,6 +115,10 @@ function NewTask({ crm, who, onClose, onSaved }) {
         <span style={lbl}>When</span>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
           {[["today", "Today"], ["daily", "Every working day"], ["job", "A job (no set day)"]].map(([k, l]) => <button key={k} type="button" onClick={() => setWhen(k)} style={pill(when === k)}>{l}</button>)}
+        </div>
+        <span style={lbl}>Priority</span>
+        <div style={{ display: "flex", gap: 6 }}>
+          {["Low", "Normal", "High"].map((p) => { const on = priority === p, col = p === "High" ? RED : p === "Low" ? "#8593a8" : "#a07a10"; return <button key={p} type="button" onClick={() => setPriority(p)} style={{ ...pill(on), flex: 1, background: on ? col : "#fff", borderColor: on ? col : "#d5d9e0" }}>{p}</button>; })}
         </div>
         {when === "job" && <><span style={lbl}>Done by (optional)</span><input type="date" style={field} value={due} onChange={(e) => setDue(e.target.value)} /></>}
         <span style={lbl}>Who's doing it? <span style={{ textTransform: "none", fontWeight: 600 }}>— pick more than one for a joint task</span></span>

@@ -2362,10 +2362,14 @@ const isFor = (assignees, user) => !assignees.length || !user || assignees.some(
 
 export const isWorkday = (d) => dow(d) < 5;
 
-// Daily items showing for a user on a day
+// High first, then Normal, then Low (every kind of task has a priority)
+export const prioRank = (t) => { const i = PRIORITIES.indexOf((t && t.priority) || "Normal"); return i < 0 ? 1 : i; };
+const byPriority = (a, b) => prioRank(b) - prioRank(a);
+
+// Daily items showing for a user on a day (high priority first)
 export const dailyTasksFor = (crm, user, day) => {
   const d = day || today();
-  return (crm.tasks || []).filter((t) => {
+  return [...(crm.tasks || [])].sort(byPriority).filter((t) => {
     if (t.kind !== "daily" || t.active === false || !isFor(t.assignees || [], user)) return false;
     if (t.repeat === "once") return t.onDate === d;
     if (t.repeat === "workdays") return isWorkday(d);
@@ -2392,7 +2396,7 @@ export const dueScheduledFor = (crm, user, day) => {
     if (!isFor(occurrenceAssignees(t, occ), user)) return;
     out.push({ task: t, occ, overdueDays: daysBetween(occ.date, d) });
   });
-  return out.sort((a, b) => a.occ.date.localeCompare(b.occ.date));
+  return out.sort((a, b) => byPriority(a.task, b.task) || a.occ.date.localeCompare(b.occ.date));
 };
 
 export const projectsFor = (crm, user, includeDone) =>
