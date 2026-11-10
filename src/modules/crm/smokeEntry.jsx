@@ -10,7 +10,7 @@ import VansScreen from "./VansScreen.jsx";
 import QuotesScreen from "./QuotesScreen.jsx";
 import SamplesScreen from "./SamplesScreen.jsx";
 import ReviewsScreen, { reviewStage } from "./ReviewsScreen.jsx";
-import { reviewSettingsOf, reviewExclusion, reviewText, customerDupeGroups, personKeyOf, reviewNext, reviewReminders, reviewChannel } from "../../lib/crmCore.js";
+import { reviewSettingsOf, reviewExclusion, reviewText, customerDupeGroups, personKeyOf, reviewNext, reviewReminders, reviewChannel, orderSummary } from "../../lib/crmCore.js";
 import TasksScreen from "./TasksScreen.jsx";
 import PurchasesScreen from "./PurchasesScreen.jsx";
 import { syncCatalogue, renameSkus, skuFor, codeSource, numericSku, skuLists, masterKey, colourSeg, skuSource } from "../../lib/crmCore.js";
@@ -105,6 +105,9 @@ export default function run(React, renderToString) {
     assert(reviewExclusion({ ...inv, orderRef: "WC-1" }, cust, rs0, null).includes("Trustpilot"), "web orders excluded by default");
     assert(reviewExclusion(inv, cust, { ...rs0, rules: { ...rs0.rules, minTotal: "2000" } }, null).includes("under"), "min value rule");
     assert(reviewText("Hi {name}: {link}", cust, "L") === "Hi Bob: L", "template fill");
+    assert(reviewText("{order}", cust, "", "decking") === "decking" && reviewText("{order}", cust, "") === "garden materials", "order fill + fallback");
+    assert(orderSummary({ lines: [{ description: "3.6m woodgrain cladding" }, { description: "PLASTIC Decking clips and Screws" }] }) === "cladding", "accessory lines don't steer the summary");
+    assert(orderSummary({ lines: [{ description: "Composite Decking Board" }, { description: "Slatted fence panel" }] }) === "decking and fencing", "two-category summary");
     const dupe = { ...blankCustomer(), name: "Robert Smith", postcode: "OL6 6UG", mobile: "07577776775" }; // same mobile as Bob
     crm.customers.push(dupe);
     const groups = customerDupeGroups(crm);

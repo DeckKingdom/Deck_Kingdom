@@ -2928,7 +2928,7 @@ export const REVIEW_DEFAULTS = {
   email: {
     ask: {
       subject: "How did we do? A quick Google review would mean a lot",
-      body: "Hi {name},\n\nThanks again for your order — we hope you're enjoying it!\n\nIf you have a minute, a quick Google review really helps a small business like ours:\n{link}\n\nAnd if you've taken any photos of the finished job, we'd love to see them — just reply to this email.\n\nThanks,\nDeck Kingdom\n0161 399 1837",
+      body: "Hi {name},\n\nThanks for your recent order of {order} — I hope it's turned out as well as you hoped and that you're happy with the service we provided.\n\nIf you can do us a short Google review using the link below it would be much appreciated… it all helps 👌\n{link}\n\nAlso, if you have any completed photos — or even better a before and after — that would be amazing: just reply to this email with them.\n\nRegards,\nJon\nDeck Kingdom · 0161 399 1837",
     },
     photos: {
       subject: "We'd love a photo of the finished job",
@@ -2944,7 +2944,7 @@ export const REVIEW_DEFAULTS = {
     },
   },
   wa: {
-    ask: "Hi {name}, it's Deck Kingdom — thanks again for your order, hope you're enjoying it! If you've got a minute, a quick Google review would mean a lot to us: {link} — and if you've snapped any photos of the finished job we'd love to see them!",
+    ask: "Hi {name},\n\nThanks for your recent order of {order} — I hope it's turned out as well as you hoped and that you're happy with the service we provided. If you can do us a short Google review using the link below it would be much appreciated… it all helps 👌\n\n{link}\n\nAlso if you have any completed photos, or even better a before and after, that would be amazing — just send them over on here.\n\nRegards\nJon",
     nudge: "Hi {name}, no rush at all — just popping the review link back to the top of your chats in case it got buried: {link} Thanks again!",
     photos: "Hi {name}, thanks so much for the review! If you've got any photos of the finished job we'd love to share them on our socials — just send them over on here.",
     thanks: "Thank you {name} — the review and photos are brilliant! If you ever need anything else for the garden, you know where we are.",
@@ -2971,8 +2971,35 @@ export const reviewSettingsOf = (crm) => {
   };
 };
 const reviewFirstName = (c) => String((c && (c.contact || c.name)) || "").trim().split(/\s+/)[0] || "";
-export const reviewText = (tpl, cust, link) =>
-  String(tpl || "").split("{name}").join(reviewFirstName(cust) || "there").split("{link}").join(link || "");
+export const reviewText = (tpl, cust, link, order) =>
+  String(tpl || "")
+    .split("{name}").join(reviewFirstName(cust) || "there")
+    .split("{link}").join(link || "")
+    .split("{order}").join(order || "garden materials");
+// a one-line "what they ordered" for the ask message, read off the invoice lines
+const ORDER_WORDS = [
+  [/clad/i, "cladding"],
+  [/fenc|picket|slatted fence/i, "fencing"],
+  [/grass|turf/i, "artificial grass"],
+  [/balustrade|handrail/i, "balustrade"],
+  [/pergola/i, "a pergola"],
+  [/deck/i, "decking"],
+];
+const ORDER_ACCESSORY = /clip|screw|fixing|adhesive|glue|tape|membrane|joist|batten|trim/i;
+export const orderSummary = (inv) => {
+  const main = [], any = [];
+  ((inv && inv.lines) || []).forEach((l) => {
+    const t = String(l.description || "") + " " + String(l.code || "");
+    ORDER_WORDS.forEach(([re, w]) => {
+      if (!re.test(t)) return;
+      if (!any.includes(w)) any.push(w);
+      if (!ORDER_ACCESSORY.test(t) && !main.includes(w)) main.push(w); // "decking clips" on a cladding job shouldn't make it a decking order
+    });
+  });
+  const words = main.length ? main : any;
+  if (!words.length) return "";
+  return words.length === 1 ? words[0] : words.slice(0, -1).join(", ") + " and " + words[words.length - 1];
+};
 // a website order already gets the Trustpilot invite from Woo
 export const isWebOrder = (i) => !!(i && (i.orderRef || i.webStatus));
 // why a job is left out of bulk asks ("" = included)

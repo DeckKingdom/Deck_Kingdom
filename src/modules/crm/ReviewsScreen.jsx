@@ -8,7 +8,7 @@ import { NAVY, GOLD, prettyDate, daysBetween } from "../../lib/core.js";
 import {
   FOLLOWUP_FLAGS, today, isSaleInvoice, onSchedule, gbp,
   reviewSettingsOf, reviewText, reviewExclusion, customerDupeGroups, personKeyOf,
-  reviewNext, nudgeDue, NUDGE_AFTER_DAYS, reviewChannel, mobileOf, askTooSoon, ASK_AFTER_DAYS,
+  reviewNext, nudgeDue, NUDGE_AFTER_DAYS, reviewChannel, mobileOf, askTooSoon, ASK_AFTER_DAYS, orderSummary,
 } from "../../lib/crmCore.js";
 import { Icon, Tg, card, sect, lbl, inp, btn, goldBtn, Modal, ListHero, HeroStat, SearchBox, FilterPills } from "./ui.jsx";
 import { waNumber, getWaMode } from "./CustomersScreen.jsx";
@@ -252,7 +252,7 @@ export default function ReviewsScreen({ crm, updateCrm, askConfirm, openInvoice,
                   <div key={i.id} style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13, fontWeight: 600 }}>
                     {reviewNext(i, tod) !== bulkKind
                       ? <span style={chip("#e9f6ee", "#28713e")}>{bulkKind === "nudge" ? "nudged" : "asked"} ✓</span>
-                      : <a href={waHref(mobileOf(c), reviewText(rs.wa[bulkKind], c, rs.link))} onClick={() => stampSend(i.id, bulkKind)}
+                      : <a href={waHref(mobileOf(c), reviewText(rs.wa[bulkKind], c, rs.link, orderSummary(i)))} onClick={() => stampSend(i.id, bulkKind)}
                           style={{ ...chip("#25D36622", "#0b6b4f"), textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 5 }}>
                           <Icon name="wa" stroke="#128C7E" size={12} />Send
                         </a>}
@@ -335,14 +335,14 @@ export default function ReviewsScreen({ crm, updateCrm, askConfirm, openInvoice,
                         <>
                           {msgKind === "nudge" && <span style={{ ...chip("#C64545", "#fff"), marginRight: 6 }}>nudge due</span>}
                           {mob && (
-                            <a href={waHref(mob, reviewText(rs.wa[msgKind], c, rs.link))} onClick={() => stampSend(i.id, msgKind)}
+                            <a href={waHref(mob, reviewText(rs.wa[msgKind], c, rs.link, orderSummary(i)))} onClick={() => stampSend(i.id, msgKind)}
                               title={"WhatsApp the " + MSG_NAMES[msgKind] + " to " + mob}
                               style={{ display: "inline-flex", width: 26, height: 26, borderRadius: 8, background: "#25D36622", alignItems: "center", justifyContent: "center", marginRight: 4 }}>
                               <Icon name="wa" stroke="#128C7E" size={14} />
                             </a>
                           )}
                           {em && (
-                            <a href={gmailTo(em, rs.email[msgKind].subject, reviewText(rs.email[msgKind].body, c, rs.link))} target="_blank" rel="noreferrer"
+                            <a href={gmailTo(em, rs.email[msgKind].subject, reviewText(rs.email[msgKind].body, c, rs.link, orderSummary(i)))} target="_blank" rel="noreferrer"
                               onClick={() => stampSend(i.id, msgKind)}
                               title={"Email the " + MSG_NAMES[msgKind] + " to " + em}
                               style={{ display: "inline-flex", width: 26, height: 26, borderRadius: 8, background: "#eef1f6", alignItems: "center", justifyContent: "center" }}>
@@ -400,7 +400,8 @@ function ReviewSettings({ rs, onSave, onClose }) {
   return (
     <Modal title="Reviews — message set-up" onClose={onClose} width={680}>
       <div style={{ fontSize: 12.5, color: "#5a6a85", fontWeight: 600, marginBottom: 10 }}>
-        <b>{"{name}"}</b> becomes the customer's first name ("there" in group emails) and <b>{"{link}"}</b> your Google review link.
+        <b>{"{name}"}</b> becomes the customer's first name ("there" in group emails), <b>{"{link}"}</b> your Google review link,
+        and <b>{"{order}"}</b> a one-liner of what they bought, read off the invoice ("decking", "cladding and fencing"…).
         Website orders get the Trustpilot invite from the website automatically — these messages are for Google reviews and photos.
       </div>
       <label style={{ display: "block", marginBottom: 12 }}>
