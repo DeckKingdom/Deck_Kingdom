@@ -52,6 +52,50 @@ export default function DriverApp({ me, warehouse, switcher }) {
   };
   useEffect(() => { load(); }, []);
 
+  // pull the screen down to refresh: a spinner drops in from the top while it reloads
+  const [pull, setPull] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const refresh = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    const t0 = Date.now();
+    try { await load(); } finally {
+      setTimeout(() => setRefreshing(false), Math.max(0, 700 - (Date.now() - t0))); // long enough to see it happen
+    }
+  };
+  const refreshRef = { current: refresh };
+  refreshRef.current = refresh;
+  useEffect(() => {
+    const prev = document.body.style.overscrollBehaviorY;
+    document.body.style.overscrollBehaviorY = "contain"; // our pull, not the browser's full reload
+    let y0 = null, dist = 0;
+    const scrolledInside = (el) => { for (let n = el; n && n !== document.body; n = n.parentElement) if (n.scrollTop > 0) return true; return false; };
+    const start = (e) => { y0 = (window.scrollY || document.documentElement.scrollTop) <= 0 && e.touches.length === 1 && !scrolledInside(e.target) ? e.touches[0].clientY : null; dist = 0; };
+    const move = (e) => {
+      if (y0 === null) return;
+      const dy = e.touches[0].clientY - y0;
+      if (dy <= 0) { dist = 0; setPull(0); return; }
+      dist = Math.min(110, dy * 0.5);
+      setPull(dist);
+    };
+    const end = () => { if (y0 !== null && dist >= 60) refreshRef.current(); y0 = null; dist = 0; setPull(0); };
+    window.addEventListener("touchstart", start, { passive: true });
+    window.addEventListener("touchmove", move, { passive: true });
+    window.addEventListener("touchend", end);
+    window.addEventListener("touchcancel", end);
+    return () => {
+      document.body.style.overscrollBehaviorY = prev;
+      window.removeEventListener("touchstart", start); window.removeEventListener("touchmove", move);
+      window.removeEventListener("touchend", end); window.removeEventListener("touchcancel", end);
+    };
+  }, []);
+  const pullBadge = (pull > 0 || refreshing) && (
+    <div aria-live="polite" style={{ position: "fixed", left: "50%", top: refreshing ? 78 : 40 + pull * 0.6, transform: "translateX(-50%)", zIndex: 60, width: 42, height: 42, borderRadius: 99, background: "#fff", boxShadow: "0 4px 16px rgba(11,31,63,.25)", display: "flex", alignItems: "center", justifyContent: "center", transition: refreshing ? "top .15s" : "none", pointerEvents: "none" }}>
+      <style>{"@keyframes dkspin{to{transform:rotate(360deg)}}"}</style>
+      <span style={{ fontSize: 22, fontWeight: 900, color: refreshing || pull >= 60 ? GOLD : "#aab3c2", display: "inline-block", transform: refreshing ? "none" : "rotate(" + pull * 4 + "deg)", animation: refreshing ? "dkspin .8s linear infinite" : "none" }}>↻</span>
+    </div>
+  );
+
   const mine = (x) => String(x.driver || "").trim().toLowerCase() === driver.trim().toLowerCase();
   // every stop for this driver, by day
   const byDay = useMemo(() => {
@@ -83,7 +127,8 @@ export default function DriverApp({ me, warehouse, switcher }) {
       {switcher && <button type="button" onClick={() => setPicking(true)} title="Switch driver / app" style={{ border: "none", background: GOLD, color: NAVY, borderRadius: 10, height: 40, padding: "0 10px", flex: "none", fontFamily: "inherit", fontWeight: 800, fontSize: 13, cursor: "pointer" }}>⇄ Switch</button>}
       {switcher && <button type="button" onClick={() => openPhoneApp(null)} title="Back to the office system" aria-label="Back to the office system" style={{ border: "none", background: "rgba(255,255,255,.12)", color: "#fff", borderRadius: 10, width: 40, height: 40, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", flex: "none" }}><Icon name="home" stroke="#fff" /></button>}
       {picking && <DriverPicker crm={crm} myName={switcher.myName} current={switcher.current} onClose={() => setPicking(false)} />}
-      <button type="button" onClick={load} title="Refresh" style={{ border: "none", background: "rgba(255,255,255,.12)", color: "#fff", borderRadius: 10, height: 40, padding: "0 12px", fontFamily: "inherit", fontWeight: 700, cursor: "pointer" }}>↻</button>
+      {pullBadge}
+      <button type="button" onClick={refresh} title="Refresh (or pull the screen down)" style={{ border: "none", background: "rgba(255,255,255,.12)", color: "#fff", borderRadius: 10, height: 40, padding: "0 12px", fontFamily: "inherit", fontWeight: 700, cursor: "pointer" }}><span style={{ display: "inline-block", animation: refreshing ? "dkspin .8s linear infinite" : "none" }}>↻</span></button>
     </div>
   );
 
