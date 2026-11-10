@@ -271,11 +271,10 @@ const collectionBody = (coll, crm) => {
   const many = ordered.length > 1;
   const items = ordered.map((g) => {
     const title = g.inv ? [g.drop ? "Drop " + g.drop : "Drop", g.pc].filter(Boolean).join(" · ") : "For stock";
-    return (many || g.inv ? `<tr><td colspan="5" style="background:#f3f5f8;font-weight:800;font-size:12px;letter-spacing:.4px;text-transform:uppercase;padding:7px 10px">${esc(title)}</td></tr>` : "") +
+    return (many || g.inv ? `<tr><td colspan="3" style="background:#f3f5f8;font-weight:800;font-size:12px;letter-spacing:.4px;text-transform:uppercase;padding:7px 10px">${esc(title)}</td></tr>` : "") +
       g.items.map((it) => `
     <tr><td style="width:26px"><div style="width:16px;height:16px;border:2px solid #0B1F3F;border-radius:4px"></div></td>
-    <td style="white-space:nowrap;font-weight:800">${esc(g.pc || "—")}</td>
-    <td><b>${esc(it.sku)}</b></td><td>${esc(it.description)}${it.colour ? " · " + esc(it.colour) : ""}${withSize(it)}</td>
+    <td>${esc(it.description || it.sku)}${it.colour ? " · " + esc(it.colour) : ""}${withSize(it)}${g.pc ? `<span style="white-space:nowrap;margin-left:10px;color:#5a6a85">→ ${esc(g.pc)}</span>` : ""}</td>
     <td class="r big">${esc(it.qty)}</td></tr>`).join("");
   }).join("");
   // notes without the "For <customer>" line - the drops above say who it's for
@@ -287,7 +286,7 @@ const collectionBody = (coll, crm) => {
   ${addrBlock("Collection", ["Date: " + pretty(coll.collectDate), coll.collectTime ? "Time: " + coll.collectTime : "", coll.driver ? "Driver: " + coll.driver : "", coll.van ? "Van: " + coll.van : ""])}
 </div>
 ${notes ? `<div class="note">📝 ${esc(notes)}</div>` : ""}
-<table><tr><th></th><th>Drop</th><th>SKU</th><th>Description</th><th class="r">Qty to collect</th></tr>${items}</table>
+<table><tr><th></th><th>Description</th><th class="r">Qty to collect</th></tr>${items}</table>
 <div class="grid" style="margin-top:30px">
   <div class="blk"><h3>Collected by (driver)</h3><div style="border-bottom:1px solid #0B1F3F;height:34px"></div></div>
   <div class="blk"><h3>Released by (supplier)</h3><div style="border-bottom:1px solid #0B1F3F;height:34px"></div></div>
