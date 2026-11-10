@@ -11,7 +11,7 @@ import {
 import { printJobDocs, runDocsHtml, DOC_KINDS, printPendingList } from "./printDocs.js";
 import { htmlToPdfFile, shareToWhatsApp } from "./pdfShare.js";
 import LinesEditor, { SizeRow, applySize, skuOption, SKU_COLS, SKU_LIST_W } from "./LinesEditor.jsx";
-import { JOB_TYPES, skuIndex, PAYMENT_TYPES, stockCheck, partKey, isColPick, blankPick, blankCollectionItem, itemPending, collectionLineOpen, editCollectionLine, removeCollectionLine, isGrassRoll, sizeLabel, purchaseCost, outwardOf, collNotesText } from "../../lib/crmCore.js";
+import { JOB_TYPES, skuIndex, PAYMENT_TYPES, stockCheck, partKey, isColPick, blankPick, blankCollectionItem, itemPending, collectionLineOpen, editCollectionLine, removeCollectionLine, isGrassRoll, sizeLabel, purchaseCost, outwardOf, collNotesText, mergeablePickups, mergePickups } from "../../lib/crmCore.js";
 import StockCheck from "./StockCheck.jsx";
 import { loadDrops, dropPhotoUrl } from "../../data/drops.js";
 import { Modal } from "./ui.jsx";
@@ -1160,6 +1160,19 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
             );
           })() : done ? <Chip tone="green">Processed</Chip> : c.collected ? (pr.done > 0 ? <Chip tone="gold">{pr.done}/{pr.total} processed</Chip> : <span style={{ color: "#28713e" }}>Collected</span>) : null}
           <span style={{ flex: 1 }} />
+          {(() => {
+            // more pick-ups from this supplier on the same day: merge them into this one (shown on the lowest COL number)
+            const sibs = mergeablePickups(crm, c, (x) => !!drops["col:" + x.id]);
+            if (!sibs.length || sibs.some((x) => (Number(x.collectionNo) || 0) < (Number(c.collectionNo) || 0))) return null;
+            const nos = sibs.map((x) => "COL-" + x.collectionNo).join(", ");
+            return (
+              <button type="button" title={"Merge " + nos + " into COL-" + c.collectionNo + " — one pick-up and one collection note for " + (c.supplier || "this supplier")}
+                onClick={() => { if (window.confirm("Merge " + nos + " into COL-" + c.collectionNo + "?\n\nAll the lines move onto one collection note for " + (c.supplier || "the supplier") + ", and " + nos + " " + (sibs.length === 1 ? "is" : "are") + " removed.")) updateCrm((d) => mergePickups(d, c.id, sibs.map((x) => x.id))); }}
+                style={{ border: "1px solid " + COLLECTION_BLUE, background: "#eef5fd", color: COLLECTION_BLUE, borderRadius: 8, padding: "4px 9px", fontFamily: "inherit", fontWeight: 800, fontSize: 11.5, cursor: "pointer", whiteSpace: "nowrap", marginRight: 6 }}>
+                ⇲ Consolidate {sibs.length + 1}
+              </button>
+            );
+          })()}
           <CollMailButton c={c} crm={crm} onSent={() => setColl(c.id, (t) => (t.emailedAt = new Date().toISOString()))} />
         </div>
         <div style={{ display: "flex", justifyContent: "flex-end" }}>

@@ -2842,3 +2842,42 @@ export const collNotesText = (crm, notes) => !crm ? notes || "" : String(notes |
   const inv = (crm.invoices || []).find((x) => String(x.invNo) === String(no));
   return inv ? "For " + jobForLabel(crm, inv) : m;
 });
+
+// Supplier pick-ups that could be merged into this one: same supplier, same day, none collected yet
+export function mergeablePickups(crm, coll, isLocked = () => false) {
+  if (!coll || coll.collected || !coll.collectDate || isLocked(coll)) return [];
+  const sup = (x) => (x.supplierId ? "id:" + x.supplierId : "n:" + String(x.supplier || "").trim().toLowerCase());
+  return (crm.collections || []).filter((x) => x.id !== coll.id && !x.collected && x.collectDate === coll.collectDate && sup(x) === sup(coll) && !isLocked(x));
+}
+// Merge pick-ups into one (the lowest COL number is kept): every line moves across, the jobs' picks
+// point at the kept collection note, the notes are combined, and the others are removed.
+export function mergePickups(c, keepId, fromIds) {
+  const keep = (c.collections || []).find((x) => x.id === keepId);
+  if (!keep) return c;
+  const from = (c.collections || []).filter((x) => fromIds.includes(x.id) && !x.collected);
+  if (!from.length) return c;
+  const keepRef = "COL-" + (keep.collectionNo || "");
+  const notes = [collNotesText(c, keep.notes)];
+  from.forEach((x) => {
+    (x.items || []).forEach((it) => keep.items.push({ ...it }));
+    if (x.notes) notes.push(collNotesText(c, x.notes));
+    if (!keep.driver && x.driver) keep.driver = x.driver;
+    if (!keep.van && x.van) keep.van = x.van;
+    if (!keep.runNo && x.runNo) keep.runNo = x.runNo;
+    if (!keep.collectTime && x.collectTime) keep.collectTime = x.collectTime;
+    const ref = "COL-" + (x.collectionNo || "");
+    (c.invoices || []).forEach((inv) => (inv.picks || []).forEach((p) => {
+      if (String(p.batchRef || "").trim().toUpperCase() === ref.toUpperCase()) p.batchRef = keepRef;
+    }));
+  });
+  // "For Kenneth White · S43" + "For Peter Lamb · SK6" -> "For Kenneth White · S43, Peter Lamb · SK6"
+  const fors = [], other = [];
+  notes.filter(Boolean).forEach((n) => String(n).split(/\n/).forEach((l) => {
+    const m = l.match(/^\s*For (.+)$/);
+    if (m) m[1].split(/,\s*/).forEach((f) => !fors.includes(f) && fors.push(f)); else if (l.trim() && !other.includes(l.trim())) other.push(l.trim());
+  }));
+  keep.notes = [fors.length ? "For " + fors.join(", ") : "", ...other].filter(Boolean).join("\n");
+  const gone = new Set(from.map((x) => x.id));
+  c.collections = c.collections.filter((x) => !gone.has(x.id));
+  return c;
+}
