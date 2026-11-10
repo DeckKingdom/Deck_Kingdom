@@ -8,7 +8,7 @@ import { NAVY, GOLD, prettyDate, daysBetween } from "../../lib/core.js";
 import {
   FOLLOWUP_FLAGS, today, isSaleInvoice, onSchedule, gbp,
   reviewSettingsOf, reviewText, reviewExclusion, customerDupeGroups, personKeyOf,
-  reviewNext, nudgeDue, NUDGE_AFTER_DAYS, reviewChannel, mobileOf,
+  reviewNext, nudgeDue, NUDGE_AFTER_DAYS, reviewChannel, mobileOf, askTooSoon, ASK_AFTER_DAYS,
 } from "../../lib/crmCore.js";
 import { Icon, Tg, card, sect, lbl, inp, btn, goldBtn, Modal, ListHero, HeroStat, SearchBox, FilterPills } from "./ui.jsx";
 import { waNumber, getWaMode } from "./CustomersScreen.jsx";
@@ -127,9 +127,10 @@ export default function ReviewsScreen({ crm, updateCrm, askConfirm, openInvoice,
     }
     return true;
   });
-  // on the To-ask view, excluded jobs drop out (toggle to see them greyed)
-  const excluded = filter === "To ask" ? stageRows.filter((i) => exclOf(i)) : [];
-  let rows = filter === "To ask" && !showExcl ? stageRows.filter((i) => !exclOf(i)) : stageRows;
+  // on the To-ask view, excluded jobs and anything delivered under a week ago
+  // drop out (toggle to see them greyed) — the deck needs building first
+  const excluded = filter === "To ask" ? stageRows.filter((i) => exclOf(i) || askTooSoon(i, tod)) : [];
+  let rows = filter === "To ask" && !showExcl ? stageRows.filter((i) => !exclOf(i) && !askTooSoon(i, tod)) : stageRows;
   // awaiting view: jobs due their nudge float to the top
   if (filter === "Awaiting review") rows = [...rows].sort((a, b) => (nudgeDue(b, tod) ? 1 : 0) - (nudgeDue(a, tod) ? 1 : 0));
 
@@ -227,8 +228,9 @@ export default function ReviewsScreen({ crm, updateCrm, askConfirm, openInvoice,
               {bulk.noContact.length > 0 && <span style={{ fontSize: 12.5, fontWeight: 600, color: "#8593a8" }}>{bulk.noContact.length} with no usable contact</span>}
               {bulk.collapsed > 0 && <span style={{ fontSize: 12.5, fontWeight: 600, color: "#8593a8" }}>· {bulk.collapsed} repeat/duplicate collapsed — one ask per person</span>}
               {excluded.length > 0 && (
-                <button onClick={() => setShowExcl((o) => !o)} style={{ ...linkBtn, fontSize: 12.5, fontWeight: 700, color: "#8593a8", textDecoration: "underline" }}>
-                  {excluded.length} excluded — {showExcl ? "hide" : "show"}
+                <button onClick={() => setShowExcl((o) => !o)} style={{ ...linkBtn, fontSize: 12.5, fontWeight: 700, color: "#8593a8", textDecoration: "underline" }}
+                  title={"Rule exclusions, plus anything delivered under " + ASK_AFTER_DAYS + " days ago"}>
+                  {excluded.length} held back — {showExcl ? "hide" : "show"}
                 </button>
               )}
               <span style={{ flex: 1 }} />
@@ -291,7 +293,8 @@ export default function ReviewsScreen({ crm, updateCrm, askConfirm, openInvoice,
                 const mob = mobileOf(c); // the mobile field, or a mobile parked in the landline field
                 const em = c && /@/.test(String(c.email || "")) ? String(c.email).trim() : "";
                 const optedOut = c && rs.optOut.includes(c.id);
-                const dim = excl ? { opacity: 0.55 } : null;
+                const tooSoon = st === "To ask" && askTooSoon(i, tod);
+                const dim = excl || tooSoon ? { opacity: 0.55 } : null;
                 return (
                   <tr key={i.id} style={dim}>
                     <td style={tdc}>
@@ -315,7 +318,11 @@ export default function ReviewsScreen({ crm, updateCrm, askConfirm, openInvoice,
                         <span style={chip("#f1f3f7", "#8593a8")} title={"Left out of bulk asks: " + excl}>{excl}</span>
                       ) : msgKind === "" ? (
                         // the cadence says leave them be — show where it's up to
-                        st === "Awaiting review" ? (
+                        tooSoon ? (
+                          <span style={chip("#fdf3e4", "#8a5a14")} title={"Asks unlock " + ASK_AFTER_DAYS + " days after delivery — time to get it built"}>
+                            {days === null ? "just delivered" : "delivered " + days + "d"} · wait
+                          </span>
+                        ) : st === "Awaiting review" ? (
                           i.reviewNudgedAt
                             ? <span style={chip("#f1f3f7", "#8593a8")} title="Asked and nudged once — the cadence stops here">nudged {prettyDate(i.reviewNudgedAt)}</span>
                             : <span style={chip("#fdf3e4", "#8a5a14")} title={"Nudge unlocks " + NUDGE_AFTER_DAYS + " days after the ask"}>asked {i.reviewAskedAt ? prettyDate(i.reviewAskedAt) : ""} · wait</span>

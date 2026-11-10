@@ -3020,12 +3020,17 @@ export const personKeyOf = (c) => dupeMobileKey(c) || dupeEmailKey(c) || dupeNam
 // Photos are only ever a second ask, to people who did leave a review
 // (the first ask already mentions photos in passing).
 export const NUDGE_AFTER_DAYS = 7;
+export const ASK_AFTER_DAYS = 7; // let the deck get built first — no ask inside a week of delivery
+export const askTooSoon = (inv, tod) => {
+  const d = (inv && inv.deliveryDate) || "";
+  return d ? daysBetween(d, tod) < ASK_AFTER_DAYS : false;
+};
 // what the cadence wants next for a job: "ask" | "nudge" | "photos" | "thanks" | "" (leave them be)
 export const reviewNext = (inv, tod) => {
   const f = inv.flags || {};
   if (f.socialPosted) return "thanks";
   if (f.reviewReceived) return f.photosRequested ? "" : "photos";
-  if (!f.reviewRequested) return "ask";
+  if (!f.reviewRequested) return askTooSoon(inv, tod) ? "" : "ask";
   if (inv.reviewNudgedAt) return ""; // nudged once already — no third poke
   const asked = inv.reviewAskedAt;
   if (asked && daysBetween(asked, tod) >= NUDGE_AFTER_DAYS) return "nudge";

@@ -84,8 +84,16 @@ export default function run(React, renderToString) {
   // reviews & photos: the delivered job starts at "To ask" and moves with the flags
   assert(reviewStage(inv) === "To ask", "review stage starts at To ask");
   assert(reviewStage({ flags: { reviewRequested: true } }) === "Awaiting review" && reviewStage({ flags: { reviewReceived: true } }) === "Review in" && reviewStage({ flags: { socialPosted: true } }) === "Posted", "review stages from flags");
-  html = renderToString(React.createElement(ReviewsScreen, props));
-  assert(html.includes("Reviews &amp; Photos") && html.includes("Bob") && html.includes("To ask"), "reviews worklist shows the delivered job");
+  {
+    // just delivered: held back from the To-ask list (asks unlock at 7 days)
+    html = renderToString(React.createElement(ReviewsScreen, props));
+    assert(html.includes("held back"), "just-delivered job is held back from the ask list");
+    const wasDel = inv.deliveryDate;
+    inv.deliveryDate = new Date(Date.now() - 8 * 86400000).toISOString().slice(0, 10);
+    html = renderToString(React.createElement(ReviewsScreen, props));
+    assert(html.includes("Reviews &amp; Photos") && html.includes("Bob") && html.includes("To ask"), "week-old delivery shows on the worklist");
+    inv.deliveryDate = wasDel;
+  }
   // bulk exclusion rules + duplicate detection
   {
     const rs0 = reviewSettingsOf(crm);
@@ -107,6 +115,8 @@ export default function run(React, renderToString) {
     const tod = today();
     const old = new Date(Date.now() - 8 * 86400000).toISOString().slice(0, 10);
     assert(reviewNext({ flags: {} }, tod) === "ask", "fresh job: ask");
+    assert(reviewNext({ flags: {}, deliveryDate: tod }, tod) === "", "delivered today: too soon to ask");
+    assert(reviewNext({ flags: {}, deliveryDate: old }, tod) === "ask", "delivered 8 days ago: ask");
     assert(reviewNext({ flags: { reviewRequested: true }, reviewAskedAt: tod }, tod) === "", "just asked: wait");
     assert(reviewNext({ flags: { reviewRequested: true }, reviewAskedAt: old }, tod) === "nudge", "week on: nudge due");
     assert(reviewNext({ flags: { reviewRequested: true }, reviewAskedAt: old, reviewNudgedAt: tod }, tod) === "", "nudged once: stop");
@@ -115,7 +125,8 @@ export default function run(React, renderToString) {
     assert(reviewNext({ flags: { socialPosted: true } }, tod) === "thanks", "posted: thank-you");
     // the weekly routine pop-ups: Tue email, Thu-from-3pm WhatsApp, Mon check
     {
-      const was = { cm: cust.contactMethod, email: cust.email };
+      const was = { cm: cust.contactMethod, email: cust.email, del: inv.deliveryDate };
+      inv.deliveryDate = old; // week-old delivery, so it's askable in the counts
       cust.contactMethod = "WhatsApp";
       let rr = reviewReminders(crm, new Date(2026, 10, 10, 16, 0)); // Tue 4pm
       assert(rr.some((r) => r.key.startsWith("rev:wa:")), "Tue 4pm: WhatsApp session due");
@@ -139,7 +150,7 @@ export default function run(React, renderToString) {
       rr = reviewReminders(crm, new Date(2026, 10, 9, 9, 0));
       assert(!rr.some((r) => r.key.startsWith("rev:check:")), "Monday: nothing yet — review day is Tuesday");
       inv.flags.reviewRequested = false; inv.reviewAskedAt = "";
-      cust.contactMethod = was.cm; cust.email = was.email;
+      cust.contactMethod = was.cm; cust.email = was.email; inv.deliveryDate = was.del;
     }
     assert(reviewSettingsOf(crm).wa.nudge.includes("{link}") && reviewSettingsOf(crm).email.nudge.subject, "nudge templates present");
   }
