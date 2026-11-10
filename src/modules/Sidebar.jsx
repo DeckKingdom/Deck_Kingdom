@@ -14,6 +14,7 @@ export const NAV_SECTIONS = [
       ["invoices", "Invoices", "doc", true],
       ["quotes", "Quotes", "tag", true],
       ["samples", "Samples", "leaf", true],
+      ["reviews", "Reviews & Photos", "star"],
     ],
   },
   { title: "", items: [["schedule", "Delivery Schedule", "cal"], ["loading", "Loading", "box"], ["issues", "Delivery issues", "warn"]] },

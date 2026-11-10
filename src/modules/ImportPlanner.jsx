@@ -38,6 +38,7 @@ import CustomersScreen from "./crm/CustomersScreen.jsx";
 import InvoicesScreen from "./crm/InvoicesScreen.jsx";
 import QuotesScreen from "./crm/QuotesScreen.jsx";
 import SamplesScreen from "./crm/SamplesScreen.jsx";
+import ReviewsScreen from "./crm/ReviewsScreen.jsx";
 import TasksScreen from "./crm/TasksScreen.jsx";
 import ProductsScreen from "./crm/ProductsScreen.jsx";
 import PurchasesScreen from "./crm/PurchasesScreen.jsx";
@@ -61,7 +62,7 @@ import { Icon, SuggestInput, abtn, DateInput, CalendarPop, selectAllProps } from
 import { EmailSettings } from "./crm/EmailPanels.jsx";
 import { emailReady } from "../data/email.js";
 
-const CRM_TABS = ["customers", "samples", "quotes", "invoices", "schedule"];
+const CRM_TABS = ["customers", "samples", "quotes", "invoices", "schedule", "reviews"];
 
 // shipment lines left blank ($ / pc, qty, kg at 0) take the product's current figure; never overwrites a typed one
 // the date each shipment stage was reached (Planning uses the planned order date)
@@ -1623,6 +1624,8 @@ export default function ImportPlanner() {
             filter={invFilter}
             setFilter={setInvFilter}
           />
+        ) : tab === "reviews" ? (
+          <ReviewsScreen crm={crm} updateCrm={updateCrm} openInvoice={openInvoice} goCustomer={goCustomer} />
         ) : (
           <ScheduleScreen headerH={headerH} panels={schedPanels} setPanel={setSchedPanel} onPendingCount={setSchedPending} openProduct={openProduct} money={access.money} crm={crm} updateCrm={updateCrm} askConfirm={setConfirmBox} openInvoice={openInvoice} openCollection={openCollection} me={me} planner={data} goCustomer={goCustomer} newFollowUp={newFollowUp} />
         ))}

@@ -10,7 +10,7 @@ export const LEVELS = [
 export const levelLabel = (k) => (LEVELS.find((x) => x.key === k) || { label: k === "none" ? "No access" : k || "—" }).label;
 
 // screens office and warehouse logins can open
-const DAY_TO_DAY = ["home", "tasks", "customers", "invoices", "quotes", "samples", "schedule", "loading", "issues", "collections"];
+const DAY_TO_DAY = ["home", "tasks", "customers", "invoices", "quotes", "samples", "schedule", "reviews", "loading", "issues", "collections"];
 
 export const accessFor = (role, readOnly) => {
   const r = role || "none";

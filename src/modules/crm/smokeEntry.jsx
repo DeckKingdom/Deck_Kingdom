@@ -9,6 +9,7 @@ import CollectionsScreen from "./CollectionsScreen.jsx";
 import VansScreen from "./VansScreen.jsx";
 import QuotesScreen from "./QuotesScreen.jsx";
 import SamplesScreen from "./SamplesScreen.jsx";
+import ReviewsScreen, { reviewStage } from "./ReviewsScreen.jsx";
 import TasksScreen from "./TasksScreen.jsx";
 import PurchasesScreen from "./PurchasesScreen.jsx";
 import { syncCatalogue, renameSkus, skuFor, codeSource, numericSku, skuLists, masterKey, colourSeg, skuSource } from "../../lib/crmCore.js";
@@ -79,6 +80,11 @@ export default function run(React, renderToString) {
   assert(html.includes("£1,452.00") && html.includes("£242.00") && html.includes("£1,210.00"), "invoice entry totals");
   html = renderToString(React.createElement(ScheduleScreen, props));
   assert(html.includes("Bob") && html.includes("1 job"), "schedule shows the job");
+  // reviews & photos: the delivered job starts at "To ask" and moves with the flags
+  assert(reviewStage(inv) === "To ask", "review stage starts at To ask");
+  assert(reviewStage({ flags: { reviewRequested: true } }) === "Awaiting review" && reviewStage({ flags: { reviewReceived: true } }) === "Review in" && reviewStage({ flags: { socialPosted: true } }) === "Posted", "review stages from flags");
+  html = renderToString(React.createElement(ReviewsScreen, props));
+  assert(html.includes("Reviews &amp; Photos") && html.includes("Bob") && html.includes("To ask"), "reviews worklist shows the delivered job");
   html = renderToString(React.createElement(HomeScreen, { data: { products: [], shipments: [] }, crm, updateCrm: noop, me: "", askConfirm: noop, setTab: noop, addShipment: noop, newInvoice: noop }));
   assert(html.includes("Today") && html.includes("Financial overview") && html.includes("Sales this month") && html.includes("Deliveries · next 4 days") && html.includes("Projects"), "home: tasks + reports");
   html = renderToString(React.createElement(ActivityScreen, { crm, data: { products: [], shipments: [] }, storageMode: "local" }));
