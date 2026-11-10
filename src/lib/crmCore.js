@@ -2895,11 +2895,21 @@ export function collectionDropGroups(crm, coll) {
     const k = it.assignedInvoiceId || "";
     if (!groups.has(k)) {
       const inv = k ? invs.find((x) => x.id === k) : null;
-      groups.set(k, { inv, pc: pcOf(inv), drop: inv ? Number(inv.dropNo) || 0 : 0, items: [] });
+      // not delivered on this pick-up's run (another day / driver, or a customer collection): it comes back to the yard
+      const lc = (x) => String(x || "").trim().toLowerCase();
+      const onRun = !!inv && !isCollectionJob(inv) && inv.deliveryDate === coll.collectDate && (!coll.driver || !inv.driver || lc(coll.driver) === lc(inv.driver));
+      groups.set(k, { inv, onRun, pc: pcOf(inv), drop: inv ? Number(inv.dropNo) || 0 : 0, items: [] });
     }
     groups.get(k).items.push(it);
   });
+  const day = (d) => (d ? new Date(d + "T00:00:00").toLocaleDateString("en-GB", { weekday: "long" }) : "");
   return [...groups.values()]
-    .sort((a, b) => (!a.inv) - (!b.inv) || (a.drop || 99) - (b.drop || 99) || a.pc.localeCompare(b.pc))
-    .map((g) => ({ ...g, title: g.inv ? [g.drop ? "Drop " + g.drop : "Drop", g.pc].filter(Boolean).join(" · ") : "For stock" }));
+    .sort((a, b) => (!a.inv) - (!b.inv) || (!a.onRun) - (!b.onRun) || (a.drop || 99) - (b.drop || 99) || a.pc.localeCompare(b.pc))
+    .map((g) => {
+      if (!g.inv) return { ...g, title: "For stock", dest: "Warehouse" };
+      if (g.onRun) return { ...g, title: [g.drop ? "Drop " + g.drop : "Drop", g.pc].filter(Boolean).join(" · "), dest: g.pc };
+      const d = g.inv.deliveryDate;
+      const when = !d ? "" : isCollectionJob(g.inv) ? " · customer collecting " + day(d) : " · for delivery " + day(d);
+      return { ...g, title: "Return to warehouse" + when, dest: "Warehouse" };
+    });
 }

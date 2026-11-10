@@ -400,7 +400,7 @@ const CollMailButton = ({ c, crm, onSent }) => {
   const body = "Hi" + (c.contact ? " " + String(c.contact).split(/\s+/)[0] : "") + ",\n\n" +
     "Deck Kingdom will be collecting the following" + (when ? " on " + when + (c.collectTime ? " (" + c.collectTime + ")" : "") : "") + ":\n\n" +
     collectionDropGroups(crm, c).map((g) => g.title.toUpperCase() + "\n" +
-      g.items.map((it) => "  " + (it.qty || "?") + " × " + (it.description || it.sku || "") + (it.colour ? " – " + it.colour : "") + (g.pc ? "   → " + g.pc : "")).join("\n")).join("\n\n") +
+      g.items.map((it) => "  " + (it.qty || "?") + " × " + (it.description || it.sku || "") + (it.colour ? " – " + it.colour : "") + (g.dest ? "   → " + g.dest : "")).join("\n")).join("\n\n") +
     "\n\nOur reference: COL-" + (c.collectionNo || "") + (c.driver ? "\nDriver: " + c.driver : "") + (c.van ? "\nVan: " + c.van : "") +
     "\n\nPlease could you have these ready. Any problems, call us on 0161 399 1837.\n\nKind regards,\nDeck Kingdom";
   const href = "https://mail.google.com/mail/?view=cm&fs=1&to=" + encodeURIComponent(email) + "&su=" + encodeURIComponent("Collection COL-" + (c.collectionNo || "") + " – Deck Kingdom" + (when ? " – " + when : "")) + "&body=" + encodeURIComponent(body);

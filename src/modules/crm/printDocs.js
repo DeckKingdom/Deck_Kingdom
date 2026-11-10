@@ -260,7 +260,7 @@ const collectionBody = (coll, crm) => {
       g.items.map((it) => `
     <tr><td style="width:26px"><div style="width:16px;height:16px;border:2px solid #0B1F3F;border-radius:4px"></div></td>
     <td>${esc(it.description || it.sku)}${it.colour ? " · " + esc(it.colour) : ""}${withSize(it)}</td>
-    <td style="width:90px;white-space:nowrap;color:#5a6a85">${g.pc ? "→ " + esc(g.pc) : ""}</td>
+    <td style="width:100px;white-space:nowrap;color:#5a6a85">${g.dest ? "→ " + esc(g.dest) : ""}</td>
     <td class="r big">${esc(it.qty)}</td></tr>`).join("");
   }).join("");
   // notes without the "For <customer>" line - the drops above say who it's for
