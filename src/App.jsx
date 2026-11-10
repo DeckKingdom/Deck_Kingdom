@@ -39,7 +39,7 @@ function Routed() {
   if (me.role === "driver") return <DriverApp me={{ fullName: me.full_name || "", driverName: me.driver_name || "", email: getSessionEmail() || "" }} />;
   // warehouse on a phone: the loading app for every van (?full=1 opens the whole system)
   const phone = typeof window !== "undefined" && window.matchMedia && window.matchMedia("(max-width: 760px)").matches;
-  if (me.role === "warehouse" && phone && !/[?&]full=1/.test(window.location.search)) return <DriverApp warehouse me={{ fullName: me.full_name || "", email: getSessionEmail() || "" }} />;
+  if (me.role === "warehouse" && phone && !/[?&]full=1/.test(window.location.search)) return <DriverApp warehouse me={{ fullName: me.full_name || "", driverName: me.driver_name || "", email: getSessionEmail() || "" }} />;
   // admin / manager: the driver screen as any driver (or the loading app) - for runs, loading and testing
   const pa = (me.role === "admin" || me.role === "manager") ? phoneAppParams() : null;
   if (pa) {
@@ -81,8 +81,8 @@ resumePhoneApp();
 export default function App() {
   // local/offline version: ?as=driver&driver=Brian previews the driver phone screen
   let localDriver = "", localWarehouse = false;
-  try { const q = new URLSearchParams(window.location.search); if (q.get("as") === "driver") localDriver = q.get("driver") || "Brian"; if (q.get("as") === "warehouse") localWarehouse = true; } catch (e) { /* ignore */ }
+  try { const q = new URLSearchParams(window.location.search); if (q.get("as") === "driver") localDriver = q.get("driver") || "Brian"; if (q.get("as") === "warehouse") { localWarehouse = true; localDriver = q.get("driver") || ""; } } catch (e) { /* ignore */ }
   const pa = storageMode === "supabase" ? null : phoneAppParams();
   if (pa) return <ErrorBoundary><DriverApp warehouse={pa.app === "loading"} switcher={{ current: pa, myName: "Jon" }} me={{ fullName: "Jon", driverName: pa.driver || "", email: "jon" }} /><InstallHint /></ErrorBoundary>;
-  return <ErrorBoundary>{storageMode === "supabase" ? <AuthGate /> : localDriver ? <DriverApp me={{ driverName: localDriver }} /> : localWarehouse ? <DriverApp warehouse me={{ fullName: "Warehouse" }} /> : <ImportPlanner />}<InstallHint /></ErrorBoundary>;
+  return <ErrorBoundary>{storageMode === "supabase" ? <AuthGate /> : localWarehouse ? <DriverApp warehouse me={{ fullName: "Warehouse", driverName: localDriver, email: localDriver ? "ian@dk.co.uk" : "" }} /> : localDriver ? <DriverApp me={{ driverName: localDriver }} /> : <ImportPlanner />}<InstallHint /></ErrorBoundary>;
 }

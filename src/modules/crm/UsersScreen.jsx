@@ -66,6 +66,16 @@ export default function UsersScreen({ me }) {
       </label>
     );
   };
+  // a warehouse login can also drive (e.g. Ian): their own runs on the phone's Deliveries tab
+  const alsoDrives = (r, onChange, disabled) => (
+    <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600, color: NAVY, marginLeft: 12 }} title="If they also drive, the name they go by on the delivery schedule — their phone shows their own runs as well as loading every van">
+      Also drives as
+      <select style={{ ...inp, width: 110, padding: "6px 8px" }} value={r.driver_name || ""} disabled={disabled} onChange={(e) => onChange(e.target.value)}>
+        <option value="">—</option>
+        {[...new Set([...DRIVERS, r.driver_name].filter(Boolean))].map((n) => <option key={n} value={n}>{n}</option>)}
+      </select>
+    </label>
+  );
   const roToggle = (on, onChange, disabled) => (
     <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600, cursor: disabled ? "default" : "pointer", color: on ? NAVY : "#8593a8" }}>
       <input type="checkbox" checked={!!on} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />Read only
@@ -104,7 +114,7 @@ export default function UsersScreen({ me }) {
                     <td style={{ ...td, fontWeight: 700 }}>{r.full_name || <span style={{ color: "#aab3c2" }}>—</span>}{self && <span style={{ fontSize: 11, color: "#8593a8", marginLeft: 6 }}>(you)</span>}</td>
                     <td style={td}>{r.email}</td>
                     <td style={td}>{levelSelect(r.role, (v) => save({ ...r, role: v }), busy === r.email || self)}</td>
-                    <td style={td}>{r.role === "driver" ? driverSelect(r, (v) => save({ ...r, driver_name: v }), busy === r.email || self) : r.role !== "none" && roToggle(r.read_only, (v) => save({ ...r, read_only: v }), busy === r.email || self)}</td>
+                    <td style={td}>{r.role === "driver" ? driverSelect(r, (v) => save({ ...r, driver_name: v }), busy === r.email || self) : r.role !== "none" && <>{roToggle(r.read_only, (v) => save({ ...r, read_only: v }), busy === r.email || self)}{r.role === "warehouse" && alsoDrives(r, (v) => save({ ...r, driver_name: v }), busy === r.email || self)}</>}</td>
                     <td style={{ ...td, fontSize: 12.5, fontWeight: 700, color: r.login ? "#28713e" : "#a05f10", whiteSpace: "nowrap" }}>
                       {r.login ? "Has a login" : "Needs a login ↓"}
                     </td>

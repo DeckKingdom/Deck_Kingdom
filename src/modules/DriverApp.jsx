@@ -12,6 +12,7 @@ import { runsOn, loadState, canCheck, shortName } from "../lib/loading.js";
 import { loadLoading } from "../data/loading.js";
 import LoadingMobile from "./LoadingMobile.jsx";
 import DriverPicker, { openPhoneApp } from "./DriverPicker.jsx";
+import DriverTasks from "./DriverTasks.jsx";
 import { outwardCode, tidyPostcode, googleNavHref, appleNavHref, isApple } from "../lib/addressCheck.js";
 
 const GREEN = "#28713e";
@@ -28,8 +29,11 @@ const label = { display: "block", fontSize: 12, fontWeight: 800, letterSpacing: 
 // switcher: { current, myName } when an admin / manager opened this from the office system
 export default function DriverApp({ me, warehouse, switcher }) {
   const [picking, setPicking] = useState(false);
-  // warehouse logins on a phone get the loading side for every van; drivers get their own runs
-  const driver = warehouse ? "" : me.driverName || (me.fullName || "").split(" ")[0] || "";
+  // warehouse logins on a phone get the loading side for every van; drivers get their own runs.
+  // A warehouse login that also drives (a driver name set in Users & access, e.g. Ian) gets both:
+  // Loading for every van, Deliveries for their own runs.
+  const driver = warehouse ? me.driverName || "" : me.driverName || (me.fullName || "").split(" ")[0] || "";
+  const allVans = warehouse || !!switcher; // who loads every van, not just their own
   const who = me.email || me.fullName || driver || "warehouse";
   const [mode, setMode] = useState(warehouse ? "loading" : "deliveries");
   const [crm, setCrm] = useState(null);
@@ -84,7 +88,7 @@ export default function DriverApp({ me, warehouse, switcher }) {
   );
 
   // Loading | Deliveries switch under the header (drivers)
-  const tabs = warehouse ? null : (
+  const tabs = !driver ? null : (
     <div style={{ display: "flex", gap: 6, padding: "10px 14px 0", position: "sticky", top: 68, zIndex: 4, background: "#f3f5f8" }}>
       {[["loading", "Loading"], ["deliveries", "Deliveries"]].map(([k, l]) => (
         <button key={k} type="button" onClick={() => { setMode(k); setView(null); }}
@@ -95,7 +99,7 @@ export default function DriverApp({ me, warehouse, switcher }) {
   if (mode === "loading") {
     return (
       <div style={page}>
-        <LoadingMobile key={loads} crm={crm} driver={warehouse ? null : driver} who={who} header={header} nav={tabs} />
+        <LoadingMobile key={loads} crm={crm} driver={allVans ? null : driver} who={who} header={header} nav={tabs} />
         {warehouse && !switcher && <div style={{ padding: "0 14px" }}><button type="button" onClick={() => signOut().then(() => window.location.reload())}
           style={{ marginTop: 10, width: "100%", border: "1px solid #d5d9e0", background: "#fff", borderRadius: 12, padding: 12, fontFamily: "inherit", fontWeight: 700, color: "#5a6a85", cursor: "pointer" }}>Sign out</button>
           <a href="?full=1" style={{ display: "block", textAlign: "center", marginTop: 12, fontSize: 13, fontWeight: 700, color: "#185FA5" }}>Open the full ops system</a></div>}
@@ -138,6 +142,7 @@ export default function DriverApp({ me, warehouse, switcher }) {
             <span style={{ fontSize: 12.5, fontWeight: 700, color: "#aeb9cf" }}>Log a fill-up</span>
           </button>
         </div>
+        <DriverTasks crm={crm} who={me.email || ""} setCrm={setCrm} />
         {switcher ? <button type="button" onClick={() => openPhoneApp(null)}
           style={{ marginTop: 22, width: "100%", border: "1px solid #d5d9e0", background: "#fff", borderRadius: 12, padding: 12, fontFamily: "inherit", fontWeight: 800, color: NAVY, cursor: "pointer" }}>🏠 Back to the office system</button> : <button type="button" onClick={() => signOut().then(() => window.location.reload())}
           style={{ marginTop: 22, width: "100%", border: "1px solid #d5d9e0", background: "#fff", borderRadius: 12, padding: 12, fontFamily: "inherit", fontWeight: 700, color: "#5a6a85", cursor: "pointer" }}>Sign out</button>}

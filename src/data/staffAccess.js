@@ -27,6 +27,7 @@ export async function saveAccess({ email, full_name, role, read_only, driver_nam
     return;
   }
   const row = { email: e, full_name: full_name || "", role, read_only: !!read_only };
-  if (role === "driver" || driver_name) row.driver_name = role === "driver" ? driver_name || String(full_name || "").split(" ")[0] : "";
+  // drivers always go by a name; a warehouse login may also drive (blank = doesn't)
+  row.driver_name = role === "driver" ? driver_name || String(full_name || "").split(" ")[0] : role === "warehouse" ? String(driver_name || "").trim() : "";
   await run(sb.from("staff_invites").upsert(row));
 }
