@@ -67,6 +67,26 @@ export function printAllToSend(crm, updateCrm, askConfirm, notice) {
   });
 }
 
+// Mark every sample still to send as sent today (no printing)
+export function markAllSent(crm, updateCrm, askConfirm) {
+  const list = samplesIn(crm, SAMPLE_GROUPS.send);
+  if (!list.length) return;
+  askConfirm({
+    message: "Mark all " + list.length + " sample request" + (list.length === 1 ? "" : "s") + " still to send as sent today (Evri unless already set)?",
+    confirmLabel: "Mark all sent",
+    action: () =>
+      updateCrm((c) => {
+        const ids = new Set(list.map((x) => x.id));
+        c.samples.forEach((x) => {
+          if (!ids.has(x.id) || x.dispatchedDate) return;
+          x.dispatchedDate = today();
+          if (!x.dispatchMethod) x.dispatchMethod = "Evri";
+        });
+        return c;
+      }),
+  });
+}
+
 // Email a follow-up group, then offer to tick them off
 export function emailFollowUpGroup(crm, updateCrm, askConfirm, stage, notice) {
   const list = samplesIn(crm, stage === "second" ? SAMPLE_GROUPS.second : SAMPLE_GROUPS.first);
