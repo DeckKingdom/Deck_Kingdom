@@ -150,11 +150,11 @@ export default function DriverApp({ me, warehouse, switcher }) {
   const counts = { loading: nLoad, deliveries: nDel, tasks: nTasks };
   const tabList = [["loading", "Loading"], ...(driver ? [["deliveries", "Deliveries"]] : []), ["tasks", "Tasks"]];
   const tabs = (
-    <div style={{ display: "flex", gap: 6, padding: "10px 14px 0", position: "sticky", top: 68, zIndex: 4, background: "#f3f5f8" }}>
+    <div style={{ display: "flex", gap: 8, padding: "12px 14px 0", position: "sticky", top: 68, zIndex: 4, background: "#f3f5f8" }}>
       {tabList.map(([k, l]) => (
         <button key={k} type="button" onClick={() => { setMode(k); setView(null); }}
-          style={{ flex: 1, borderRadius: 12, padding: "11px 6px", fontFamily: "inherit", fontWeight: 800, fontSize: 15, cursor: "pointer", border: "1px solid " + (mode === k ? NAVY : "#d5d9e0"), background: mode === k ? NAVY : "#fff", color: mode === k ? "#fff" : NAVY, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-          {l}{counts[k] > 0 && <span title={k === "loading" ? "Vans still to load or check today" : k === "deliveries" ? "Stops still to do today" : "Tasks still to do"} style={{ minWidth: 20, height: 20, borderRadius: 99, background: RED, color: "#fff", fontSize: 11.5, fontWeight: 800, display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "0 5px" }}>{counts[k]}</span>}
+          style={{ position: "relative", flex: 1, minWidth: 0, borderRadius: 12, padding: "11px 4px", fontFamily: "inherit", fontWeight: 800, fontSize: "clamp(13px, 3.9vw, 15px)", cursor: "pointer", border: "1px solid " + (mode === k ? NAVY : "#d5d9e0"), background: mode === k ? NAVY : "#fff", color: mode === k ? "#fff" : NAVY, whiteSpace: "nowrap" }}>
+          {l}{counts[k] > 0 && <span title={k === "loading" ? "Vans still to load or check today" : k === "deliveries" ? "Stops still to do today" : "Tasks still to do"} style={{ position: "absolute", top: -7, right: -4, minWidth: 20, height: 20, borderRadius: 99, background: RED, color: "#fff", border: "2px solid #f3f5f8", fontSize: 11.5, fontWeight: 800, display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "0 5px", boxSizing: "border-box", lineHeight: 1 }}>{counts[k]}</span>}
         </button>
       ))}
     </div>
