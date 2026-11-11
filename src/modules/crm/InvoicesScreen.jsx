@@ -7,7 +7,7 @@ import {
   recordOrigin, blankInvoice, blankLine, nextNumber, blankSite, DRIVERS, invoiceTotals, gbp, isPaid,
   JOB_TYPES, PAYMENT_TYPES, PREP_FLAGS, FOLLOWUP_FLAGS, today, TIME_SLOTS, vanOptions,
   skuIndex, invoiceCost, buildPicks, pickLandedCost, jobCost, blankPick, invoiceLoadKg, applyInvoiceStockDeduction, releaseInvoiceLinks,
-  TRADE_COUNTER, isCollectionJob, TRADE_COUNTER_LABEL, quoteRef, sampleRef, isSaleInvoice, riskOf, staffName, isVoidInvoice, onSchedule, userInitials, isHistoric } from "../../lib/crmCore.js";
+  TRADE_COUNTER, isCollectionJob, TRADE_COUNTER_LABEL, quoteRef, sampleRef, isSaleInvoice, riskOf, staffName, isVoidInvoice, onSchedule, userInitials, isHistoric, SERVED_BY, sourceOptions } from "../../lib/crmCore.js";
 import { ListHero, HeroStat, HeroAdd, SearchBox, RiskChip, WebStatusChip, Soon, DateInput, CalendarPop, usePhone, PrintButton, bandBtn, BandDelete } from "./ui.jsx";
 import { invoiceEmailLink, invoiceEmailTo } from "../../lib/invoiceEmail.js";
 import { Icon, Chip, Tg, Modal, selectAllProps, SuggestInput, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
@@ -647,6 +647,21 @@ export default function InvoicesScreen({ headerH = 0, openProduct, money = true,
           </div>
           {field("Payment date", "paymentDate", { type: "date" })}
           {field("Order ref / PO", "orderRef")}
+          <div>
+            <span style={lbl}>Served by</span>
+            <select style={inp} value={inv.servedBy || ""} onChange={(e) => setInv((x) => (x.servedBy = e.target.value))}>
+              <option value="">—</option>
+              {inv.servedBy && !SERVED_BY.includes(inv.servedBy) && <option value={inv.servedBy}>{inv.servedBy}</option>}
+              {SERVED_BY.map((n) => <option key={n} value={n}>{n}</option>)}
+            </select>
+          </div>
+          <div>
+            <span style={lbl} title="Where this customer found us — taken from their account unless changed here">Source</span>
+            <select style={inp} value={inv.source || (cust && cust.source) || ""} onChange={(e) => setInv((x) => (x.source = e.target.value))}>
+              <option value="">—</option>
+              {sourceOptions(inv.source || (cust && cust.source)).map((s2) => <option key={s2} value={s2}>{s2}</option>)}
+            </select>
+          </div>
         </div>
       </div>
 

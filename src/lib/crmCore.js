@@ -8,6 +8,12 @@ export const RUN_NOS = ["1", "2", "3", "4", "5", "6"];
 export const isCollectionJob = (inv) => /collection/i.test(inv && inv.jobType ? inv.jobType : "");
 export const PAYMENT_TYPES = ["COD", "Stripe", "Transfer", "Card", "Cash", "Post"];
 export const SOURCES = ["Manual entry", "Website", "Market Place", "Repeat", "Transfer", "Word of Mouth", "Walk-in"];
+// where a customer found us - the account's Source dropdown (and the job's)
+export const CUSTOMER_SOURCES = ["Website Order", "Website Enquiry", "Website", "Market Place", "Ebay", "Google Maps", "Direct Marketing",
+  "Trade Counter", "Passing", "Walk-in", "Referal", "Word of Mouth", "Repeat Customer", "Sample Conversion", "Transfer", "Manual entry"];
+export const sourceOptions = (current) => (current && !CUSTOMER_SOURCES.some((s) => s.toLowerCase() === String(current).toLowerCase()) ? [current, ...CUSTOMER_SOURCES] : CUSTOMER_SOURCES);
+// who served the customer (trade counter / phone)
+export const SERVED_BY = ["Molly", "Ian", "Mands", "Jon", "Hayley"];
 // sentinel siteId for walk-in/trade-counter jobs: no delivery site, the
 // customer collects from the warehouse
 export const TRADE_COUNTER = "__trade_counter__";

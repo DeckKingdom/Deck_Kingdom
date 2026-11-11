@@ -5,7 +5,7 @@ import { InvoicePeek, useHoverPeek } from "./Peeks.jsx";
 import { NAVY, GOLD, RED, prettyDate, prettyDateTime, addDays as addDaysC } from "../../lib/core.js";
 import {
   originText, recordOrigin, userInitials,
-  blankCustomer, blankSite, nextNumber, SOURCES,
+  blankCustomer, blankSite, nextNumber, SOURCES, sourceOptions,
   invoiceTotals, gbp, isPaid, isSaleInvoice, today as todayC, followUpDone, FOLLOWUP_FLAGS, FIELD_FORMATS, CONTACT_METHODS,
   TRADE_COUNTER, TRADE_COUNTER_LABEL, quoteTotals, quoteStatus, quoteInvoice, quoteRef, QUOTE_TONES, sampleRef, sampleStatus, sampleInvoice, SAMPLE_TONES,
   isVoidInvoice,
@@ -936,12 +936,10 @@ export default function CustomersScreen({ money = true, crm, updateCrm, askConfi
             {custField("email", "Email", {}, { gridColumn: "span 2" })}
             <div>
               <span style={lbl}>Source</span>
-              <SuggestInput
-                value={custDraft.source}
-                options={[...new Set([...SOURCES, ...crm.customers.map((c) => (c.source || "").trim()).filter(Boolean)])].sort()}
-                format={FIELD_FORMATS.source}
-                onChange={(v) => setCustDraft((d) => ({ ...d, source: v }))}
-              />
+              <select style={inp} value={custDraft.source || ""} onChange={(e) => setCustDraft((d) => ({ ...d, source: e.target.value }))}>
+                <option value="">—</option>
+                {sourceOptions(custDraft.source).map((s2) => <option key={s2} value={s2}>{s2}</option>)}
+              </select>
             </div>
             <div>
               <span style={lbl}>Preferred contact</span>

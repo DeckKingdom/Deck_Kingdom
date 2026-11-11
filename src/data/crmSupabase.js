@@ -158,6 +158,7 @@ const invToRow = (inv, i) => {
   if (runReady) { row.driver = str(inv.driver); row.drop_no = str(inv.dropNo); }
   if (runNoReady) row.run_no = str(inv.runNo);
   if (reviewDatesReady) { row.review_asked_at = str(inv.reviewAskedAt); row.review_nudged_at = str(inv.reviewNudgedAt); }
+  if (servedReady) { row.served_by = str(inv.servedBy); row.source = str(inv.source); }
   return row;
 };
 
@@ -170,6 +171,7 @@ let webStatusReady = false; // invoices.web_status (migration 032)
 let runReady = false; // invoices.driver / drop_no (migration 033)
 let runNoReady = false; // invoices.run_no (migration 034)
 let reviewDatesReady = false; // invoices.review_asked_at / review_nudged_at (migration 053)
+let servedReady = false; // invoices.served_by / source (migration 056)
 export const reviewDatesSchemaReady = () => reviewDatesReady;
 let collRunReady = false; // collections.driver / run_no / drop_no (migration 035)
 let collMailReady = false; // collections.emailed_at (migration 042)
@@ -455,6 +457,7 @@ async function loadAll() {
   runReady = is_.length ? Object.prototype.hasOwnProperty.call(is_[0], "drop_no") : runReady;
   runNoReady = is_.length ? Object.prototype.hasOwnProperty.call(is_[0], "run_no") : runNoReady;
   reviewDatesReady = is_.length ? Object.prototype.hasOwnProperty.call(is_[0], "review_asked_at") : reviewDatesReady;
+  servedReady = is_.length ? Object.prototype.hasOwnProperty.call(is_[0], "served_by") : servedReady;
   const invoices = is_.map((r) => {
     const inv = {
       id: r.id,
@@ -478,6 +481,7 @@ async function loadAll() {
     inv.webStatus = nv(r.web_status);
     inv.driver = nv(r.driver); inv.dropNo = nv(r.drop_no); inv.runNo = nv(r.run_no);
     inv.reviewAskedAt = nv(r.review_asked_at); inv.reviewNudgedAt = nv(r.review_nudged_at);
+    inv.servedBy = nv(r.served_by); inv.source = nv(r.source);
     // old "Delivery Run 2" job types: job type Delivery, run 2 (once the run column exists)
     { const m = runNoReady && /^\s*Delivery Run\s*(\d+)\s*$/i.exec(inv.jobType || ""); if (m) { inv.jobType = "Delivery"; if (!inv.runNo) inv.runNo = m[1]; } }
     inv.riskFlag = nv(r.risk_flag); inv.riskNote = nv(r.risk_note); inv.riskChecked = nv(r.risk_checked);
