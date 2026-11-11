@@ -51,7 +51,7 @@ export function PeekShell({ onClose, width = 1120, title = "", children }) {
   }, [onClose]);
 
   return (
-    <div onMouseDownCapture={bringFront}
+    <div data-peek="1" onMouseDownCapture={bringFront}
       style={{ position: "fixed", left: pos.x, top: pos.y, width: PW, maxHeight: "calc(100dvh - 50px)", display: "flex", flexDirection: "column", zIndex: z, background: "#fff", border: "1px solid #d8dde6", borderRadius: 12, boxShadow: "0 18px 50px rgba(11,31,63,.35)", boxSizing: "border-box", overflow: "hidden" }}>
       <div onPointerDown={onBarDown}
         style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 10px 7px 14px", background: "#f3f5f9", borderBottom: "1px solid #e6e9ef", cursor: "move", userSelect: "none", flex: "none", touchAction: "none" }}>
@@ -222,4 +222,39 @@ export function CollectionPeek({ crm, collId, updateCrm, onClose, onOpenFull, on
       </div>
     </PeekShell>
   );
+}
+
+// Hover to peek: rest the mouse on a link for a moment and its peek opens; it closes again when
+// the mouse leaves both the link and the peek - unless you clicked the link or into the peek,
+// which pins it open like a normal click.  const hp = useHoverPeek(setPeekInv);  <button {...hp.bind(id)} />
+export function useHoverPeek(open, wait = 450) {
+  const t = useRef({ open: null, close: null, hoverId: null, pinned: false });
+  const clear = () => { clearTimeout(t.current.open); clearTimeout(t.current.close); };
+  useEffect(() => {
+    // anything clicked inside a peek pins it
+    const down = (e) => { if (e.target.closest && e.target.closest("[data-peek]")) t.current.pinned = true; };
+    window.addEventListener("pointerdown", down, true);
+    return () => { window.removeEventListener("pointerdown", down, true); clear(); };
+  }, []);
+  const overPeek = () => !!document.querySelector("[data-peek]:hover");
+  const scheduleClose = () => {
+    clearTimeout(t.current.close);
+    t.current.close = setTimeout(() => {
+      if (!t.current.hoverId || t.current.pinned) return;
+      if (overPeek()) { scheduleClose(); return; } // still reading it - check again shortly
+      t.current.hoverId = null;
+      open(null);
+    }, 300);
+  };
+  return {
+    bind: (id) => ({
+      onMouseEnter: () => {
+        clear();
+        if (t.current.hoverId === id) return;
+        t.current.open = setTimeout(() => { t.current.hoverId = id; t.current.pinned = false; open(id); }, wait);
+      },
+      onMouseLeave: () => { clearTimeout(t.current.open); if (t.current.hoverId) scheduleClose(); },
+      onClick: () => { clear(); t.current.hoverId = null; t.current.pinned = true; open(id); },
+    }),
+  };
 }
