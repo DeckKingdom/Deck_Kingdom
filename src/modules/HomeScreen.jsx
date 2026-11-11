@@ -463,7 +463,7 @@ export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTa
       </div>
 
       {draft && crm && <TaskModal crm={crm} updateCrm={updateCrm} me={me} draft={draft} askConfirm={askConfirm} onClose={() => setDraft(null)} />}
-      {colPeek && crm && !invPeek && (
+      {colPeek && crm && (
         <CollectionPeek crm={crm} collId={colPeek} updateCrm={updateCrm}
           onClose={() => setColPeek(null)}
           onOpenFull={(id) => { setColPeek(null); openCollection ? openCollection(id) : setTab("collections"); }}

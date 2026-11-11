@@ -468,15 +468,15 @@ export default function QuotesScreen({ openProduct, money = true, crm, updateCrm
           </div>
         </div>
       </div>
-      {peekCust && !peekInv && (
+      {peekCust && (
         <CustomerPeek crm={crm} custId={peekCust} onClose={() => setPeekCust(null)}
-          onOpenFull={(id) => { setPeekCust(null); goCustomer(id); }}
+          onOpenFull={(id) => { setPeekCust(null); setPeekInv(null); goCustomer(id); }}
           onInvoice={(id) => setPeekInv(id)} />
       )}
       {peekInv && (
         <InvoicePeek crm={crm} invId={peekInv} onClose={() => setPeekInv(null)}
           onOpenFull={(id) => { setPeekInv(null); setPeekCust(null); openInvoice(id); }}
-          onCustomer={(id) => { setPeekInv(null); setPeekCust(id); }} />
+          onCustomer={(id) => setPeekCust(id)} />
       )}
     </div>
   );

@@ -441,14 +441,14 @@ export default function ReviewsScreen({ crm, updateCrm, askConfirm, openInvoice,
       {peekCust && (
         <CustomerPeek crm={crm} custId={peekCust} optOut={rs.optOut}
           onClose={() => setPeekCust(null)}
-          onOpenFull={(id) => { setPeekCust(null); goCustomer && goCustomer(id); }}
-          onInvoice={(id) => { setPeekCust(null); setPeek(id); }} />
+          onOpenFull={(id) => { setPeekCust(null); setPeek(null); goCustomer && goCustomer(id); }}
+          onInvoice={(id) => setPeek(id)} />
       )}
-      {peek && !peekCust && (
+      {peek && (
         <InvoicePeek crm={crm} invId={peek}
           onClose={() => setPeek(null)}
-          onOpenFull={(id) => { setPeek(null); openInvoice && openInvoice(id); }}
-          onCustomer={(id) => { setPeek(null); setPeekCust(id); }} />
+          onOpenFull={(id) => { setPeek(null); setPeekCust(null); openInvoice && openInvoice(id); }}
+          onCustomer={(id) => setPeekCust(id)} />
       )}
       {settings && <ReviewSettings rs={rs} onSave={(d) => { saveRs(d); setSettings(false); }} onClose={() => setSettings(false)} />}
       {dupes && <DupePanel groups={dupeGroups} crm={crm} goCustomer={goCustomer} optOut={rs.optOut} onClose={() => setDupes(false)} />}

@@ -1,6 +1,7 @@
 // Shared peek pop-overs — the system-wide rule: clicking a record's link opens
 // it in a pop-over rather than navigating away, and links inside a pop-over
 // open the next pop-over. Each has an "Open …" button for the full screen.
+import { useState, useRef, useEffect } from "react";
 import { NAVY, prettyDate } from "../../lib/core.js";
 import { gbp, invoiceTotals, isPaid, isSaleInvoice, mobileOf, DRIVERS, vanOptions, itemPending, sizeLabel, isGrassRoll } from "../../lib/crmCore.js";
 import { Icon, btn, goldBtn, lbl, inp, Chip } from "./ui.jsx";
@@ -9,15 +10,60 @@ import LinesEditor from "./LinesEditor.jsx";
 export const peekChip = (bg, fg) => ({ fontSize: 11, fontWeight: 800, color: fg, background: bg, borderRadius: 999, padding: "2px 8px", whiteSpace: "nowrap" });
 const linkBtn = { border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit", padding: 0 };
 
-export function PeekShell({ onClose, width = 1120, children }) {
+// Peeks are small floating windows, not modals: no backdrop, so windows can
+// stack with the ones behind still visible and editable. Drag by the top bar,
+// click anywhere to bring to the front, close with the X (or Esc, topmost first).
+let topZ = 80; // peeks float above modals (z 60) but below reminders (z 90+)
+let openSeq = 0; // cascade: each new window lands a step down-right of the last
+export function PeekShell({ onClose, width = 1120, title = "", children }) {
   const PW = Math.min(width, window.innerWidth - 40);
+  const [z, setZ] = useState(() => ++topZ);
+  const [pos, setPos] = useState(() => {
+    const n = openSeq++ % 7;
+    return {
+      x: Math.min(Math.max(10, Math.round((window.innerWidth - PW) / 2)) + n * 30, window.innerWidth - PW - 10),
+      y: 30 + n * 30,
+    };
+  });
+  const posRef = useRef(pos); posRef.current = pos;
+  const zRef = useRef(z); zRef.current = z;
+  const bringFront = () => { if (zRef.current !== topZ) setZ(++topZ); };
+
+  const onBarDown = (e) => {
+    if (e.target.closest("button, a, input, select, textarea")) return; // the X and friends still click
+    bringFront();
+    const start = { dx: e.clientX - posRef.current.x, dy: e.clientY - posRef.current.y };
+    const move = (ev) => setPos({
+      x: Math.min(Math.max(10 - PW + 80, ev.clientX - start.dx), window.innerWidth - 60),
+      y: Math.min(Math.max(0, ev.clientY - start.dy), window.innerHeight - 40),
+    });
+    const up = () => window.removeEventListener("pointermove", move);
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up, { once: true });
+    e.preventDefault();
+  };
+
+  // Esc closes the topmost window
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape" && zRef.current === topZ) onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   return (
-    <>
-      <div onMouseDown={onClose} style={{ position: "fixed", inset: 0, zIndex: 70, background: "rgba(11,31,63,0.25)" }} />
-      <div style={{ position: "fixed", left: Math.max(10, Math.round((window.innerWidth - PW) / 2)), top: 36, width: PW, maxHeight: "calc(100dvh - 72px)", overflowY: "auto", zIndex: 71, background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, boxShadow: "0 14px 40px rgba(11,31,63,.28)", padding: "14px 18px", boxSizing: "border-box" }}>
-        {children}
+    <div onMouseDownCapture={bringFront}
+      style={{ position: "fixed", left: pos.x, top: pos.y, width: PW, maxHeight: "calc(100dvh - 50px)", display: "flex", flexDirection: "column", zIndex: z, background: "#fff", border: "1px solid #d8dde6", borderRadius: 12, boxShadow: "0 18px 50px rgba(11,31,63,.35)", boxSizing: "border-box", overflow: "hidden" }}>
+      <div onPointerDown={onBarDown}
+        style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 10px 7px 14px", background: "#f3f5f9", borderBottom: "1px solid #e6e9ef", cursor: "move", userSelect: "none", flex: "none", touchAction: "none" }}>
+        <span style={{ fontSize: 12, fontWeight: 800, color: "#5a6a85", letterSpacing: 0.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{title}</span>
+        <span style={{ flex: 1 }} />
+        <button onClick={onClose} title="Close (Esc)"
+          style={{ border: "none", background: "transparent", cursor: "pointer", padding: 4, lineHeight: 0, borderRadius: 6 }}>
+          <Icon name="x" stroke="#5a6a85" size={14} />
+        </button>
       </div>
-    </>
+      <div style={{ overflowY: "auto", padding: "12px 18px 14px" }}>{children}</div>
+    </div>
   );
 }
 
@@ -30,7 +76,7 @@ export function InvoicePeek({ crm, invId, onClose, onOpenFull, onCustomer }) {
   const t = invoiceTotals(i);
   const addr = (s ? [s.name !== s.address ? s.name : "", s.address, s.town, s.postcode] : c ? [c.address, c.town, c.postcode] : []).filter(Boolean);
   return (
-    <PeekShell onClose={onClose}>
+    <PeekShell onClose={onClose} title={"Job #" + (i.invNo || "—") + ((c && c.name) ? " · " + c.name : "")}>
       <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
         {onCustomer && c ? (
           <button onClick={() => onCustomer(c.id)} title="Peek at the account" style={{ ...linkBtn, fontSize: 15, fontWeight: 700, color: NAVY, textDecoration: "underline", textDecorationColor: "#c8cfdb" }}>{c.name || "Unnamed"}</button>
@@ -73,7 +119,7 @@ export function CustomerPeek({ crm, custId, optOut = [], onClose, onOpenFull, on
   const mob = mobileOf(c);
   const line = (label, v) => (v ? <div style={{ display: "flex", gap: 8, fontSize: 13, fontWeight: 600, padding: "2px 0" }}><span style={{ color: "#8593a8", width: 86, flex: "none" }}>{label}</span><span style={{ color: NAVY }}>{v}</span></div> : null);
   return (
-    <PeekShell onClose={onClose} width={600}>
+    <PeekShell onClose={onClose} width={600} title={"Account #" + (c.accountNo || "—") + (c.name ? " · " + c.name : "")}>
       <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
         <b style={{ fontSize: 15, color: NAVY }}>{c.name || "Unnamed"}</b>
         <span style={{ fontSize: 12, fontWeight: 700, color: "#8593a8" }}>#{c.accountNo || "—"}</span>
@@ -121,7 +167,7 @@ export function CollectionPeek({ crm, collId, updateCrm, onClose, onOpenFull, on
   const th = { fontSize: 10.5, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", padding: "6px 6px", borderBottom: "2px solid #e6e9ef", textAlign: "left", whiteSpace: "nowrap" };
   const td = { padding: "6px 6px", borderBottom: "1px solid #f0f2f6", fontSize: 13, fontWeight: 600, verticalAlign: "middle" };
   return (
-    <PeekShell onClose={onClose} width={820}>
+    <PeekShell onClose={onClose} width={820} title={"Collection COL-" + (c0.collectionNo || "—") + (c0.supplier ? " · " + c0.supplier : "")}>
       <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
         <b style={{ fontSize: 15, color: NAVY }}>Collection COL-{c0.collectionNo || "—"}</b>
         <span style={{ fontSize: 13, fontWeight: 700, color: "#5a6a85" }}>{c0.supplier || "Supplier"}</span>
