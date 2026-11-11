@@ -2,6 +2,7 @@
 // follow-ups due) and conversion reporting; entry screen per request.
 // Conversions are credited automatically (see syncSampleConversions).
 import { useState, useMemo, useRef } from "react";
+import { InvoicePeek, CustomerPeek } from "./Peeks.jsx";
 import { NAVY, GOLD, RED, prettyDate, prettyDateTime, addDays, daysBetween } from "../../lib/core.js";
 import {
   blankSample, blankSampleItem, blankCustomer, nextNumber, gbp, today, invoiceTotals, isSaleInvoice,
@@ -112,6 +113,8 @@ export default function SamplesScreen({ money = true, crm, updateCrm, askConfirm
   const [period, setPeriod] = useState("90");
   const [custQuery, setCustQuery] = useState("");
   const [newCust, setNewCust] = useState(null);
+  const [peekInv, setPeekInv] = useState(null);
+  const [peekCust, setPeekCust] = useState(null);
   const [stampOpen, setStampOpen] = useState(false);
   const [periodOpen, setPeriodOpen] = useState(false);
   const [rowLimit, setRowLimit] = useState(10);
@@ -346,7 +349,7 @@ export default function SamplesScreen({ money = true, crm, updateCrm, askConfirm
                           <td style={tdc}><Chip tone={SAMPLE_TONES[st]}>{st}</Chip></td>
                           <td style={{ ...tdc, whiteSpace: "nowrap" }}>
                             {inv ? (
-                              <button className="dk-title-link" title="Open the job" onClick={(e) => { e.stopPropagation(); openInvoice(inv.id); }}
+                              <button className="dk-title-link" title="Peek at the job" onClick={(e) => { e.stopPropagation(); setPeekInv(inv.id); }}
                                 style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontWeight: 700, color: "#185FA5", fontSize: 13, padding: 0 }}>
                                 {(inv.invNo ? "#" + inv.invNo : inv.orderRef || "#—") + " · " + gbp(invoiceTotals(inv).total)}
                               </button>
@@ -519,7 +522,7 @@ export default function SamplesScreen({ money = true, crm, updateCrm, askConfirm
         <div style={{ ...card, marginBottom: 0 }}>
           <p style={sect}>Customer</p>
           {cust ? (
-            <div className="dk-row-link" onClick={() => goCustomer(cust.id)} title="Open the customer's account" style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <div className="dk-row-link" onClick={() => setPeekCust(cust.id)} title="Peek at the customer's account" style={{ display: "flex", gap: 10, alignItems: "center" }}>
               <div style={{ width: 40, height: 40, borderRadius: 12, background: GOLD, color: NAVY, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17, fontWeight: 700, flex: "none" }}>
                 {(cust.name || "?").trim().charAt(0).toUpperCase() || "?"}
               </div>
@@ -579,7 +582,7 @@ export default function SamplesScreen({ money = true, crm, updateCrm, askConfirm
         <div style={{ ...card, marginBottom: 0, borderColor: inv ? "#bfe3ca" : "#e6e9ef", background: inv ? "#3FA55C0d" : "#fff" }}>
           <p style={sect}>Conversion</p>
           {inv ? (
-            <div className="dk-row-link" onClick={() => openInvoice(inv.id)} title="Open the order" style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+            <div className="dk-row-link" onClick={() => setPeekInv(inv.id)} title="Peek at the order" style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
               <div style={{ width: 40, height: 40, borderRadius: 12, background: "#3FA55C", display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>
                 <Icon name="pound" size={18} stroke="#fff" />
               </div>
@@ -767,6 +770,16 @@ export default function SamplesScreen({ money = true, crm, updateCrm, askConfirm
           );
         })()}
       </div>
+      {peekCust && !peekInv && (
+        <CustomerPeek crm={crm} custId={peekCust} onClose={() => setPeekCust(null)}
+          onOpenFull={(id) => { setPeekCust(null); goCustomer(id); }}
+          onInvoice={(id) => setPeekInv(id)} />
+      )}
+      {peekInv && (
+        <InvoicePeek crm={crm} invId={peekInv} onClose={() => setPeekInv(null)}
+          onOpenFull={(id) => { setPeekInv(null); setPeekCust(null); openInvoice(id); }}
+          onCustomer={(id) => { setPeekInv(null); setPeekCust(id); }} />
+      )}
     </div>
   );
 }

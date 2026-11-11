@@ -2,6 +2,7 @@
 // A quote mirrors an invoice (same lines, inc-VAT prices, discount, delivery)
 // on its own Q-number sequence; "Convert to invoice" raises the sale.
 import { useState } from "react";
+import { InvoicePeek, CustomerPeek } from "./Peeks.jsx";
 import { NAVY, GOLD, RED, uid, prettyDate, prettyDateTime, addDays } from "../../lib/core.js";
 import {
   blankQuote, nextNumber, quoteTotals, gbp, today, quoteRef, quoteStatus, quoteInvoice, quoteIsOpen,
@@ -40,6 +41,8 @@ export default function QuotesScreen({ openProduct, money = true, crm, updateCrm
   const [statusFilter, setStatusFilter] = useState("Open");
   const [custQuery, setCustQuery] = useState("");
   const [notice, setNotice] = useState("");
+  const [peekInv, setPeekInv] = useState(null);
+  const [peekCust, setPeekCust] = useState(null);
   const ready = quotesAvailable();
   const quotes = crm.quotes || [];
 
@@ -159,13 +162,13 @@ export default function QuotesScreen({ openProduct, money = true, crm, updateCrm
                           onMouseLeave={(e) => (e.currentTarget.style.background = "")}>
                           <td style={{ ...tdc, fontWeight: 700, color: "#185FA5", whiteSpace: "nowrap" }}>{quoteRef(x)}</td>
                           <td style={{ ...tdc, whiteSpace: "nowrap" }}>{prettyDate(x.date)}</td>
-                          <td style={{ ...tdc, fontWeight: 700 }}>{c ? (goCustomer ? <button type="button" className="dk-title-link" title="Open account" onClick={(e) => { e.stopPropagation(); goCustomer(c.id); }} style={{ fontSize: 13, fontWeight: 700, color: NAVY }}>{c.name || "Unnamed"}</button> : c.name) : <span style={{ color: RED }}>No customer</span>}</td>
+                          <td style={{ ...tdc, fontWeight: 700 }}>{c ? (goCustomer ? <button type="button" className="dk-title-link" title="Peek at the account" onClick={(e) => { e.stopPropagation(); setPeekCust(c.id); }} style={{ fontSize: 13, fontWeight: 700, color: NAVY }}>{c.name || "Unnamed"}</button> : c.name) : <span style={{ color: RED }}>No customer</span>}</td>
                           <td style={{ ...tdc, whiteSpace: "nowrap", color: st === "Expired" ? RED : undefined, fontWeight: st === "Expired" ? 700 : 400 }}>{x.validUntil ? prettyDate(x.validUntil) : "—"}</td>
                           <td style={{ ...tdc, textAlign: "right", fontWeight: 700 }}>{quoteTotals(x).total.toLocaleString("en-GB", { minimumFractionDigits: 2 })}</td>
                           <td style={tdc}><Chip tone={QUOTE_TONES[st]}>{st}</Chip></td>
                           <td style={tdc}>
                             {inv ? (
-                              <button type="button" className="dk-title-link" title={"Open job #" + (inv.invNo || "—")} onClick={(e) => { e.stopPropagation(); openInvoice(inv.id); }}
+                              <button type="button" className="dk-title-link" title={"Peek at job #" + (inv.invNo || "—")} onClick={(e) => { e.stopPropagation(); setPeekInv(inv.id); }}
                                 style={{ fontWeight: 700, color: "#185FA5", fontSize: 13 }}>
                                 #{inv.invNo || "—"}
                               </button>
@@ -355,7 +358,7 @@ export default function QuotesScreen({ openProduct, money = true, crm, updateCrm
                   {[cust.mobile || cust.landline, cust.email, cust.contactMethod ? "prefers " + cust.contactMethod : "", cust.trader ? "Trade" : "", Number(cust.discountPct) > 0 ? "−" + Number(cust.discountPct) + "%" : ""].filter(Boolean).join(" · ")}
                 </div>
               </div>
-              <button style={abtn} title="Open account" onClick={() => goCustomer(cust.id)}><Icon name="user" /></button>
+              <button style={abtn} title="Peek at the account" onClick={() => setPeekCust(cust.id)}><Icon name="user" /></button>
               {!locked && (
                 <button style={abtn} title="Change customer" onClick={() => { setQuote((x) => { x.customerId = ""; x.siteId = ""; }); setCustQuery(""); }}><Icon name="x" /></button>
               )}
@@ -465,6 +468,16 @@ export default function QuotesScreen({ openProduct, money = true, crm, updateCrm
           </div>
         </div>
       </div>
+      {peekCust && !peekInv && (
+        <CustomerPeek crm={crm} custId={peekCust} onClose={() => setPeekCust(null)}
+          onOpenFull={(id) => { setPeekCust(null); goCustomer(id); }}
+          onInvoice={(id) => setPeekInv(id)} />
+      )}
+      {peekInv && (
+        <InvoicePeek crm={crm} invId={peekInv} onClose={() => setPeekInv(null)}
+          onOpenFull={(id) => { setPeekInv(null); setPeekCust(null); openInvoice(id); }}
+          onCustomer={(id) => { setPeekInv(null); setPeekCust(id); }} />
+      )}
     </div>
   );
 }

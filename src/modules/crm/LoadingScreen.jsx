@@ -2,6 +2,7 @@
 // report. Counts can be entered here too. Whoever loads submits it with photos; a different person
 // double-checks the van, and only then do the driver's deliveries open.
 import { useEffect, useMemo, useState } from "react";
+import { InvoicePeek } from "./Peeks.jsx";
 import { NAVY, GOLD, RED, prettyDateTime } from "../../lib/core.js";
 import { ListHero, HeroStat, Chip, card, sect, lbl, inp, btn, goldBtn, Modal, Icon } from "./ui.jsx";
 import { runsOn, loadState, shortLinesOf, canCheck, shortName } from "../../lib/loading.js";
@@ -21,6 +22,7 @@ export default function LoadingScreen({ crm, me, canEdit, canManage, openInvoice
   const [err, setErr] = useState("");
   const [n, setN] = useState(0);
   const [openKey, setOpenKey] = useState(null);
+  const [peekInv, setPeekInv] = useState(null);
   useEffect(() => { try { sessionStorage.setItem("dk-load-day", date); } catch (e) { /* */ } }, [date]);
   useEffect(() => {
     let live = true;
@@ -87,7 +89,11 @@ export default function LoadingScreen({ crm, me, canEdit, canManage, openInvoice
       {cur && <RunReport run={cur} data={data} me={me} canEdit={canEdit} canManage={canManage} onClose={() => setOpenKey(null)} onChanged={() => setN((x) => x + 1)}
         setBoxCount={(invId, b) => setBoxes(cur, invId, b, me).then((row) => setData((d) => ({ ...d, counts: { ...d.counts, [cur.key]: { ...(d.counts[cur.key] || {}), [boxKey(invId)]: row } } })))}
         setCount={(item, q) => setLoaded(cur, item, q, me, { boxed: !!((data && data.counts[cur.key] || {})[item.key] || {}).boxed }).then((row) => setData((d) => ({ ...d, counts: { ...d.counts, [cur.key]: { ...(d.counts[cur.key] || {}), [item.key]: row } } })))}
-        openInvoice={openInvoice} openCollection={openCollection} />}
+        openInvoice={(id) => setPeekInv(id)} openCollection={openCollection} />}
+      {peekInv && (
+        <InvoicePeek crm={crm} invId={peekInv} onClose={() => setPeekInv(null)}
+          onOpenFull={(id) => { setPeekInv(null); openInvoice(id); }} />
+      )}
     </div>
   );
 }
@@ -136,7 +142,7 @@ function RunReport({ run, data, me, canEdit, canManage, onClose, onChanged, setC
               return (
                 <tr key={x.key} style={{ borderTop: "1px solid #f0f2f6" }}>
                   <td style={td}>{x.inv.dropNo || "—"}</td>
-                  <td style={td}><button className="dk-title-link" onClick={() => openInvoice(x.inv.id)} style={{ fontWeight: 700, color: NAVY }}>{x.customer}</button> <span style={{ color: "#8593a8", fontSize: 12 }}>#{x.inv.invNo}</span></td>
+                  <td style={td}><button className="dk-title-link" title="Peek at the job" onClick={() => openInvoice(x.inv.id)} style={{ fontWeight: 700, color: NAVY }}>{x.customer}</button> <span style={{ color: "#8593a8", fontSize: 12 }}>#{x.inv.invNo}</span></td>
                   <td style={td}>{x.line.description || x.line.code}{x.line.colour ? <span style={{ color: "#5a6a85" }}> · {x.line.colour}</span> : null}{c && c.boxed ? <span style={{ color: "#8a5a00", fontWeight: 700, fontSize: 12 }}> · 📦 in box</span> : null}</td>
                   <td style={tdR}>{x.qty}</td>
                   <td style={tdR}>

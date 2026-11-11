@@ -2,6 +2,7 @@
 // payment not taken, or a note - and every van that was loaded short. Each stays LIVE until it's sorted: by hand ("Mark sorted"), or on
 // its own once the follow-up job is delivered and / or the job shows paid.
 import { useEffect, useMemo, useState } from "react";
+import { InvoicePeek } from "./Peeks.jsx";
 import { NAVY, RED, GOLD, prettyDateTime } from "../../lib/core.js";
 import { gbp } from "../../lib/crmCore.js";
 import { ListHero, HeroStat, Chip, card, sect, lbl, inp, btn, goldBtn, Modal, SearchBox } from "./ui.jsx";
@@ -34,6 +35,7 @@ export default function IssuesScreen({ crm, updateCrm, me, openInvoice, openColl
   const [tab, setTab] = useState("live");
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(null);
+  const [peekInv, setPeekInv] = useState(null);
   const [openLoad, setOpenLoad] = useState(null);
   const [reload, setReload] = useState(0);
   useEffect(() => {
@@ -124,9 +126,13 @@ export default function IssuesScreen({ crm, updateCrm, me, openInvoice, openColl
       ))}
 
       {cur && <IssuePage crm={crm} x={cur} name={nameOf(cur)} refNo={refOf(cur)} me={me} canEdit={canEdit} onClose={() => setOpen(null)} onChanged={() => setReload((n) => n + 1)}
-        openInvoice={openInvoice} openCollection={openCollection} newFollowUpFromDrop={newFollowUpFromDrop} />}
-      {curLoad && <ShortLoadPage crm={crm} rep={curLoad.rep} canEdit={canEdit} onClose={() => setOpenLoad(null)} onOpenJob={openInvoice}
+        openInvoice={(id) => setPeekInv(id)} openCollection={openCollection} newFollowUpFromDrop={newFollowUpFromDrop} />}
+      {curLoad && <ShortLoadPage crm={crm} rep={curLoad.rep} canEdit={canEdit} onClose={() => setOpenLoad(null)} onOpenJob={(id) => setPeekInv(id)}
         onFollowUp={(rep, j) => onLoadFollowUp && onLoadFollowUp(rep, j)} onResolve={shortLoads.resolve} onReopen={shortLoads.reopen} />}
+      {peekInv && (
+        <InvoicePeek crm={crm} invId={peekInv} onClose={() => setPeekInv(null)}
+          onOpenFull={(id) => { setPeekInv(null); openInvoice(id); }} />
+      )}
     </div>
   );
 }
@@ -176,7 +182,7 @@ function IssuePage({ crm, x, name, refNo, me, canEdit, onClose, onChanged, openI
       </div>
       {msg && <div style={{ marginTop: 10, fontSize: 13, fontWeight: 700, color: RED }}>{msg}</div>}
       <div style={{ display: "flex", gap: 8, marginTop: 16, flexWrap: "wrap" }}>
-        {x.inv && <button style={btn} onClick={() => { onClose(); openInvoice(x.inv.id); }}>Open job</button>}
+        {x.inv && <button style={btn} onClick={() => openInvoice(x.inv.id)}>Peek at job</button>}
         {x.col && <button style={btn} onClick={() => { onClose(); openCollection(x.col.id); }}>Open collection</button>}
         {x.col && x.left.length > 0 && (() => {
           const m = shortPickupMail(x.col, r, crm);
@@ -187,7 +193,7 @@ function IssuePage({ crm, x, name, refNo, me, canEdit, onClose, onChanged, openI
             ✉ {r.supplierEmailedAt ? "Supplier emailed " + new Date(r.supplierEmailedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "Email supplier"}
           </a>;
         })()}
-        {x.fu && <button style={btn} onClick={() => { onClose(); openInvoice(x.fu.id); }}>Open follow-up #{x.fu.invNo}</button>}
+        {x.fu && <button style={btn} onClick={() => openInvoice(x.fu.id)}>Follow-up #{x.fu.invNo}</button>}
         {canEdit && x.inv && x.left.length > 0 && !x.fu && <button style={{ ...goldBtn, color: NAVY }} onClick={() => { onClose(); newFollowUpFromDrop(r, x.inv, x.left); }}>Raise follow-up job</button>}
         <span style={{ flex: 1 }} />
         {canEdit && (x.live

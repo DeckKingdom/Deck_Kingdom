@@ -1,6 +1,7 @@
 // Customers tab: searchable account list -> account view with sites and
 // invoice history, per the approved mockup.
 import React, { useState, useMemo, useEffect } from "react";
+import { InvoicePeek } from "./Peeks.jsx";
 import { NAVY, GOLD, RED, prettyDate, prettyDateTime, addDays as addDaysC } from "../../lib/core.js";
 import {
   originText, recordOrigin, userInitials,
@@ -104,6 +105,7 @@ export default function CustomersScreen({ money = true, crm, updateCrm, askConfi
   const [search, setSearch] = useState("");
   const [custDraft, setCustDraft] = useState(null);
   const addrGuard = useAddressGuard();
+  const [peekInv, setPeekInv] = useState(null); // job peeked from the account view
   const [siteDraft, setSiteDraft] = useState(null);
   const [noEdit, setNoEdit] = useState(false); // account # unlocked for editing
   const [noConfirm, setNoConfirm] = useState(false); // confirmation bar showing
@@ -741,7 +743,7 @@ export default function CustomersScreen({ money = true, crm, updateCrm, askConfi
                             </td>
                             <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6" }}><Chip tone={SAMPLE_TONES[st]}>{st}</Chip></td>
                             <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6" }}>
-                              {si ? <button className="dk-title-link" title="Open the job" onClick={() => openInvoice(si.id)} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontWeight: 700, color: "#185FA5", fontSize: 13, padding: 0 }}>{"#" + (si.invNo || "—")}</button> : <span style={{ color: "#aab3c2" }}>—</span>}
+                              {si ? <button className="dk-title-link" title="Peek at the job" onClick={() => setPeekInv(si.id)} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontWeight: 700, color: "#185FA5", fontSize: 13, padding: 0 }}>{"#" + (si.invNo || "—")}</button> : <span style={{ color: "#aab3c2" }}>—</span>}
                             </td>
                             <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", textAlign: "right" }}>
                               <span style={{ display: "inline-flex", gap: 5 }}>
@@ -834,7 +836,7 @@ export default function CustomersScreen({ money = true, crm, updateCrm, askConfi
                           <tr key={i.id}>
                             <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", whiteSpace: "nowrap" }}>{prettyDate(i.date)}</td>
                             <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6" }}>
-                              <button className="dk-title-link" title="Open the job" onClick={() => openInvoice(i.id)} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontWeight: 700, color: "#185FA5", fontSize: 13, padding: 0 }}>{"#" + (i.invNo || "—")}</button>
+                              <button className="dk-title-link" title="Peek at the job" onClick={() => setPeekInv(i.id)} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontWeight: 700, color: "#185FA5", fontSize: 13, padding: 0 }}>{"#" + (i.invNo || "—")}</button>
                             </td>
                             <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6" }}>
                               <b>{siteName(i.siteId) || "Invoice address"}</b> <span style={{ color: "#5a6a85", fontWeight: 600 }}>· {i.jobType}</span><RiskChip inv={i} style={{ marginLeft: 8 }} /><WebStatusChip inv={i} style={{ marginLeft: 8 }} />
@@ -1060,6 +1062,10 @@ export default function CustomersScreen({ money = true, crm, updateCrm, askConfi
             }}>Save</button>
           </div>
         </Modal>
+      )}
+      {peekInv && (
+        <InvoicePeek crm={crm} invId={peekInv} onClose={() => setPeekInv(null)}
+          onOpenFull={(id) => { setPeekInv(null); openInvoice(id); }} />
       )}
     </div>
   );

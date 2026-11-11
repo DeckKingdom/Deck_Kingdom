@@ -1,6 +1,7 @@
 // Invoices tab: searchable list -> invoice entry screen per the approved
 // mockup. Prices are entered inc VAT; VAT is backed out of the total.
 import { useState, useMemo } from "react";
+import { CustomerPeek } from "./Peeks.jsx";
 import { NAVY, GOLD, RED, uid, prettyDate, prettyDateTime, addMonths, addDays, daysBetween } from "../../lib/core.js";
 import {
   recordOrigin, blankInvoice, blankLine, nextNumber, blankSite, DRIVERS, invoiceTotals, gbp, isPaid,
@@ -54,6 +55,7 @@ const loadRange = () => { try { return JSON.parse(localStorage.getItem("dk-sales
 export default function InvoicesScreen({ headerH = 0, openProduct, money = true, newFollowUp, crm, updateCrm, askConfirm, selId, setSelId, goCustomer, openQuote, openSample, openCollection, me, planner, updatePlanner, filter, setFilter }) {
   const [search, setSearch] = useState("");
   const phone = usePhone();
+  const [peekCust, setPeekCust] = useState(null); // account peeked from the invoice editor
   const [range, setRangeState] = useState(loadRange); // the sales summary's period (remembered on this computer)
   const setRange = (r) => { setRangeState(r); try { localStorage.setItem("dk-sales-range", JSON.stringify(r)); } catch (e) { /* not kept */ } };
   const stick = (top, z) => (phone ? {} : { position: "sticky", top: headerH + top, zIndex: z });
@@ -509,7 +511,7 @@ export default function InvoicesScreen({ headerH = 0, openProduct, money = true,
                   {[cust.mobile || cust.landline, cust.contactMethod ? "prefers " + cust.contactMethod : "", cust.source, cust.trader ? "Trade" : "", Number(cust.discountPct) > 0 ? "−" + Number(cust.discountPct) + "%" : ""].filter(Boolean).join(" · ")}
                 </div>
               </div>
-              <button style={abtn} title="Open account" onClick={() => goCustomer(cust.id)}><Icon name="user" /></button>
+              <button style={abtn} title="Peek at the account" onClick={() => setPeekCust(cust.id)}><Icon name="user" /></button>
               <button style={abtn} title="Change customer" onClick={() => { setInv((x) => { x.customerId = ""; x.siteId = ""; }); setCustQuery(""); }}><Icon name="x" /></button>
             </div>
           ) : (
@@ -831,6 +833,11 @@ export default function InvoicesScreen({ headerH = 0, openProduct, money = true,
           onRaised={(names) => setNotice((names.length > 1 ? "Collection notes raised with " : "Collection note raised with ") + names.join(" and ") + " — linked to this job and added to its pick list." + (inv.deliveryDate ? " It's on the delivery schedule as the stop before this job." : " This job has no delivery date yet, so give the note a date on the Collections screen."))} />
       </div>
       {money && <JobTotals inv={inv} crm={crm} planner={planner} />}
+      {peekCust && (
+        <CustomerPeek crm={crm} custId={peekCust} onClose={() => setPeekCust(null)}
+          onOpenFull={(id) => { setPeekCust(null); goCustomer(id); }}
+          onInvoice={(id) => { setPeekCust(null); setSelId(id); }} />
+      )}
     </div>
   );
 }
