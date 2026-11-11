@@ -3144,3 +3144,21 @@ export const reviewReminders = (crm, now = new Date()) => {
     add("rev:nudge:" + weekStart, "Review day — " + n.nudges + " nudge" + (n.nudges === 1 ? "" : "s") + " due, send with the WhatsApp session", "red");
   return out;
 };
+
+// ----- Monday: sample follow-ups — people weigh samples up over the weekend,
+// so the chase lands while it's fresh (and stays clear of Tuesday's review day)
+export const sampleReminders = (crm, now = new Date()) => {
+  const weekStart = mondayOf(today());
+  const snoozes = (crm && crm.reminders) || {};
+  let due = 0;
+  (crm.samples || []).forEach((s) => {
+    try {
+      const st = sampleStatus(s, crm);
+      if (st === "Follow-up due" || st === "2nd follow-up due") due++;
+    } catch (e) { /* half-filled sample row: skip it */ }
+  });
+  const key = "smp:fu:" + weekStart;
+  if (due > 0 && (!snoozes[key] || snoozes[key] < weekStart))
+    return [{ key, kind: "sample", label: "Sample follow-ups — " + due + " due (7-day chase, discount code at 14)", severity: "amber" }];
+  return [];
+};

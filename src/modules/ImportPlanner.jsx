@@ -32,7 +32,7 @@ import {
   int,
 } from "../lib/core.js";
 import { sampleStatus } from "../lib/crmCore.js";
-import { blankInvoice, blankLine, blankQuote, blankSample, blankSampleItem, nextNumber, TRADE_COUNTER, vanReminders, reviewReminders, reviewAskCounts, syncCatalogue, renameSkus, syncOpenPicks, colourTidyPlan, syncSampleConversions, cleanCode, codeSource, PRODUCT_SOURCES, suggestDescription, suggestCode, codeFollowsName, dueScheduledFor, setTaskDone, describeSchedule, today as todayStr, newPurchaseFor } from "../lib/crmCore.js";
+import { blankInvoice, blankLine, blankQuote, blankSample, blankSampleItem, nextNumber, TRADE_COUNTER, vanReminders, reviewReminders, sampleReminders, reviewAskCounts, syncCatalogue, renameSkus, syncOpenPicks, colourTidyPlan, syncSampleConversions, cleanCode, codeSource, PRODUCT_SOURCES, suggestDescription, suggestCode, codeFollowsName, dueScheduledFor, setTaskDone, describeSchedule, today as todayStr, newPurchaseFor } from "../lib/crmCore.js";
 import { useCrm } from "./crm/useCrm.js";
 import CustomersScreen from "./crm/CustomersScreen.jsx";
 import InvoicesScreen from "./crm/InvoicesScreen.jsx";
@@ -537,9 +537,11 @@ export default function ImportPlanner() {
     setTaskPopClosed(true);
   };
 
-  const dueReminders = crm ? [...vanReminders(crm), ...reviewReminders(crm)] : [];
-  const remVan = dueReminders.some((r) => r.kind !== "review");
+  const dueReminders = crm ? [...vanReminders(crm), ...reviewReminders(crm), ...sampleReminders(crm)] : [];
+  const remVan = dueReminders.some((r) => r.kind !== "review" && r.kind !== "sample");
   const remRev = dueReminders.some((r) => r.kind === "review");
+  const remSmp = dueReminders.some((r) => r.kind === "sample");
+  const remKinds = [remVan, remRev, remSmp].filter(Boolean).length;
   const snoozeReminders = () => {
     const tod = new Date().toISOString().slice(0, 10);
     updateCrm((c) => {
@@ -2640,9 +2642,9 @@ export default function ImportPlanner() {
         <div style={{ position: "fixed", inset: 0, zIndex: 55, background: "rgba(11,31,63,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
           <div style={{ background: "#fff", borderRadius: 12, width: "100%", maxWidth: 560, overflow: "hidden", boxShadow: "0 24px 70px rgba(11,31,63,0.5)" }}>
             <div style={{ background: "linear-gradient(135deg,#C8102E 0%,#8a0b20 100%)", padding: "18px 22px", display: "flex", alignItems: "center", gap: 12 }}>
-              <span style={{ fontSize: 26 }}>{remVan && !remRev ? "🚐" : remRev && !remVan ? "⭐" : "⏰"}</span>
+              <span style={{ fontSize: 26 }}>{remKinds > 1 ? "⏰" : remVan ? "🚐" : remRev ? "⭐" : "🌿"}</span>
               <div>
-                <div style={{ color: "#fff", fontWeight: 700, fontSize: 18 }}>{remVan && !remRev ? "Van reminders" : remRev && !remVan ? "Review routine" : "Reminders"}</div>
+                <div style={{ color: "#fff", fontWeight: 700, fontSize: 18 }}>{remKinds > 1 ? "Reminders" : remVan ? "Van reminders" : remRev ? "Review routine" : "Sample follow-ups"}</div>
                 <div style={{ color: "#ffd8dd", fontSize: 12.5, fontWeight: 600 }}>
                   {dueReminders.length} item{dueReminders.length === 1 ? "" : "s"} need attention
                 </div>
@@ -2658,7 +2660,8 @@ export default function ImportPlanner() {
               ))}
               <p style={{ fontSize: 12, color: "#8593a8", fontWeight: 600, margin: "10px 0 0" }}>
                 {remVan && "Weekly checks come back every Monday until recorded; renewals nag weekly from a month out until the date is moved on. "}
-                {remRev && "Tuesday is review day: morning — reply to new reviews, tick them in, send the group email; from 3pm — the WhatsApp session with any nudges. Each stays until dismissed, then rests for the week."}
+                {remRev && "Tuesday is review day: morning — reply to new reviews, tick them in, send the group email; from 3pm — the WhatsApp session with any nudges. Each stays until dismissed, then rests for the week. "}
+                {remSmp && "Monday is sample day: chase the follow-ups while the weekend's deliberating is fresh."}
               </p>
             </div>
             <div style={{ display: "flex", gap: 8, padding: "0 22px 18px", flexWrap: "wrap" }}>
@@ -2672,6 +2675,12 @@ export default function ImportPlanner() {
                 <button onClick={() => { setRemindersClosed(true); setTab("reviews"); }}
                   style={{ ...btn, background: remVan ? undefined : GOLD, borderColor: remVan ? undefined : GOLD, fontWeight: 700 }}>
                   Go to Reviews
+                </button>
+              )}
+              {remSmp && (
+                <button onClick={() => { setRemindersClosed(true); setTab("samples"); }}
+                  style={{ ...btn, background: remVan || remRev ? undefined : GOLD, borderColor: remVan || remRev ? undefined : GOLD, fontWeight: 700 }}>
+                  Go to Samples
                 </button>
               )}
               <button onClick={snoozeReminders} style={btn}>Done / snooze this week</button>
