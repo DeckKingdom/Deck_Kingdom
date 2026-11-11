@@ -617,11 +617,14 @@ async function loadAll() {
   if (fmRow && fmRow.value) data.fmBridge = fmRow.value;
   const wooRow = settingRow("wooBridgeLast"); // website feed status (written by woo_sync)
   if (wooRow && wooRow.value) data.wooBridge = wooRow.value;
-  snapshot = rowsFromData(data);
-  settingsSnapshot = { numbering: JSON.stringify(numbering), reminders: JSON.stringify(reminders), skuLists: skuListsRow ? JSON.stringify(skuListsRow.value) : undefined, sampleEmails: sampleEmailsRow ? JSON.stringify(sampleEmailsRow.value) : undefined, dsNotify: dsNotifyRow ? JSON.stringify(dsNotifyRow.value) : undefined, dsRunOrder: dsRunOrderRow ? JSON.stringify(dsRunOrderRow.value) : undefined, driverPhones: driverPhonesRow ? JSON.stringify(driverPhonesRow.value) : undefined, fleetCosts: fleetCostsRow ? JSON.stringify(fleetCostsRow.value) : undefined, reviewSettings: reviewSettingsRow ? JSON.stringify(reviewSettingsRow.value) : undefined };
+  // NOT adopted here: what this screen last saved/loaded only changes when the screen actually shows this
+  // data (commit below). A refresh that was skipped because someone was typing must not move the baseline,
+  // or the next save would think everything new since was deleted - and delete it.
+  const snap = rowsFromData(data);
+  const sset = { numbering: JSON.stringify(numbering), reminders: JSON.stringify(reminders), skuLists: skuListsRow ? JSON.stringify(skuListsRow.value) : undefined, sampleEmails: sampleEmailsRow ? JSON.stringify(sampleEmailsRow.value) : undefined, dsNotify: dsNotifyRow ? JSON.stringify(dsNotifyRow.value) : undefined, dsRunOrder: dsRunOrderRow ? JSON.stringify(dsRunOrderRow.value) : undefined, driverPhones: driverPhonesRow ? JSON.stringify(driverPhonesRow.value) : undefined, fleetCosts: fleetCostsRow ? JSON.stringify(fleetCostsRow.value) : undefined, reviewSettings: reviewSettingsRow ? JSON.stringify(reviewSettingsRow.value) : undefined };
 
   if (!customers.length && !sites.length && !invoices.length && !masterProducts.length && !collections.length && !vans.length && !quotes.length && !samples.length && !tasks.length && !suppliers.length && !purchases.length && !settings.length) return null;
-  return data;
+  return { data, commit: () => { snapshot = snap; settingsSnapshot = sset; } };
 }
 
 function diff(oldMap, newMap) {
@@ -823,7 +826,8 @@ export const crmSupabaseStorage = {
   async get(key) {
     if (key !== "dk-crm") return null;
     const d = await loadAll();
-    return d === null ? null : { key, value: JSON.stringify(d) };
+    // commit(): call it when this data is put on screen - it becomes the baseline the next save compares against
+    return d === null ? null : { key, value: JSON.stringify(d.data), commit: d.commit };
   },
   async set(key, value) {
     if (key !== "dk-crm") return { key, value };

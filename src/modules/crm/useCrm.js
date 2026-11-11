@@ -29,10 +29,14 @@ export function useCrm(enabled) {
   const seen = useRef(0); // newest change from elsewhere already loaded
   const timer = useRef(null);
 
+  const commitRef = useRef(null);
   const fetchCrm = async () => {
     const r = await crmStorage.get("dk-crm");
+    commitRef.current = r && r.commit ? r.commit : null;
     return r && r.value ? JSON.parse(r.value) : null;
   };
+  // the data just fetched is now what's on screen: make it the baseline for the next save
+  const adopt = () => { if (commitRef.current) commitRef.current(); commitRef.current = null; };
 
   const loadCrm = async () => {
     if (loading.current) return;
@@ -51,6 +55,7 @@ export function useCrm(enabled) {
         return;
       }
     }
+    adopt();
     setCrm(normaliseCrm(d || emptyCrm()));
     loaded.current = true;
     loading.current = false;
@@ -80,6 +85,7 @@ export function useCrm(enabled) {
         const d = await fetchCrm();
         if (!stop && d && !pending.current && !saving.current) {
           seen.current = id;
+          adopt();
           setCrm(normaliseCrm(d));
           setLastLive(new Date());
         }
