@@ -3049,7 +3049,7 @@ export const personKeyOf = (c) => dupeMobileKey(c) || dupeEmailKey(c) || dupeNam
 // Photos are only ever a second ask, to people who did leave a review
 // (the first ask already mentions photos in passing).
 export const NUDGE_AFTER_DAYS = 7;
-export const ASK_AFTER_DAYS = 7; // let the deck get built first — no ask inside a week of delivery
+export const ASK_AFTER_DAYS = 10; // let the deck get built first — no ask inside 10 days of delivery
 export const askTooSoon = (inv, tod) => {
   const d = (inv && inv.deliveryDate) || "";
   return d ? daysBetween(d, tod) < ASK_AFTER_DAYS : false;

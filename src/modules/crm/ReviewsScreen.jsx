@@ -54,6 +54,7 @@ export default function ReviewsScreen({ crm, updateCrm, askConfirm, openInvoice,
   const [showExcl, setShowExcl] = useState(false);
   const [issueIds, setIssueIds] = useState(null); // invoice ids with a live delivery issue
   const [peek, setPeek] = useState(null); // invoice id shown in the pop-over
+  const [peekCust, setPeekCust] = useState(null); // customer id shown in the pop-over
 
   const rs = reviewSettingsOf(crm);
 
@@ -306,7 +307,7 @@ export default function ReviewsScreen({ crm, updateCrm, askConfirm, openInvoice,
                       </button>
                     </td>
                     <td style={{ ...tdc, maxWidth: 210, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      <button onClick={() => goCustomer && goCustomer(i.customerId)} title="Open the customer account"
+                      <button onClick={() => c && setPeekCust(c.id)} title="Peek at the account"
                         style={{ ...linkBtn, fontSize: 13, fontWeight: 700, color: "#1a2b4a" }}>
                         {(c && c.name) || "—"}
                       </button>
@@ -386,6 +387,53 @@ export default function ReviewsScreen({ crm, updateCrm, askConfirm, openInvoice,
         </div>
       </div>
 
+      {/* account peek: the customer in a pop-over — Open account for the full screen */}
+      {peekCust && (() => {
+        const c = crm.customers.find((x) => x.id === peekCust);
+        if (!c) return null;
+        const invs = crm.invoices.filter((x) => x.customerId === c.id && isSaleInvoice(x)).sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+        const owed = invs.filter((x) => !isPaid(x)).reduce((s, x) => s + invoiceTotals(x).total, 0);
+        const mob = mobileOf(c);
+        const PW = Math.min(600, window.innerWidth - 40);
+        const line = (label, v) => (v ? <div style={{ display: "flex", gap: 8, fontSize: 13, fontWeight: 600, padding: "2px 0" }}><span style={{ color: "#8593a8", width: 86, flex: "none" }}>{label}</span><span style={{ color: NAVY }}>{v}</span></div> : null);
+        return (
+          <>
+            <div onMouseDown={() => setPeekCust(null)} style={{ position: "fixed", inset: 0, zIndex: 70, background: "rgba(11,31,63,0.25)" }} />
+            <div style={{ position: "fixed", left: Math.max(10, Math.round((window.innerWidth - PW) / 2)), top: 48, width: PW, maxHeight: "calc(100dvh - 96px)", overflowY: "auto", zIndex: 71, background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, boxShadow: "0 14px 40px rgba(11,31,63,.28)", padding: "14px 18px", boxSizing: "border-box" }}>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
+                <b style={{ fontSize: 15, color: NAVY }}>{c.name || "Unnamed"}</b>
+                <span style={{ fontSize: 12, fontWeight: 700, color: "#8593a8" }}>#{c.accountNo || "—"}</span>
+                {c.trader && <span style={chip("#eef1f6", "#3b4c6b")}>trade</span>}
+                {Number(c.discountPct) > 0 && <span style={chip("#eef1f6", "#3b4c6b")}>{c.discountPct}% discount</span>}
+                {rs.optOut.includes(c.id) && <span style={chip("#fde8ea", "#9b1c2e")}>no review asks</span>}
+              </div>
+              {line("Contact", c.contact)}
+              {line("Mobile", mob || c.mobile)}
+              {line("Phone", c.phone)}
+              {line("Email", c.email)}
+              {line("Prefers", c.contactMethod)}
+              {line("Address", [c.address, c.town, c.postcode].filter(Boolean).join(", "))}
+              <div style={{ marginTop: 10, borderTop: "1px solid #eef1f6", paddingTop: 8 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 4 }}>
+                  {invs.length} invoice{invs.length === 1 ? "" : "s"}{owed > 0 ? " · " + gbp(owed) + " outstanding" : ""}
+                </div>
+                {invs.slice(0, 6).map((x) => (
+                  <div key={x.id} style={{ display: "flex", gap: 10, alignItems: "center", fontSize: 13, fontWeight: 600, padding: "3px 0" }}>
+                    <button onClick={() => { setPeekCust(null); setPeek(x.id); }} style={{ ...linkBtn, fontWeight: 700, color: "#185FA5", fontSize: 12.5 }}>#{x.invNo || "—"}</button>
+                    <span style={{ color: "#5a6a85" }}>{x.date ? prettyDate(x.date) : ""}</span>
+                    <span style={{ marginLeft: "auto" }}>{gbp(invoiceTotals(x).total)}</span>
+                    <span style={chip(isPaid(x) ? "#e9f6ee" : "#fdf3e4", isPaid(x) ? "#28713e" : "#8a5a14")}>{isPaid(x) ? "paid" : "owed"}</span>
+                  </div>
+                ))}
+                {invs.length > 6 && <div style={{ fontSize: 12, fontWeight: 600, color: "#8593a8" }}>…and {invs.length - 6} more on the account</div>}
+              </div>
+              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10, gap: 8 }}>
+                <button style={goldBtn} onClick={() => { setPeekCust(null); goCustomer && goCustomer(c.id); }}><Icon name="user" stroke={NAVY} />Open account</button>
+              </div>
+            </div>
+          </>
+        );
+      })()}
       {/* invoice peek: the job in a pop-over, read-only — Open job for the full screen */}
       {peek && (() => {
         const i = crm.invoices.find((x) => x.id === peek);

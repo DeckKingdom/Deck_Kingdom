@@ -89,9 +89,9 @@ export default function run(React, renderToString) {
     html = renderToString(React.createElement(ReviewsScreen, props));
     assert(html.includes("held back"), "just-delivered job is held back from the ask list");
     const wasDel = inv.deliveryDate;
-    inv.deliveryDate = new Date(Date.now() - 8 * 86400000).toISOString().slice(0, 10);
+    inv.deliveryDate = new Date(Date.now() - 11 * 86400000).toISOString().slice(0, 10);
     html = renderToString(React.createElement(ReviewsScreen, props));
-    assert(html.includes("Reviews &amp; Photos") && html.includes("Bob") && html.includes("To ask"), "week-old delivery shows on the worklist");
+    assert(html.includes("Reviews &amp; Photos") && html.includes("Bob") && html.includes("To ask"), "matured delivery shows on the worklist");
     inv.deliveryDate = wasDel;
   }
   // bulk exclusion rules + duplicate detection
@@ -116,10 +116,10 @@ export default function run(React, renderToString) {
     crm.customers.pop();
     // the cadence: ask -> wait -> one nudge at 7 days -> stop; photos only once the review's in
     const tod = today();
-    const old = new Date(Date.now() - 8 * 86400000).toISOString().slice(0, 10);
+    const old = new Date(Date.now() - 12 * 86400000).toISOString().slice(0, 10);
     assert(reviewNext({ flags: {} }, tod) === "ask", "fresh job: ask");
     assert(reviewNext({ flags: {}, deliveryDate: tod }, tod) === "", "delivered today: too soon to ask");
-    assert(reviewNext({ flags: {}, deliveryDate: old }, tod) === "ask", "delivered 8 days ago: ask");
+    assert(reviewNext({ flags: {}, deliveryDate: old }, tod) === "ask", "delivered 12 days ago: ask");
     assert(reviewNext({ flags: { reviewRequested: true }, reviewAskedAt: tod }, tod) === "", "just asked: wait");
     assert(reviewNext({ flags: { reviewRequested: true }, reviewAskedAt: old }, tod) === "nudge", "week on: nudge due");
     assert(reviewNext({ flags: { reviewRequested: true }, reviewAskedAt: old, reviewNudgedAt: tod }, tod) === "", "nudged once: stop");
