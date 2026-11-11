@@ -12,6 +12,9 @@
  *      -> a sample request in ops (source "Sample request form").
  *      Any WPForms form with "sample" in its title is picked up too, while that's still in use.
  *   3. Customers are matched in ops by email address, or created.
+ *   4. And the other way: it asks ops what's been finished — once a web order's job is
+ *      delivered (and any sample on it dispatched) the WooCommerce order is marked
+ *      Completed, and /sample-request/ form entries are stamped handled.
  *
  * Nothing on the website changes for customers. If ops can't be reached, it simply tries
  * again next time — nothing is lost. Status page: WooCommerce > Ops feed.
@@ -252,6 +255,27 @@ function dk_ops_send( $payload ) {
 	return is_array( $body ) ? $body : array();
 }
 
+/* ---------- ask ops what's been finished ---------- */
+function dk_ops_pull_done() {
+	$res = wp_remote_post(
+		rtrim( DK_OPS_URL, '/' ) . '/rest/v1/rpc/woo_done',
+		array(
+			'timeout' => 30,
+			'headers' => array(
+				'apikey'        => DK_OPS_KEY,
+				'Authorization' => 'Bearer ' . DK_OPS_KEY,
+				'Content-Type'  => 'application/json',
+			),
+			'body'    => wp_json_encode( array( 'p_secret' => DK_OPS_SECRET ) ),
+		)
+	);
+	if ( is_wp_error( $res ) || 200 !== (int) wp_remote_retrieve_response_code( $res ) ) {
+		return null; // ops not reachable or woo_done not installed yet — just try next run
+	}
+	$body = json_decode( wp_remote_retrieve_body( $res ), true );
+	return is_array( $body ) ? $body : null;
+}
+
 /* ---------- the run ---------- */
 function dk_ops_run( $force_since = '' ) {
 	if ( get_transient( 'dk_ops_lock' ) ) {
@@ -260,7 +284,7 @@ function dk_ops_run( $force_since = '' ) {
 	set_transient( 'dk_ops_lock', 1, 120 );
 	$st = get_option( 'dk_ops_state', array() );
 	$st = is_array( $st ) ? $st : array();
-	$log = array( 'at' => current_time( 'mysql' ), 'orders' => 0, 'requests' => 0, 'error' => '' );
+	$log = array( 'at' => current_time( 'mysql' ), 'orders' => 0, 'requests' => 0, 'completed' => 0, 'error' => '' );
 
 	try {
 		// 1. orders changed since last time (by modified date, oldest first, 50 at a time)
@@ -349,6 +373,42 @@ function dk_ops_run( $force_since = '' ) {
 			$log['requests'] += count( $queue );
 			update_option( 'dk_ops_wpf_queue', array(), false );
 		}
+		// 4. the other way: what ops has finished -> complete the orders and form entries here
+		$done = dk_ops_pull_done();
+		if ( is_array( $done ) ) {
+			$applied = get_option( 'dk_ops_done_applied', array() );
+			$applied = is_array( $applied ) ? $applied : array();
+			if ( function_exists( 'wc_get_order' ) && ! empty( $done['orders'] ) ) {
+				foreach ( (array) $done['orders'] as $oid ) {
+					$oid = (int) $oid;
+					if ( ! $oid || isset( $applied[ 'o' . $oid ] ) ) {
+						continue;
+					}
+					$o = $oid ? wc_get_order( $oid ) : false;
+					if ( $o && in_array( $o->get_status(), array( 'processing', 'on-hold' ), true ) ) {
+						$o->update_status( 'completed', 'Completed from Ops — delivered / samples sent.' );
+						$log['completed']++;
+					}
+					$applied[ 'o' . $oid ] = 1; // done (or gone / already closed): never touched again
+				}
+			}
+			if ( ! empty( $done['requests'] ) ) {
+				$t2 = $wpdb->prefix . 'dk_sample_requests';
+				if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $t2 ) ) === $t2 ) {
+					if ( ! $wpdb->get_var( "SHOW COLUMNS FROM $t2 LIKE 'handled_at'" ) ) {
+						$wpdb->query( "ALTER TABLE $t2 ADD COLUMN handled_at datetime NULL" );
+					}
+					$ids = array_filter( array_map( 'intval', (array) $done['requests'] ) );
+					if ( $ids ) {
+						$wpdb->query( "UPDATE $t2 SET handled_at = NOW() WHERE handled_at IS NULL AND id IN (" . implode( ',', $ids ) . ')' );
+					}
+				}
+			}
+			if ( count( $applied ) > 4000 ) { // keep the memory of what's been applied from growing forever
+				$applied = array_slice( $applied, -2000, null, true );
+			}
+			update_option( 'dk_ops_done_applied', $applied, false );
+		}
 	} catch ( Exception $e ) {
 		$log['error'] = $e->getMessage();
 	}
@@ -356,7 +416,7 @@ function dk_ops_run( $force_since = '' ) {
 	update_option( 'dk_ops_state', $st, false );
 	$hist = get_option( 'dk_ops_log', array() );
 	$hist = is_array( $hist ) ? $hist : array();
-	if ( $log['orders'] || $log['requests'] || $log['error'] ) {
+	if ( $log['orders'] || $log['requests'] || $log['completed'] || $log['error'] ) {
 		array_unshift( $hist, $log );
 		update_option( 'dk_ops_log', array_slice( $hist, 0, 30 ), false );
 	}
@@ -477,9 +537,9 @@ function dk_ops_admin_page() {
 	echo '&nbsp; or resend orders changed since <input type="date" name="from"> <button class="button">Resend</button>';
 	echo ' <span class="description">Resending is safe — ops updates what it has, it never duplicates.</span></form>';
 	if ( $hist ) {
-		echo '<h2>Recent activity</h2><table class="widefat striped" style="max-width:720px"><thead><tr><th>When</th><th>Orders</th><th>Sample requests</th><th>Problem</th></tr></thead><tbody>';
+		echo '<h2>Recent activity</h2><table class="widefat striped" style="max-width:720px"><thead><tr><th>When</th><th>Orders</th><th>Sample requests</th><th>Completed back</th><th>Problem</th></tr></thead><tbody>';
 		foreach ( $hist as $h ) {
-			echo '<tr><td>' . esc_html( $h['at'] ) . '</td><td>' . (int) $h['orders'] . '</td><td>' . (int) $h['requests'] . '</td><td>' . esc_html( $h['error'] ) . '</td></tr>';
+			echo '<tr><td>' . esc_html( $h['at'] ) . '</td><td>' . (int) $h['orders'] . '</td><td>' . (int) $h['requests'] . '</td><td>' . ( isset( $h['completed'] ) ? (int) $h['completed'] : 0 ) . '</td><td>' . esc_html( $h['error'] ) . '</td></tr>';
 		}
 		echo '</tbody></table>';
 	}
