@@ -8,8 +8,8 @@ import { crmStorage, latestChange } from "../../data/crmStorage.js";
 import { getSessionEmail } from "../../data/auth.js";
 import { emptyCrm, normaliseCrm, carryRidingCollections } from "../../lib/crmCore.js";
 
-const CHECK_MS = 10_000; // how often to look for changes made elsewhere
-const QUIET_MS = 8_000; // wait this long after the last edit here before reloading
+const CHECK_MS = 4_000; // how often to look for changes made elsewhere
+const QUIET_MS = 5_000; // wait this long after the last edit here before reloading
 
 export function useCrm(enabled) {
   const [crm, setCrm] = useState(null);
@@ -17,6 +17,8 @@ export function useCrm(enabled) {
   const [crmSave, setCrmSave] = useState("");
   const [saveError, setSaveError] = useState(""); // why the last save failed (shown as a red banner)
   const retry = useRef(null);
+  const [saveNotice, setSaveNotice] = useState(""); // e.g. a job number the database had to change
+  const noticeT = useRef(null);
   const [lastLive, setLastLive] = useState(null); // when changes from elsewhere were last pulled in
   const loaded = useRef(false);
   const loading = useRef(false);
@@ -94,6 +96,21 @@ export function useCrm(enabled) {
     return () => { stop = true; clearInterval(t); document.removeEventListener("visibilitychange", vis); window.removeEventListener("focus", vis); };
   }, [enabled]);
 
+  // someone else got that job number first: the database gave this job the next free one - show it here
+  const applyRenumbered = (list) => {
+    if (!list || !list.length) return;
+    setCrm((d) => {
+      if (!d) return d;
+      const n = { ...d, invoices: d.invoices.map((i) => { const r = list.find((x) => x.id === i.id); return r ? { ...i, invNo: r.to } : i; }) };
+      const top = Math.max(...list.map((r) => r.to));
+      n.numbering = { ...(d.numbering || {}), invoice: Math.max(Number((d.numbering || {}).invoice) || 1, top + 1) };
+      return n;
+    });
+    setSaveNotice(list.map((r) => "Job #" + r.from + " was just taken by someone else, so this job is now #" + r.to + ".").join(" "));
+    if (noticeT.current) clearTimeout(noticeT.current);
+    noticeT.current = setTimeout(() => setSaveNotice(""), 20_000);
+  };
+
   useEffect(() => {
     if (!loaded.current || !crm || !dirty.current || !pending.current) return;
     setCrmSave("Saving…");
@@ -102,11 +119,13 @@ export function useCrm(enabled) {
       saving.current = true;
       pending.current = false;
       try {
-        await crmStorage.set("dk-crm", JSON.stringify(crm));
+        const res = await crmStorage.set("dk-crm", JSON.stringify(crm));
+        applyRenumbered(res && res.renumbered);
         setCrmSave("Saved");
         setSaveError("");
       } catch (e) {
         pending.current = true;
+        applyRenumbered(e && e.renumbered);
         const msg = String((e && e.message) || e || "unknown error");
         setCrmSave(e && e.partial ? "Partly saved" : "Save failed");
         setSaveError(msg);
@@ -149,5 +168,5 @@ export function useCrm(enabled) {
     setCrm(normaliseCrm(d));
   };
 
-  return { crm, updateCrm, replaceCrm, crmError, loadCrm, crmSave, saveError, lastLive };
+  return { crm, updateCrm, replaceCrm, crmError, loadCrm, crmSave, saveError, saveNotice, lastLive };
 }

@@ -248,7 +248,7 @@ export default function ImportPlanner() {
 
   // ===== CRM module (customers / invoices / schedule) =====
   const [crmOn, setCrmOn] = useState(false);
-  const { crm, updateCrm: updateCrmRaw, replaceCrm, crmError, loadCrm, crmSave, saveError, lastLive } = useCrm(crmOn);
+  const { crm, updateCrm: updateCrmRaw, replaceCrm, crmError, loadCrm, crmSave, saveError, saveNotice, lastLive } = useCrm(crmOn);
   // read-only logins can look but not change: edits are ignored with a short note
   const updateCrm = (fn) => {
     if (!access.canEdit) { setRoNote(true); return; }
@@ -1487,6 +1487,11 @@ export default function ImportPlanner() {
         <span style={{ color: saveError ? "#ff8a9a" : "#8fa0c0", fontWeight: saveError ? 800 : 400, fontSize: 12, minWidth: 48, textAlign: "right" }}>{CRM_TABS.includes(tab) || saveError ? crmSave : saveState}</span>
       </div>
 
+      {saveNotice && !saveError && (
+        <div role="status" style={{ position: "fixed", left: "50%", bottom: 18, transform: "translateX(-50%)", zIndex: 900, width: "min(620px, calc(100vw - 32px))", boxSizing: "border-box", background: "#0B1F3F", color: "#fff", border: "2px solid #F4B73E", borderRadius: 12, padding: "12px 16px", boxShadow: "0 10px 30px rgba(11,31,63,.35)", fontSize: 14, fontWeight: 700 }}>
+          🔢 {saveNotice}
+        </div>
+      )}
       {saveError && (
         <div role="alert" style={{ position: "fixed", left: "50%", bottom: 18, transform: "translateX(-50%)", zIndex: 900, width: "min(720px, calc(100vw - 32px))", boxSizing: "border-box", background: "#C8102E", color: "#fff", borderRadius: 12, padding: "12px 16px", boxShadow: "0 10px 30px rgba(11,31,63,.35)", fontSize: 13.5, fontWeight: 600, lineHeight: 1.4 }}>
           <b style={{ display: "block", fontSize: 15, marginBottom: 3 }}>⚠ Not saved — don't refresh or close this page</b>

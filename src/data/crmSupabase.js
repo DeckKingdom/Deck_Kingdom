@@ -669,13 +669,26 @@ async function saveAll(d) {
   // is tried on its own, the good ones go in, and only the refused ones are kept back to retry (and reported).
   const failed = []; // { key, id, op, msg, label }
   const labelOf = (key, r) => (key === "invoices" && r && r.inv_no ? "job #" + r.inv_no : key === "customers" && r && r.name ? "account " + r.name : key.replace(/s$/, "") + " " + (r && r.id));
+  // job numbers: the database has the final say (057 renumbers a clash), so read back what it kept
+  const renumbered = []; // { id, from, to }
+  const readBack = (sent, got) => {
+    (got || []).forEach((g) => {
+      const r = sent.find((x) => x.id === g.id);
+      if (r && g.inv_no != null && Number(g.inv_no) !== Number(r.inv_no)) {
+        renumbered.push({ id: g.id, from: r.inv_no, to: Number(g.inv_no) });
+        r.inv_no = Number(g.inv_no); // the snapshot matches the database
+      }
+    });
+  };
   const up_ = async (table, key, rows) => {
     if (!rows.length) return;
-    const { error } = await sb.from(table).upsert(rows);
-    if (!error) return;
+    const isInv = table === "invoices";
+    const { data, error } = isInv ? await sb.from(table).upsert(rows).select("id,inv_no") : await sb.from(table).upsert(rows);
+    if (!error) { if (isInv) readBack(rows, data); return; }
     for (const r of rows) {
-      const { error: e } = await sb.from(table).upsert(r);
+      const { data: d1, error: e } = isInv ? await sb.from(table).upsert(r).select("id,inv_no") : await sb.from(table).upsert(r);
       if (e) failed.push({ key, id: r.id, op: "save", msg: e.message, label: labelOf(key, r) });
+      else if (isInv) readBack([r], d1);
     }
   };
   const del_ = async (table, key, ids) => {
@@ -767,8 +780,10 @@ async function saveAll(d) {
   if (failed.length) {
     const err = new Error(failed.slice(0, 3).map((f) => "Couldn't " + f.op + " " + f.label + ": " + f.msg).join(" · ") + (failed.length > 3 ? " · +" + (failed.length - 3) + " more" : ""));
     err.partial = true;
+    err.renumbered = renumbered;
     throw err;
   }
+  return { renumbered };
 }
 
 // ===== live refresh: the newest change someone else made (FileMaker, the website, another member of staff) =====
@@ -800,8 +815,8 @@ export const crmSupabaseStorage = {
   },
   async set(key, value) {
     if (key !== "dk-crm") return { key, value };
-    await saveAll(JSON.parse(value));
-    return { key, value };
+    const r = await saveAll(JSON.parse(value));
+    return { key, value, renumbered: (r && r.renumbered) || [] };
   },
 };
 
