@@ -80,11 +80,9 @@ export default function ReviewsCard({ crm, updateCrm, askConfirm, openReviews, s
     { n: s.awaiting, label: "Awaiting a review", tone: "#8593a8", filter: "Awaiting review" },
   ];
 
-  return (
-    <div style={{ ...card, marginBottom: 0, height: "100%", boxSizing: "border-box" }}>
-      {/* one card for the week's chasing: Monday samples, Tuesday reviews */}
-      {samplesSlot}
-      <div style={{ display: "flex", alignItems: "center", marginBottom: 6, marginTop: samplesSlot ? 14 : 0 }}>
+  const reviewsCol = (
+    <div style={{ minWidth: 0 }}>
+      <div style={{ display: "flex", alignItems: "center", marginBottom: 6 }}>
         <p style={{ ...sect, margin: 0 }}>Reviews &amp; Photos</p>
         <span style={{ marginLeft: 10, fontSize: 11.5, fontWeight: 700, color: "#8593a8" }}>Tuesday</span>
         <span style={{ flex: 1 }} />
@@ -100,6 +98,17 @@ export default function ReviewsCard({ crm, updateCrm, askConfirm, openReviews, s
       <div style={{ fontSize: 11.5, fontWeight: 600, color: "#8593a8", marginTop: 8 }}>
         Asks go out 10 days after delivery, one per person — website orders, collections and opted-out accounts stay out.
       </div>
+    </div>
+  );
+  return (
+    <div style={{ ...card, marginBottom: 0, height: "100%", boxSizing: "border-box" }}>
+      {/* one card for the week's chasing: Monday samples | Tuesday reviews, side by side */}
+      {samplesSlot ? (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "6px 28px" }}>
+          <div style={{ minWidth: 0 }}>{samplesSlot}</div>
+          {reviewsCol}
+        </div>
+      ) : reviewsCol}
     </div>
   );
 }

@@ -205,7 +205,7 @@ export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTa
                           </div>
                           <div style={sub}>Drops</div>
                           {drops.length === 0 ? <div style={{ fontSize: 12, color: "#aab3c2", fontWeight: 600 }}>None</div> : drops.slice(0, 5).map((i) => (
-                            <button key={i.id} onClick={() => openInvoice && openInvoice(i.id)} className="dk-title-link" title={"Open job #" + (i.invNo || "—")}
+                            <button key={i.id} onClick={() => setInvPeek(i.id)} className="dk-title-link" title={"Peek at job #" + (i.invNo || "—")}
                               style={{ display: "flex", gap: 6, alignItems: "center", width: "100%", fontSize: 12.5, fontWeight: 700, color: NAVY, padding: "2px 0" }}>
                               <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>{custName(i.customerId)}</span>
                               <RiskChip inv={i} />
@@ -221,7 +221,7 @@ export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTa
                           ))}
                           <div style={sub}>Collections</div>
                           {colls.length === 0 ? <div style={{ fontSize: 12, color: "#aab3c2", fontWeight: 600 }}>None due</div> : colls.map((c) => (
-                            <button key={c.id} onClick={() => (openCollection ? openCollection(c.id) : setTab("collections"))} className="dk-title-link" title="Open the collection"
+                            <button key={c.id} onClick={() => setColPeek(c.id)} className="dk-title-link" title="Peek at the collection"
                               style={{ display: "flex", gap: 6, width: "100%", fontSize: 12.5, fontWeight: 600, color: NAVY, padding: "1px 0" }}>
                               <Icon name="box" size={13} stroke="#5a6a85" />
                               <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>{c.supplier || "Supplier"}</span>
@@ -237,119 +237,6 @@ export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTa
             })()}
           </div>
           <div className="dk-home-cell" style={{ gridColumn: "span 1", gridRow: "span 2", minWidth: 0 }}>
-            {crm && (() => {
-              const rows = [
-                ["To send", samplesIn(crm, SAMPLE_GROUPS.send).length, "Print all", "doc", () => printAllToSend(crm, updateCrm, askConfirm, setHomeNotice)],
-                ["Follow-up due", samplesIn(crm, SAMPLE_GROUPS.first).length, "Email all", "mail", () => emailFollowUpGroup(crm, updateCrm, askConfirm, "first", setHomeNotice)],
-                ["2nd follow-up (discount code)", samplesIn(crm, SAMPLE_GROUPS.second).length, "Email all", "mail", () => emailFollowUpGroup(crm, updateCrm, askConfirm, "second", setHomeNotice)],
-              ];
-              const samplesSlot = (
-                <>
-                  <div style={{ display: "flex", alignItems: "center", marginBottom: 6 }}>
-                    <p style={{ ...sect, margin: 0 }}>Samples</p>
-                    <span style={{ marginLeft: 10, fontSize: 11.5, fontWeight: 700, color: "#8593a8" }}>Monday</span>
-                    <span style={{ flex: 1 }} />
-                    <button onClick={() => setTab("samples")} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 700, color: "#185FA5", padding: 0 }}>Open samples ▸</button>
-                  </div>
-                  {homeNotice && <div style={{ fontSize: 12.5, fontWeight: 600, color: "#6b5305", background: "#fff8e6", border: "1px solid #f4d78f", borderRadius: 8, padding: "6px 10px", marginBottom: 6 }}>{homeNotice}</div>}
-                  {rows.map(([label, n, act, icon, run]) => (
-                    <div key={label} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", borderBottom: "1px solid #f0f2f6", fontSize: 13, fontWeight: 600 }}>
-                      <b style={{ minWidth: 26, textAlign: "center", fontSize: 15, color: n ? (label === "To send" ? RED : "#a05f10") : "#aab3c2" }}>{n}</b>
-                      <span style={{ flex: 1, color: n ? NAVY : "#8593a8" }}>{label}</span>
-                      {n > 0 && label === "To send" && (
-                        <button onClick={() => markAllSent(crm, updateCrm, askConfirm)} title="Mark every sample still to send as sent today" style={{ border: "1px solid #3FA55C", background: "#3FA55C", color: "#fff", borderRadius: 8, padding: "5px 10px", fontFamily: "inherit", fontWeight: 800, fontSize: 12, cursor: "pointer" }}>✓ All sent</button>
-                      )}
-                      {n > 0 && (
-                        <button onClick={run} style={{ ...goldBtn, padding: "5px 10px", fontSize: 12 }}><Icon name={icon} stroke={NAVY} size={13} />{act}</button>
-                      )}
-                    </div>
-                  ))}
-                </>
-              );
-              // samples and reviews are the same kind of work — one card, Monday then Tuesday
-              return <ReviewsCard crm={crm} updateCrm={updateCrm} askConfirm={askConfirm} openReviews={openReviews} samplesSlot={samplesSlot} />;
-            })()}
-          </div>
-          <div className="dk-home-cell" style={{ gridColumn: "span 3", minWidth: 0 }}>
-            {crm && (() => {
-              // stock coming in over the next 7 days: import containers (expected date, or an estimate) and supplier collections
-              const end = addDays(tod, 6);
-              const dayLabel = (d) => d === tod ? "Today" : d === addDays(tod, 1) ? "Tomorrow" : new Date(d + "T00:00:00").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
-              const ships = data.shipments
-                .filter((x) => !x.arrivedDate && x.status !== "Planning" && x.status !== "Paid")
-                .map((x) => ({ kind: "ship", id: x.id, date: x.etaDate || (x.orderDate ? addMonths(x.orderDate, 3) : ""), est: !x.etaDate, title: x.name || "Shipment", sub: [x.supplier, x.status].filter(Boolean).join(" · ") }))
-                .filter((x) => x.date && x.date <= end);
-              const colls = (crm.collections || [])
-                .filter((c) => !c.collected && c.collectDate && c.collectDate <= end)
-                .map((c) => ({ kind: "coll", id: c.id, date: c.collectDate, est: false, title: c.supplier || "Supplier collection",
-                  sub: ["COL-" + (c.collectionNo || "—"), (c.items || []).length ? (c.items || []).length + " item" + ((c.items || []).length === 1 ? "" : "s") : "", c.van].filter(Boolean).join(" · ") }));
-              const rows = [...ships, ...colls].sort((a, b) => a.date.localeCompare(b.date));
-              const late = rows.filter((r) => r.date < tod).length;
-              return (
-                <div style={{ ...card, marginBottom: 0, height: "100%", boxSizing: "border-box" }}>
-                  <div style={{ display: "flex", alignItems: "center", marginBottom: 8, gap: 10 }}>
-                    <p style={{ ...sect, margin: 0 }}>Coming in · next 7 days</p>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: "#5a6a85" }}>{ships.length} container{ships.length === 1 ? "" : "s"} · {colls.length} collection{colls.length === 1 ? "" : "s"}</span>
-                    {late > 0 && <span style={{ fontSize: 12, fontWeight: 700, color: RED }}>{late} overdue</span>}
-                    <span style={{ flex: 1 }} />
-                    {canTab("overview") && <button onClick={() => setTab("overview")} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 700, color: "#185FA5", padding: 0 }}>Imports ▸</button>}
-                    <button onClick={() => setTab("collections")} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 700, color: "#185FA5", padding: 0 }}>Collections ▸</button>
-                  </div>
-                  {rows.length === 0 ? (
-                    <div style={{ color: "#8593a8", fontWeight: 600, fontSize: 13, padding: "4px 0" }}>Nothing due in this week.</div>
-                  ) : rows.map((r) => (
-                    <button key={r.kind + r.id} className="dk-title-link" disabled={r.kind === "ship" && !canTab("shipments")}
-                      title={r.kind === "ship" ? (canTab("shipments") ? "Open the shipment" : undefined) : "Open the collection"}
-                      onClick={() => (r.kind === "coll" ? setColPeek(r.id) : canTab("shipments") && (openShipment ? openShipment(r.id) : setTab("overview")))}
-                      style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "7px 0", borderBottom: "1px solid #f0f2f6", fontSize: 13, fontWeight: 700, color: NAVY }}>
-                      <span style={{ width: 92, flex: "none", fontSize: 12.5, color: r.date < tod ? RED : r.date === tod ? "#a05f10" : "#5a6a85" }}>{r.date < tod ? "Late · " + prettyDate(r.date).slice(0, 6) : dayLabel(r.date)}</span>
-                      <Icon name={r.kind === "ship" ? "ship" : "box"} size={14} stroke="#5a6a85" />
-                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{r.title}</span>
-                      <span style={{ flex: 1, color: "#8593a8", fontWeight: 600, fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{r.sub}</span>
-                      {r.est && <span title="No expected date on this shipment yet — estimated at 3 months from the order date. Add it under Imports → the shipment → Expected in." style={{ fontSize: 10.5, fontWeight: 800, color: "#8a5a00", background: "#fdf3dc", borderRadius: 999, padding: "1px 7px" }}>est.</span>}
-                    </button>
-                  ))}
-                </div>
-              );
-            })()}
-          </div>
-          <div className="dk-home-cell" style={{ gridColumn: "span 2", minWidth: 0 }}>
-            {crm && (() => {
-              // fleet: every renewal date across the vans, soonest first
-              const dates = (crm.vans || []).filter((v) => v.active !== false).flatMap((v) =>
-                RENEWAL_FIELDS.map(([k, label]) => ({ van: v.name || "Van", label, date: v[k] || "", d: daysUntil(v[k]) }))
-              );
-              const set = dates.filter((x) => x.d !== null).sort((a, b) => a.d - b.d);
-              const missing = dates.filter((x) => !x.date).length;
-              const chip = (d) => d < 0 ? { bg: "#fde8ea", fg: "#9b1c2e", txt: Math.abs(d) + "d overdue" } : d === 0 ? { bg: "#fde8ea", fg: "#9b1c2e", txt: "today" } : d <= 30 ? { bg: "#fdf3e4", fg: "#8a5a14", txt: "in " + d + "d" } : { bg: "#f1f3f7", fg: "#5a6a85", txt: "in " + d + "d" };
-              return (
-                <div style={{ ...card, marginBottom: 0, height: "100%", boxSizing: "border-box" }}>
-                  <div style={{ display: "flex", alignItems: "center", marginBottom: 6 }}>
-                    <p style={{ ...sect, margin: 0 }}>Fleet dates</p>
-                    <span style={{ flex: 1 }} />
-                    {canTab("vans") && <button onClick={() => setTab("vans")} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 700, color: "#185FA5", padding: 0 }}>Open vans ▸</button>}
-                  </div>
-                  {set.length === 0 ? (
-                    <div style={{ color: "#8593a8", fontWeight: 600, fontSize: 13, padding: "4px 0" }}>No renewal dates on the vans yet.</div>
-                  ) : set.slice(0, 6).map((x, k) => {
-                    const c = chip(x.d);
-                    return (
-                      <div key={k} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", borderBottom: "1px solid #f0f2f6", fontSize: 13, fontWeight: 600 }}>
-                        <span style={{ fontWeight: 700, color: NAVY, width: 86, flex: "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{x.van}</span>
-                        <span style={{ flex: 1, color: "#5a6a85" }}>{x.label}</span>
-                        <span style={{ color: "#5a6a85", fontSize: 12.5 }}>{prettyDate(x.date)}</span>
-                        <span style={{ fontSize: 11, fontWeight: 800, color: c.fg, background: c.bg, borderRadius: 999, padding: "2px 8px", minWidth: 62, textAlign: "center" }}>{c.txt}</span>
-                      </div>
-                    );
-                  })}
-                  <div style={{ fontSize: 11.5, fontWeight: 600, color: "#8593a8", marginTop: 8 }}>
-                    Pop-up reminders fire a month before each date, then weekly until it's moved on — van checks every Monday.{missing ? " " + missing + " date" + (missing === 1 ? "" : "s") + " not filled in yet." : ""}
-                  </div>
-                </div>
-              );
-            })()}
-          </div>
-          <div className="dk-home-cell" style={{ gridColumn: "span 2", minWidth: 0 }}>
             <div style={{ ...card, marginBottom: 0, height: "100%", boxSizing: "border-box" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
                 <p style={{ ...sect, margin: 0 }}>Today</p>
@@ -425,6 +312,76 @@ export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTa
                 </button>
               </div>
             </div>
+          </div>
+          <div className="dk-home-cell dk-chase-cell" style={{ gridColumn: "span 3", minWidth: 0 }}>
+            {crm && (() => {
+              const rows = [
+                ["To send", samplesIn(crm, SAMPLE_GROUPS.send).length, "Print all", "doc", () => printAllToSend(crm, updateCrm, askConfirm, setHomeNotice)],
+                ["Follow-up due", samplesIn(crm, SAMPLE_GROUPS.first).length, "Email all", "mail", () => emailFollowUpGroup(crm, updateCrm, askConfirm, "first", setHomeNotice)],
+                ["2nd follow-up (discount code)", samplesIn(crm, SAMPLE_GROUPS.second).length, "Email all", "mail", () => emailFollowUpGroup(crm, updateCrm, askConfirm, "second", setHomeNotice)],
+              ];
+              const samplesSlot = (
+                <>
+                  <div style={{ display: "flex", alignItems: "center", marginBottom: 6 }}>
+                    <p style={{ ...sect, margin: 0 }}>Samples</p>
+                    <span style={{ marginLeft: 10, fontSize: 11.5, fontWeight: 700, color: "#8593a8" }}>Monday</span>
+                    <span style={{ flex: 1 }} />
+                    <button onClick={() => setTab("samples")} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 700, color: "#185FA5", padding: 0 }}>Open samples ▸</button>
+                  </div>
+                  {homeNotice && <div style={{ fontSize: 12.5, fontWeight: 600, color: "#6b5305", background: "#fff8e6", border: "1px solid #f4d78f", borderRadius: 8, padding: "6px 10px", marginBottom: 6 }}>{homeNotice}</div>}
+                  {rows.map(([label, n, act, icon, run]) => (
+                    <div key={label} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", borderBottom: "1px solid #f0f2f6", fontSize: 13, fontWeight: 600 }}>
+                      <b style={{ minWidth: 26, textAlign: "center", fontSize: 15, color: n ? (label === "To send" ? RED : "#a05f10") : "#aab3c2" }}>{n}</b>
+                      <span style={{ flex: 1, color: n ? NAVY : "#8593a8" }}>{label}</span>
+                      {n > 0 && label === "To send" && (
+                        <button onClick={() => markAllSent(crm, updateCrm, askConfirm)} title="Mark every sample still to send as sent today" style={{ border: "1px solid #3FA55C", background: "#3FA55C", color: "#fff", borderRadius: 8, padding: "5px 10px", fontFamily: "inherit", fontWeight: 800, fontSize: 12, cursor: "pointer" }}>✓ All sent</button>
+                      )}
+                      {n > 0 && (
+                        <button onClick={run} style={{ ...goldBtn, padding: "5px 10px", fontSize: 12 }}><Icon name={icon} stroke={NAVY} size={13} />{act}</button>
+                      )}
+                    </div>
+                  ))}
+                </>
+              );
+              // samples and reviews are the same kind of work — one card, Monday then Tuesday
+              return <ReviewsCard crm={crm} updateCrm={updateCrm} askConfirm={askConfirm} openReviews={openReviews} samplesSlot={samplesSlot} />;
+            })()}
+          </div>
+          <div className="dk-home-cell" style={{ gridColumn: "span 2", minWidth: 0 }}>
+            {crm && (() => {
+              // fleet: every renewal date across the vans, soonest first
+              const dates = (crm.vans || []).filter((v) => v.active !== false).flatMap((v) =>
+                RENEWAL_FIELDS.map(([k, label]) => ({ van: v.name || "Van", label, date: v[k] || "", d: daysUntil(v[k]) }))
+              );
+              const set = dates.filter((x) => x.d !== null).sort((a, b) => a.d - b.d);
+              const missing = dates.filter((x) => !x.date).length;
+              const chip = (d) => d < 0 ? { bg: "#fde8ea", fg: "#9b1c2e", txt: Math.abs(d) + "d overdue" } : d === 0 ? { bg: "#fde8ea", fg: "#9b1c2e", txt: "today" } : d <= 30 ? { bg: "#fdf3e4", fg: "#8a5a14", txt: "in " + d + "d" } : { bg: "#f1f3f7", fg: "#5a6a85", txt: "in " + d + "d" };
+              return (
+                <div style={{ ...card, marginBottom: 0, height: "100%", boxSizing: "border-box" }}>
+                  <div style={{ display: "flex", alignItems: "center", marginBottom: 6 }}>
+                    <p style={{ ...sect, margin: 0 }}>Fleet dates</p>
+                    <span style={{ flex: 1 }} />
+                    {canTab("vans") && <button onClick={() => setTab("vans")} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 700, color: "#185FA5", padding: 0 }}>Open vans ▸</button>}
+                  </div>
+                  {set.length === 0 ? (
+                    <div style={{ color: "#8593a8", fontWeight: 600, fontSize: 13, padding: "4px 0" }}>No renewal dates on the vans yet.</div>
+                  ) : set.slice(0, 6).map((x, k) => {
+                    const c = chip(x.d);
+                    return (
+                      <div key={k} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", borderBottom: "1px solid #f0f2f6", fontSize: 13, fontWeight: 600 }}>
+                        <span style={{ fontWeight: 700, color: NAVY, width: 86, flex: "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{x.van}</span>
+                        <span style={{ flex: 1, color: "#5a6a85" }}>{x.label}</span>
+                        <span style={{ color: "#5a6a85", fontSize: 12.5 }}>{prettyDate(x.date)}</span>
+                        <span style={{ fontSize: 11, fontWeight: 800, color: c.fg, background: c.bg, borderRadius: 999, padding: "2px 8px", minWidth: 62, textAlign: "center" }}>{c.txt}</span>
+                      </div>
+                    );
+                  })}
+                  <div style={{ fontSize: 11.5, fontWeight: 600, color: "#8593a8", marginTop: 8 }}>
+                    Pop-up reminders fire a month before each date, then weekly until it's moved on — van checks every Monday.{missing ? " " + missing + " date" + (missing === 1 ? "" : "s") + " not filled in yet." : ""}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
           <div className="dk-home-cell" style={{ gridColumn: "span 2", minWidth: 0 }}>
             <div style={{ ...card, marginBottom: 0, height: "100%", boxSizing: "border-box" }}>
