@@ -32,7 +32,7 @@ import {
   int,
 } from "../lib/core.js";
 import { sampleStatus } from "../lib/crmCore.js";
-import { blankInvoice, blankLine, blankQuote, blankSample, blankSampleItem, nextNumber, TRADE_COUNTER, vanReminders, reviewReminders, syncCatalogue, renameSkus, syncOpenPicks, colourTidyPlan, syncSampleConversions, cleanCode, codeSource, PRODUCT_SOURCES, suggestDescription, suggestCode, codeFollowsName, dueScheduledFor, setTaskDone, describeSchedule, today as todayStr, newPurchaseFor } from "../lib/crmCore.js";
+import { blankInvoice, blankLine, blankQuote, blankSample, blankSampleItem, nextNumber, TRADE_COUNTER, vanReminders, reviewReminders, reviewAskCounts, syncCatalogue, renameSkus, syncOpenPicks, colourTidyPlan, syncSampleConversions, cleanCode, codeSource, PRODUCT_SOURCES, suggestDescription, suggestCode, codeFollowsName, dueScheduledFor, setTaskDone, describeSchedule, today as todayStr, newPurchaseFor } from "../lib/crmCore.js";
 import { useCrm } from "./crm/useCrm.js";
 import CustomersScreen from "./crm/CustomersScreen.jsx";
 import InvoicesScreen from "./crm/InvoicesScreen.jsx";
@@ -277,6 +277,8 @@ export default function ImportPlanner() {
   }, [!!crm, access.role, tab, shortLoads.reports]);
   // samples waiting to be posted: red count on Samples
   const samplesToSend = useMemo(() => (crm && crm.samples ? crm.samples.filter((x) => { try { return sampleStatus(x, crm) === "To send"; } catch (e) { return false; } }).length : 0), [crm && crm.samples, crm && crm.invoices]);
+  const sampleFollowUps = useMemo(() => (crm && crm.samples ? crm.samples.filter((x) => { try { const st = sampleStatus(x, crm); return st === "Follow-up due" || st === "2nd follow-up due"; } catch (e) { return false; } }).length : 0), [crm && crm.samples, crm && crm.invoices]);
+  const reviewsDue = useMemo(() => { if (!crm) return 0; try { const n = reviewAskCounts(crm); return n.email + n.wa + n.nudges; } catch (e) { return 0; } }, [crm]);
   const [phonePick, setPhonePick] = useState(false); // admin / manager: open the driver or loading app
   const canPhoneApps = storageMode !== "supabase" || access.role === "admin" || access.role === "manager";
   // vans loaded and waiting for a second person to double-check: blue count on Loading
@@ -1405,7 +1407,7 @@ export default function ImportPlanner() {
         );
       })()}
       <div style={{ display: "flex", alignItems: "stretch" }}>
-      <Sidebar phone={isPhone} tab={tab} setTab={navTo} open={sideOpen} footer={sideFooter} onNew={access.canEdit ? (t) => { if (isPhone) setSideOpen(false); sideNew(t); } : null} canNew={(t) => (["overview", "vans", "purchases", "suppliers"].includes(t) ? access.canManage : access.canEdit)} onToggle={() => setSideOpen((o) => !o)} allow={access.canTab} badges={{ issues: issueCount, loading: checkCount, samples: samplesToSend }} />
+      <Sidebar phone={isPhone} tab={tab} setTab={navTo} open={sideOpen} footer={sideFooter} onNew={access.canEdit ? (t) => { if (isPhone) setSideOpen(false); sideNew(t); } : null} canNew={(t) => (["overview", "vans", "purchases", "suppliers"].includes(t) ? access.canManage : access.canEdit)} onToggle={() => setSideOpen((o) => !o)} allow={access.canTab} badges={{ issues: issueCount, loading: checkCount, reviews: [{ n: reviewsDue, title: reviewsDue + " ready to ask or nudge" }], samples: [{ n: samplesToSend, title: samplesToSend + " to send" }, { n: sampleFollowUps, bg: "#E8912D", title: sampleFollowUps + " follow-up" + (sampleFollowUps === 1 ? "" : "s") + " due" }] }} />
       <div style={{ flex: 1, minWidth: 0 }}>
 
       <div ref={headerRef} className="no-print" style={{ background: NAVY, padding: isPhone ? "8px 10px" : "10px 16px", display: "flex", alignItems: "center", gap: isPhone ? 6 : 10, position: "sticky", top: 0, zIndex: 25, boxShadow: "0 2px 8px rgba(11,31,63,0.25)" }}>

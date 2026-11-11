@@ -158,12 +158,30 @@ export default function Sidebar({ tab, setTab, open, footer, onNew, canNew, onTo
                     marginBottom: 2,
                   }}
                 >
-                  <span style={{ position: "relative", display: "inline-flex" }}>
-                    <Icon name={icon} size={17} stroke={on ? NAVY : "#8fa0c0"} />
-                    {!open && badges[t] > 0 && <span style={{ position: "absolute", top: -4, right: -6, width: 9, height: 9, borderRadius: 99, background: "#e5394f", border: "2px solid " + NAVY }} />}
-                  </span>
-                  {open && <span style={{ whiteSpace: "nowrap" }}>{label}</span>}
-                  {open && badges[t] > 0 && <span title={badges[t] + (t === "samples" ? " to send" : " live")} style={{ marginLeft: "auto", marginRight: canAdd && onNew && (!canNew || canNew(t)) ? 30 : 0, minWidth: 20, height: 20, padding: "0 6px", borderRadius: 99, background: "#e5394f", color: "#fff", fontSize: 11.5, fontWeight: 800, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>{badges[t]}</span>}
+                  {/* a badge is a number, or a list of {n, bg, title} bubbles (e.g. samples: to send + follow-ups due) */}
+                  {(() => {
+                    const raw = badges[t];
+                    const bubbles = (Array.isArray(raw) ? raw : [{ n: raw }]).filter((b) => b && b.n > 0);
+                    return (
+                      <>
+                        <span style={{ position: "relative", display: "inline-flex" }}>
+                          <Icon name={icon} size={17} stroke={on ? NAVY : "#8fa0c0"} />
+                          {!open && bubbles.length > 0 && <span style={{ position: "absolute", top: -4, right: -6, width: 9, height: 9, borderRadius: 99, background: bubbles[0].bg || "#e5394f", border: "2px solid " + NAVY }} />}
+                        </span>
+                        {open && <span style={{ whiteSpace: "nowrap" }}>{label}</span>}
+                        {open && bubbles.length > 0 && (
+                          <span style={{ marginLeft: "auto", marginRight: canAdd && onNew && (!canNew || canNew(t)) ? 30 : 0, display: "inline-flex", gap: 4 }}>
+                            {bubbles.map((b, k) => (
+                              <span key={k} title={b.title || b.n + (t === "samples" ? " to send" : " live")}
+                                style={{ minWidth: 20, height: 20, padding: "0 6px", borderRadius: 99, background: b.bg || "#e5394f", color: "#fff", fontSize: 11.5, fontWeight: 800, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+                                {b.n}
+                              </span>
+                            ))}
+                          </span>
+                        )}
+                      </>
+                    );
+                  })()}
                 </button>
                 {open && canAdd && onNew && (!canNew || canNew(t)) && (
                   <button
