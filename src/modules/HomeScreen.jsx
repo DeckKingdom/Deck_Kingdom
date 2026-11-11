@@ -111,7 +111,7 @@ export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTa
     });
 
   return (
-    <div style={{ maxWidth: 1720, margin: "0 auto", padding: "18px 22px" }}>
+    <div style={{ maxWidth: 1380, margin: "0 auto", padding: "18px 22px" }}>
       {/* hero */}
       <div style={{ background: "linear-gradient(135deg,#0B1F3F 0%,#13294f 100%)", borderRadius: 12, padding: "18px 22px", color: "#fff", marginBottom: 16, display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
         <div style={{ minWidth: 200 }}>
