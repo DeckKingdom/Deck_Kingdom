@@ -665,54 +665,77 @@ async function saveAll(d) {
     if (error) throw new Error(error.message);
   };
 
+  // One record the database refuses must never stop everything else saving: if a batch fails, each row
+  // is tried on its own, the good ones go in, and only the refused ones are kept back to retry (and reported).
+  const failed = []; // { key, id, op, msg, label }
+  const labelOf = (key, r) => (key === "invoices" && r && r.inv_no ? "job #" + r.inv_no : key === "customers" && r && r.name ? "account " + r.name : key.replace(/s$/, "") + " " + (r && r.id));
+  const up_ = async (table, key, rows) => {
+    if (!rows.length) return;
+    const { error } = await sb.from(table).upsert(rows);
+    if (!error) return;
+    for (const r of rows) {
+      const { error: e } = await sb.from(table).upsert(r);
+      if (e) failed.push({ key, id: r.id, op: "save", msg: e.message, label: labelOf(key, r) });
+    }
+  };
+  const del_ = async (table, key, ids) => {
+    if (!ids.length) return;
+    const { error } = await sb.from(table).delete().in("id", ids);
+    if (!error) return;
+    for (const id of ids) {
+      const { error: e } = await sb.from(table).delete().eq("id", id);
+      if (e) failed.push({ key, id, op: "delete", msg: e.message, label: labelOf(key, (prev[key] && prev[key].get(id)) || { id }) });
+    }
+  };
+
   // children first on delete, parents first on upsert
-  if (dl.deletes.length) await run(sb.from("invoice_items").delete().in("id", dl.deletes));
-  if (dp.deletes.length) await run(sb.from("invoice_picks").delete().in("id", dp.deletes));
-  if (di.deletes.length) await run(sb.from("invoices").delete().in("id", di.deletes));
-  if (ds.deletes.length) await run(sb.from("customer_sites").delete().in("id", ds.deletes));
-  if (dc.deletes.length) await run(sb.from("customers").delete().in("id", dc.deletes));
-  if (dk.deletes.length) await run(sb.from("product_components").delete().in("id", dk.deletes));
-  if (dm.deletes.length) await run(sb.from("master_products").delete().in("id", dm.deletes));
-  if (dc.upserts.length) await run(sb.from("customers").upsert(dc.upserts));
-  if (ds.upserts.length) await run(sb.from("customer_sites").upsert(ds.upserts));
-  if (di.upserts.length) await run(sb.from("invoices").upsert(di.upserts));
-  if (dl.upserts.length) await run(sb.from("invoice_items").upsert(dl.upserts));
-  if (dp.upserts.length) await run(sb.from("invoice_picks").upsert(dp.upserts));
-  if (dci.deletes.length) await run(sb.from("collection_items").delete().in("id", dci.deletes));
-  if (dco.deletes.length) await run(sb.from("collections").delete().in("id", dco.deletes));
-  if (dmv.deletes.length) await run(sb.from("stock_movements").delete().in("id", dmv.deletes));
-  if (dm.upserts.length) await run(sb.from("master_products").upsert(dm.upserts));
-  if (dk.upserts.length) await run(sb.from("product_components").upsert(dk.upserts));
-  if (dco.upserts.length) await run(sb.from("collections").upsert(dco.upserts));
-  if (dci.upserts.length) await run(sb.from("collection_items").upsert(dci.upserts));
-  if (dmv.upserts.length) await run(sb.from("stock_movements").upsert(dmv.upserts));
-  if (dvc.deletes.length) await run(sb.from("van_checks").delete().in("id", dvc.deletes));
-  if (dv.deletes.length) await run(sb.from("vans").delete().in("id", dv.deletes));
-  if (dv.upserts.length) await run(sb.from("vans").upsert(dv.upserts));
-  if (dvc.upserts.length) await run(sb.from("van_checks").upsert(dvc.upserts));
+  await del_("invoice_items", "items", dl.deletes);
+  await del_("invoice_picks", "picks", dp.deletes);
+  await del_("invoices", "invoices", di.deletes);
+  await del_("customer_sites", "sites", ds.deletes);
+  await del_("customers", "customers", dc.deletes);
+  await del_("product_components", "comps", dk.deletes);
+  await del_("master_products", "mps", dm.deletes);
+  await up_("customers", "customers", dc.upserts);
+  await up_("customer_sites", "sites", ds.upserts);
+  await up_("invoices", "invoices", di.upserts);
+  await up_("invoice_items", "items", dl.upserts);
+  await up_("invoice_picks", "picks", dp.upserts);
+  await del_("collection_items", "collItems", dci.deletes);
+  await del_("collections", "colls", dco.deletes);
+  await del_("stock_movements", "moves", dmv.deletes);
+  await up_("master_products", "mps", dm.upserts);
+  await up_("product_components", "comps", dk.upserts);
+  await up_("collections", "colls", dco.upserts);
+  await up_("collection_items", "collItems", dci.upserts);
+  await up_("stock_movements", "moves", dmv.upserts);
+  await del_("van_checks", "checks", dvc.deletes);
+  await del_("vans", "vans", dv.deletes);
+  await up_("vans", "vans", dv.upserts);
+  await up_("van_checks", "checks", dvc.upserts);
   if (quotesReady) {
-    if (dqi.deletes.length) await run(sb.from("quote_items").delete().in("id", dqi.deletes));
-    if (dq.deletes.length) await run(sb.from("quotes").delete().in("id", dq.deletes));
-    if (dq.upserts.length) await run(sb.from("quotes").upsert(dq.upserts));
-    if (dqi.upserts.length) await run(sb.from("quote_items").upsert(dqi.upserts));
+    await del_("quote_items", "quoteItems", dqi.deletes);
+    await del_("quotes", "quotes", dq.deletes);
+    await up_("quotes", "quotes", dq.upserts);
+    await up_("quote_items", "quoteItems", dqi.upserts);
   }
   if (samplesReady) {
-    if (dsi.deletes.length) await run(sb.from("sample_items").delete().in("id", dsi.deletes));
-    if (dsm.deletes.length) await run(sb.from("samples").delete().in("id", dsm.deletes));
-    if (dsm.upserts.length) await run(sb.from("samples").upsert(dsm.upserts));
-    if (dsi.upserts.length) await run(sb.from("sample_items").upsert(dsi.upserts));
+    await del_("sample_items", "sampleItems", dsi.deletes);
+    await del_("samples", "samples", dsm.deletes);
+    await up_("samples", "samples", dsm.upserts);
+    await up_("sample_items", "sampleItems", dsi.upserts);
   }
   if (purchasesReady) {
-    if (dpu.deletes.length) await run(sb.from("purchases").delete().in("id", dpu.deletes));
-    if (dsp.deletes.length) await run(sb.from("suppliers").delete().in("id", dsp.deletes));
-    if (dsp.upserts.length) await run(sb.from("suppliers").upsert(dsp.upserts));
-    if (dpu.upserts.length) await run(sb.from("purchases").upsert(dpu.upserts));
+    await del_("purchases", "purchases", dpu.deletes);
+    await del_("suppliers", "suppliers", dsp.deletes);
+    await up_("suppliers", "suppliers", dsp.upserts);
+    await up_("purchases", "purchases", dpu.upserts);
   }
   if (tasksReady) {
-    if (dtl.deletes.length) await run(sb.from("task_log").delete().in("id", dtl.deletes));
-    if (dtk.deletes.length) await run(sb.from("tasks").delete().in("id", dtk.deletes));
-    if (dtk.upserts.length) await run(sb.from("tasks").upsert(dtk.upserts));
-    if (dtl.upserts.length) await run(sb.from("task_log").upsert(dtl.upserts));
+    await del_("task_log", "taskLog", dtl.deletes);
+    await del_("tasks", "tasks", dtk.deletes);
+    await up_("tasks", "tasks", dtk.upserts);
+    await up_("task_log", "taskLog", dtl.upserts);
   }
 
   const settingsToSave = {
@@ -734,7 +757,18 @@ async function saveAll(d) {
     }
   }
 
+  // whatever was refused stays "unsaved" so the next save tries it again
+  failed.forEach((f) => {
+    const was = prev[f.key] && prev[f.key].get(f.id);
+    if (!next[f.key]) return;
+    if (was) next[f.key].set(f.id, was); else next[f.key].delete(f.id);
+  });
   snapshot = next;
+  if (failed.length) {
+    const err = new Error(failed.slice(0, 3).map((f) => "Couldn't " + f.op + " " + f.label + ": " + f.msg).join(" · ") + (failed.length > 3 ? " · +" + (failed.length - 3) + " more" : ""));
+    err.partial = true;
+    throw err;
+  }
 }
 
 // ===== live refresh: the newest change someone else made (FileMaker, the website, another member of staff) =====

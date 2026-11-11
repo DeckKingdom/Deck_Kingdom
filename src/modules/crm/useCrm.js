@@ -15,6 +15,8 @@ export function useCrm(enabled) {
   const [crm, setCrm] = useState(null);
   const [crmError, setCrmError] = useState(false);
   const [crmSave, setCrmSave] = useState("");
+  const [saveError, setSaveError] = useState(""); // why the last save failed (shown as a red banner)
+  const retry = useRef(null);
   const [lastLive, setLastLive] = useState(null); // when changes from elsewhere were last pulled in
   const loaded = useRef(false);
   const loading = useRef(false);
@@ -102,14 +104,30 @@ export function useCrm(enabled) {
       try {
         await crmStorage.set("dk-crm", JSON.stringify(crm));
         setCrmSave("Saved");
+        setSaveError("");
       } catch (e) {
         pending.current = true;
-        setCrmSave("Save failed — will retry on next change");
+        const msg = String((e && e.message) || e || "unknown error");
+        setCrmSave(e && e.partial ? "Partly saved" : "Save failed");
+        setSaveError(msg);
+        // keep trying on its own - don't wait for the next edit
+        if (retry.current) clearTimeout(retry.current);
+        retry.current = setTimeout(() => setCrm((d) => (d ? { ...d } : d)), 15_000);
       } finally {
         saving.current = false;
       }
     }, 600);
   }, [crm]);
+
+  // never lose unsaved work to a refresh / closed tab without a warning
+  useEffect(() => {
+    const warn = (e) => {
+      if (pending.current || saving.current) { e.preventDefault(); e.returnValue = ""; return ""; }
+      return undefined;
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, []);
 
   const updateCrm = (fn) => {
     dirty.current = true;
@@ -131,5 +149,5 @@ export function useCrm(enabled) {
     setCrm(normaliseCrm(d));
   };
 
-  return { crm, updateCrm, replaceCrm, crmError, loadCrm, crmSave, lastLive };
+  return { crm, updateCrm, replaceCrm, crmError, loadCrm, crmSave, saveError, lastLive };
 }
