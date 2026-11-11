@@ -14,7 +14,7 @@ export const NAV_SECTIONS = [
       ["invoices", "Invoices", "doc", true],
       ["quotes", "Quotes", "tag", true],
       ["samples", "Samples", "leaf", true],
-      ["reviews", "Reviews & Photos", "star"],
+      ["reviews", "Reviews", "star"], // short label so the count pill never eats it
     ],
   },
   { title: "", items: [["schedule", "Delivery Schedule", "cal"], ["loading", "Loading", "box"], ["issues", "Delivery issues", "warn"]] },
@@ -171,11 +171,11 @@ export default function Sidebar({ tab, setTab, open, footer, onNew, canNew, onTo
                         {open && <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>{label}</span>}
                         {open && bubbles.length > 0 && (
                           // one slim pill; two counts share it as joined segments
-                          <span style={{ marginLeft: "auto", marginRight: canAdd && onNew && (!canNew || canNew(t)) ? 30 : 0, display: "inline-flex", borderRadius: 999, overflow: "hidden", flex: "none", boxShadow: on ? "none" : "0 0 0 1px #ffffff22" }}>
+                          <span style={{ marginLeft: "auto", marginRight: canAdd && onNew && (!canNew || canNew(t)) ? 30 : 0, display: "inline-flex", gap: 1, borderRadius: 999, overflow: "hidden", flex: "none" }}>
                             {bubbles.map((b, k) => (
                               <span key={k} title={b.title || b.n + (t === "samples" ? " to send" : " live")}
-                                style={{ minWidth: 15, height: 16, padding: "0 5px", background: b.bg || "#e5394f", color: "#fff", fontSize: 10, fontWeight: 800, letterSpacing: 0.2, display: "inline-flex", alignItems: "center", justifyContent: "center", fontVariantNumeric: "tabular-nums" }}>
-                                {b.n > 999 ? "999+" : b.n}
+                                style={{ minWidth: 13, height: 15, padding: "0 4.5px", background: b.bg || "#e5394f", color: "#fff", fontSize: 9.5, fontWeight: 800, letterSpacing: 0.2, display: "inline-flex", alignItems: "center", justifyContent: "center", fontVariantNumeric: "tabular-nums" }}>
+                                {b.n > 99 ? "99+" : b.n}
                               </span>
                             ))}
                           </span>
