@@ -279,6 +279,8 @@ export default function ImportPlanner() {
   const samplesToSend = useMemo(() => (crm && crm.samples ? crm.samples.filter((x) => { try { return sampleStatus(x, crm) === "To send"; } catch (e) { return false; } }).length : 0), [crm && crm.samples, crm && crm.invoices]);
   const sampleFollowUps = useMemo(() => (crm && crm.samples ? crm.samples.filter((x) => { try { const st = sampleStatus(x, crm); return st === "Follow-up due" || st === "2nd follow-up due"; } catch (e) { return false; } }).length : 0), [crm && crm.samples, crm && crm.invoices]);
   const reviewsDue = useMemo(() => { if (!crm) return 0; try { const n = reviewAskCounts(crm); return n.email + n.wa + n.nudges; } catch (e) { return 0; } }, [crm]);
+  const [reviewsFocus, setReviewsFocus] = useState(null); // jump into Reviews with a filter pre-set (from Home)
+  const openReviews = (f) => { setReviewsFocus({ f, at: Date.now() }); setTab("reviews"); };
   const [phonePick, setPhonePick] = useState(false); // admin / manager: open the driver or loading app
   const canPhoneApps = storageMode !== "supabase" || access.role === "admin" || access.role === "manager";
   // vans loaded and waiting for a second person to double-check: blue count on Loading
@@ -1497,7 +1499,7 @@ export default function ImportPlanner() {
               </div>
             </div>
           )}
-          <HomeScreen money={access.money} canTab={access.canTab} data={data} crm={crm} updateCrm={updateCrm} me={me} askConfirm={setConfirmBox} setTab={setTab} openInvoice={openInvoice} openCollection={openCollection} openShipment={(id) => { setActiveId(id); setTab("shipments"); }} addShipment={addShipment} newInvoice={() => (crm ? newInvoiceFor("", "") : setTab("invoices"))} />
+          <HomeScreen money={access.money} canTab={access.canTab} data={data} crm={crm} updateCrm={updateCrm} me={me} askConfirm={setConfirmBox} setTab={setTab} openInvoice={openInvoice} openCollection={openCollection} openShipment={(id) => { setActiveId(id); setTab("shipments"); }} openReviews={openReviews} addShipment={addShipment} newInvoice={() => (crm ? newInvoiceFor("", "") : setTab("invoices"))} />
         </>
       )}
 
@@ -1631,7 +1633,7 @@ export default function ImportPlanner() {
             setFilter={setInvFilter}
           />
         ) : tab === "reviews" ? (
-          <ReviewsScreen crm={crm} updateCrm={updateCrm} askConfirm={setConfirmBox} openInvoice={openInvoice} goCustomer={goCustomer} />
+          <ReviewsScreen crm={crm} updateCrm={updateCrm} askConfirm={setConfirmBox} openInvoice={openInvoice} goCustomer={goCustomer} focus={reviewsFocus} />
         ) : (
           <ScheduleScreen headerH={headerH} panels={schedPanels} setPanel={setSchedPanel} onPendingCount={setSchedPending} openProduct={openProduct} money={access.money} crm={crm} updateCrm={updateCrm} askConfirm={setConfirmBox} openInvoice={openInvoice} openCollection={openCollection} me={me} planner={data} goCustomer={goCustomer} newFollowUp={newFollowUp} />
         ))}

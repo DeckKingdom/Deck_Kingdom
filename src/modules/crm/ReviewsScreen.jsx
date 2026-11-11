@@ -44,7 +44,7 @@ const channelOf = reviewChannel;
 const chip = (bg, fg) => ({ fontSize: 11, fontWeight: 800, color: fg, background: bg, borderRadius: 999, padding: "2px 8px", whiteSpace: "nowrap" });
 const linkBtn = { border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit", padding: 0 };
 
-export default function ReviewsScreen({ crm, updateCrm, askConfirm, openInvoice, goCustomer }) {
+export default function ReviewsScreen({ crm, updateCrm, askConfirm, openInvoice, goCustomer, focus }) {
   const [filter, setFilter] = useState("To ask");
   const [period, setPeriod] = useState("90");
   const [search, setSearch] = useState("");
@@ -58,6 +58,9 @@ export default function ReviewsScreen({ crm, updateCrm, askConfirm, openInvoice,
   const [openGroups, setOpenGroups] = useState(() => new Set()); // expanded same-customer groups
 
   const rs = reviewSettingsOf(crm);
+
+  // arriving from a Home-card shortcut: land on the right filter
+  useEffect(() => { if (focus && focus.f) setFilter(focus.f); }, [focus]);
 
   // live delivery issues — a job with one open is never asked
   useEffect(() => {

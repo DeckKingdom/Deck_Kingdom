@@ -7,6 +7,7 @@ import {
   dailyTasksFor, isDailyDone, dueScheduledFor, projectsFor, setTaskDone, scheduledOccurrence, nextScheduled,
   occurrenceAssignees, staffName, staffList, describeSchedule, PROJECT_STATUSES,
   quoteTotals, quoteStatus, quoteIsOpen, sampleStats, sampleStatus, isVoidInvoice, onSchedule,
+  RENEWAL_FIELDS, daysUntil,
 } from "../lib/crmCore.js";
 import { tasksAvailable } from "../data/crmStorage.js";
 import { Icon, Chip, card, sect, lbl, inp, btn, goldBtn, RiskChip } from "./crm/ui.jsx";
@@ -37,7 +38,7 @@ const Report = ({ label, value, sub, tone, onClick }) => (
 
 const rowStyle = { display: "flex", gap: 11, alignItems: "flex-start", padding: "9px 0", borderBottom: "1px solid #f0f2f6" };
 
-export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTab, addShipment, newInvoice, openInvoice, openCollection, openShipment, money = true, canTab = () => true }) {
+export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTab, addShipment, newInvoice, openInvoice, openCollection, openShipment, openReviews, money = true, canTab = () => true }) {
   const tod = today();
   const [viewAs, setViewAs] = useState(me || "");
   const [draft, setDraft] = useState(null);
@@ -306,8 +307,44 @@ export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTa
               );
             })()}
           </div>
-          <div className="dk-home-cell" style={{ gridColumn: "span 4", minWidth: 0 }}>
-            {crm && <ReviewsCard crm={crm} updateCrm={updateCrm} openInvoice={openInvoice} />}
+          <div className="dk-home-cell" style={{ gridColumn: "span 2", minWidth: 0 }}>
+            {crm && <ReviewsCard crm={crm} updateCrm={updateCrm} askConfirm={askConfirm} openReviews={openReviews} />}
+          </div>
+          <div className="dk-home-cell" style={{ gridColumn: "span 2", minWidth: 0 }}>
+            {crm && (() => {
+              // fleet: every renewal date across the vans, soonest first
+              const dates = (crm.vans || []).filter((v) => v.active !== false).flatMap((v) =>
+                RENEWAL_FIELDS.map(([k, label]) => ({ van: v.name || "Van", label, date: v[k] || "", d: daysUntil(v[k]) }))
+              );
+              const set = dates.filter((x) => x.d !== null).sort((a, b) => a.d - b.d);
+              const missing = dates.filter((x) => !x.date).length;
+              const chip = (d) => d < 0 ? { bg: "#fde8ea", fg: "#9b1c2e", txt: Math.abs(d) + "d overdue" } : d === 0 ? { bg: "#fde8ea", fg: "#9b1c2e", txt: "today" } : d <= 30 ? { bg: "#fdf3e4", fg: "#8a5a14", txt: "in " + d + "d" } : { bg: "#f1f3f7", fg: "#5a6a85", txt: "in " + d + "d" };
+              return (
+                <div style={{ ...card, marginBottom: 0, height: "100%", boxSizing: "border-box" }}>
+                  <div style={{ display: "flex", alignItems: "center", marginBottom: 6 }}>
+                    <p style={{ ...sect, margin: 0 }}>Fleet dates</p>
+                    <span style={{ flex: 1 }} />
+                    {canTab("vans") && <button onClick={() => setTab("vans")} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 700, color: "#185FA5", padding: 0 }}>Open vans ▸</button>}
+                  </div>
+                  {set.length === 0 ? (
+                    <div style={{ color: "#8593a8", fontWeight: 600, fontSize: 13, padding: "4px 0" }}>No renewal dates on the vans yet.</div>
+                  ) : set.slice(0, 6).map((x, k) => {
+                    const c = chip(x.d);
+                    return (
+                      <div key={k} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", borderBottom: "1px solid #f0f2f6", fontSize: 13, fontWeight: 600 }}>
+                        <span style={{ fontWeight: 700, color: NAVY, width: 86, flex: "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{x.van}</span>
+                        <span style={{ flex: 1, color: "#5a6a85" }}>{x.label}</span>
+                        <span style={{ color: "#5a6a85", fontSize: 12.5 }}>{prettyDate(x.date)}</span>
+                        <span style={{ fontSize: 11, fontWeight: 800, color: c.fg, background: c.bg, borderRadius: 999, padding: "2px 8px", minWidth: 62, textAlign: "center" }}>{c.txt}</span>
+                      </div>
+                    );
+                  })}
+                  <div style={{ fontSize: 11.5, fontWeight: 600, color: "#8593a8", marginTop: 8 }}>
+                    Pop-up reminders fire a month before each date, then weekly until it's moved on — van checks every Monday.{missing ? " " + missing + " date" + (missing === 1 ? "" : "s") + " not filled in yet." : ""}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
           <div className="dk-home-cell" style={{ gridColumn: "span 2", minWidth: 0 }}>
             <div style={{ ...card, marginBottom: 0, height: "100%", boxSizing: "border-box" }}>
