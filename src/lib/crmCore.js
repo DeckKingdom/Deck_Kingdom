@@ -2078,16 +2078,22 @@ export const SAMPLE_EMAIL_DEFAULTS = {
   code: "",
   offer: "10% off",
   first: {
-    subject: "Your Deck Kingdom samples",
-    body: "Hi {name},\n\nJust checking your samples arrived safely and that you've had a chance to look at them.\n\nIf you have any questions about colours, quantities or fitting, just reply to this email or call us on 0161 399 1837 — we're happy to help you plan your project.\n\nKind regards,\nDeck Kingdom",
+    subject: "How did your Deck Kingdom samples look?",
+    body: "Hi {name},\n\nYour samples should have reached you by now. We hope you've had a chance to see them in your own garden and light, as colours can look quite different outside compared with on screen.\n\nIf you're still deciding, we're happy to help with:\n\n• Choosing a colour or finish. Send us a photo of your space and we'll give you our honest opinion.\n• Working out quantities. Send us your measurements and we'll put a full parts list and price together, including boards, joists, clips and trims.\n• Fitting advice. Our team can talk you through installation before you buy.\n\nWhen you're ready, we deliver on our own vans, usually within 48 hours, and our drivers unload for you. You're also welcome to call into our showroom in Ashton-under-Lyne to see the full range.\n\nJust reply to this email or call us on 0161 399 1837.\n\nKind regards,\nThe Deck Kingdom Team",
   },
   second: {
     subject: "{offer} your Deck Kingdom order",
     body: "Hi {name},\n\nThanks again for requesting samples from Deck Kingdom. If you're ready to go ahead, here's {offer} your order — just use code {code} at checkout on deckkingdom.co.uk, or quote it when you call us on 0161 399 1837.\n\nAny questions at all, just reply to this email.\n\nKind regards,\nDeck Kingdom",
   },
 };
+// the original first follow-up: a saved copy that was never changed picks up the new default wording
+const OLD_FIRST = { subject: "Your Deck Kingdom samples", body: "Hi {name},\n\nJust checking your samples arrived safely and that you've had a chance to look at them.\n\nIf you have any questions about colours, quantities or fitting, just reply to this email or call us on 0161 399 1837 — we're happy to help you plan your project.\n\nKind regards,\nDeck Kingdom" };
 export const sampleEmailSettings = (crm) => {
-  const v = (crm && crm.sampleEmails) || {};
+  const raw = (crm && crm.sampleEmails) || {};
+  const f = raw.first || {};
+  const v = { ...raw, first: { ...f } };
+  if (v.first.subject === OLD_FIRST.subject) delete v.first.subject;
+  if (v.first.body === OLD_FIRST.body) delete v.first.body;
   return { ...SAMPLE_EMAIL_DEFAULTS, ...v, first: { ...SAMPLE_EMAIL_DEFAULTS.first, ...(v.first || {}) }, second: { ...SAMPLE_EMAIL_DEFAULTS.second, ...(v.second || {}) } };
 };
 export const SAMPLE_SOURCES = ["Manual entry", "Phone", "Showroom", "Email", "Website", "Market Place", "Social", "Trade"];
