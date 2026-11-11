@@ -171,7 +171,8 @@ export default function LinesEditor({ doc, edit, crm, readOnly, toolbar, onOpenP
     stockCheck(doc, crm).forEach((r) => (m[r.key] = r));
     return m;
   }, [fulfilment, doc, crm]);
-  const ncols = 7 + (sized ? 1 : 0);
+  const disc = Number(doc && doc.discountPct) || 0; // account discount: show each price after it
+  const ncols = 7 + (sized ? 1 : 0) + (disc > 0 ? 1 : 0);
   const setPick = (pid, fn) => edit((x) => { const p = (x.picks || []).find((y) => y.id === pid); if (p) fn(p); });
   const fulfilRow = (l) => {
     if (!l.code && !l.description) return null;
@@ -241,6 +242,12 @@ export default function LinesEditor({ doc, edit, crm, readOnly, toolbar, onOpenP
     );
   };
 
+  const discPrice = (l) => ((Number(l.price) || 0) * (1 - disc / 100)).toFixed(2);
+  const discCell = (l) => disc > 0 ? (
+    <td style={{ ...td, textAlign: "right", width: 92, whiteSpace: "nowrap", fontWeight: 700, color: "#8a5a00" }} title={"Price after the " + disc + "% account discount"}>
+      <span style={{ display: "inline-block", background: "#fdf3dc", borderRadius: 6, padding: "4px 8px" }}>{discPrice(l)}</span>
+    </td>
+  ) : null;
   const lineTotal = (l) => ((Number(l.qty) || 0) * (Number(l.price) || 0)).toLocaleString("en-GB", { minimumFractionDigits: 2 });
 
   return (
@@ -255,8 +262,8 @@ export default function LinesEditor({ doc, edit, crm, readOnly, toolbar, onOpenP
         <table className="dk-t" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 700 }}>
           <thead>
             <tr>
-              {["Code", ...(sized ? ["Length × width (m)"] : []), "Description", "Colour", "Qty", "Price £ inc VAT", "Line £", ""].map((h, i, all) => (
-                <th key={i} style={{ textAlign: h.startsWith("Price") || h === "Line £" ? "right" : "left", fontSize: 11, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", padding: "8px 6px", borderBottom: "2px solid #e6e9ef", whiteSpace: "nowrap" }}>{h}</th>
+              {["Code", ...(sized ? ["Length × width (m)"] : []), "Description", "Colour", "Qty", "Price £ inc VAT", ...(disc > 0 ? ["Less " + disc + "%"] : []), "Line £", ""].map((h, i, all) => (
+                <th key={i} style={{ textAlign: h.startsWith("Price") || h.startsWith("Less") || h === "Line £" ? "right" : "left", fontSize: 11, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", padding: "8px 6px", borderBottom: "2px solid #e6e9ef", whiteSpace: "nowrap" }}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -270,6 +277,7 @@ export default function LinesEditor({ doc, edit, crm, readOnly, toolbar, onOpenP
                     <td style={td}>{l.colour}</td>
                     <td style={td}>{l.qty}</td>
                     <td style={{ ...td, textAlign: "right" }}>{(Number(l.price) || 0).toFixed(2)}</td>
+                    {discCell(l)}
                     <td style={{ ...td, textAlign: "right", fontWeight: 700 }}>{lineTotal(l)}</td>
                     <td style={td} />
                   </tr>
@@ -303,6 +311,7 @@ export default function LinesEditor({ doc, edit, crm, readOnly, toolbar, onOpenP
                     <td style={{ ...td, width: 100 }}>
                       <input style={numInp} inputMode="decimal" value={l.price} {...selectAllProps} onChange={(e) => setLine(l.id, "price", e.target.value)} />
                     </td>
+                    {discCell(l)}
                     <td style={{ ...td, textAlign: "right", fontWeight: 700, width: 90, whiteSpace: "nowrap" }}>{lineTotal(l)}</td>
                     <td style={{ ...td, padding: "6px 2px", width: 34, textAlign: "right" }}>
                       <button style={{ ...abtn, border: "none", color: RED }} title="Remove line"
