@@ -83,7 +83,11 @@ export default function InvoicesScreen({ headerH = 0, openProduct, money = true,
   const setInv = (fn) =>
     updateCrm((c) => {
       const t = c.invoices.find((i) => i.id === inv.id);
-      if (t) fn(t, c);
+      if (t) {
+        fn(t, c);
+        // a customer collection with no date yet is collected the day it's raised
+        if (isCollectionJob(t) && !t.deliveryDate) t.deliveryDate = t.date || today();
+      }
       return c;
     });
 

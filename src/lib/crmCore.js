@@ -2040,7 +2040,7 @@ export const convertQuoteToInvoice = (c, quoteId, actor, newId) => {
   inv.invNo = nextNumber(c.invoices, "invNo", c.numbering.invoice);
   inv.raisedBy = actor || "";
   inv.quoteId = q.id;
-  if (q.siteId === TRADE_COUNTER) inv.jobType = "Customer Collection";
+  if (q.siteId === TRADE_COUNTER) { inv.jobType = "Customer Collection"; if (!inv.deliveryDate) inv.deliveryDate = inv.date; }
   inv.deliveryCharge = q.deliveryCharge;
   inv.discountPct = q.discountPct;
   inv.vatRate = q.vatRate;
