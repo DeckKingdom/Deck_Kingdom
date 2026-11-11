@@ -168,13 +168,14 @@ export default function Sidebar({ tab, setTab, open, footer, onNew, canNew, onTo
                           <Icon name={icon} size={17} stroke={on ? NAVY : "#8fa0c0"} />
                           {!open && bubbles.length > 0 && <span style={{ position: "absolute", top: -4, right: -6, width: 9, height: 9, borderRadius: 99, background: bubbles[0].bg || "#e5394f", border: "2px solid " + NAVY }} />}
                         </span>
-                        {open && <span style={{ whiteSpace: "nowrap" }}>{label}</span>}
+                        {open && <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>{label}</span>}
                         {open && bubbles.length > 0 && (
-                          <span style={{ marginLeft: "auto", marginRight: canAdd && onNew && (!canNew || canNew(t)) ? 30 : 0, display: "inline-flex", gap: 4 }}>
+                          // one slim pill; two counts share it as joined segments
+                          <span style={{ marginLeft: "auto", marginRight: canAdd && onNew && (!canNew || canNew(t)) ? 30 : 0, display: "inline-flex", borderRadius: 999, overflow: "hidden", flex: "none", boxShadow: on ? "none" : "0 0 0 1px #ffffff22" }}>
                             {bubbles.map((b, k) => (
                               <span key={k} title={b.title || b.n + (t === "samples" ? " to send" : " live")}
-                                style={{ minWidth: 20, height: 20, padding: "0 6px", borderRadius: 99, background: b.bg || "#e5394f", color: "#fff", fontSize: 11.5, fontWeight: 800, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
-                                {b.n}
+                                style={{ minWidth: 15, height: 16, padding: "0 5px", background: b.bg || "#e5394f", color: "#fff", fontSize: 10, fontWeight: 800, letterSpacing: 0.2, display: "inline-flex", alignItems: "center", justifyContent: "center", fontVariantNumeric: "tabular-nums" }}>
+                                {b.n > 999 ? "999+" : b.n}
                               </span>
                             ))}
                           </span>
