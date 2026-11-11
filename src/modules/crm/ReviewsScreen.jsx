@@ -7,7 +7,7 @@ import { useState, useMemo, useEffect } from "react";
 import { NAVY, GOLD, prettyDate, daysBetween } from "../../lib/core.js";
 import LinesEditor from "./LinesEditor.jsx";
 import {
-  FOLLOWUP_FLAGS, today, isSaleInvoice, onSchedule, gbp, invoiceTotals, isPaid,
+  FOLLOWUP_FLAGS, today, isSaleInvoice, onSchedule, reviewable, gbp, invoiceTotals, isPaid,
   reviewSettingsOf, reviewText, reviewExclusion, customerDupeGroups, personKeyOf,
   reviewNext, nudgeDue, NUDGE_AFTER_DAYS, reviewChannel, mobileOf, askTooSoon, ASK_AFTER_DAYS, orderSummary,
 } from "../../lib/crmCore.js";
@@ -120,7 +120,7 @@ export default function ReviewsScreen({ crm, updateCrm, askConfirm, openInvoice,
   const pool = useMemo(
     () =>
       crm.invoices
-        .filter((i) => i.deliveryCompleted && isSaleInvoice(i) && onSchedule(i, crm))
+        .filter((i) => reviewable(i, crm))
         .filter((i) => !since || (i.deliveryDate || i.invDate || "") >= since)
         .sort((a, b) => String(b.deliveryDate || b.invDate || "").localeCompare(String(a.deliveryDate || a.invDate || ""))),
     [crm, since]

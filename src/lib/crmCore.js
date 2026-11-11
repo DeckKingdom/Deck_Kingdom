@@ -3072,6 +3072,10 @@ export const nudgeDue = (inv, tod) => reviewNext(inv, tod) === "nudge";
 // Mon: check Google for new reviews, reply, tick them in.
 // Each shows from its moment until dismissed, then stays quiet for the week,
 // and only appears when there's actually something to send or check.
+// which jobs the review pipeline covers: delivered sales we took to them —
+// collections and trade-counter walk-ins stay out
+export const reviewable = (inv, crm) =>
+  inv.deliveryCompleted && isSaleInvoice(inv) && onSchedule(inv, crm) && !isCollectionJob(inv) && inv.siteId !== TRADE_COUNTER;
 const reviewHasEmail = (c) => /@/.test(String((c && c.email) || ""));
 // the best WhatsApp-able number we hold: the mobile field first, but older
 // records sometimes have the mobile sat in the landline field
@@ -3099,7 +3103,7 @@ export const reviewAskCounts = (crm) => {
   const seen = new Set();
   let email = 0, wa = 0, awaiting = 0, nudges = 0;
   (crm.invoices || []).forEach((i) => {
-    if (!i.deliveryCompleted || !isSaleInvoice(i) || !onSchedule(i, crm)) return;
+    if (!reviewable(i, crm)) return;
     const f = i.flags || {};
     if (f.reviewRequested && !f.reviewReceived) awaiting++;
     const next = reviewNext(i, tod);
