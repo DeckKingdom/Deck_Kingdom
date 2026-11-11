@@ -1,8 +1,10 @@
 // CRM domain helpers: customers, sites, invoices, delivery schedule.
 import { uid, daysBetween, landedPerPiece, addDays } from "./core.js";
 
-export const JOB_TYPES = ["Pending", "Delivery", "Customer Collection", "Evri", "Post Office", "Courier TG", "Returns"];
+export const JOB_TYPES = ["Pending", "Back Order", "Delivery", "Customer Collection", "Evri", "Post Office", "Courier TG", "Returns"];
 // run number on the delivery schedule (was part of the job type: "Delivery Run 2")
+// parked on the Delivery Schedule's Back orders card: waiting on stock, not to be booked yet
+export const isBackOrder = (inv) => !!inv && inv.jobType === "Back Order";
 export const RUN_NOS = ["1", "2", "3", "4", "5", "6"];
 // "collection" anywhere in the job type means the customer picks up — no van run
 export const isCollectionJob = (inv) => /collection/i.test(inv && inv.jobType ? inv.jobType : "");

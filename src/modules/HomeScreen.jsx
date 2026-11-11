@@ -78,7 +78,7 @@ export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTa
   const todays = schedInvs.filter((i) => i.deliveryDate === tod && !i.deliveryCompleted).length;
   const weekEnd = addDays(tod, 6);
   const thisWeek = schedInvs.filter((i) => i.deliveryDate >= tod && i.deliveryDate <= weekEnd && !i.deliveryCompleted).length;
-  const toBook = schedInvs.filter((i) => !i.deliveryDate && !i.deliveryCompleted).length;
+  const toBook = schedInvs.filter((i) => !i.deliveryDate && !i.deliveryCompleted && i.jobType !== "Back Order").length;
   const quotes = crm ? crm.quotes || [] : [];
   const openQuotes = quotes.filter((q) => quoteIsOpen(q, crm));
   const acceptedWaiting = quotes.filter((q) => quoteStatus(q, crm) === "Accepted").length;

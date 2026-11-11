@@ -11,7 +11,7 @@ import {
 import { printJobDocs, runDocsHtml, DOC_KINDS, printPendingList } from "./printDocs.js";
 import { htmlToPdfFile, shareToWhatsApp } from "./pdfShare.js";
 import LinesEditor, { SizeRow, applySize, skuOption, SKU_COLS, SKU_LIST_W } from "./LinesEditor.jsx";
-import { JOB_TYPES, skuIndex, PAYMENT_TYPES, stockCheck, partKey, isColPick, blankPick, blankCollectionItem, itemPending, collectionLineOpen, editCollectionLine, removeCollectionLine, isGrassRoll, sizeLabel, purchaseCost, outwardOf, collNotesText, mergeablePickups, mergePickups, collectionDropGroups, releaseInvoiceLinks, releaseCollectionPicks } from "../../lib/crmCore.js";
+import { JOB_TYPES, isBackOrder, skuIndex, PAYMENT_TYPES, stockCheck, partKey, isColPick, blankPick, blankCollectionItem, itemPending, collectionLineOpen, editCollectionLine, removeCollectionLine, isGrassRoll, sizeLabel, purchaseCost, outwardOf, collNotesText, mergeablePickups, mergePickups, collectionDropGroups, releaseInvoiceLinks, releaseCollectionPicks } from "../../lib/crmCore.js";
 import StockCheck from "./StockCheck.jsx";
 import { loadDrops, dropPhotoUrl } from "../../data/drops.js";
 import { Modal } from "./ui.jsx";
@@ -40,7 +40,7 @@ const short16 = (t) => (String(t).length > 16 ? String(t).slice(0, 15).trimEnd()
 // stripe · done · customer · postcode · source · job type tab · driver · run · drop · van · weight · date+time · payment · (prep · follow-up) · update · days
 const dsCols = (prep) => "4px 46px 122px 60px 52px 56px 86px 62px 44px 78px 72px 120px 192px " + (prep ? "162px 162px " : "") + "136px 38px 22px";
 // short labels so the job type is a small tab (it's normally set on the invoice already)
-const JOB_SHORT = { Pending: "PEND", Delivery: "DEL", "Customer Collection": "COLL", Evri: "EVRI", "Post Office": "PO", "Courier TG": "TG", Returns: "RTN" };
+const JOB_SHORT = { Pending: "PEND", "Back Order": "B/O", Delivery: "DEL", "Customer Collection": "COLL", Evri: "EVRI", "Post Office": "PO", "Courier TG": "TG", Returns: "RTN" };
 const jobShort = (t) => JOB_SHORT[t] || (/^deliver/i.test(t || "") ? "DEL" : /collect/i.test(t || "") ? "COLL" : String(t || "").replace(/[^A-Za-z]/g, "").slice(0, 4).toUpperCase());
 // source pill, abbreviated (full name on hover)
 const sourceShort = (s) => {
@@ -753,7 +753,7 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
       const moving = isColDrag(id) ? (c.collections || []).find((x) => x.id === id.slice(4)) : c.invoices.find((x) => x.id === id);
       if (!moving) return c;
       if (isColDrag(id)) moving.collectDate = date || "";
-      else { moving.deliveryDate = date || ""; if (!moving.jobType || moving.jobType === "Pending") moving.jobType = "Delivery"; }
+      else { moving.deliveryDate = date || ""; if (!moving.jobType || moving.jobType === "Pending" || moving.jobType === "Back Order") moving.jobType = "Delivery"; }
       moving.driver = target.driver || ""; moving.runNo = target.runNo || "";
       const sameRun = (x) => (x.driver || "") === (target.driver || "") && (x.runNo || "") === (target.runNo || "");
       const stops = [
@@ -775,7 +775,17 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
     endDrag();
     if (!id) return;
     if (isColDrag(id)) return moveColl(id, "");
-    guard(id, () => updateCrm((c) => { const t = c.invoices.find((x) => x.id === id); if (t) { t.deliveryDate = ""; t.dropNo = ""; } return c; }));
+    guard(id, () => updateCrm((c) => { const t = c.invoices.find((x) => x.id === id); if (t) { t.deliveryDate = ""; t.dropNo = ""; if (isBackOrder(t)) t.jobType = "Pending"; } return c; }));
+  };
+  // dropped on the Back orders card: parked - no date, off any run, until the stock is in
+  const [overBack, setOverBack] = useState(false);
+  const park = () => {
+    const id = dragId;
+    endDrag(); setOverBack(false);
+    if (!id || isColDrag(id)) return;
+    const doIt = () => updateCrm((c) => { const t = c.invoices.find((x) => x.id === id); if (t) { t.jobType = "Back Order"; t.deliveryDate = ""; t.dropNo = ""; t.driver = ""; t.runNo = ""; } return c; });
+    const was = crm.invoices.find((x) => x.id === id);
+    if (was && was.deliveryDate) guard(id, doIt); else doIt();
   };
   const dropOn = (d) => {
     const id = dragId;
@@ -786,7 +796,7 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
     if (was && was.deliveryDate === d) return;
     guard(id, () => updateCrm((c) => {
       const t = c.invoices.find((x) => x.id === id);
-      if (t) { t.deliveryDate = d; if (!t.jobType || t.jobType === "Pending") t.jobType = "Delivery"; }
+      if (t) { t.deliveryDate = d; if (!t.jobType || t.jobType === "Pending" || t.jobType === "Back Order") t.jobType = "Delivery"; }
       return c;
     }));
   };
@@ -866,8 +876,9 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
     return c.collectDate >= weekAgo;
   });
 
+  const backOrders = visible.filter(isBackOrder).map((i) => ({ kind: "inv", date: "", time: "", obj: i })).sort((a, b) => (a.obj.date || "").localeCompare(b.obj.date || ""));
   const entries = [
-    ...visible.map((i) => ({ kind: "inv", date: i.deliveryDate, time: i.deliveryTime || "", obj: i })),
+    ...visible.filter((i) => !isBackOrder(i)).map((i) => ({ kind: "inv", date: i.deliveryDate, time: i.deliveryTime || "", obj: i })),
     ...visibleColls.map((c) => ({ kind: "col", date: c.collectDate, time: c.collectTime || "", obj: c })),
   ];
   const dated = entries.filter((e) => e.date).sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
@@ -1023,7 +1034,7 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
         <span style={{ fontSize: 12.5, color: "#5a6a85", fontWeight: 700, whiteSpace: "nowrap" }}>{(s && s.postcode) || (c && c.postcode) || "—"}</span>
         <span style={{ minWidth: 0, overflow: "hidden" }} title={c && c.source ? "Source: " + c.source : ""}>{c && c.source ? <Chip style={{ fontSize: 10.5, padding: "1px 7px", whiteSpace: "nowrap", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis" }}>{sourceShort(c.source)}</Chip> : <span style={{ color: "#aab3c2" }}>—</span>}</span>
         <span style={sep} title={"Job type: " + (i.jobType || "not set") + " — click to change"}><span style={{ width: "100%", minWidth: 0 }}>
-          <PillSelect value={i.jobType || ""} options={JOB_TYPES} placeholder="Type" short={jobShort} listWidth={170} tone={isCollectionJob(i) ? "#9a7408" : NAVY} onChange={(v) => setInv(i.id, (t) => (t.jobType = v))} />
+          <PillSelect value={i.jobType || ""} options={JOB_TYPES} placeholder="Type" short={jobShort} listWidth={170} tone={isCollectionJob(i) ? "#9a7408" : NAVY} onChange={(v) => setInv(i.id, (t) => { t.jobType = v; if (v === "Back Order") { t.deliveryDate = ""; t.dropNo = ""; t.driver = ""; t.runNo = ""; } })} />
         </span></span>
         {isCollectionJob(i) ? (
           // customer collects from the warehouse: no driver, run, drop or van
@@ -1546,7 +1557,7 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
           outline: overPending ? "2px dashed " + GOLD : "none", outlineOffset: 3, background: overPending ? "#fff8e6" : "#fff" }}
         onDragOver={(ev) => {
           const it = dragId && (isColDrag(dragId) ? (crm.collections || []).find((x) => "col:" + x.id === dragId) : crm.invoices.find((x) => x.id === dragId));
-          if (it && (it.deliveryDate || it.collectDate)) { ev.preventDefault(); setOverPending(true); } }}
+          if (it && (it.deliveryDate || it.collectDate || isBackOrder(it))) { ev.preventDefault(); setOverPending(true); } }}
         onDragLeave={(ev) => { if (!ev.currentTarget.contains(ev.relatedTarget)) setOverPending(false); }}
         onDrop={(ev) => { ev.preventDefault(); unschedule(); }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
@@ -1581,6 +1592,25 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
         {pending.length === 0 ? (
           <div style={{ fontSize: 13, color: "#8593a8", fontWeight: 600, padding: "6px 0" }}>Everything's booked in.</div>
         ) : pending.map((e) => <PendingRow key={e.kind + e.obj.id} e={e} />)}
+      </div>
+      )}
+      {pendOpen && (
+      <div style={{ ...card, marginBottom: 0, padding: "12px 16px",
+          outline: overBack ? "2px dashed " + GOLD : "none", outlineOffset: 3, background: overBack ? "#fff8e6" : "#fff" }}
+        onDragOver={(ev) => {
+          const it = dragId && !isColDrag(dragId) && crm.invoices.find((x) => x.id === dragId);
+          if (it && !isBackOrder(it)) { ev.preventDefault(); setOverBack(true); } }}
+        onDragLeave={(ev) => { if (!ev.currentTarget.contains(ev.relatedTarget)) setOverBack(false); }}
+        onDrop={(ev) => { ev.preventDefault(); park(); }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+          <p style={{ ...sect, margin: 0, color: backOrders.length ? "#a05f10" : "#8593a8" }}>Back orders</p>
+          <span style={{ flex: 1 }} />
+          <b style={{ fontSize: 15, color: backOrders.length ? "#a05f10" : "#aab3c2" }}>{backOrders.length}</b>
+        </div>
+        <div style={{ fontSize: 11.5, color: "#8593a8", fontWeight: 600, marginBottom: 4 }}>Parked until the stock's in · drag a job here, or onto a day when it's ready</div>
+        {backOrders.length === 0 ? (
+          <div style={{ fontSize: 13, color: "#8593a8", fontWeight: 600, padding: "6px 0" }}>Nothing on back order.</div>
+        ) : backOrders.map((e) => <PendingRow key={"bo" + e.obj.id} e={e} />)}
       </div>
       )}
       </div>
@@ -1953,7 +1983,7 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
               <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", background: isPaid(i) ? "#eef8f1" : "#f7f9fc", border: "1px solid " + (isPaid(i) ? "#bfe3ca" : "#e6e9ef"), borderRadius: 10, padding: "6px 10px", marginBottom: 10 }}>
                 <span style={{ ...lbl, marginBottom: 0, whiteSpace: "nowrap" }}>{isCollectionJob(i) ? "Collection" : "Delivery"}</span>
                 <DateInput value={i.deliveryDate || ""} title={i.deliveryDate ? "" : "Not booked yet"} style={{ ...pill, width: 130, padding: "3px 8px", ...(i.deliveryDate ? {} : { borderColor: "#f4d78f", background: "#fff8e6" }) }}
-                  onChange={(e) => { const v = e.target.value; guard(i.id, () => setInv(i.id, (t) => { t.deliveryDate = v; if (v && (!t.jobType || t.jobType === "Pending")) t.jobType = "Delivery"; })); }} />
+                  onChange={(e) => { const v = e.target.value; guard(i.id, () => setInv(i.id, (t) => { t.deliveryDate = v; if (v && (!t.jobType || t.jobType === "Pending" || t.jobType === "Back Order")) t.jobType = "Delivery"; })); }} />
                 {!i.deliveryDate && <span style={{ fontSize: 11.5, fontWeight: 700, color: "#a05f10" }}>not booked</span>}
                 <span style={{ width: 1, height: 22, background: "#d5d9e0", margin: "0 6px" }} />
                 <span style={{ ...lbl, marginBottom: 0, whiteSpace: "nowrap" }}>Payment</span>

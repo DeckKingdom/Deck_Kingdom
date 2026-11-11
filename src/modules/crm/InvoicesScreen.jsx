@@ -183,7 +183,7 @@ export default function InvoicesScreen({ headerH = 0, openProduct, money = true,
           const sched = live.filter((i) => onSchedule(i, crm)); // delivery counts: not off-schedule customers
           const today_ = sched.filter((i) => i.deliveryDate === tod && !i.deliveryCompleted).length;
           const week = sched.filter((i) => i.deliveryDate >= tod && i.deliveryDate <= weekEnd && !i.deliveryCompleted).length;
-          const toBook = sched.filter((i) => !i.deliveryDate && !i.deliveryCompleted).length;
+          const toBook = sched.filter((i) => !i.deliveryDate && !i.deliveryCompleted && i.jobType !== "Back Order").length;
           const sales = thisM.filter(isSaleInvoice);
           const feeds = [["FileMaker feed", crm.fmBridge, 30], ["Website feed", crm.wooBridge, 24 * 60]].filter(([, fd]) => fd && fd.at);
           return (
