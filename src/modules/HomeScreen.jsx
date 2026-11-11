@@ -62,6 +62,14 @@ export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTa
   const salesIn = (key, uptoDay) => invs.filter((i) => (i.date || "").slice(0, 7) === key && (!uptoDay || Number((i.date || "").slice(8, 10)) <= uptoDay)).reduce((t, i) => t + invoiceTotals(i).total, 0);
   const salesThisMonth = salesIn(monthKey);
   const salesLastToDate = salesIn(lastMonthKey, dayOfMonth);
+  const todayJobs = invs.filter((i) => i.date === tod);
+  const salesToday = todayJobs.reduce((t, i) => t + invoiceTotals(i).total, 0);
+  const lastYearKey = String(Number(monthKey.slice(0, 4)) - 1) + monthKey.slice(4);
+  const salesLyToDate = salesIn(lastYearKey, dayOfMonth);
+  const salesLyMonth = salesIn(lastYearKey);
+  const lyMonthName = new Date(lastYearKey + "-01T12:00:00").toLocaleDateString("en-GB", { month: "short", year: "numeric" });
+  const lyDiff = salesThisMonth - salesLyToDate;
+  const lyPct = salesLyToDate ? Math.round((lyDiff / salesLyToDate) * 100) : null;
   const awaiting = invs.filter((i) => !isPaid(i));
   const owed = awaiting.reduce((t, i) => t + invoiceTotals(i).total, 0);
   const schedInvs = invs.filter((i) => onSchedule(i, crm)); // delivery counts leave out off-schedule customers
@@ -145,9 +153,13 @@ export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTa
                 </div>
                 ) : (
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 8 }}>
+                  <Report label="Sales today" value={gbp(salesToday)} sub={todayJobs.length + " job" + (todayJobs.length === 1 ? "" : "s") + " · inc VAT"} onClick={() => setTab("invoices")} />
                   <Report label="Sales this month" value={gbp(salesThisMonth)}
                     sub={salesLastToDate ? (salesThisMonth >= salesLastToDate ? "▲ " : "▼ ") + gbp(Math.abs(salesThisMonth - salesLastToDate)) + " vs last month to date" : "inc VAT"}
                     tone={salesLastToDate && salesThisMonth < salesLastToDate ? RED : NAVY} onClick={() => setTab("invoices")} />
+                  <Report label={"vs " + lyMonthName} value={salesLyToDate ? (lyDiff >= 0 ? "▲ " : "▼ ") + gbp(Math.abs(lyDiff)) : "—"}
+                    sub={salesLyToDate ? (lyPct >= 0 ? "+" : "") + lyPct + "% · " + gbp(salesLyToDate) + " to date, " + gbp(salesLyMonth) + " full month" : "No sales recorded " + lyMonthName}
+                    tone={salesLyToDate ? (lyDiff >= 0 ? "#1f7a3a" : RED) : NAVY} onClick={() => setTab("invoices")} />
                   <Report label="Awaiting payment" value={gbp(owed)} sub={awaiting.length + " invoice" + (awaiting.length === 1 ? "" : "s")} tone={awaiting.length ? "#a05f10" : NAVY} onClick={() => setTab("invoices")} />
                   <Report label="Open quotes" value={gbp(openQuotes.reduce((t, q) => t + quoteTotals(q).total, 0))} sub={openQuotes.length + " open" + (acceptedWaiting ? " · " + acceptedWaiting + " to invoice" : "")} onClick={() => setTab("quotes")} />
                   <Report label="Stock at cost" value={stockVal ? gbp(stockVal.costValue) : "—"} sub={stockVal ? stockVal.units.toLocaleString("en-GB") + " units" : ""} onClick={() => setTab("stock")} />
