@@ -5,7 +5,6 @@
 // bulk asks by default. Same five flags as the schedule's follow-up icons.
 import { useState, useMemo, useEffect } from "react";
 import { NAVY, GOLD, prettyDate, daysBetween } from "../../lib/core.js";
-import LinesEditor from "./LinesEditor.jsx";
 import {
   FOLLOWUP_FLAGS, today, isSaleInvoice, onSchedule, reviewable, gbp, invoiceTotals, isPaid,
   reviewSettingsOf, reviewText, reviewExclusion, customerDupeGroups, personKeyOf,
@@ -13,6 +12,7 @@ import {
 } from "../../lib/crmCore.js";
 import { Icon, Tg, card, sect, lbl, inp, btn, goldBtn, Modal, ListHero, HeroStat, SearchBox, FilterPills } from "./ui.jsx";
 import { waNumber, getWaMode } from "./CustomersScreen.jsx";
+import { InvoicePeek, CustomerPeek } from "./Peeks.jsx";
 import { loadAllDrops } from "../../data/drops.js";
 import { issueOf } from "./IssuesScreen.jsx";
 
@@ -437,94 +437,19 @@ export default function ReviewsScreen({ crm, updateCrm, askConfirm, openInvoice,
         </div>
       </div>
 
-      {/* account peek: the customer in a pop-over — Open account for the full screen */}
-      {peekCust && (() => {
-        const c = crm.customers.find((x) => x.id === peekCust);
-        if (!c) return null;
-        const invs = crm.invoices.filter((x) => x.customerId === c.id && isSaleInvoice(x)).sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
-        const owed = invs.filter((x) => !isPaid(x)).reduce((s, x) => s + invoiceTotals(x).total, 0);
-        const mob = mobileOf(c);
-        const PW = Math.min(600, window.innerWidth - 40);
-        const line = (label, v) => (v ? <div style={{ display: "flex", gap: 8, fontSize: 13, fontWeight: 600, padding: "2px 0" }}><span style={{ color: "#8593a8", width: 86, flex: "none" }}>{label}</span><span style={{ color: NAVY }}>{v}</span></div> : null);
-        return (
-          <>
-            <div onMouseDown={() => setPeekCust(null)} style={{ position: "fixed", inset: 0, zIndex: 70, background: "rgba(11,31,63,0.25)" }} />
-            <div style={{ position: "fixed", left: Math.max(10, Math.round((window.innerWidth - PW) / 2)), top: 48, width: PW, maxHeight: "calc(100dvh - 96px)", overflowY: "auto", zIndex: 71, background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, boxShadow: "0 14px 40px rgba(11,31,63,.28)", padding: "14px 18px", boxSizing: "border-box" }}>
-              <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
-                <b style={{ fontSize: 15, color: NAVY }}>{c.name || "Unnamed"}</b>
-                <span style={{ fontSize: 12, fontWeight: 700, color: "#8593a8" }}>#{c.accountNo || "—"}</span>
-                {c.trader && <span style={chip("#eef1f6", "#3b4c6b")}>trade</span>}
-                {Number(c.discountPct) > 0 && <span style={chip("#eef1f6", "#3b4c6b")}>{c.discountPct}% discount</span>}
-                {rs.optOut.includes(c.id) && <span style={chip("#fde8ea", "#9b1c2e")}>no review asks</span>}
-              </div>
-              {line("Contact", c.contact)}
-              {line("Mobile", mob || c.mobile)}
-              {line("Phone", c.phone)}
-              {line("Email", c.email)}
-              {line("Prefers", c.contactMethod)}
-              {line("Address", [c.address, c.town, c.postcode].filter(Boolean).join(", "))}
-              <div style={{ marginTop: 10, borderTop: "1px solid #eef1f6", paddingTop: 8 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 4 }}>
-                  {invs.length} invoice{invs.length === 1 ? "" : "s"}{owed > 0 ? " · " + gbp(owed) + " outstanding" : ""}
-                </div>
-                {invs.slice(0, 6).map((x) => (
-                  <div key={x.id} style={{ display: "flex", gap: 10, alignItems: "center", fontSize: 13, fontWeight: 600, padding: "3px 0" }}>
-                    <button onClick={() => { setPeekCust(null); setPeek(x.id); }} style={{ ...linkBtn, fontWeight: 700, color: "#185FA5", fontSize: 12.5 }}>#{x.invNo || "—"}</button>
-                    <span style={{ color: "#5a6a85" }}>{x.date ? prettyDate(x.date) : ""}</span>
-                    <span style={{ marginLeft: "auto" }}>{gbp(invoiceTotals(x).total)}</span>
-                    <span style={chip(isPaid(x) ? "#e9f6ee" : "#fdf3e4", isPaid(x) ? "#28713e" : "#8a5a14")}>{isPaid(x) ? "paid" : "owed"}</span>
-                  </div>
-                ))}
-                {invs.length > 6 && <div style={{ fontSize: 12, fontWeight: 600, color: "#8593a8" }}>…and {invs.length - 6} more on the account</div>}
-              </div>
-              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10, gap: 8 }}>
-                <button style={goldBtn} onClick={() => { setPeekCust(null); goCustomer && goCustomer(c.id); }}><Icon name="user" stroke={NAVY} />Open account</button>
-              </div>
-            </div>
-          </>
-        );
-      })()}
-      {/* invoice peek: the job in a pop-over, read-only — Open job for the full screen */}
-      {peek && (() => {
-        const i = crm.invoices.find((x) => x.id === peek);
-        if (!i) return null;
-        const c = custById[i.customerId], s = siteById[i.siteId];
-        const t = invoiceTotals(i);
-        const addr = (s ? [s.name !== s.address ? s.name : "", s.address, s.town, s.postcode] : c ? [c.address, c.town, c.postcode] : []).filter(Boolean);
-        const PW = Math.min(1120, window.innerWidth - 40);
-        return (
-          <>
-            <div onMouseDown={() => setPeek(null)} style={{ position: "fixed", inset: 0, zIndex: 70, background: "rgba(11,31,63,0.25)" }} />
-            <div style={{ position: "fixed", left: Math.max(10, Math.round((window.innerWidth - PW) / 2)), top: 36, width: PW, maxHeight: "calc(100dvh - 72px)", overflowY: "auto", zIndex: 71, background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, boxShadow: "0 14px 40px rgba(11,31,63,.28)", padding: "14px 18px", boxSizing: "border-box" }}>
-              <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
-                <b style={{ fontSize: 15, color: NAVY }}>{(c && c.name) || "No customer"}</b>
-                <span style={{ fontSize: 12, fontWeight: 700, color: "#185FA5" }}>#{i.invNo || "—"}</span>
-                {i.deliveryDate && <span style={chip("#eef1f6", "#3b4c6b")}>delivered {prettyDate(i.deliveryDate)}</span>}
-                <span style={chip(isPaid(i) ? "#e9f6ee" : "#fdf3e4", isPaid(i) ? "#28713e" : "#8a5a14")}>{isPaid(i) ? "paid" + (i.paymentType ? " · " + i.paymentType : "") : "awaiting payment"}</span>
-                <span style={{ flex: 1 }} />
-                <span style={{ fontSize: 11.5, fontWeight: 600, color: "#8593a8" }}>
-                  {(i.created || i.date ? "Raised " + prettyDate(i.created || i.date) + (i.raisedBy ? " by " + String(i.raisedBy).split("@")[0] : "") : "")}
-                </span>
-              </div>
-              {addr.length > 0 && (
-                <div style={{ fontSize: 13, fontWeight: 600, color: NAVY, lineHeight: 1.5, marginBottom: 6 }}>
-                  {addr.map((l, k) => <span key={k}>{l}{k < addr.length - 1 ? " · " : ""}</span>)}
-                </div>
-              )}
-              <LinesEditor doc={i} crm={crm} readOnly edit={() => {}} />
-              <div style={{ marginTop: 8, fontSize: 12.5, fontWeight: 700, color: NAVY, display: "grid", gridTemplateColumns: "1fr auto", gap: "3px 10px" }}>
-                {Number(i.deliveryCharge) ? <><span style={{ color: "#5a6a85" }}>Delivery</span><span>{gbp(Number(i.deliveryCharge))}</span></> : null}
-                <span>Total</span><span>{gbp(t.total)}</span>
-              </div>
-              {i.jobNotes && <div style={{ marginTop: 8, fontSize: 12.5, fontWeight: 600, color: "#6b5305", background: "#fff8e6", border: "1px solid #f4d78f", borderRadius: 8, padding: "6px 10px" }}>{i.jobNotes}</div>}
-              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10, gap: 8 }}>
-                {c && goCustomer && <button style={btn} onClick={() => { setPeek(null); goCustomer(c.id); }}><Icon name="user" stroke={NAVY} />Open account</button>}
-                <button style={goldBtn} onClick={() => { setPeek(null); openInvoice && openInvoice(i.id); }}><Icon name="doc" stroke={NAVY} />Open job</button>
-              </div>
-            </div>
-          </>
-        );
-      })()}
+      {/* peeks: links open pop-overs, and links inside them open the next pop-over */}
+      {peekCust && (
+        <CustomerPeek crm={crm} custId={peekCust} optOut={rs.optOut}
+          onClose={() => setPeekCust(null)}
+          onOpenFull={(id) => { setPeekCust(null); goCustomer && goCustomer(id); }}
+          onInvoice={(id) => { setPeekCust(null); setPeek(id); }} />
+      )}
+      {peek && !peekCust && (
+        <InvoicePeek crm={crm} invId={peek}
+          onClose={() => setPeek(null)}
+          onOpenFull={(id) => { setPeek(null); openInvoice && openInvoice(id); }}
+          onCustomer={(id) => { setPeek(null); setPeekCust(id); }} />
+      )}
       {settings && <ReviewSettings rs={rs} onSave={(d) => { saveRs(d); setSettings(false); }} onClose={() => setSettings(false)} />}
       {dupes && <DupePanel groups={dupeGroups} crm={crm} goCustomer={goCustomer} optOut={rs.optOut} onClose={() => setDupes(false)} />}
       <div style={{ height: 30 }} />

@@ -12,7 +12,7 @@ import { Icon, card, sect, goldBtn } from "./crm/ui.jsx";
 
 const gmailBcc = (list, subject, body) => "https://mail.google.com/mail/?view=cm&fs=1&bcc=" + encodeURIComponent(list.join(",")) + "&su=" + encodeURIComponent(subject) + "&body=" + encodeURIComponent(body);
 
-export default function ReviewsCard({ crm, updateCrm, askConfirm, openReviews }) {
+export default function ReviewsCard({ crm, updateCrm, askConfirm, openReviews, samplesSlot }) {
   const tod = today();
   const rs = reviewSettingsOf(crm);
 
@@ -82,9 +82,11 @@ export default function ReviewsCard({ crm, updateCrm, askConfirm, openReviews })
 
   return (
     <div style={{ ...card, marginBottom: 0, height: "100%", boxSizing: "border-box" }}>
-      <div style={{ display: "flex", alignItems: "center", marginBottom: 6 }}>
+      {/* one card for the week's chasing: Monday samples, Tuesday reviews */}
+      {samplesSlot}
+      <div style={{ display: "flex", alignItems: "center", marginBottom: 6, marginTop: samplesSlot ? 14 : 0 }}>
         <p style={{ ...sect, margin: 0 }}>Reviews &amp; Photos</p>
-        <span style={{ marginLeft: 10, fontSize: 11.5, fontWeight: 700, color: "#8593a8" }}>Tuesday is review day</span>
+        <span style={{ marginLeft: 10, fontSize: 11.5, fontWeight: 700, color: "#8593a8" }}>Tuesday</span>
         <span style={{ flex: 1 }} />
         <button onClick={() => go("To ask")} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 700, color: "#185FA5", padding: 0 }}>Open reviews ▸</button>
       </div>

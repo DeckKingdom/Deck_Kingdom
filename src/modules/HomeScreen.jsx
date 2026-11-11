@@ -13,6 +13,7 @@ import { tasksAvailable } from "../data/crmStorage.js";
 import { Icon, Chip, card, sect, lbl, inp, btn, goldBtn, RiskChip } from "./crm/ui.jsx";
 import WebsiteCard from "./WebsiteCard.jsx";
 import ReviewsCard from "./ReviewsCard.jsx";
+import { CollectionPeek, InvoicePeek } from "./crm/Peeks.jsx";
 import { samplesIn, SAMPLE_GROUPS, printAllToSend, emailFollowUpGroup, markAllSent } from "./crm/sampleActions.js";
 import { analyticsReady } from "../data/analytics.js";
 import { TaskModal, TasksSchemaNotice, PRIORITY_TONES, STATUS_TONES } from "./crm/TasksScreen.jsx";
@@ -44,6 +45,8 @@ export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTa
   const [draft, setDraft] = useState(null);
   const [showDone, setShowDone] = useState(false);
   const [homeNotice, setHomeNotice] = useState("");
+  const [colPeek, setColPeek] = useState(null); // collection opened in a pop-over from "Coming in"
+  const [invPeek, setInvPeek] = useState(null); // a job peeked from inside the collection pop-over
   const ready = tasksAvailable();
   const who = viewAs; // "" = everyone's view (preview / unassigned)
 
@@ -108,7 +111,7 @@ export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTa
     });
 
   return (
-    <div style={{ maxWidth: 1180, margin: "0 auto", padding: "18px 22px" }}>
+    <div style={{ maxWidth: 1720, margin: "0 auto", padding: "18px 22px" }}>
       {/* hero */}
       <div style={{ background: "linear-gradient(135deg,#0B1F3F 0%,#13294f 100%)", borderRadius: 12, padding: "18px 22px", color: "#fff", marginBottom: 16, display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
         <div style={{ minWidth: 200 }}>
@@ -240,10 +243,11 @@ export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTa
                 ["Follow-up due", samplesIn(crm, SAMPLE_GROUPS.first).length, "Email all", "mail", () => emailFollowUpGroup(crm, updateCrm, askConfirm, "first", setHomeNotice)],
                 ["2nd follow-up (discount code)", samplesIn(crm, SAMPLE_GROUPS.second).length, "Email all", "mail", () => emailFollowUpGroup(crm, updateCrm, askConfirm, "second", setHomeNotice)],
               ];
-              return (
-                <div style={{ ...card, marginBottom: 0, height: "100%", boxSizing: "border-box" }}>
+              const samplesSlot = (
+                <>
                   <div style={{ display: "flex", alignItems: "center", marginBottom: 6 }}>
                     <p style={{ ...sect, margin: 0 }}>Samples</p>
+                    <span style={{ marginLeft: 10, fontSize: 11.5, fontWeight: 700, color: "#8593a8" }}>Monday</span>
                     <span style={{ flex: 1 }} />
                     <button onClick={() => setTab("samples")} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 700, color: "#185FA5", padding: 0 }}>Open samples ▸</button>
                   </div>
@@ -260,8 +264,10 @@ export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTa
                       )}
                     </div>
                   ))}
-                </div>
+                </>
               );
+              // samples and reviews are the same kind of work — one card, Monday then Tuesday
+              return <ReviewsCard crm={crm} updateCrm={updateCrm} askConfirm={askConfirm} openReviews={openReviews} samplesSlot={samplesSlot} />;
             })()}
           </div>
           <div className="dk-home-cell" style={{ gridColumn: "span 3", minWidth: 0 }}>
@@ -294,7 +300,7 @@ export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTa
                   ) : rows.map((r) => (
                     <button key={r.kind + r.id} className="dk-title-link" disabled={r.kind === "ship" && !canTab("shipments")}
                       title={r.kind === "ship" ? (canTab("shipments") ? "Open the shipment" : undefined) : "Open the collection"}
-                      onClick={() => (r.kind === "coll" ? (openCollection ? openCollection(r.id) : setTab("collections")) : canTab("shipments") && (openShipment ? openShipment(r.id) : setTab("overview")))}
+                      onClick={() => (r.kind === "coll" ? setColPeek(r.id) : canTab("shipments") && (openShipment ? openShipment(r.id) : setTab("overview")))}
                       style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "7px 0", borderBottom: "1px solid #f0f2f6", fontSize: 13, fontWeight: 700, color: NAVY }}>
                       <span style={{ width: 92, flex: "none", fontSize: 12.5, color: r.date < tod ? RED : r.date === tod ? "#a05f10" : "#5a6a85" }}>{r.date < tod ? "Late · " + prettyDate(r.date).slice(0, 6) : dayLabel(r.date)}</span>
                       <Icon name={r.kind === "ship" ? "ship" : "box"} size={14} stroke="#5a6a85" />
@@ -306,9 +312,6 @@ export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTa
                 </div>
               );
             })()}
-          </div>
-          <div className="dk-home-cell" style={{ gridColumn: "span 2", minWidth: 0 }}>
-            {crm && <ReviewsCard crm={crm} updateCrm={updateCrm} askConfirm={askConfirm} openReviews={openReviews} />}
           </div>
           <div className="dk-home-cell" style={{ gridColumn: "span 2", minWidth: 0 }}>
             {crm && (() => {
@@ -460,6 +463,17 @@ export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTa
       </div>
 
       {draft && crm && <TaskModal crm={crm} updateCrm={updateCrm} me={me} draft={draft} askConfirm={askConfirm} onClose={() => setDraft(null)} />}
+      {colPeek && crm && !invPeek && (
+        <CollectionPeek crm={crm} collId={colPeek} updateCrm={updateCrm}
+          onClose={() => setColPeek(null)}
+          onOpenFull={(id) => { setColPeek(null); openCollection ? openCollection(id) : setTab("collections"); }}
+          onJob={(id) => setInvPeek(id)} />
+      )}
+      {invPeek && crm && (
+        <InvoicePeek crm={crm} invId={invPeek}
+          onClose={() => setInvPeek(null)}
+          onOpenFull={(id) => { setInvPeek(null); setColPeek(null); openInvoice && openInvoice(id); }} />
+      )}
       <div style={{ height: 30 }} />
     </div>
   );

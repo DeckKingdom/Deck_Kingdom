@@ -13,6 +13,7 @@ import { SupplierModal } from "./SuppliersScreen.jsx";
 import { purchasesAvailable } from "../../data/crmStorage.js";
 import { Icon, Chip, Modal, selectAllProps, SuggestInput, sect, lbl, card, abtn, inp, btn, goldBtn, DateInput, CalendarPop, BandDelete, HoverStamp, ListHero, HeroStat, HeroAdd, SearchBox, FilterPills, PrintButton, bandBtn } from "./ui.jsx";
 import { printCollectionNote } from "./printDocs.js";
+import { InvoicePeek } from "./Peeks.jsx";
 import { skuOption, SKU_COLS, SKU_LIST_W, SizeRow, applySize, CodeCell, QtyCell, ColourSelect } from "./LinesEditor.jsx";
 
 const navyBtn = bandBtn;
@@ -25,6 +26,7 @@ export default function CollectionsScreen({ openProduct, money = true, crm, upda
   const [supDraft, setSupDraft] = useState(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("Open");
+  const [peekInv, setPeekInv] = useState(null); // a job peeked from a "Job #n" chip
   const [assignFor, setAssignFor] = useState(null); // item id, or "ALL" for every pending line
   const [assignQuery, setAssignQuery] = useState("");
   const [notice, setNotice] = useState("");
@@ -178,8 +180,8 @@ export default function CollectionsScreen({ openProduct, money = true, crm, upda
             </div>
           ) : (
             <table className="dk-t dk-bleed" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-              <thead><tr>{["COL #", "Supplier", "Postcode", "Collect", "Van", "Lines", "Done", "Value £", "Status", ""].map((h, i) => (!money && i === 7) ? null : (
-                <th key={i} style={{ textAlign: i >= 5 && i <= 7 ? "right" : "left", fontSize: 10.5, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", padding: "8px 7px", borderBottom: "2px solid #e6e9ef", whiteSpace: "nowrap" }}>{h}</th>
+              <thead><tr>{["COL #", "Supplier", "Postcode", "Collect", "Driver", "Van", "Lines", "Done", "Value £", "Status", ""].map((h, i) => (!money && i === 8) ? null : (
+                <th key={i} style={{ textAlign: i >= 6 && i <= 8 ? "right" : "left", fontSize: 10.5, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", padding: "8px 7px", borderBottom: "2px solid #e6e9ef", whiteSpace: "nowrap" }}>{h}</th>
               ))}</tr></thead>
               <tbody>
                 {rows.map((c) => {
@@ -193,6 +195,7 @@ export default function CollectionsScreen({ openProduct, money = true, crm, upda
                       <td style={{ ...td, fontWeight: 700 }}>{c.supplier || "—"}</td>
                       <td style={td}>{c.postcode}</td>
                       <td style={{ ...td, whiteSpace: "nowrap" }}>{c.collectDate ? prettyDate(c.collectDate) + (c.collectTime ? " " + c.collectTime : "") : "—"}</td>
+                      <td style={td}>{c.driver || "—"}</td>
                       <td style={td}>{c.van || "—"}</td>
                       <td style={{ ...td, textAlign: "right", fontWeight: 700 }}>{prog.total}</td>
                       <td style={{ ...td, textAlign: "right", fontWeight: 700, color: prog.done ? "#28713e" : "#aab3c2" }}>{prog.done}</td>
@@ -393,7 +396,7 @@ export default function CollectionsScreen({ openProduct, money = true, crm, upda
         </div>
         <div className="dk-bleed" style={{ overflowX: "auto" }}>
           <table className="dk-t" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 780 }}>
-            <thead><tr>{["Code", ...(sized ? ["Length × width (m)"] : []), "Qty", "Description", "Colour", "Unit cost £", "Line £", "Where it went", ""].map((h, i) => (!money && (h === "Unit cost £" || h === "Line £")) ? null : (
+            <thead><tr>{["Code", ...(sized ? ["Length × width (m)"] : []), "Description", "Colour", "Qty", "Unit cost £", "Line £", "Where it went", ""].map((h, i) => (!money && (h === "Unit cost £" || h === "Line £")) ? null : (
               <th key={i} style={{ textAlign: h === "Unit cost £" || h === "Line £" ? "right" : "left", fontSize: 10.5, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", padding: "7px 6px", borderBottom: "2px solid #e6e9ef", whiteSpace: "nowrap" }}>{h}</th>
             ))}</tr></thead>
             <tbody>
@@ -411,9 +414,6 @@ export default function CollectionsScreen({ openProduct, money = true, crm, upda
                         {pending && needs ? <SizeRow inline compact line={it} onSize={(k, v) => setColl((t, c) => editCollectionLine(c, t, it.id, (y) => applySize(y, k, v)))} /> : sizeLabel(it)}
                       </td>
                     )}
-                    <td style={{ ...td, width: 74 }}>
-                      <QtyCell value={it.qty} readOnly={!pending} onChange={(v) => setItem(it.id, "qty", v)} />
-                    </td>
                     <td style={{ ...td, minWidth: 200 }}>
                       {pending ? <input style={inp} {...selectAllProps} value={it.description} onChange={(e) => setItem(it.id, "description", e.target.value)} /> : it.description}
                     </td>
@@ -422,6 +422,9 @@ export default function CollectionsScreen({ openProduct, money = true, crm, upda
                         <ColourSelect line={{ ...it, code: it.sku }} crm={crm} bySku={bySku}
                           onPick={(colour, sku) => setColl((t, c) => editCollectionLine(c, t, it.id, (y) => { y.colour = colour; if (sku) y.sku = sku; }))} />
                       ) : it.colour || "—"}
+                    </td>
+                    <td style={{ ...td, width: 74 }}>
+                      <QtyCell value={it.qty} readOnly={!pending} onChange={(v) => setItem(it.id, "qty", v)} />
                     </td>
                     {money && <td style={{ ...td, width: 100, textAlign: "right" }}>
                       {pending ? <input style={{ ...inp, textAlign: "right" }} inputMode="decimal" {...selectAllProps} value={it.unitCost} onChange={(e) => setItem(it.id, "unitCost", e.target.value)} /> : (it.unitCost === "" ? "—" : Number(it.unitCost).toFixed(2))}
@@ -433,7 +436,7 @@ export default function CollectionsScreen({ openProduct, money = true, crm, upda
                       {it.postedAt ? (
                         <Chip tone="green">In stock · {prettyDate(it.postedAt)}</Chip>
                       ) : it.assignedInvoiceId ? (
-                        <button onClick={() => openInvoice(it.assignedInvoiceId)} title={"Open job " + invNoFor(it.assignedInvoiceId)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit" }}>
+                        <button onClick={() => setPeekInv(it.assignedInvoiceId)} title={"Peek at job " + invNoFor(it.assignedInvoiceId)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit" }}>
                           <Chip tone="gold">Job {invNoFor(it.assignedInvoiceId)} →</Chip>
                         </button>
                       ) : (
@@ -491,6 +494,10 @@ export default function CollectionsScreen({ openProduct, money = true, crm, upda
       {supDraft && (
         <SupplierModal crm={crm} updateCrm={updateCrm} me={me} draft={supDraft} onClose={() => setSupDraft(null)}
           onSaved={(sp) => setColl((t) => { t.supplierId = sp.id; t.supplier = sp.name; })} />
+      )}
+      {peekInv && (
+        <InvoicePeek crm={crm} invId={peekInv} onClose={() => setPeekInv(null)}
+          onOpenFull={(id) => { setPeekInv(null); openInvoice && openInvoice(id); }} />
       )}
     </div>
   );
