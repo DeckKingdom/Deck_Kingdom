@@ -79,3 +79,20 @@ FRESH START (Nov 2026) - clear ops and bring everything across again
    means FileMaker's copy of a web order joins up with it instead of making a second job.
 4. Office PC: copy the new files over the old ones in C:\DeckKingdomBridge (keep fm-bridge.config.json),
    then double-click fresh-import.cmd. It sends every job since 1 January, then runs every minute.
+
+----------------------------------------------------------------------
+FINAL IMPORT (Nov 2026) - switching over to ops for good
+----------------------------------------------------------------------
+1. Finish everything in FileMaker (no more edits there after this).
+2. In ops: Backup (bottom of the menu).
+3. Office PC: copy the new files over the old ones in C:\DeckKingdomBridge (keep fm-bridge.config.json),
+   then double-click final-import.cmd. It stops the every-minute bridge and sends EVERY FileMaker job
+   (all years) with its customer accounts and sites. Leave the window open until it says Done.
+   - Existing records are updated in place; nothing is deleted. Sample requests, products, shipments,
+     collections, purchases, loading, drop confirmations and tasks are not touched.
+   - This year's jobs are re-sent too, so FileMaker's values win for them (driver / run / drop set in
+     ops are kept where FileMaker's field is blank).
+   - Jobs dated before 1 Jan 2026 arrive as History: they show on the customer's account and in the
+     figures, but not on the delivery schedule, not in Awaiting payment and not in Reviews.
+   - Safe to run again if it stops part-way.
+4. The bridge stays off afterwards. Raise and edit everything in ops.

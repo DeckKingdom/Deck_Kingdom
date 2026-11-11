@@ -13,6 +13,8 @@
     powershell -ExecutionPolicy Bypass -File fm-bridge.ps1 -Full       # resend everything from the start date
     powershell -ExecutionPolicy Bypass -File fm-bridge.ps1 -FreshStart # after ops has been cleared: settings for a fresh
                                                                        # import from 1 Jan (or -StartFrom yyyy-MM-dd), then everything
+    powershell -ExecutionPolicy Bypass -File fm-bridge.ps1 -FinalImport # the last run before FileMaker is retired: every job
+                                                                        # ever (or -StartFrom), with its customers and sites
 
   Written for Windows PowerShell 5.1 (built into Windows 10/11).
 #>
@@ -21,6 +23,7 @@ param(
   [switch]$Test,
   [switch]$Full,
   [switch]$FreshStart,
+  [switch]$FinalImport,
   [string]$StartFrom = "",
   [string]$ConfigPath = (Join-Path $PSScriptRoot "fm-bridge.config.json")
 )
@@ -53,6 +56,17 @@ if ($FreshStart) {
   $cfg | ConvertTo-Json -Depth 8 | Set-Content -Path $ConfigPath -Encoding UTF8
   if (Test-Path $statePath) { Remove-Item $statePath -Force }
   $Full = $true
+}
+if ($FinalImport) {
+  # every job FileMaker has, and only the accounts and sites those jobs belong to
+  SetProp $cfg "startDate" $(if ($StartFrom) { $StartFrom } else { "1990-01-01" })
+  SetProp $cfg.customers "allDaily" $false
+  if ($cfg.customers.PSObject.Properties["scan"]) { $cfg.customers.PSObject.Properties.Remove("scan") }
+  if ($cfg.customers.PSObject.Properties["created"]) { $cfg.customers.created = "" }   # not "every account created since 1990"
+  if (Test-Path $statePath) { Remove-Item $statePath -Force }
+  $Full = $true
+  $StartFrom = ""
+  Log ("FINAL IMPORT: every FileMaker job from " + $cfg.startDate + ", with its customers and sites.")
 }
 if ($StartFrom) { $cfg.startDate = $StartFrom }
 # delivery schedule details (Nov 2026): driver and drop number, added here so older config files pick them up

@@ -7,8 +7,7 @@ import {
   recordOrigin, blankInvoice, blankLine, nextNumber, blankSite, DRIVERS, invoiceTotals, gbp, isPaid,
   JOB_TYPES, PAYMENT_TYPES, PREP_FLAGS, FOLLOWUP_FLAGS, today, TIME_SLOTS, vanOptions,
   skuIndex, invoiceCost, buildPicks, pickLandedCost, jobCost, blankPick, invoiceLoadKg, applyInvoiceStockDeduction, releaseInvoiceLinks,
-  TRADE_COUNTER, isCollectionJob, TRADE_COUNTER_LABEL, quoteRef, sampleRef, isSaleInvoice, riskOf, staffName, isVoidInvoice, onSchedule, userInitials,
-} from "../../lib/crmCore.js";
+  TRADE_COUNTER, isCollectionJob, TRADE_COUNTER_LABEL, quoteRef, sampleRef, isSaleInvoice, riskOf, staffName, isVoidInvoice, onSchedule, userInitials, isHistoric } from "../../lib/crmCore.js";
 import { ListHero, HeroStat, HeroAdd, SearchBox, RiskChip, WebStatusChip, Soon, DateInput, CalendarPop, usePhone, PrintButton, bandBtn, BandDelete } from "./ui.jsx";
 import { Icon, Chip, Tg, Modal, selectAllProps, SuggestInput, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
 import { printInvoice, printJobSheet, printLoadingBill, printJobDocs } from "./printDocs.js";
@@ -260,7 +259,7 @@ export default function InvoicesScreen({ headerH = 0, openProduct, money = true,
                           <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", fontWeight: 700 }}>{c ? c.name : <span style={{ color: RED }}>No customer</span>}<RiskChip inv={i} style={{ marginLeft: 8 }} /><WebStatusChip inv={i} style={{ marginLeft: 8 }} /></td>
                           <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6" }}>{i.jobType}</td>
                           <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6" }}>
-                            {isVoidInvoice(i) ? <span style={{ color: "#aab3c2" }}>—</span> : i.deliveryCompleted ? <Chip tone="green">Done</Chip> : i.deliveryDate ? <Chip tone="gold">{prettyDate(i.deliveryDate).slice(0, 6)}</Chip> : <Chip tone="red">Not booked</Chip>}
+                            {isVoidInvoice(i) ? <span style={{ color: "#aab3c2" }}>—</span> : i.deliveryCompleted ? <Chip tone="green">Done</Chip> : isHistoric(i) ? <Chip title="From FileMaker, before ops went live">History</Chip> : i.deliveryDate ? <Chip tone="gold">{prettyDate(i.deliveryDate).slice(0, 6)}</Chip> : <Chip tone="red">Not booked</Chip>}
                           </td>
                           <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", textAlign: "right", fontWeight: 700 }}>{t.total.toLocaleString("en-GB", { minimumFractionDigits: 2 })}</td>
                           <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6" }}>

@@ -452,7 +452,12 @@ export const FOLLOWUP_FLAGS = [
   ["sampleFollowed", "Sample followed up", "leaf"],
 ];
 
-export const isPaid = (inv) => Boolean(inv.paymentDate);
+// FileMaker history: jobs from before ops went live (brought across in the final import) are kept for
+// the customer's record and the figures, but nothing acts on them - not on the schedule, not chased
+// for payment, not asked for a review.
+export const HISTORY_BEFORE = "2026-01-01";
+export const isHistoric = (inv) => !!inv && String(inv.id || "").startsWith("fm-i-") && String(inv.date || "") < HISTORY_BEFORE;
+export const isPaid = (inv) => Boolean(inv.paymentDate) || isHistoric(inv);
 // payment / fraud risk on a job: from the website (Stripe Radar) or flagged by hand
 export const RISK_LABELS = { elevated: "Elevated payment risk", high: "High payment risk", manual: "Flagged high risk" };
 export const riskOf = (inv) => {
@@ -2159,7 +2164,7 @@ export const offScheduleIds = (crm) => {
   }
   return hit;
 };
-export const onSchedule = (inv, crm) => !!inv && !offScheduleIds(crm).has(inv.customerId);
+export const onSchedule = (inv, crm) => !!inv && !isHistoric(inv) && !offScheduleIds(crm).has(inv.customerId);
 // artificial grass rolls are sold by the square metre: a line can carry length x width (m) and qty = their product
 const GRASS_EXTRAS = /adhesive|glue|tape|pin|nail|staple|sand|membrane|join|infill|brush|edging|knife/i;
 export const isGrassRoll = (p) => !!p && /grass/i.test([p.category, p.family, p.name].join(" ")) && /grass/i.test(String(p.category || "") + " " + String(p.name || "")) && !GRASS_EXTRAS.test(String(p.name || ""));
