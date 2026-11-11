@@ -103,6 +103,11 @@ const NoteBox = ({ children }) => (
 
 export default function CustomersScreen({ money = true, crm, updateCrm, askConfirm, selId, setSelId, openInvoice, newInvoiceFor, newFollowUp, openQuote, newQuoteFor, openSample, newSampleFor, onOutstanding, me, newSignal, onNewHandled, onEmailSetup }) {
   const [search, setSearch] = useState("");
+  // list filters + sort, remembered on this PC
+  const LF0 = { kind: "", source: "", orders: "", sort: "newest", desc: false };
+  const [lf, setLfRaw] = useState(() => { try { return { ...LF0, ...JSON.parse(localStorage.getItem("dk-cust-list") || "{}") }; } catch (e) { return LF0; } });
+  const setLf = (patch) => setLfRaw((o) => { const n = { ...o, ...patch }; try { localStorage.setItem("dk-cust-list", JSON.stringify(n)); } catch (e) { /* */ } return n; });
+  const [showN, setShowN] = useState(50);
   const [custDraft, setCustDraft] = useState(null);
   const addrGuard = useAddressGuard();
   const [peekInv, setPeekInv] = useState(null); // job peeked from the account view
@@ -301,20 +306,65 @@ export default function CustomersScreen({ money = true, crm, updateCrm, askConfi
       contact: sel.contact, landline: sel.landline, mobile: sel.mobile, email: sel.email,
     }));
 
-  // ===== search list =====
+  // ===== search list: filters + sort (remembered on this PC) =====
   const q = search.trim().toLowerCase();
-  const matches = q
-    ? crm.customers.filter((c) =>
-        [c.name, c.town, c.postcode, c.contact, c.mobile, c.landline, c.email, String(c.accountNo || "")]
-          .some((v) => String(v || "").toLowerCase().includes(q)))
-    : crm.customers;
-  // newest first: accounts still waiting for a number (just in from the website) on top, then highest account # down
-  const sorted = [...matches].sort((a, b) => {
+  const sourceOf = (c) => {
+    if (c.source) return c.source;
+    const o = recordOrigin(c);
+    return o.key === "filemaker" ? "FileMaker" : o.key === "website" ? "Website" : "Manual entry";
+  };
+  // per account: sales count, spend, last order (void / non-sale jobs left out)
+  const custFacts = useMemo(() => {
+    const m = {};
+    crm.customers.forEach((c) => {
+      const sales = (invByCust[c.id] || []).filter(isSaleInvoice);
+      m[c.id] = { jobs: (invByCust[c.id] || []).length, sales: sales.length, spend: sales.reduce((t, i) => t + invoiceTotals(i).total, 0), last: sales.reduce((d, i) => ((i.date || "") > d ? i.date || "" : d), "") };
+    });
+    return m;
+  }, [crm.customers, invByCust]);
+  const yearAgoL = addDaysC(todayC(), -365);
+  const monthAgoL = addDaysC(todayC(), -30);
+  const matches = crm.customers.filter((c) => {
+    const f = custFacts[c.id] || {};
+    if (lf.kind === "trade" && !c.trader) return false;
+    if (lf.kind === "retail" && c.trader) return false;
+    if (lf.source && sourceOf(c) !== lf.source) return false;
+    if (lf.orders === "never" && f.sales) return false;
+    if (lf.orders === "ordered" && !f.sales) return false;
+    if (lf.orders === "repeat" && (f.sales || 0) < 2) return false;
+    if (lf.orders === "active" && !(f.last >= yearAgoL)) return false;
+    if (lf.orders === "lapsed" && !(f.sales && f.last < yearAgoL)) return false;
+    if (lf.orders === "new" && !((c.created || "") >= monthAgoL)) return false;
+    if (q && ![c.name, c.town, c.postcode, c.contact, c.mobile, c.landline, c.email, String(c.accountNo || "")].some((v) => String(v || "").toLowerCase().includes(q))) return false;
+    return true;
+  });
+  const newestCmp = (a, b) => {
     const na = Number(a.accountNo) || 0, nb = Number(b.accountNo) || 0;
     if (!na !== !nb) return na ? 1 : -1;
     return nb - na || String(b.created || "").localeCompare(String(a.created || ""));
-  });
-  const shown = sorted.slice(0, 50);
+  };
+  const txt = (v) => String(v || "").toLowerCase();
+  const SORTS = {
+    newest: { label: "newest first", cmp: newestCmp },
+    oldest: { label: "oldest first", cmp: (a, b) => -newestCmp(a, b) },
+    name: { label: "name A–Z", cmp: (a, b) => txt(a.name).localeCompare(txt(b.name)) },
+    town: { label: "town A–Z", cmp: (a, b) => (!a.town !== !b.town ? (a.town ? -1 : 1) : txt(a.town).localeCompare(txt(b.town))) },
+    postcode: { label: "postcode", cmp: (a, b) => (!a.postcode !== !b.postcode ? (a.postcode ? -1 : 1) : txt(a.postcode).localeCompare(txt(b.postcode), "en", { numeric: true })) },
+    source: { label: "source", cmp: (a, b) => sourceOf(a).localeCompare(sourceOf(b)) },
+    jobs: { label: "most jobs", cmp: (a, b) => (custFacts[b.id].jobs - custFacts[a.id].jobs) },
+    spend: { label: "biggest spend", cmp: (a, b) => (custFacts[b.id].spend - custFacts[a.id].spend) },
+    last: { label: "last order", cmp: (a, b) => String(custFacts[b.id].last).localeCompare(String(custFacts[a.id].last)) },
+  };
+  const sortDef = SORTS[lf.sort] || SORTS.newest;
+  const sorted = [...matches].sort((a, b) => (lf.desc ? -1 : 1) * sortDef.cmp(a, b) || newestCmp(a, b));
+  const shown = sorted.slice(0, showN);
+  const filtersOn = !!(lf.kind || lf.source || lf.orders);
+  const sourceList = useMemo(() => {
+    const n = {};
+    crm.customers.forEach((c) => { const k = sourceOf(c); n[k] = (n[k] || 0) + 1; });
+    return Object.entries(n).sort((a, b) => b[1] - a[1]);
+  }, [crm.customers]);
+  useEffect(() => { setShowN(50); }, [q, lf.kind, lf.source, lf.orders, lf.sort, lf.desc]);
 
   // ===== summary =====
   // retail top-ups (an extra board, trim and clips) under this value don't make a repeat customer
@@ -410,7 +460,7 @@ export default function CustomersScreen({ money = true, crm, updateCrm, askConfi
         const sub = heroSub;
         const tr = stats.trade, rt = stats.retail;
         return (
-          <ListHero title="Customers" sub={stats.total.toLocaleString("en-GB") + " account" + (stats.total === 1 ? "" : "s") + " · newest first"}>
+          <ListHero title="Customers" sub={stats.total.toLocaleString("en-GB") + " account" + (stats.total === 1 ? "" : "s") + " · " + (filtersOn ? matches.length.toLocaleString("en-GB") + " shown · " : "") + sortDef.label + (lf.desc ? " (reversed)" : "")}>
             <div style={box}>
               <div style={lab}>Customer accounts</div>
               <div style={big}>{stats.total.toLocaleString("en-GB")}</div>
@@ -488,12 +538,47 @@ export default function CustomersScreen({ money = true, crm, updateCrm, askConfi
                   <Icon name="gear" />
                 </button>
               </div>
+              {(() => {
+                const pill = (on, label, go, key) => (
+                  <button key={key || label} type="button" onClick={go}
+                    style={{ fontFamily: "inherit", fontSize: 12.5, fontWeight: 700, padding: "5px 11px", borderRadius: 999, cursor: "pointer", whiteSpace: "nowrap", border: "1px solid " + (on ? NAVY : "#d5d9e0"), background: on ? NAVY : "#fff", color: on ? "#fff" : "#5a6a85" }}>{label}</button>
+                );
+                const sel_ = { ...inp, width: "auto", padding: "5px 10px", fontSize: 12.5, fontWeight: 700, borderRadius: 999, height: 31 };
+                return (
+                  <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", margin: "4px 0 10px" }}>
+                    {pill(!lf.kind, "All", () => setLf({ kind: "" }))}
+                    {pill(lf.kind === "trade", "Trade", () => setLf({ kind: lf.kind === "trade" ? "" : "trade" }))}
+                    {pill(lf.kind === "retail", "Retail", () => setLf({ kind: lf.kind === "retail" ? "" : "retail" }))}
+                    <span style={{ width: 1, height: 20, background: "#e6e9ef", margin: "0 4px" }} />
+                    {[["ordered", "Ordered"], ["repeat", "Repeat"], ["active", "Active 12m"], ["lapsed", "Lapsed 12m+"], ["never", "Never ordered"], ["new", "New 30 days"]].map(([k, l]) =>
+                      pill(lf.orders === k, l, () => setLf({ orders: lf.orders === k ? "" : k }), k))}
+                    <span style={{ width: 1, height: 20, background: "#e6e9ef", margin: "0 4px" }} />
+                    <select value={lf.source} onChange={(e) => setLf({ source: e.target.value })} style={{ ...sel_, borderColor: lf.source ? NAVY : "#d5d9e0", color: lf.source ? NAVY : "#5a6a85" }}>
+                      <option value="">Any source</option>
+                      {sourceList.map(([k, n]) => <option key={k} value={k}>{k} ({n})</option>)}
+                    </select>
+                    <select value={lf.sort} onChange={(e) => setLf({ sort: e.target.value, desc: false })} style={sel_} title="Sort">
+                      {Object.entries(SORTS).filter(([k]) => money || k !== "spend").map(([k, d]) => <option key={k} value={k}>Sort: {d.label}</option>)}
+                    </select>
+                    <button type="button" title="Reverse the order" onClick={() => setLf({ desc: !lf.desc })} style={{ ...abtn, width: 31, height: 31, fontWeight: 800, color: lf.desc ? GOLD : NAVY }}>⇅</button>
+                    {(filtersOn || lf.sort !== "newest" || lf.desc) && <button type="button" onClick={() => setLf(LF0)} style={{ fontFamily: "inherit", fontSize: 12.5, fontWeight: 700, border: "none", background: "none", color: RED, cursor: "pointer", padding: "4px 6px" }}>Clear</button>}
+                    <span style={{ marginLeft: "auto", fontSize: 12.5, fontWeight: 700, color: "#8593a8" }}>{matches.length.toLocaleString("en-GB")} account{matches.length === 1 ? "" : "s"}</span>
+                  </div>
+                );
+              })()}
               <table className="dk-t dk-bleed" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13.5 }}>
                 <thead>
                   <tr>
-                    {["#", "Name", "Town", "Postcode", "Contact", "Source", "", "Invoices"].map((h, i) => (
-                      <th key={i} style={{ textAlign: i === 7 ? "right" : "left", fontSize: 11, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", padding: "8px 8px", borderBottom: "2px solid #e6e9ef", whiteSpace: "nowrap" }}>{h}</th>
-                    ))}
+                    {[["#", "newest"], ["Name", "name"], ["Town", "town"], ["Postcode", "postcode"], ["Contact", ""], ["Source", "source"], ["", ""], ["Last order", "last"], ...(money ? [["Spent", "spend"]] : []), ["Invoices", "jobs"]].map(([h, k], i, arr) => {
+                      const on = k && lf.sort === k;
+                      return (
+                        <th key={i} onClick={k ? () => setLf(on ? { desc: !lf.desc } : { sort: k, desc: false }) : undefined}
+                          title={k ? "Sort by " + (h || k).toLowerCase() + (on ? " — click again to reverse" : "") : undefined}
+                          style={{ textAlign: i >= arr.length - (money ? 3 : 2) ? "right" : "left", fontSize: 11, fontWeight: 700, color: on ? NAVY : "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", padding: "8px 8px", borderBottom: "2px solid " + (on ? GOLD : "#e6e9ef"), whiteSpace: "nowrap", cursor: k ? "pointer" : "default", userSelect: "none" }}>
+                          {h}{on ? (lf.desc ? " ▲" : " ▼") : ""}
+                        </th>
+                      );
+                    })}
                   </tr>
                 </thead>
                 <tbody>
@@ -513,14 +598,23 @@ export default function CustomersScreen({ money = true, crm, updateCrm, askConfi
                         return <Chip style={{ background: "#fff", borderStyle: "dashed", color: "#8593a8" }}>{t}</Chip>;
                       })()}</td>
                       <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6" }}>{c.trader && <Chip tone="red">Trade</Chip>}</td>
+                      <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", textAlign: "right", whiteSpace: "nowrap", color: "#5a6a85" }}>{custFacts[c.id] && custFacts[c.id].last ? prettyDate(custFacts[c.id].last) : "—"}</td>
+                      {money && <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", textAlign: "right", whiteSpace: "nowrap" }}>{custFacts[c.id] && custFacts[c.id].spend ? gbp(custFacts[c.id].spend) : "—"}</td>}
                       <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", textAlign: "right", fontWeight: 700 }}>{(invByCust[c.id] || []).length}</td>
                     </tr>
                   ))}
+                  {!shown.length && (
+                    <tr><td colSpan={money ? 10 : 9} style={{ padding: "26px 8px", textAlign: "center", color: "#8593a8", fontWeight: 600 }}>
+                      No accounts match{filtersOn ? " these filters" : ""}{q ? " “" + search.trim() + "”" : ""}.{" "}
+                      {filtersOn && <button type="button" onClick={() => setLf({ kind: "", source: "", orders: "" })} style={{ fontFamily: "inherit", fontWeight: 800, color: NAVY, background: "none", border: "none", textDecoration: "underline", cursor: "pointer", padding: 0 }}>Clear filters</button>}
+                    </td></tr>
+                  )}
                 </tbody>
               </table>
               {matches.length > shown.length && (
                 <div style={{ fontSize: 12, color: "#8593a8", fontWeight: 600, marginTop: 10 }}>
-                  Showing {shown.length} of {matches.length.toLocaleString("en-GB")} — keep typing to narrow it down.
+                  Showing {shown.length} of {matches.length.toLocaleString("en-GB")} — narrow it down with the search or filters, or{" "}
+                  <button type="button" onClick={() => setShowN((n) => n + 100)} style={{ fontFamily: "inherit", fontSize: 12, fontWeight: 800, color: NAVY, background: "none", border: "none", textDecoration: "underline", cursor: "pointer", padding: 0 }}>show 100 more</button>
                 </div>
               )}
             </>
