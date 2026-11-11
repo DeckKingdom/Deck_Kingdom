@@ -64,6 +64,8 @@ export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTa
   const salesLastToDate = salesIn(lastMonthKey, dayOfMonth);
   const todayJobs = invs.filter((i) => i.date === tod);
   const salesToday = todayJobs.reduce((t, i) => t + invoiceTotals(i).total, 0);
+  const paidToday = invs.filter((i) => i.paymentDate === tod);
+  const takenToday = paidToday.reduce((t, i) => t + invoiceTotals(i).total, 0);
   const lastYearKey = String(Number(monthKey.slice(0, 4)) - 1) + monthKey.slice(4);
   const salesLyToDate = salesIn(lastYearKey, dayOfMonth);
   const salesLyMonth = salesIn(lastYearKey);
@@ -154,6 +156,7 @@ export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTa
                 ) : (
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 8 }}>
                   <Report label="Sales today" value={gbp(salesToday)} sub={todayJobs.length + " job" + (todayJobs.length === 1 ? "" : "s") + " · inc VAT"} onClick={() => setTab("invoices")} />
+                  <Report label="Payments taken today" value={gbp(takenToday)} sub={paidToday.length + " payment" + (paidToday.length === 1 ? "" : "s") + " · inc VAT"} tone={paidToday.length ? "#1f7a3a" : NAVY} onClick={() => setTab("invoices")} />
                   <Report label="Sales this month" value={gbp(salesThisMonth)}
                     sub={salesLastToDate ? (salesThisMonth >= salesLastToDate ? "▲ " : "▼ ") + gbp(Math.abs(salesThisMonth - salesLastToDate)) + " vs last month to date" : "inc VAT"}
                     tone={salesLastToDate && salesThisMonth < salesLastToDate ? RED : NAVY} onClick={() => setTab("invoices")} />
