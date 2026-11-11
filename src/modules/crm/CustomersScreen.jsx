@@ -586,7 +586,7 @@ export default function CustomersScreen({ money = true, crm, updateCrm, askConfi
                     <tr key={c.id} onClick={() => setSelId(c.id)} style={{ cursor: "pointer" }}
                       onMouseEnter={(e) => (e.currentTarget.style.background = "#f6f8fb")}
                       onMouseLeave={(e) => (e.currentTarget.style.background = "")}>
-                      <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", fontWeight: 700 }}>{c.accountNo || <span title="Waiting for FileMaker to give it an account number" style={{ fontSize: 10.5, fontWeight: 800, color: "#8a5a00", background: "#fdf3dc", borderRadius: 8, padding: "1px 5px" }}>NEW</span>}</td>
+                      <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", fontWeight: 700 }}>{c.accountNo || <span title="No account number yet - the database gives it one when it next saves" style={{ fontSize: 10.5, fontWeight: 800, color: "#8a5a00", background: "#fdf3dc", borderRadius: 8, padding: "1px 5px" }}>NEW</span>}</td>
                       <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", fontWeight: 700 }}>{c.name || "—"}</td>
                       <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6" }}>{c.town}</td>
                       <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6" }}>{c.postcode}</td>

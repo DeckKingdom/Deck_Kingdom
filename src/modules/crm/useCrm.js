@@ -111,6 +111,12 @@ export function useCrm(enabled) {
     noticeT.current = setTimeout(() => setSaveNotice(""), 20_000);
   };
 
+  // account numbers the database gave out / changed: just show them
+  const applyAccountNos = (list) => {
+    if (!list || !list.length) return;
+    setCrm((d) => (d ? { ...d, customers: d.customers.map((c) => { const r = list.find((x) => x.id === c.id); return r ? { ...c, accountNo: r.to } : c; }) } : d));
+  };
+
   useEffect(() => {
     if (!loaded.current || !crm || !dirty.current || !pending.current) return;
     setCrmSave("Saving…");
@@ -121,11 +127,13 @@ export function useCrm(enabled) {
       try {
         const res = await crmStorage.set("dk-crm", JSON.stringify(crm));
         applyRenumbered(res && res.renumbered);
+        applyAccountNos(res && res.accountNos);
         setCrmSave("Saved");
         setSaveError("");
       } catch (e) {
         pending.current = true;
         applyRenumbered(e && e.renumbered);
+        applyAccountNos(e && e.accountNos);
         const msg = String((e && e.message) || e || "unknown error");
         setCrmSave(e && e.partial ? "Partly saved" : "Save failed");
         setSaveError(msg);
