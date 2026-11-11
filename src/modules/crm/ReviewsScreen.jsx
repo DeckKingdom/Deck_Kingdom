@@ -55,6 +55,7 @@ export default function ReviewsScreen({ crm, updateCrm, askConfirm, openInvoice,
   const [issueIds, setIssueIds] = useState(null); // invoice ids with a live delivery issue
   const [peek, setPeek] = useState(null); // invoice id shown in the pop-over
   const [peekCust, setPeekCust] = useState(null); // customer id shown in the pop-over
+  const [openGroups, setOpenGroups] = useState(() => new Set()); // expanded same-customer groups
 
   const rs = reviewSettingsOf(crm);
 
@@ -81,14 +82,31 @@ export default function ReviewsScreen({ crm, updateCrm, askConfirm, openInvoice,
       return c;
     });
   // what sending this stage's message records on the job
+  // sending covers the PERSON, not just the one job: an ask stamps every
+  // delivered, unasked job on the same person (duplicate accounts included),
+  // so their other rows can't queue a second ask next week
+  const stampOne = (c, t, kind) => {
+    const tod2 = today();
+    if (!t.flags) t.flags = {};
+    if (kind === "photos") { t.flags.photosRequested = true; return; }
+    if (kind === "thanks") return;
+    const key = personKeyOf(custById[t.customerId]);
+    c.invoices.forEach((x) => {
+      if (x.id !== t.id) {
+        const xc = custById[x.customerId];
+        if (!xc || personKeyOf(xc) !== key) return;
+        if (kind === "ask" && !(x.deliveryCompleted && !(x.flags || {}).reviewRequested && !(x.flags || {}).reviewReceived)) return;
+        if (kind === "nudge" && reviewNext(x, tod2) !== "nudge") return;
+      }
+      if (!x.flags) x.flags = {};
+      if (kind === "ask") { x.flags.reviewRequested = true; if (!x.reviewAskedAt) x.reviewAskedAt = tod2; }
+      else x.reviewNudgedAt = tod2;
+    });
+  };
   const stampSend = (invId, kind) =>
     updateCrm((c) => {
       const t = c.invoices.find((i) => i.id === invId);
-      if (!t) return c;
-      if (!t.flags) t.flags = {};
-      if (kind === "ask") { t.flags.reviewRequested = true; if (!t.reviewAskedAt) t.reviewAskedAt = today(); }
-      if (kind === "nudge") t.reviewNudgedAt = today();
-      if (kind === "photos") t.flags.photosRequested = true;
+      if (t) stampOne(c, t, kind);
       return c;
     });
   const saveRs = (next) => updateCrm((c) => { c.reviewSettings = next; return c; });
@@ -167,12 +185,7 @@ export default function ReviewsScreen({ crm, updateCrm, askConfirm, openInvoice,
       action: () =>
         updateCrm((c) => {
           const ids = new Set(list.map((x) => x.i.id));
-          c.invoices.forEach((t) => {
-            if (!ids.has(t.id)) return;
-            if (!t.flags) t.flags = {};
-            if (kind === "nudge") t.reviewNudgedAt = today();
-            else { t.flags.reviewRequested = true; if (!t.reviewAskedAt) t.reviewAskedAt = today(); }
-          });
+          c.invoices.forEach((t) => { if (ids.has(t.id)) stampOne(c, t, kind); });
           return c;
         }),
     });
@@ -286,7 +299,16 @@ export default function ReviewsScreen({ crm, updateCrm, askConfirm, openInvoice,
               </tr>
             </thead>
             <tbody>
-              {rows.map((i) => {
+              {(() => {
+                // one row per person: the newest job leads, the rest tuck behind "+n jobs"
+                const groups = [];
+                const byKey = new Map();
+                rows.forEach((i) => {
+                  const k = personKeyOf(custById[i.customerId]);
+                  if (byKey.has(k)) byKey.get(k).members.push(i);
+                  else { const g = { key: k, lead: i, members: [] }; byKey.set(k, g); groups.push(g); }
+                });
+                const renderRow = (i, group, isMember) => {
                 const c = custById[i.customerId], s = siteById[i.siteId];
                 const del = i.deliveryDate || i.invDate || "";
                 const days = del ? daysBetween(del, tod) : null;
@@ -297,7 +319,7 @@ export default function ReviewsScreen({ crm, updateCrm, askConfirm, openInvoice,
                 const em = c && /@/.test(String(c.email || "")) ? String(c.email).trim() : "";
                 const optedOut = c && rs.optOut.includes(c.id);
                 const tooSoon = st === "To ask" && askTooSoon(i, tod);
-                const dim = excl || tooSoon ? { opacity: 0.55 } : null;
+                const dim = excl || tooSoon ? { opacity: 0.55 } : isMember ? { opacity: 0.8 } : null;
                 return (
                   <tr key={i.id} style={dim}>
                     <td style={tdc}>
@@ -306,11 +328,24 @@ export default function ReviewsScreen({ crm, updateCrm, askConfirm, openInvoice,
                         #{i.invNo || "—"}
                       </button>
                     </td>
-                    <td style={{ ...tdc, maxWidth: 210, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      <button onClick={() => c && setPeekCust(c.id)} title="Peek at the account"
-                        style={{ ...linkBtn, fontSize: 13, fontWeight: 700, color: "#1a2b4a" }}>
-                        {(c && c.name) || "—"}
-                      </button>
+                    <td style={{ ...tdc, maxWidth: 230, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {isMember ? (
+                        <span style={{ fontSize: 12, fontWeight: 600, color: "#8593a8", paddingLeft: 14 }}>↳ same customer</span>
+                      ) : (
+                        <>
+                          <button onClick={() => c && setPeekCust(c.id)} title="Peek at the account"
+                            style={{ ...linkBtn, fontSize: 13, fontWeight: 700, color: "#1a2b4a" }}>
+                            {(c && c.name) || "—"}
+                          </button>
+                          {group && group.members.length > 0 && (
+                            <button onClick={() => setOpenGroups((o) => { const n = new Set(o); n.has(group.key) ? n.delete(group.key) : n.add(group.key); return n; })}
+                              title={"This person has " + (group.members.length + 1) + " jobs in this view — one ask covers them all"}
+                              style={{ ...linkBtn, marginLeft: 8, fontSize: 11.5, fontWeight: 800, color: "#185FA5" }}>
+                              {openGroups.has(group.key) ? "▾" : "▸"} +{group.members.length} job{group.members.length === 1 ? "" : "s"}
+                            </button>
+                          )}
+                        </>
+                      )}
                     </td>
                     <td style={{ ...tdc, whiteSpace: "nowrap" }}>{(s && s.postcode) || (c && c.postcode) || ""}</td>
                     <td style={{ ...tdc, whiteSpace: "nowrap" }}>{del ? prettyDate(del) : "—"}</td>
@@ -376,7 +411,13 @@ export default function ReviewsScreen({ crm, updateCrm, askConfirm, openInvoice,
                     </td>
                   </tr>
                 );
-              })}
+                };
+                return groups.flatMap((g) => {
+                  const out = [renderRow(g.lead, g, false)];
+                  if (g.members.length && openGroups.has(g.key)) g.members.forEach((m) => out.push(renderRow(m, null, true)));
+                  return out;
+                });
+              })()}
               {!rows.length && (
                 <tr><td colSpan={13} style={{ ...tdc, textAlign: "center", color: "#8593a8", padding: 26 }}>
                   {excluded.length ? "Everything left here is excluded by the rules — use “show” above to see them." : pool.length ? "Nothing in this view — try another filter or a longer period." : "No delivered jobs in this period yet."}
