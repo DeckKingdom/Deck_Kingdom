@@ -9,6 +9,7 @@ import {
   skuIndex, invoiceCost, buildPicks, pickLandedCost, jobCost, blankPick, invoiceLoadKg, applyInvoiceStockDeduction, releaseInvoiceLinks,
   TRADE_COUNTER, isCollectionJob, TRADE_COUNTER_LABEL, quoteRef, sampleRef, isSaleInvoice, riskOf, staffName, isVoidInvoice, onSchedule, userInitials, isHistoric } from "../../lib/crmCore.js";
 import { ListHero, HeroStat, HeroAdd, SearchBox, RiskChip, WebStatusChip, Soon, DateInput, CalendarPop, usePhone, PrintButton, bandBtn, BandDelete } from "./ui.jsx";
+import { invoiceEmailLink, invoiceEmailTo } from "../../lib/invoiceEmail.js";
 import { Icon, Chip, Tg, Modal, selectAllProps, SuggestInput, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
 import { printInvoice, printJobSheet, printLoadingBill, printJobDocs } from "./printDocs.js";
 import { readableFor } from "./LinesEditor.jsx";
@@ -266,8 +267,14 @@ export default function InvoicesScreen({ headerH = 0, openProduct, money = true,
                             {isVoidInvoice(i) ? <Chip>{i.webStatus === "refunded" ? "Refunded" : "Cancelled"}</Chip>
                               : <Chip tone={isPaid(i) ? "green" : "amber"}>{isPaid(i) ? "Paid" : "Awaiting"}{i.paymentType ? " · " + i.paymentType : ""}</Chip>}
                           </td>
-                          <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", textAlign: "right" }}>
-                            <button style={abtn} title="Open" onClick={(e) => { e.stopPropagation(); setSelId(i.id); }}><Icon name="pen" /></button>
+                          <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", textAlign: "right", whiteSpace: "nowrap" }}>
+                            {(() => {
+                              const c = custById[i.customerId], st = siteById[i.siteId], to = invoiceEmailTo(c, st);
+                              return to && !isVoidInvoice(i)
+                                ? <a style={{ ...abtn, marginRight: 6, display: "inline-flex", verticalAlign: "middle" }} title={"Email invoice #" + (i.invNo || "") + " to " + to} href={invoiceEmailLink(i, c, st)} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}><Icon name="mail" /></a>
+                                : <span style={{ ...abtn, marginRight: 6, display: "inline-flex", verticalAlign: "middle", opacity: 0.35, cursor: "default" }} title={isVoidInvoice(i) ? "Refunded / cancelled" : "No email address on this customer"}><Icon name="mail" /></span>;
+                            })()}
+                            <button style={{ ...abtn, verticalAlign: "middle" }} title="Open" onClick={(e) => { e.stopPropagation(); setSelId(i.id); }}><Icon name="pen" /></button>
                           </td>
                         </tr>
                       );
@@ -419,6 +426,11 @@ export default function InvoicesScreen({ headerH = 0, openProduct, money = true,
           const ok = printJobDocs([inv], ["loading", "delivery", "invoice"], { custOf: (x) => custById[x.customerId], siteOf: (x) => siteById[x.siteId], crm, planner, title: "Job " + (inv.invNo || "") });
           if (!ok) setNotice("Printing is blocked here — allow pop-ups for ops.deckkingdom.co.uk and try again.");
         }} />
+        {invoiceEmailTo(cust, site)
+          ? <a style={{ ...bandBtn, textDecoration: "none" }} href={invoiceEmailLink(inv, cust, site)} target="_blank" rel="noopener noreferrer" title={"Opens Gmail with the invoice set out, to " + invoiceEmailTo(cust, site)}>
+              <Icon name="mail" stroke="#fff" size={14} />Email invoice
+            </a>
+          : <span style={{ ...bandBtn, opacity: 0.45, cursor: "default" }} title="Add an email address to the customer (or site) first"><Icon name="mail" stroke="#fff" size={14} />Email invoice</span>}
         {newFollowUp && (
           <button style={bandBtn} title="Something missing or broken? Create a follow-up job to post or deliver it" onClick={() => newFollowUp(inv.id)}>
             <Icon name="wrench" stroke="#fff" size={14} />Follow-up job
