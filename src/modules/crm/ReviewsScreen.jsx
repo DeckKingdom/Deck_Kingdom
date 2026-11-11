@@ -350,7 +350,7 @@ export default function ReviewsScreen({ crm, updateCrm, askConfirm, openInvoice,
                     <td style={{ ...tdc, whiteSpace: "nowrap" }}>{(s && s.postcode) || (c && c.postcode) || ""}</td>
                     <td style={{ ...tdc, whiteSpace: "nowrap" }}>{del ? prettyDate(del) : "—"}</td>
                     <td style={{ ...tdc, textAlign: "right", color: days > 28 && st === "To ask" && !excl ? "#C64545" : "#5a6a85" }}>{days === null ? "—" : days}</td>
-                    <td style={{ ...tdc, textAlign: "center", whiteSpace: "nowrap" }}>
+                    <td style={{ ...tdc, textAlign: "left", whiteSpace: "nowrap" }}>
                       {/* the message this stage needs, on the channels we hold for them */}
                       {excl ? (
                         <span style={chip("#f1f3f7", "#8593a8")} title={"Left out of bulk asks: " + excl}>{excl}</span>
@@ -369,26 +369,32 @@ export default function ReviewsScreen({ crm, updateCrm, askConfirm, openInvoice,
                         ) : (
                           <span style={{ color: "#aab3c2", fontWeight: 700 }}>—</span>
                         )
+                      ) : !mob && !em ? (
+                        <span style={{ fontSize: 11.5, color: "#aab3c2", fontWeight: 700 }}>no contact</span>
                       ) : (
-                        <>
-                          {msgKind === "nudge" && <span style={{ ...chip("#C64545", "#fff"), marginRight: 6 }}>nudge due</span>}
-                          {mob && (
+                        // fixed two-slot layout so the icons line up down the column
+                        <span style={{ display: "inline-flex", gap: 4, alignItems: "center" }}>
+                          {mob ? (
                             <a href={waHref(mob, reviewText(rs.wa[msgKind], c, rs.link, orderSummary(i)))} onClick={() => stampSend(i.id, msgKind)}
                               title={"WhatsApp the " + MSG_NAMES[msgKind] + " to " + mob}
-                              style={{ display: "inline-flex", width: 26, height: 26, borderRadius: 8, background: "#25D36622", alignItems: "center", justifyContent: "center", marginRight: 4 }}>
+                              style={{ display: "inline-flex", width: 26, height: 26, borderRadius: 8, background: "#25D36622", alignItems: "center", justifyContent: "center" }}>
                               <Icon name="wa" stroke="#128C7E" size={14} />
                             </a>
+                          ) : (
+                            <span style={{ width: 26, height: 26, flex: "none" }} />
                           )}
-                          {em && (
+                          {em ? (
                             <a href={gmailTo(em, rs.email[msgKind].subject, reviewText(rs.email[msgKind].body, c, rs.link, orderSummary(i)))} target="_blank" rel="noreferrer"
                               onClick={() => stampSend(i.id, msgKind)}
                               title={"Email the " + MSG_NAMES[msgKind] + " to " + em}
                               style={{ display: "inline-flex", width: 26, height: 26, borderRadius: 8, background: "#eef1f6", alignItems: "center", justifyContent: "center" }}>
                               <Icon name="mail" stroke="#3b4c6b" size={14} />
                             </a>
+                          ) : (
+                            <span style={{ width: 26, height: 26, flex: "none" }} />
                           )}
-                          {!mob && !em && <span style={{ fontSize: 11.5, color: "#aab3c2", fontWeight: 700 }}>no contact</span>}
-                        </>
+                          {msgKind === "nudge" && <span style={{ ...chip("#C64545", "#fff"), marginLeft: 2 }}>nudge due</span>}
+                        </span>
                       )}
                     </td>
                     {FOLLOWUP_FLAGS.map(([k, label, icon]) => (
