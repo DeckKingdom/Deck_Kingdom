@@ -669,6 +669,11 @@ export default function ImportPlanner() {
     }, 600);
   }, [data]);
 
+  // imports + products save as one dataset: one editor at a time
+  // (hooks must sit ABOVE the early returns below, or React throws #310)
+  const PLANNER_TABS = ["overview", "shipments", "completion", "landed", "products"];
+  const plannerLockedBy = useLock(PLANNER_TABS.includes(tab) && access.canManage ? "planner" : "");
+
   if (loadError)
     return (
       <div style={{ fontFamily: "Quicksand, sans-serif", padding: 40, textAlign: "center", color: NAVY }}>
@@ -762,8 +767,6 @@ export default function ImportPlanner() {
     );
   };
 
-  const PLANNER_TABS = ["overview", "shipments", "completion", "landed", "products"];
-  const plannerLockedBy = useLock(PLANNER_TABS.includes(tab) && access.canManage ? "planner" : ""); // imports + products save as one dataset: one editor at a time
   const update = (fn) => {
     // products and shipments: managers and admin only
     if (!access.canManage) { if (access.known) setRoNote(true); return; }
