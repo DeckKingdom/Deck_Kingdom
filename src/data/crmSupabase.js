@@ -336,30 +336,41 @@ let snapshot = null;
 let settingsSnapshot = {};
 
 async function loadAll(quick = false) {
+  const t0 = performance.now();
+  const timings = [];
+  const T = (label, p) => {
+    const s = performance.now();
+    return Promise.resolve(p).then((r) => {
+      timings.push({ what: label, ms: Math.round(performance.now() - s), rows: Array.isArray(r) ? r.length : (r && Array.isArray(r.invoices) ? r.invoices.length + "+" + r.items.length : "") });
+      return r;
+    });
+  };
   const sb = await getSupabase();
+  timings.push({ what: "client ready", ms: Math.round(performance.now() - t0), rows: "" });
   // quick first paint: one round trip brings the hot slice of the invoice book
   // (open, unpaid, last 90 days) with its lines and picks; stock movements and
   // the task log wait for the background fill that follows straight after.
   let hot = null;
   if (quick) {
     try {
-      const { data, error } = await sb.rpc("crm_hot_invoices", { p_days: 90 });
+      const { data, error } = await T("hot slice (rpc)", sb.rpc("crm_hot_invoices", { p_days: 90 }).then((r) => r));
       if (!error && data && Array.isArray(data.invoices)) hot = data;
-    } catch (e) { /* 061 not run yet: carry on with the full load */ }
+      else timings.push({ what: "QUICK PATH OFF — run 061", ms: 0, rows: String((error && error.message) || "") });
+    } catch (e) { timings.push({ what: "QUICK PATH OFF — run 061", ms: 0, rows: String(e && e.message) }); }
   }
   const [cs, ss, is_, ls, ps_, mps_, comps_, colls_, collItems_, moves_, vans_, vanChecks_, settings, quoteData, sampleData, taskData, staffRows, purchData] = await Promise.all([
-    fetchAll(sb, "customers"),
-    fetchAll(sb, "customer_sites"),
-    hot ? Promise.resolve(hot.invoices) : fetchAll(sb, "invoices"),
-    hot ? Promise.resolve(hot.items) : fetchAll(sb, "invoice_items"),
-    hot ? Promise.resolve(hot.picks) : fetchAll(sb, "invoice_picks"),
-    fetchAll(sb, "master_products"),
-    fetchAll(sb, "product_components"),
-    fetchAll(sb, "collections"),
-    fetchAll(sb, "collection_items"),
-    hot ? Promise.resolve([]) : fetchAll(sb, "stock_movements"),
-    fetchAll(sb, "vans"),
-    fetchAll(sb, "van_checks"),
+    T("customers", fetchAll(sb, "customers")),
+    T("sites", fetchAll(sb, "customer_sites")),
+    hot ? Promise.resolve(hot.invoices) : T("invoices (full)", fetchAll(sb, "invoices")),
+    hot ? Promise.resolve(hot.items) : T("invoice lines (full)", fetchAll(sb, "invoice_items")),
+    hot ? Promise.resolve(hot.picks) : T("picks (full)", fetchAll(sb, "invoice_picks")),
+    T("products", fetchAll(sb, "master_products")),
+    T("components", fetchAll(sb, "product_components")),
+    T("collections", fetchAll(sb, "collections")),
+    T("collection items", fetchAll(sb, "collection_items")),
+    hot ? Promise.resolve([]) : T("stock movements", fetchAll(sb, "stock_movements")),
+    T("vans", fetchAll(sb, "vans")),
+    T("van checks", fetchAll(sb, "van_checks")),
     (async () => {
       // crm_settings has no position/id ordering columns — plain select
       const { data, error } = await sb.from("crm_settings").select("*");
@@ -369,7 +380,7 @@ async function loadAll(quick = false) {
     (async () => {
       // tolerant: a missing quotes table (SQL not run yet) must not stop the CRM loading
       try {
-        const [q, qi] = await Promise.all([fetchAll(sb, "quotes"), fetchAll(sb, "quote_items")]);
+        const [q, qi] = await Promise.all([T("quotes", fetchAll(sb, "quotes")), T("quote items", fetchAll(sb, "quote_items"))]);
         return { q, qi };
       } catch (e) {
         return null;
@@ -377,7 +388,7 @@ async function loadAll(quick = false) {
     })(),
     (async () => {
       try {
-        const [sm, si] = await Promise.all([fetchAll(sb, "samples"), fetchAll(sb, "sample_items")]);
+        const [sm, si] = await Promise.all([T("samples", fetchAll(sb, "samples")), T("sample items", fetchAll(sb, "sample_items"))]);
         return { sm, si };
       } catch (e) {
         return null;
@@ -417,7 +428,7 @@ async function loadAll(quick = false) {
     })(),
     (async () => {
       try {
-        const [sp, pu] = await Promise.all([fetchAll(sb, "suppliers"), fetchAll(sb, "purchases")]);
+        const [sp, pu] = await Promise.all([T("suppliers", fetchAll(sb, "suppliers")), T("purchases", fetchAll(sb, "purchases"))]);
         return { sp, pu };
       } catch (e) {
         return null;
@@ -643,6 +654,11 @@ async function loadAll(quick = false) {
   const sset = { numbering: JSON.stringify(numbering), reminders: JSON.stringify(reminders), skuLists: skuListsRow ? JSON.stringify(skuListsRow.value) : undefined, sampleEmails: sampleEmailsRow ? JSON.stringify(sampleEmailsRow.value) : undefined, dsNotify: dsNotifyRow ? JSON.stringify(dsNotifyRow.value) : undefined, dsRunOrder: dsRunOrderRow ? JSON.stringify(dsRunOrderRow.value) : undefined, driverPhones: driverPhonesRow ? JSON.stringify(driverPhonesRow.value) : undefined, fleetCosts: fleetCostsRow ? JSON.stringify(fleetCostsRow.value) : undefined, reviewSettings: reviewSettingsRow ? JSON.stringify(reviewSettingsRow.value) : undefined };
 
   if (!customers.length && !sites.length && !invoices.length && !masterProducts.length && !collections.length && !vans.length && !quotes.length && !samples.length && !tasks.length && !suppliers.length && !purchases.length && !settings.length) return null;
+  try {
+    timings.push({ what: (hot ? "QUICK load total" : "FULL load total"), ms: Math.round(performance.now() - t0), rows: "" });
+    console.log("[dk-load] " + (hot ? "quick" : "full") + " " + Math.round(performance.now() - t0) + "ms");
+    console.table(timings);
+  } catch (e) { /* console closed */ }
   return { data, commit: () => { snapshot = snap; settingsSnapshot = sset; }, partial: !!hot };
 }
 
