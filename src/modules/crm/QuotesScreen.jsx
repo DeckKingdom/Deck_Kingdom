@@ -2,7 +2,7 @@
 // A quote mirrors an invoice (same lines, inc-VAT prices, discount, delivery)
 // on its own Q-number sequence; "Convert to invoice" raises the sale.
 import { useState } from "react";
-import { InvoicePeek, CustomerPeek } from "./Peeks.jsx";
+import { InvoicePeek, CustomerPeek, LockGuard } from "./Peeks.jsx";
 import { NAVY, GOLD, RED, uid, prettyDate, prettyDateTime, addDays } from "../../lib/core.js";
 import {
   blankQuote, nextNumber, quoteTotals, gbp, today, quoteRef, quoteStatus, quoteInvoice, quoteIsOpen,
@@ -263,6 +263,7 @@ export default function QuotesScreen({ openProduct, money = true, crm, updateCrm
     <div style={{ maxWidth: 1320, margin: "0 auto", padding: "18px 22px" }}>
       <RecordNav backLabel="All quotes" onBack={() => setSelId(null)} onGo={setSelId} noun="quote" label={(x) => quoteRef(x) + ((custById[x.customerId] || {}).name ? " · " + custById[x.customerId].name : "")}
         order={[...quotes].sort((a, b) => (b.date || "").localeCompare(a.date || "") || (Number(b.quoteNo) || 0) - (Number(a.quoteNo) || 0))} cur={q.id} />
+      <LockGuard k={"quote:" + q.id} crm={crm}>
       {!ready && <SchemaNotice />}
 
       {notice && (
@@ -468,6 +469,7 @@ export default function QuotesScreen({ openProduct, money = true, crm, updateCrm
           </div>
         </div>
       </div>
+      </LockGuard>
       {peekCust && (
         <CustomerPeek crm={crm} custId={peekCust} onClose={() => setPeekCust(null)}
           onOpenFull={(id) => { setPeekCust(null); setPeekInv(null); goCustomer(id); }}

@@ -8,6 +8,7 @@ import {
 } from "../../lib/crmCore.js";
 import { tasksAvailable } from "../../data/crmStorage.js";
 import { Icon, Chip, Modal, sect, lbl, card, abtn, inp, btn, goldBtn, DateInput, CalendarPop } from "./ui.jsx";
+import { LockGuard } from "./Peeks.jsx";
 
 const th = { fontSize: 11, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", padding: "8px 8px", borderBottom: "2px solid #e6e9ef", whiteSpace: "nowrap", textAlign: "left" };
 const tdc = { padding: "9px 8px", borderBottom: "1px solid #f0f2f6", verticalAlign: "top" };
@@ -109,6 +110,7 @@ export function TaskModal({ crm, updateCrm, me, draft, onClose, askConfirm }) {
 
   return (
     <Modal title={(isNew ? "New task" : "Edit task") + " · " + kindLabel} onClose={onClose} width={600}>
+    <LockGuard k={isNew ? "" : "task:" + t.id} crm={crm}>
       {isNew && (
         <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
           {TASK_KINDS.map(([k, label]) => (
@@ -268,6 +270,7 @@ export function TaskModal({ crm, updateCrm, me, draft, onClose, askConfirm }) {
         <button style={btn} onClick={onClose}>Cancel</button>
         <button style={{ ...goldBtn, opacity: t.title.trim() ? 1 : 0.5 }} disabled={!t.title.trim()} onClick={save}>Save</button>
       </div>
+    </LockGuard>
     </Modal>
   );
 }

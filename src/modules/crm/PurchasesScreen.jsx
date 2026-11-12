@@ -10,6 +10,7 @@ import {
 } from "../../lib/crmCore.js";
 import { purchasesAvailable } from "../../data/crmStorage.js";
 import { Icon, Chip, SuggestInput, selectAllProps, sect, lbl, card, abtn, inp, btn, goldBtn, DateInput, CalendarPop, RecordNav, BandDelete, HoverStamp, ListHero, HeroStat, HeroAdd, SearchBox, FilterPills } from "./ui.jsx";
+import { LockGuard } from "./Peeks.jsx";
 import { SupplierModal, PurchasesSchemaNotice } from "./SuppliersScreen.jsx";
 
 const th = { fontSize: 11, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", padding: "8px 8px", borderBottom: "2px solid #e6e9ef", whiteSpace: "nowrap", textAlign: "left" };
@@ -233,6 +234,7 @@ export default function PurchasesScreen({ crm, updateCrm, askConfirm, selId, set
 
   return (
     <div style={{ maxWidth: 1320, margin: "0 auto", padding: "18px 22px" }}>
+    <LockGuard k={"pur:" + p.id} crm={crm}>
       <datalist id="dk-pcats2">{categories.map((x) => <option key={x} value={x} />)}</datalist>
       <datalist id="dk-pmethods2">{methods.map((x) => <option key={x} value={x} />)}</datalist>
       <datalist id="dk-people">{people.map((x) => <option key={x} value={x} />)}</datalist>
@@ -381,6 +383,7 @@ export default function PurchasesScreen({ crm, updateCrm, askConfirm, selId, set
         <SupplierModal crm={crm} updateCrm={updateCrm} me={me} draft={supDraft} onClose={() => setSupDraft(null)}
           onSaved={(s) => { setP((x) => { x.supplierId = s.id; if (!x.category && s.category) x.category = s.category; if (!x.paymentMethod && s.paymentMethod) x.paymentMethod = s.paymentMethod; }); setSupQuery(""); }} />
       )}
+    </LockGuard>
     </div>
   );
 }

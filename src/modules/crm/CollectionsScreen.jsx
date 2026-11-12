@@ -13,7 +13,7 @@ import { SupplierModal } from "./SuppliersScreen.jsx";
 import { purchasesAvailable } from "../../data/crmStorage.js";
 import { Icon, Chip, Modal, selectAllProps, SuggestInput, sect, lbl, card, abtn, inp, btn, goldBtn, DateInput, CalendarPop, BandDelete, HoverStamp, ListHero, HeroStat, HeroAdd, SearchBox, FilterPills, PrintButton, bandBtn } from "./ui.jsx";
 import { printCollectionNote } from "./printDocs.js";
-import { InvoicePeek } from "./Peeks.jsx";
+import { InvoicePeek, LockGuard } from "./Peeks.jsx";
 import { skuOption, SKU_COLS, SKU_LIST_W, SizeRow, applySize, CodeCell, QtyCell, ColourSelect } from "./LinesEditor.jsx";
 
 const navyBtn = bandBtn;
@@ -253,6 +253,7 @@ export default function CollectionsScreen({ openProduct, money = true, crm, upda
 
   return (
     <div style={{ maxWidth: 1320, margin: "0 auto", padding: "18px 22px" }}>
+    <LockGuard k={"col:" + coll.id} crm={crm}>
       {(() => {
         // step through the list in its order (newest first; the current search applied)
         const q = search.trim().toLowerCase();
@@ -491,6 +492,7 @@ export default function CollectionsScreen({ openProduct, money = true, crm, upda
           </div>
         </Modal>
       )}
+      </LockGuard>
       {supDraft && (
         <SupplierModal crm={crm} updateCrm={updateCrm} me={me} draft={supDraft} onClose={() => setSupDraft(null)}
           onSaved={(sp) => setColl((t) => { t.supplierId = sp.id; t.supplier = sp.name; })} />

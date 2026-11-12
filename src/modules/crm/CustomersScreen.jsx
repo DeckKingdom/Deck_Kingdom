@@ -1,7 +1,7 @@
 // Customers tab: searchable account list -> account view with sites and
 // invoice history, per the approved mockup.
 import React, { useState, useMemo, useEffect } from "react";
-import { InvoicePeek, useHoverPeek } from "./Peeks.jsx";
+import { InvoicePeek, useHoverPeek, LockGuard } from "./Peeks.jsx";
 import { NAVY, GOLD, RED, prettyDate, prettyDateTime, addDays as addDaysC } from "../../lib/core.js";
 import {
   originText, recordOrigin, userInitials,
@@ -450,6 +450,7 @@ export default function CustomersScreen({ money = true, crm, updateCrm, askConfi
 
   return (
     <div style={{ maxWidth: sel ? 1320 : 1140, margin: "0 auto", padding: "18px 22px" }}>
+    <LockGuard k={sel ? "cust:" + sel.id : ""} crm={crm}>
 
       {/* summary */}
       {!sel && crm.customers.length > 0 && (() => {
@@ -1156,6 +1157,7 @@ export default function CustomersScreen({ money = true, crm, updateCrm, askConfi
           </div>
         </Modal>
       )}
+    </LockGuard>
       {peekInv && (
         <InvoicePeek crm={crm} invId={peekInv} onClose={() => setPeekInv(null)}
           onOpenFull={(id) => { setPeekInv(null); openInvoice(id); }} />

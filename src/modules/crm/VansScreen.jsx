@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { NAVY, GOLD, RED, prettyDate } from "../../lib/core.js";
 import { blankVan, blankVanCheck, VAN_CHECK_ITEMS, daysUntil, FIELD_FORMATS } from "../../lib/crmCore.js";
 import { Icon, Chip, Modal, selectAllProps, sect, lbl, card, abtn, inp, btn, goldBtn, DateInput, CalendarPop } from "./ui.jsx";
+import { LockGuard } from "./Peeks.jsx";
 import { getSupabase } from "../../data/supabaseClient.js";
 import { storageMode } from "../../data/storage.js";
 import { gbp } from "../../lib/crmCore.js";
@@ -164,6 +165,7 @@ export default function VansScreen({ crm, updateCrm, askConfirm, me, newSignal }
       {/* van modal */}
       {draft && (
         <Modal title={draft._new ? "New van" : "Edit " + (draft.name || "van")} onClose={() => setDraft(null)} width={620}>
+        <LockGuard k={draft._new ? "" : "van:" + draft.id} crm={crm}>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12 }}>
             {field("name", "Van name", { autoFocus: true })}
             {field("reg", "Registration")}
@@ -187,6 +189,7 @@ export default function VansScreen({ crm, updateCrm, askConfirm, me, newSignal }
             <button style={btn} onClick={() => setDraft(null)}>Cancel</button>
             <button className="dk-save" style={{ ...goldBtn, opacity: draft.name.trim() ? 1 : 0.5 }} onClick={save}>Save</button>
           </div>
+        </LockGuard>
         </Modal>
       )}
 

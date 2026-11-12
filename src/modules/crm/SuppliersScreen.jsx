@@ -9,6 +9,7 @@ import {
 import { purchasesAvailable } from "../../data/crmStorage.js";
 import { collectionStatus } from "../../lib/crmCore.js";
 import { Icon, Chip, Modal, sect, lbl, card, abtn, inp, btn, goldBtn, RecordNav, BandDelete, HoverStamp, ListHero, HeroStat, HeroAdd, SearchBox } from "./ui.jsx";
+import { LockGuard } from "./Peeks.jsx";
 
 const th = { fontSize: 11, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", padding: "8px 8px", borderBottom: "2px solid #e6e9ef", whiteSpace: "nowrap", textAlign: "left" };
 const tdc = { padding: "9px 8px", borderBottom: "1px solid #f0f2f6" };
@@ -53,6 +54,7 @@ export function SupplierModal({ crm, updateCrm, me, draft, onClose, onSaved }) {
   );
   return (
     <Modal title={isNew ? "New supplier" : "Edit supplier"} onClose={onClose} width={600}>
+    <LockGuard k={isNew ? "" : "sup:" + s.id} crm={crm}>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
         {f("name", "Supplier name", 2, { autoFocus: true })}
         {f("accountNo", "Account #")}
@@ -93,6 +95,7 @@ export function SupplierModal({ crm, updateCrm, me, draft, onClose, onSaved }) {
         <button style={btn} onClick={onClose}>Cancel</button>
         <button style={{ ...goldBtn, opacity: s.name.trim() ? 1 : 0.5 }} disabled={!s.name.trim()} onClick={save}>Save</button>
       </div>
+    </LockGuard>
     </Modal>
   );
 }

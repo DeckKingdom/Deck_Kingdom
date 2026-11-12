@@ -3,8 +3,9 @@
 // open the next pop-over. Each has an "Open …" button for the full screen.
 import { useState, useRef, useEffect } from "react";
 import { NAVY, prettyDate } from "../../lib/core.js";
-import { gbp, invoiceTotals, isPaid, isSaleInvoice, mobileOf, DRIVERS, vanOptions, itemPending, sizeLabel, isGrassRoll } from "../../lib/crmCore.js";
-import { Icon, btn, goldBtn, lbl, inp, Chip } from "./ui.jsx";
+import { gbp, invoiceTotals, isPaid, isSaleInvoice, mobileOf, DRIVERS, vanOptions, itemPending, sizeLabel, isGrassRoll, staffName } from "../../lib/crmCore.js";
+import { Icon, btn, goldBtn, lbl, inp, Chip, LockBar } from "./ui.jsx";
+import { useLock } from "./useLock.js";
 import LinesEditor from "./LinesEditor.jsx";
 
 export const peekChip = (bg, fg) => ({ fontSize: 11, fontWeight: 800, color: fg, background: bg, borderRadius: 999, padding: "2px 8px", whiteSpace: "nowrap" });
@@ -160,9 +161,10 @@ export function CustomerPeek({ crm, custId, optOut = [], onClose, onOpenFull, on
 export function CollectionPeek({ crm, collId, updateCrm, onClose, onOpenFull, onJob }) {
   const c0 = (crm.collections || []).find((x) => x.id === collId);
   if (!c0) return null;
+  const lockedBy = useLock(updateCrm ? "col:" + collId : ""); // editing peek claims the collection's lock
   const set = (fn) => updateCrm && updateCrm((d) => { const t = (d.collections || []).find((x) => x.id === collId); if (t) fn(t); return d; });
   const invNoFor = (id) => { const inv = crm.invoices.find((x) => x.id === id); return inv ? "#" + (inv.invNo || "—") : "#—"; };
-  const canEdit = !!updateCrm;
+  const canEdit = !!updateCrm && !lockedBy;
   const sized = (c0.items || []).some((it) => isGrassRoll(it));
   const th = { fontSize: 10.5, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", padding: "6px 6px", borderBottom: "2px solid #e6e9ef", textAlign: "left", whiteSpace: "nowrap" };
   const td = { padding: "6px 6px", borderBottom: "1px solid #f0f2f6", fontSize: 13, fontWeight: 600, verticalAlign: "middle" };
@@ -173,6 +175,7 @@ export function CollectionPeek({ crm, collId, updateCrm, onClose, onOpenFull, on
         <span style={{ fontSize: 13, fontWeight: 700, color: "#5a6a85" }}>{c0.supplier || "Supplier"}</span>
         {c0.collected && <span style={peekChip("#e9f6ee", "#28713e")}>collected</span>}
       </div>
+      {lockedBy && <LockBar name={crm ? staffName(crm, lockedBy) : String(lockedBy).split("@")[0]} />}
       {/* the booking bits, editable right here */}
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 10 }}>
         <label><span style={lbl}>Collect date</span>
@@ -257,4 +260,19 @@ export function useHoverPeek(open, wait = 450) {
       onClick: () => { clear(); t.current.hoverId = null; t.current.pinned = true; open(id); },
     }),
   };
+}
+
+// Wrap an editor in a record lock: claims the lock while mounted; if someone
+// else holds it, shows the red banner and disables every control inside.
+export function LockGuard({ k, crm, extra, children }) {
+  const holder = useLock(k || "");
+  const name = holder ? (crm ? staffName(crm, holder) : String(holder).split("@")[0]) : "";
+  return (
+    <>
+      {holder && <LockBar name={name}>{extra}</LockBar>}
+      <fieldset disabled={!!holder} style={{ border: "none", padding: 0, margin: 0, minWidth: 0, display: "block" }}>
+        {children}
+      </fieldset>
+    </>
+  );
 }

@@ -32,8 +32,9 @@ import {
   int,
 } from "../lib/core.js";
 import { sampleStatus } from "../lib/crmCore.js";
-import { blankInvoice, blankLine, blankQuote, blankSample, blankSampleItem, nextNumber, TRADE_COUNTER, vanReminders, reviewReminders, sampleReminders, reviewAskCounts, syncCatalogue, renameSkus, syncOpenPicks, colourTidyPlan, syncSampleConversions, cleanCode, codeSource, PRODUCT_SOURCES, suggestDescription, suggestCode, codeFollowsName, dueScheduledFor, setTaskDone, describeSchedule, today as todayStr, newPurchaseFor } from "../lib/crmCore.js";
+import { blankInvoice, blankLine, blankQuote, blankSample, blankSampleItem, nextNumber, TRADE_COUNTER, vanReminders, reviewReminders, sampleReminders, reviewAskCounts, syncCatalogue, staffName, renameSkus, syncOpenPicks, colourTidyPlan, syncSampleConversions, cleanCode, codeSource, PRODUCT_SOURCES, suggestDescription, suggestCode, codeFollowsName, dueScheduledFor, setTaskDone, describeSchedule, today as todayStr, newPurchaseFor } from "../lib/crmCore.js";
 import { useCrm } from "./crm/useCrm.js";
+import { useLock } from "./crm/useLock.js";
 import CustomersScreen from "./crm/CustomersScreen.jsx";
 import InvoicesScreen from "./crm/InvoicesScreen.jsx";
 import QuotesScreen from "./crm/QuotesScreen.jsx";
@@ -58,7 +59,7 @@ import CompletionsScreen from "./crm/CompletionsScreen.jsx";
 import IssuesScreen, { issueOf } from "./crm/IssuesScreen.jsx";
 import LoadingScreen from "./crm/LoadingScreen.jsx";
 import { loadAllDrops } from "../data/drops.js";
-import { Icon, SuggestInput, abtn, DateInput, CalendarPop, selectAllProps } from "./crm/ui.jsx";
+import { Icon, SuggestInput, abtn, DateInput, CalendarPop, selectAllProps, LockBar } from "./crm/ui.jsx";
 import { EmailSettings } from "./crm/EmailPanels.jsx";
 import { emailReady } from "../data/email.js";
 
@@ -761,9 +762,12 @@ export default function ImportPlanner() {
     );
   };
 
+  const PLANNER_TABS = ["overview", "shipments", "completion", "landed", "products"];
+  const plannerLockedBy = useLock(PLANNER_TABS.includes(tab) && access.canManage ? "planner" : ""); // imports + products save as one dataset: one editor at a time
   const update = (fn) => {
     // products and shipments: managers and admin only
     if (!access.canManage) { if (access.known) setRoNote(true); return; }
+    if (plannerLockedBy) return; // someone else is in the imports data — the banner on screen says who
     dirty.current = true;
     setData((d) => fn(JSON.parse(JSON.stringify(d))));
   };
@@ -1660,6 +1664,11 @@ export default function ImportPlanner() {
           <CollectionsScreen openProduct={openProduct} money={access.money} crm={crm} updateCrm={updateCrm} askConfirm={setConfirmBox} selId={selCollectionId} setSelId={setSelCollectionId} openInvoice={openInvoice} me={me} goSupplier={access.canTab("suppliers") ? goSupplier : null} planner={data} newSignal={newCollectionSignal} />
         ))}
 
+      {PLANNER_TABS.includes(tab) && plannerLockedBy && (
+        <div style={{ maxWidth: 1140, margin: "0 auto", padding: "14px 22px 0" }}>
+          <LockBar name={crm ? staffName(crm, plannerLockedBy) : String(plannerLockedBy).split("@")[0]} />
+        </div>
+      )}
       {tab === "overview" && (
         <div style={{ padding: "18px 22px", maxWidth: 1760, margin: "0 auto" }}>
           <h2 style={{ fontSize: 19, fontWeight: 700, margin: "0 0 14px" }}>All shipments</h2>

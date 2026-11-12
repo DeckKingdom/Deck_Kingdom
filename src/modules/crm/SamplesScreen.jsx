@@ -2,7 +2,7 @@
 // follow-ups due) and conversion reporting; entry screen per request.
 // Conversions are credited automatically (see syncSampleConversions).
 import { useState, useMemo, useRef } from "react";
-import { InvoicePeek, CustomerPeek } from "./Peeks.jsx";
+import { InvoicePeek, CustomerPeek, LockGuard } from "./Peeks.jsx";
 import { NAVY, GOLD, RED, prettyDate, prettyDateTime, addDays, daysBetween } from "../../lib/core.js";
 import {
   blankSample, blankSampleItem, blankCustomer, nextNumber, gbp, today, invoiceTotals, isSaleInvoice,
@@ -461,6 +461,7 @@ export default function SamplesScreen({ money = true, crm, updateCrm, askConfirm
 
   return (
     <div style={{ maxWidth: 1320, margin: "0 auto", padding: "18px 22px" }}>
+    <LockGuard k={"smp:" + smp.id} crm={crm}>
       {(() => {
         // step through every sample, newest first (same order as the list)
         const order = [...samples].sort((a, b) => (b.date || "").localeCompare(a.date || "") || (Number(b.sampleNo) || 0) - (Number(a.sampleNo) || 0));
@@ -770,6 +771,7 @@ export default function SamplesScreen({ money = true, crm, updateCrm, askConfirm
           );
         })()}
       </div>
+      </LockGuard>
       {peekCust && (
         <CustomerPeek crm={crm} custId={peekCust} onClose={() => setPeekCust(null)}
           onOpenFull={(id) => { setPeekCust(null); setPeekInv(null); goCustomer(id); }}

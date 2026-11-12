@@ -623,7 +623,7 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
   const [hideDone, setHideDone] = useState(false);
   const todayRef = useRef(null);
   const [pop, setPop] = useState(null); // { id, rect }: the job whose details are open
-  const popLockedBy = useLock(pop && pop.kind !== "col" && pop.kind !== "parts" && !pop.peek ? "inv:" + pop.id : ""); // hover-peeks don't claim the lock
+  const popLockedBy = useLock(pop && !pop.peek ? (pop.kind === "col" ? "col:" : "inv:") + pop.id : ""); // hover-peeks don't claim the lock
   // reopen a stop the driver confirmed: undo it here and open it again on their phone
   const reopenDrop = async (key) => {
     const conf = drops[key];
@@ -1751,6 +1751,8 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
               onMouseDown={() => { if (pop.peek) { peekCancel(); setPop({ ...pop, peek: false }); } }}
               style={{ position: "fixed", ...(phone ? { left: 8, right: 8, top: 62, width: "auto", maxHeight: "calc(100dvh - 74px)" } : { left: pop.side === "left" ? Math.max(10, pop.rect.left - PW - 24) : Math.max(10, Math.round((window.innerWidth - PW) / 2)), top: Math.max(10, pop.side === "left" ? Math.min(pop.rect.top - 60, window.innerHeight - PH - 10) : top), width: PW, maxHeight: PH }), zIndex: 71, overflowY: "auto",
               background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, boxShadow: "0 14px 40px rgba(11,31,63,.28)", padding: "14px 18px", boxSizing: "border-box" }}>
+              {popLockedBy && <LockBar name={String(popLockedBy).split("@")[0]} />}
+              <fieldset disabled={!!popLockedBy} style={{ border: "none", padding: 0, margin: 0, minWidth: 0, display: "block" }}>
               <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 6 }}>
                 <button type="button" className="dk-title-link" onClick={goCol} title="Open the collection" style={{ fontSize: 15, fontWeight: 700, color: COLLECTION_BLUE }}>{col.supplier || "Supplier"}</button>
                 <button type="button" className="dk-title-link" onClick={goCol} title="Open the collection" style={{ fontSize: 12, fontWeight: 700, color: "#185FA5" }}>COL-{col.collectionNo || "—"}</button>
@@ -1828,6 +1830,7 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
                 <span style={{ color: col.collected ? "#28713e" : "#a05f10" }}>{col.collected ? "Collected" : "Not collected yet"}</span><span />
               </div>
               {col.notes && <div style={{ marginTop: 8, fontSize: 12.5, fontWeight: 600, color: "#6b5305", background: "#fff8e6", border: "1px solid #f4d78f", borderRadius: 8, padding: "6px 10px" }}>{collNotesText(crm, col.notes)}</div>}
+              </fieldset>
               <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10 }}>
                 <button style={goldBtn} onClick={() => { setPop(null); openCollection && openCollection(col.id); }}><Icon name="box" stroke={NAVY} />Open collection</button>
               </div>
@@ -1868,6 +1871,8 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
               onMouseDown={() => { if (pop.peek) { peekCancel(); setPop({ ...pop, peek: false }); } }}
               style={{ position: "fixed", ...(phone ? { left: 8, right: 8, top: 62, width: "auto", maxHeight: "calc(100dvh - 74px)" } : { left, ...vpos, width: PW, maxHeight: Math.min(PH, (vpos.top ? window.innerHeight - vpos.top : pop.rect.top) - 16) }), zIndex: 71, overflowY: "auto",
                 background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, boxShadow: "0 14px 40px rgba(11,31,63,.28)", padding: "14px 18px", boxSizing: "border-box" }}>
+              {popLockedBy && <LockBar name={String(popLockedBy).split("@")[0]} />}
+              <fieldset disabled={!!popLockedBy} style={{ border: "none", padding: 0, margin: 0, minWidth: 0, display: "block" }}>
               <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 4 }}>
                 <b style={{ fontSize: 15, color: NAVY }}>Parts · <button type="button" className="dk-title-link" title="Open the job" onClick={() => { setPop(null); openInvoice(i.id); }} style={{ fontSize: 15, fontWeight: 700, color: NAVY }}>{c ? c.name || "Unnamed" : "No customer"}</button></b>
                 <span style={{ fontSize: 12, fontWeight: 700, color: "#185FA5" }}>#{i.invNo || "—"}</span>
@@ -1939,6 +1944,7 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
               <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 12 }}>
                 <button style={goldBtn} onClick={() => { setPop(null); openInvoice(i.id); }}><Icon name="doc" stroke={NAVY} />Open job</button>
               </div>
+              </fieldset>
             </div>
           </>
         );
