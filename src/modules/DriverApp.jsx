@@ -1,7 +1,7 @@
 // Driver logins: a phone screen with just their own runs (today, tomorrow and the rest of the week)
 // and a fuel form. The database only hands a driver the jobs and pick-ups planned for them.
 import { useState, useEffect, useMemo } from "react";
-import { crmStorage } from "../data/crmStorage.js";
+import { crmStorage, storageMode } from "../data/crmStorage.js";
 import { getSupabase } from "../data/supabaseClient.js";
 import { signOut } from "../data/auth.js";
 import { normaliseCrm, isVoidInvoice, isCollectionJob, invoiceTotals, isPaid, gbp, partKey, collNotesText } from "../lib/crmCore.js";
@@ -57,10 +57,15 @@ export default function DriverApp({ me, warehouse, switcher }) {
     setLoads((n) => n + 1);
     loadLoading([ymd(new Date())]).then(setTodayLoad).catch(() => {});
     try {
-      const r = await crmStorage.get("dk-crm");
+      // The phone only needs the live slice — this week's runs, open jobs, tasks,
+      // collections — so take the one-round-trip quick path first. The full book
+      // (years of history, thousands of lines) is only fetched if quick isn't there.
+      let r = null;
+      if (storageMode === "supabase") r = await crmStorage.get("dk-crm-quick").catch(() => null);
+      if (!r || !r.value) r = await crmStorage.get("dk-crm");
       setCrm(normaliseCrm(r && r.value ? JSON.parse(r.value) : {}));
     } catch (e) {
-      setErr("Couldn't load your runs — check your signal and tap refresh.");
+      setErr("Couldn't load — check your signal, then tap Try again.");
     }
   };
   useEffect(() => { load(); }, []);
@@ -163,16 +168,24 @@ export default function DriverApp({ me, warehouse, switcher }) {
       ))}
     </div>
   );
+  // a failed load must never look like an endless "Loading…": say so, offer a retry
+  const errCard = err ? (
+    <div style={{ ...cardS, borderColor: RED }}>
+      <div style={{ color: RED, fontWeight: 700 }}>{err}</div>
+      <button type="button" onClick={load} style={{ marginTop: 10, width: "100%", border: "1px solid " + NAVY, background: NAVY, color: "#fff", borderRadius: 12, padding: 12, fontFamily: "inherit", fontWeight: 800, fontSize: 15, cursor: "pointer" }}>Try again</button>
+    </div>
+  ) : null;
   if (mode === "tasks") {
     return (
       <div style={page}>
         {header("My tasks")}
         {tabs}
-        <div style={{ padding: 14 }}><DriverTasks crm={crm} who={taskWho} setCrm={setCrm} full canAdd /></div>
+        <div style={{ padding: 14 }}>{err && !crm ? errCard : <DriverTasks crm={crm} who={taskWho} setCrm={setCrm} full canAdd />}</div>
       </div>
     );
   }
   if (mode === "loading") {
+    if (err && !crm) return <div style={page}>{header("Loading")}{tabs}<div style={{ padding: 14 }}>{errCard}</div></div>;
     return (
       <div style={page}>
         <LoadingMobile key={loads} crm={crm} driver={allVans ? null : driver} who={who} header={header} nav={tabs} />
@@ -198,7 +211,7 @@ export default function DriverApp({ me, warehouse, switcher }) {
       {header("Hi " + driver)}
       {tabs}
       <div style={{ padding: 14 }}>
-        {err && <div style={{ ...cardS, borderColor: RED, color: RED, fontWeight: 700 }}>{err}</div>}
+        {errCard}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
           {days.map((d, n) => {
             const k = ymd(d), count = crm ? (byDay[k] || []).filter((x) => !(x.kind === "col" ? x.obj.collected : x.obj.deliveryCompleted)).length : null;
