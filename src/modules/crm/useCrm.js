@@ -39,14 +39,51 @@ export function useCrm(enabled) {
   // the data just fetched is now what's on screen: make it the baseline for the next save
   const adopt = () => { if (commitRef.current) commitRef.current(); commitRef.current = null; };
 
+  // Background fill after a quick first paint: fetch the full book and swap it
+  // in the moment nothing here is unsaved — if the user got editing straight
+  // away, just try again shortly. Keeps retrying until the full data lands.
+  const fillT = useRef(null);
+  const scheduleFill = (ms = 200) => {
+    if (fillT.current) clearTimeout(fillT.current);
+    fillT.current = setTimeout(async () => {
+      if (pending.current || saving.current || loading.current) return scheduleFill(2_000);
+      loading.current = true;
+      const editsAtStart = lastEdit.current;
+      try {
+        const d = await fetchCrm(); // the whole book this time
+        if (d && !pending.current && !saving.current && lastEdit.current === editsAtStart) {
+          adopt();
+          setCrm(normaliseCrm(d));
+        } else {
+          scheduleFill(2_000); // they started editing mid-fetch — this copy may be stale
+        }
+      } catch (e) {
+        scheduleFill(5_000);
+      } finally {
+        loading.current = false;
+      }
+    }, ms);
+  };
+  useEffect(() => () => { if (fillT.current) clearTimeout(fillT.current); }, []);
+
   const loadCrm = async () => {
     if (loading.current) return;
     loading.current = true;
     setCrmError(false);
-    let d = null;
+    let d = null, partial = false;
     try {
       seen.current = await latestChange(getSessionEmail()).catch(() => seen.current);
-      d = await fetchCrm();
+      // quick first paint: the hot slice of the data in one round trip (supabase
+      // only; falls back to the full load if the quick path isn't available)
+      if (storageMode === "supabase") {
+        const q = await crmStorage.get("dk-crm-quick").catch(() => null);
+        if (q && q.value) {
+          d = JSON.parse(q.value);
+          commitRef.current = q.commit || null;
+          partial = !!q.partial;
+        }
+      }
+      if (!d) d = await fetchCrm();
     } catch (e) {
       const msg = String(e && e.message ? e.message : e).toLowerCase();
       const isEmpty = msg.includes("not found") || msg.includes("no such") || msg.includes("404");
@@ -60,6 +97,7 @@ export function useCrm(enabled) {
     setCrm(normaliseCrm(d || emptyCrm()));
     loaded.current = true;
     loading.current = false;
+    if (partial) scheduleFill(); // pull the rest of the history in behind the paint
   };
 
   useEffect(() => {

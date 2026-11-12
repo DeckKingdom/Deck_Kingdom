@@ -335,19 +335,29 @@ async function fetchAll(sb, table) {
 let snapshot = null;
 let settingsSnapshot = {};
 
-async function loadAll() {
+async function loadAll(quick = false) {
   const sb = await getSupabase();
+  // quick first paint: one round trip brings the hot slice of the invoice book
+  // (open, unpaid, last 90 days) with its lines and picks; stock movements and
+  // the task log wait for the background fill that follows straight after.
+  let hot = null;
+  if (quick) {
+    try {
+      const { data, error } = await sb.rpc("crm_hot_invoices", { p_days: 90 });
+      if (!error && data && Array.isArray(data.invoices)) hot = data;
+    } catch (e) { /* 061 not run yet: carry on with the full load */ }
+  }
   const [cs, ss, is_, ls, ps_, mps_, comps_, colls_, collItems_, moves_, vans_, vanChecks_, settings, quoteData, sampleData, taskData, staffRows, purchData] = await Promise.all([
     fetchAll(sb, "customers"),
     fetchAll(sb, "customer_sites"),
-    fetchAll(sb, "invoices"),
-    fetchAll(sb, "invoice_items"),
-    fetchAll(sb, "invoice_picks"),
+    hot ? Promise.resolve(hot.invoices) : fetchAll(sb, "invoices"),
+    hot ? Promise.resolve(hot.items) : fetchAll(sb, "invoice_items"),
+    hot ? Promise.resolve(hot.picks) : fetchAll(sb, "invoice_picks"),
     fetchAll(sb, "master_products"),
     fetchAll(sb, "product_components"),
     fetchAll(sb, "collections"),
     fetchAll(sb, "collection_items"),
-    fetchAll(sb, "stock_movements"),
+    hot ? Promise.resolve([]) : fetchAll(sb, "stock_movements"),
     fetchAll(sb, "vans"),
     fetchAll(sb, "van_checks"),
     (async () => {
@@ -379,6 +389,7 @@ async function loadAll() {
         const [tk, lg] = await Promise.all([
           fetchAll(sb, "tasks"),
           (async () => {
+            if (hot) return []; // quick pass: the fill brings the log
             const out = [];
             for (let from = 0; ; from += 1000) {
               const { data, error } = await sb.from("task_log").select("*").gte("period", since).order("id").range(from, from + 999);
@@ -632,7 +643,7 @@ async function loadAll() {
   const sset = { numbering: JSON.stringify(numbering), reminders: JSON.stringify(reminders), skuLists: skuListsRow ? JSON.stringify(skuListsRow.value) : undefined, sampleEmails: sampleEmailsRow ? JSON.stringify(sampleEmailsRow.value) : undefined, dsNotify: dsNotifyRow ? JSON.stringify(dsNotifyRow.value) : undefined, dsRunOrder: dsRunOrderRow ? JSON.stringify(dsRunOrderRow.value) : undefined, driverPhones: driverPhonesRow ? JSON.stringify(driverPhonesRow.value) : undefined, fleetCosts: fleetCostsRow ? JSON.stringify(fleetCostsRow.value) : undefined, reviewSettings: reviewSettingsRow ? JSON.stringify(reviewSettingsRow.value) : undefined };
 
   if (!customers.length && !sites.length && !invoices.length && !masterProducts.length && !collections.length && !vans.length && !quotes.length && !samples.length && !tasks.length && !suppliers.length && !purchases.length && !settings.length) return null;
-  return { data, commit: () => { snapshot = snap; settingsSnapshot = sset; } };
+  return { data, commit: () => { snapshot = snap; settingsSnapshot = sset; }, partial: !!hot };
 }
 
 function diff(oldMap, newMap) {
@@ -867,6 +878,10 @@ export async function fetchAuditLog(limit = 200, beforeId = null) {
 
 export const crmSupabaseStorage = {
   async get(key) {
+    if (key === "dk-crm-quick") {
+      const d = await loadAll(true);
+      return d === null ? null : { key, value: JSON.stringify(d.data), commit: d.commit, partial: d.partial };
+    }
     if (key !== "dk-crm") return null;
     const d = await loadAll();
     // commit(): call it when this data is put on screen - it becomes the baseline the next save compares against
