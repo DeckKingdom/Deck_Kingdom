@@ -167,7 +167,10 @@ export function useCrm(enabled) {
     pending.current = true;
     lastEdit.current = Date.now();
     setCrm((d) => {
-      const next = fn(JSON.parse(JSON.stringify(d)));
+      // structuredClone is several times faster than a JSON round-trip, and this
+      // clone runs on every single edit — with years of records it's the
+      // difference between typing feeling instant and typing feeling sticky
+      const next = fn(typeof structuredClone === "function" ? structuredClone(d) : JSON.parse(JSON.stringify(d)));
       carryRidingCollections(d, next); // collection notes follow their job round the schedule
       return next;
     });

@@ -313,13 +313,21 @@ function rowsFromData(d) {
 }
 
 async function fetchAll(sb, table) {
-  const out = [];
+  // first page tells us the total, the rest come down in parallel — a big
+  // table used to mean a chain of round trips, one after the other
   const page = 1000;
-  for (let from = 0; ; from += page) {
-    const { data, error } = await sb.from(table).select("*").order("position").order("id").range(from, from + page - 1);
-    if (error) throw new Error(error.message);
-    out.push(...data);
-    if (data.length < page) break;
+  const first = await sb.from(table).select("*", { count: "exact" }).order("position").order("id").range(0, page - 1);
+  if (first.error) throw new Error(first.error.message);
+  const out = first.data || [];
+  const total = first.count == null ? out.length : first.count;
+  if (total > page) {
+    const jobs = [];
+    for (let from = page; from < total; from += page) jobs.push(sb.from(table).select("*").order("position").order("id").range(from, from + page - 1));
+    const rest = await Promise.all(jobs);
+    for (const r of rest) {
+      if (r.error) throw new Error(r.error.message);
+      out.push(...r.data);
+    }
   }
   return out;
 }
@@ -705,6 +713,37 @@ async function saveAll(d) {
       else if (back) back[1]([r], d1);
     }
   };
+  // Two people often have the same record open (one books the delivery date while
+  // another takes a payment). Saves are whole rows, so the later save used to wipe
+  // the earlier one's columns. Before writing, read what the database holds NOW and
+  // merge column by column: a column someone else changed — and we didn't — keeps
+  // their value. Only a column BOTH changed takes ours.
+  const eqCol = (a, b) => a === b || JSON.stringify(a === undefined ? null : a) === JSON.stringify(b === undefined ? null : b);
+  const merge3 = async (table, prevMap, rows) => {
+    if (!rows.length || !prevMap) return;
+    const skip = new Set(["id", "position", "created_at", "created_by", "updated_at", "updated_by"]);
+    try {
+      const { data } = await sb.from(table).select("*").in("id", rows.map((r) => r.id));
+      const dbBy = new Map((data || []).map((r) => [r.id, r]));
+      rows.forEach((r) => {
+        const db = dbBy.get(r.id), base = prevMap.get(r.id);
+        if (!db || !base) return; // brand new row, or nothing to compare against
+        Object.keys(r).forEach((k) => {
+          if (skip.has(k) || !(k in db)) return;
+          if (!eqCol(db[k], base[k]) && eqCol(r[k], base[k])) r[k] = db[k]; // they changed it, we didn't — theirs stands
+        });
+      });
+    } catch (e) { /* merge is best-effort — the save itself still goes ahead */ }
+  };
+
+  // A save should never be able to wipe swathes of records: if a client's copy has
+  // somehow lost a chunk of a parent table, refuse the mass delete and say so.
+  const guardDeletes = (key, ids, label) => {
+    if (ids.length <= 30) return ids;
+    failed.push({ key, id: "", op: "delete", msg: "refused: one save tried to delete " + ids.length + " " + label + " — reload the page and try again", label: ids.length + " " + label });
+    return [];
+  };
+
   const del_ = async (table, key, ids) => {
     if (!ids.length) return;
     const { error } = await sb.from(table).delete().in("id", ids);
@@ -718,11 +757,15 @@ async function saveAll(d) {
   // children first on delete, parents first on upsert
   await del_("invoice_items", "items", dl.deletes);
   await del_("invoice_picks", "picks", dp.deletes);
-  await del_("invoices", "invoices", di.deletes);
+  await del_("invoices", "invoices", guardDeletes("invoices", di.deletes, "jobs"));
   await del_("customer_sites", "sites", ds.deletes);
-  await del_("customers", "customers", dc.deletes);
+  await del_("customers", "customers", guardDeletes("customers", dc.deletes, "accounts"));
   await del_("product_components", "comps", dk.deletes);
   await del_("master_products", "mps", dm.deletes);
+  await merge3("customers", prev.customers, dc.upserts);
+  await merge3("customer_sites", prev.sites, ds.upserts);
+  await merge3("invoices", prev.invoices, di.upserts);
+  await merge3("invoice_items", prev.items, dl.upserts);
   await up_("customers", "customers", dc.upserts);
   await up_("customer_sites", "sites", ds.upserts);
   await up_("invoices", "invoices", di.upserts);
