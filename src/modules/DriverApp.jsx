@@ -41,7 +41,11 @@ export default function DriverApp({ me, warehouse, switcher }) {
   const taskWho = (() => {
     if (!switcher) return me.email || "";
     const lc = (x) => String(x || "").trim().toLowerCase();
-    const s = ((crm && crm.staff) || []).find((x) => lc(x.driverName) === lc(driver)) || ((crm && crm.staff) || []).find((x) => lc(String(x.name || "").split(" ")[0]) === lc(driver));
+    const list = (crm && crm.staff) || [];
+    const s =
+      list.find((x) => lc(x.driverName) === lc(driver)) ||
+      list.find((x) => lc(String(x.name || "").split(" ")[0]) === lc(driver)) ||
+      list.find((x) => lc(String(x.email || "").split("@")[0]) === lc(driver)); // last resort: email prefix
     return s ? s.email : "";
   })();
   const [err, setErr] = useState("");

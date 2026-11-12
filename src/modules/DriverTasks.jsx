@@ -10,7 +10,7 @@ import { tickTask, addTask, setProjectStatus } from "../data/taskTicks.js";
 export const tasksOutstanding = (crm, who) => {
   if (!crm || !who) return 0;
   const d = today();
-  return dueScheduledFor(crm, who, d).length + dailyTasksFor(crm, who, d).filter((t) => !isDailyDone(crm, t, d, who)).length;
+  return dueScheduledFor(crm, who, d).length + dailyTasksFor(crm, who, d).filter((t) => !isDailyDone(crm, t, d, who)).length + projectsFor(crm, who).length;
 };
 
 export default function DriverTasks({ crm, who, setCrm, full, canAdd }) {
@@ -21,12 +21,12 @@ export default function DriverTasks({ crm, who, setCrm, full, canAdd }) {
     <button type="button" onClick={() => setAdding(true)} style={{ width: "100%", marginBottom: 12, border: "1.5px dashed " + GOLD, background: "#fff8e6", color: NAVY, borderRadius: 14, padding: 13, fontFamily: "inherit", fontWeight: 800, fontSize: 15, cursor: "pointer" }}>+ New task</button>
   ) : null;
   const sheet = adding ? <NewTask crm={crm} who={who} onClose={() => setAdding(false)} onSaved={(t) => { setCrm((c) => ({ ...c, tasks: [...(c.tasks || []), t] })); setAdding(false); }} /> : null;
-  if (!crm) return null;
-  if (!who) return full ? <div style={{ background: "#fff", border: "1px solid #e6e9ef", borderRadius: 16, padding: 16, color: "#5a6a85", fontWeight: 600 }}>This login isn't linked to anyone's tasks.</div> : null;
+  if (!crm) return full ? <div style={{ background: "#fff", border: "1px solid #e6e9ef", borderRadius: 16, padding: "22px 16px", textAlign: "center", color: "#5a6a85", fontWeight: 700 }}>Loading your tasks…</div> : null;
+  if (!who) return full ? <div style={{ background: "#fff", border: "1px solid #e6e9ef", borderRadius: 16, padding: 16, color: "#5a6a85", fontWeight: 600 }}>This device isn't linked to anyone's tasks — in ops, open Users &amp; access and set the <b>Driver name</b> on your login so it matches the name this phone uses.</div> : null;
   const d = today();
   const daily = dailyTasksFor(crm, who, d);
   const due = dueScheduledFor(crm, who, d);
-  const projects = projectsFor(crm, who).slice(0, 6);
+  const projects = projectsFor(crm, who);
   if (!daily.length && !due.length && !projects.length) return full ? <>{addBtn}{sheet}<div style={{ background: "#fff", border: "1px solid #e6e9ef", borderRadius: 16, padding: "22px 16px", textAlign: "center", color: "#5a6a85", fontWeight: 700 }}>✓ Nothing on your list today</div></> : null;
   const doneDaily = daily.filter((t) => isDailyDone(crm, t, d, who)).length;
 
