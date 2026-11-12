@@ -565,3 +565,12 @@ export function PrintButton({ options, dark = true, allLabel = "Print all", onAl
 
 // a button on a record's navy header band (print, duplicate, follow-up…) — gold for the main action
 export const bandBtn = { ...btn, background: "transparent", border: "1px solid #3a4f78", color: "#fff", whiteSpace: "nowrap" };
+
+// "Being edited by …" banner: shown when someone else holds a record's lock
+export const LockBar = ({ name, children }) => (
+  <div style={{ display: "flex", gap: 10, alignItems: "center", background: "#fde8ea", border: "1px solid #f2b9c1", color: "#9b1c2e", borderRadius: 10, padding: "9px 13px", marginBottom: 12, fontSize: 13.5, fontWeight: 700 }}>
+    <Icon name="lock" stroke="#9b1c2e" size={16} />
+    <span style={{ flex: 1 }}>Being edited by <b>{name || "someone"}</b> — view only for now. It frees up the moment they leave.</span>
+    {children}
+  </div>
+);

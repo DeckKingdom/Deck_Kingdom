@@ -69,17 +69,15 @@ export function useCrm(enabled) {
   useEffect(() => {
     if (!enabled) return;
     let stop = false;
-    const busyTyping = () => {
-      const el = document.activeElement;
-      return !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable);
-    };
     const check = async () => {
       if (stop || !loaded.current || loading.current || document.hidden) return;
       let id = 0;
       try { id = await latestChange(getSessionEmail()); } catch (e) { return; }
       if (!id || id <= seen.current) return;
-      // something changed elsewhere: reload once nothing here is unsaved or being typed
-      if (pending.current || saving.current || Date.now() - lastEdit.current < QUIET_MS || busyTyping()) return;
+      // Something changed elsewhere: reload once nothing here is unsaved or mid-edit.
+      // (A cursor merely parked in a field must NOT block this — it used to, which is
+      // why other people's new jobs and run changes took ages to appear, or never did.)
+      if (pending.current || saving.current || Date.now() - lastEdit.current < QUIET_MS) return;
       loading.current = true;
       try {
         const d = await fetchCrm();

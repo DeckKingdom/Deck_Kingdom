@@ -2,13 +2,14 @@
 // mockup. Prices are entered inc VAT; VAT is backed out of the total.
 import { useState, useMemo } from "react";
 import { CustomerPeek } from "./Peeks.jsx";
+import { useLock } from "./useLock.js";
 import { NAVY, GOLD, RED, uid, prettyDate, prettyDateTime, addMonths, addDays, daysBetween } from "../../lib/core.js";
 import {
   recordOrigin, blankInvoice, blankLine, nextNumber, blankSite, DRIVERS, invoiceTotals, gbp, isPaid,
   JOB_TYPES, PAYMENT_TYPES, PREP_FLAGS, FOLLOWUP_FLAGS, today, TIME_SLOTS, vanOptions,
   skuIndex, invoiceCost, buildPicks, pickLandedCost, jobCost, blankPick, invoiceLoadKg, applyInvoiceStockDeduction, releaseInvoiceLinks,
   TRADE_COUNTER, isCollectionJob, TRADE_COUNTER_LABEL, quoteRef, sampleRef, isSaleInvoice, riskOf, staffName, isVoidInvoice, onSchedule, userInitials, isHistoric, SERVED_BY, sourceOptions } from "../../lib/crmCore.js";
-import { ListHero, HeroStat, HeroAdd, SearchBox, RiskChip, WebStatusChip, Soon, DateInput, CalendarPop, usePhone, PrintButton, bandBtn, BandDelete } from "./ui.jsx";
+import { ListHero, HeroStat, HeroAdd, SearchBox, RiskChip, WebStatusChip, Soon, DateInput, CalendarPop, usePhone, PrintButton, bandBtn, BandDelete, LockBar } from "./ui.jsx";
 import { invoiceEmailLink, invoiceEmailTo } from "../../lib/invoiceEmail.js";
 import { Icon, Chip, Tg, Modal, selectAllProps, SuggestInput, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
 import { printInvoice, printJobSheet, printLoadingBill, printJobDocs } from "./printDocs.js";
@@ -74,6 +75,7 @@ export default function InvoicesScreen({ headerH = 0, openProduct, money = true,
   }, [crm.sites]);
 
   const inv = crm.invoices.find((i) => i.id === selId) || null;
+  const lockedBy = useLock(inv ? "inv:" + inv.id : ""); // someone else editing this job right now
   const bySkuAll = useMemo(() => skuIndex(crm), [crm.masterProducts]);
 
   const [stampOpen, setStampOpen] = useState(false);
@@ -358,6 +360,12 @@ export default function InvoicesScreen({ headerH = 0, openProduct, money = true,
   return (
     <div style={{ maxWidth: 1320, margin: "0 auto", padding: "18px 22px" }}>
       <datalist id="dk-paytypes">{PAYMENT_TYPES.map((s) => <option key={s} value={s} />)}</datalist>
+      {lockedBy && (
+        <LockBar name={staffName(crm, lockedBy)}>
+          <button style={btn} onClick={() => setSelId("")}>Back to invoices</button>
+        </LockBar>
+      )}
+      <fieldset disabled={!!lockedBy} style={{ border: "none", padding: 0, margin: 0, minWidth: 0, display: "block" }}>
 
       {(() => {
         // step through the list in its order (newest first; the current search / filter applied)
@@ -863,6 +871,7 @@ export default function InvoicesScreen({ headerH = 0, openProduct, money = true,
           onRaised={(names) => setNotice((names.length > 1 ? "Collection notes raised with " : "Collection note raised with ") + names.join(" and ") + " — linked to this job and added to its pick list." + (inv.deliveryDate ? " It's on the delivery schedule as the stop before this job." : " This job has no delivery date yet, so give the note a date on the Collections screen."))} />
       </div>
       {money && <JobTotals inv={inv} crm={crm} planner={planner} />}
+      </fieldset>
       {peekCust && (
         <CustomerPeek crm={crm} custId={peekCust} onClose={() => setPeekCust(null)}
           onOpenFull={(id) => { setPeekCust(null); goCustomer(id); }}

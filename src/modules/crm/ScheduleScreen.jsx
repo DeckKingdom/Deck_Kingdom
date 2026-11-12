@@ -9,6 +9,7 @@ import {
   isVoidInvoice, onSchedule, applyInvoiceStockDeduction, buildPicks, batchBreakdown, batchKeyForPick,
 } from "../../lib/crmCore.js";
 import { printJobDocs, runDocsHtml, DOC_KINDS, printPendingList } from "./printDocs.js";
+import { useLock } from "./useLock.js";
 import { htmlToPdfFile, shareToWhatsApp } from "./pdfShare.js";
 import LinesEditor, { SizeRow, applySize, skuOption, SKU_COLS, SKU_LIST_W } from "./LinesEditor.jsx";
 import { JOB_TYPES, isBackOrder, skuIndex, PAYMENT_TYPES, stockCheck, partKey, isColPick, blankPick, blankCollectionItem, itemPending, collectionLineOpen, editCollectionLine, removeCollectionLine, isGrassRoll, sizeLabel, purchaseCost, outwardOf, collNotesText, mergeablePickups, mergePickups, collectionDropGroups, releaseInvoiceLinks, releaseCollectionPicks } from "../../lib/crmCore.js";
@@ -17,7 +18,7 @@ import { loadDrops, dropPhotoUrl } from "../../data/drops.js";
 import { Modal } from "./ui.jsx";
 import { reopenConfirmations } from "./DropSync.jsx";
 import DropPhotos from "./DropPhotos.jsx";
-import { Icon, Chip, Tg, sect, lbl, card, abtn, inp, btn, goldBtn, RiskChip, WebStatusChip, Soon, usePhone, DateInput, CalendarPop, SuggestInput, selectAllProps, PrintButton } from "./ui.jsx";
+import { Icon, Chip, Tg, sect, lbl, card, abtn, inp, btn, goldBtn, RiskChip, WebStatusChip, Soon, usePhone, DateInput, CalendarPop, SuggestInput, selectAllProps, PrintButton, LockBar } from "./ui.jsx";
 
 const RANGE_OPTS = [
   ["upcoming", "Upcoming + last 7 days"],
@@ -622,6 +623,7 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
   const [hideDone, setHideDone] = useState(false);
   const todayRef = useRef(null);
   const [pop, setPop] = useState(null); // { id, rect }: the job whose details are open
+  const popLockedBy = useLock(pop && pop.kind !== "col" && pop.kind !== "parts" && !pop.peek ? "inv:" + pop.id : ""); // hover-peeks don't claim the lock
   // reopen a stop the driver confirmed: undo it here and open it again on their phone
   const reopenDrop = async (key) => {
     const conf = drops[key];
@@ -1960,6 +1962,8 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
               onMouseDown={() => { if (pop.peek) { peekCancel(); setPop({ ...pop, peek: false }); } }}
               style={{ position: "fixed", ...(phone ? { left: 8, right: 8, top: 62, width: "auto", maxHeight: "calc(100dvh - 74px)" } : { left: pop.side === "left" ? Math.max(10, pop.rect.left - PW - 24) : Math.max(10, Math.round((window.innerWidth - PW) / 2)), top: Math.max(10, pop.side === "left" ? Math.min(pop.rect.top - 60, window.innerHeight - PH - 10) : top), width: PW, maxHeight: PH }), zIndex: 71, overflowY: "auto",
               background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, boxShadow: "0 14px 40px rgba(11,31,63,.28)", padding: "14px 18px", boxSizing: "border-box" }}>
+              {popLockedBy && <LockBar name={String(popLockedBy).split("@")[0]} />}
+              <fieldset disabled={!!popLockedBy} style={{ border: "none", padding: 0, margin: 0, minWidth: 0, display: "block" }}>
               {(() => {
                 const stamp = [
                   i.created || i.date ? "Raised " + prettyDate(i.created || i.date) + (i.raisedBy ? " by " + i.raisedBy.split("@")[0] : "") : "",
@@ -2010,6 +2014,7 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
                 <span style={{ color: isPaid(i) ? "#28713e" : "#a05f10" }}>{isPaid(i) ? "Paid" + (i.paymentType ? " · " + i.paymentType : "") : i.paymentType === "COD" ? "Cash on delivery" : "Awaiting payment"}</span><span />
               </div>
               {i.jobNotes && <div style={{ marginTop: 8, fontSize: 12.5, fontWeight: 600, color: "#6b5305", background: "#fff8e6", border: "1px solid #f4d78f", borderRadius: 8, padding: "6px 10px" }}>{i.jobNotes}</div>}
+              </fieldset>
               <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10 }}>
                 {c && goCustomer && <button style={{ ...btn, marginRight: 8 }} onClick={() => { setPop(null); goCustomer(c.id); }}><Icon name="user" stroke={NAVY} />Open account</button>}
                 <button style={goldBtn} onClick={() => { setPop(null); openInvoice(i.id); }}><Icon name="doc" stroke={NAVY} />Open job</button>
