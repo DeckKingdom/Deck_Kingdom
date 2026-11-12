@@ -316,19 +316,22 @@ async function fetchAll(sb, table) {
   // first page tells us the total, the rest come down in parallel — a big
   // table used to mean a chain of round trips, one after the other
   const page = 1000;
-  const first = await sb.from(table).select("*", { count: "exact" }).order("position").order("id").range(0, page - 1);
+  // paginate on the primary key (indexed, cheap) — sorting by position on big
+  // tables was timing out on busy nights; the order screens expect is applied here instead
+  const first = await sb.from(table).select("*", { count: "exact" }).order("id").range(0, page - 1);
   if (first.error) throw new Error(first.error.message);
   const out = first.data || [];
   const total = first.count == null ? out.length : first.count;
   if (total > page) {
     const jobs = [];
-    for (let from = page; from < total; from += page) jobs.push(sb.from(table).select("*").order("position").order("id").range(from, from + page - 1));
+    for (let from = page; from < total; from += page) jobs.push(sb.from(table).select("*").order("id").range(from, from + page - 1));
     const rest = await Promise.all(jobs);
     for (const r of rest) {
       if (r.error) throw new Error(r.error.message);
       out.push(...r.data);
     }
   }
+  out.sort((a, b) => ((Number(a.position) || 0) - (Number(b.position) || 0)) || (String(a.id) < String(b.id) ? -1 : String(a.id) > String(b.id) ? 1 : 0));
   return out;
 }
 
@@ -351,24 +354,23 @@ async function loadAll(quick = false) {
   // (open, unpaid, last 90 days) with its lines and picks; stock movements and
   // the task log wait for the background fill that follows straight after.
   let hot = null;
-  if (quick) {
-    try {
-      const { data, error } = await T("hot slice (rpc)", sb.rpc("crm_hot_invoices", { p_days: 90 }).then((r) => r));
-      if (!error && data && Array.isArray(data.invoices)) hot = data;
-      else timings.push({ what: "QUICK PATH OFF — run 061", ms: 0, rows: String((error && error.message) || "") });
-    } catch (e) { timings.push({ what: "QUICK PATH OFF — run 061", ms: 0, rows: String(e && e.message) }); }
-  }
+  const hotP = !quick ? Promise.resolve(null) : T("hot slice (rpc)", sb.rpc("crm_hot_invoices", { p_days: 90 }).then((r) => {
+    if (!r.error && r.data && Array.isArray(r.data.invoices)) return r.data;
+    timings.push({ what: "QUICK PATH OFF — run 061", ms: 0, rows: String((r.error && r.error.message) || "") });
+    return null;
+  }).catch((e) => { timings.push({ what: "QUICK PATH OFF — run 061", ms: 0, rows: String(e && e.message) }); return null; }));
+  hotP.then((h) => { hot = h; });
   const [cs, ss, is_, ls, ps_, mps_, comps_, colls_, collItems_, moves_, vans_, vanChecks_, settings, quoteData, sampleData, taskData, staffRows, purchData] = await Promise.all([
     T("customers", fetchAll(sb, "customers")),
     T("sites", fetchAll(sb, "customer_sites")),
-    hot ? Promise.resolve(hot.invoices) : T("invoices (full)", fetchAll(sb, "invoices")),
-    hot ? Promise.resolve(hot.items) : T("invoice lines (full)", fetchAll(sb, "invoice_items")),
-    hot ? Promise.resolve(hot.picks) : T("picks (full)", fetchAll(sb, "invoice_picks")),
+    hotP.then((h) => (h ? h.invoices : T("invoices (full)", fetchAll(sb, "invoices")))),
+    hotP.then((h) => (h ? h.items : T("invoice lines (full)", fetchAll(sb, "invoice_items")))),
+    hotP.then((h) => (h ? h.picks : T("picks (full)", fetchAll(sb, "invoice_picks")))),
     T("products", fetchAll(sb, "master_products")),
     T("components", fetchAll(sb, "product_components")),
     T("collections", fetchAll(sb, "collections")),
     T("collection items", fetchAll(sb, "collection_items")),
-    hot ? Promise.resolve([]) : T("stock movements", fetchAll(sb, "stock_movements")),
+    hotP.then((h) => (h ? [] : T("stock movements", fetchAll(sb, "stock_movements")))),
     T("vans", fetchAll(sb, "vans")),
     T("van checks", fetchAll(sb, "van_checks")),
     (async () => {
@@ -400,7 +402,7 @@ async function loadAll(quick = false) {
         const [tk, lg] = await Promise.all([
           fetchAll(sb, "tasks"),
           (async () => {
-            if (hot) return []; // quick pass: the fill brings the log
+            if (await hotP) return []; // quick pass: the fill brings the log
             const out = [];
             for (let from = 0; ; from += 1000) {
               const { data, error } = await sb.from("task_log").select("*").gte("period", since).order("id").range(from, from + 999);
