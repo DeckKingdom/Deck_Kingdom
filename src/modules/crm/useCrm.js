@@ -4,7 +4,8 @@
 // another member of staff) has changed something; if so, and nobody here is mid-edit, the data
 // is quietly reloaded so the screens show it without a page refresh.
 import { useState, useEffect, useRef } from "react";
-import { crmStorage, latestChange } from "../../data/crmStorage.js";
+import { crmStorage, latestChange, storageMode } from "../../data/crmStorage.js";
+import { getSupabase } from "../../data/supabaseClient.js";
 import { getSessionEmail } from "../../data/auth.js";
 import { emptyCrm, normaliseCrm, carryRidingCollections } from "../../lib/crmCore.js";
 
@@ -93,11 +94,38 @@ export function useCrm(enabled) {
         loading.current = false;
       }
     };
-    const t = setInterval(check, CHECK_MS);
+    const t = setInterval(check, CHECK_MS); // fallback poll, in case the push channel drops
     const vis = () => { if (!document.hidden) check(); };
     document.addEventListener("visibilitychange", vis);
     window.addEventListener("focus", vis);
-    return () => { stop = true; clearInterval(t); document.removeEventListener("visibilitychange", vis); window.removeEventListener("focus", vis); };
+
+    // PUSH: the database tells every open screen the instant anyone commits a
+    // change (every change writes an audit row, and that table is published
+    // over Realtime by migration 060). A save writes several rows at once, so
+    // the reload is debounced a touch to run once per burst.
+    let ch = null, burst = null;
+    if (storageMode === "supabase") {
+      (async () => {
+        try {
+          const sb = await getSupabase();
+          ch = sb
+            .channel("dk-live-changes")
+            .on("postgres_changes", { event: "INSERT", schema: "public", table: "audit_log" }, (payload) => {
+              const r = (payload && payload.new) || {};
+              if (r.actor && r.actor === (getSessionEmail() || "")) return; // our own save echoing back
+              if (r.record_id === "fmBridgeLast" || r.record_id === "wooBridgeLast") return; // bridge heartbeats
+              if (burst) clearTimeout(burst);
+              burst = setTimeout(check, 250);
+            })
+            .subscribe();
+        } catch (e) { /* no realtime (060 not run, or offline): the poll still covers it */ }
+      })();
+    }
+    return () => {
+      stop = true; clearInterval(t); if (burst) clearTimeout(burst);
+      document.removeEventListener("visibilitychange", vis); window.removeEventListener("focus", vis);
+      try { if (ch) ch.unsubscribe(); } catch (e) { /* already gone */ }
+    };
   }, [enabled]);
 
   // someone else got that job number first: the database gave this job the next free one - show it here
