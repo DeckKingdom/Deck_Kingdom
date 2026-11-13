@@ -1,7 +1,7 @@
 // Invoices tab: searchable list -> invoice entry screen per the approved
 // mockup. Prices are entered inc VAT; VAT is backed out of the total.
 import { useState, useMemo } from "react";
-import { CustomerPeek } from "./Peeks.jsx";
+import { CustomerPeek, NewCustomerPeek } from "./Peeks.jsx";
 import { useLock } from "./useLock.js";
 import { NAVY, GOLD, RED, uid, prettyDate, prettyDateTime, addMonths, addDays, daysBetween } from "../../lib/core.js";
 import {
@@ -67,6 +67,7 @@ export default function InvoicesScreen({ headerH = 0, openProduct, money = true,
   const [stNote, setStNote] = useState(""); // statement-of-account progress / hints
   const phone = usePhone();
   const [peekCust, setPeekCust] = useState(null); // account peeked from the invoice editor
+  const [newCust, setNewCust] = useState(false); // create-an-account window over the editor
   const [range, setRangeState] = useState(loadRange); // the sales summary's period (remembered on this computer)
   const setRange = (r) => { setRangeState(r); try { localStorage.setItem("dk-sales-range", JSON.stringify(r)); } catch (e) { /* not kept */ } };
   const stick = (top, z) => (phone ? {} : { position: "sticky", top: headerH + top, zIndex: z });
@@ -695,7 +696,10 @@ export default function InvoicesScreen({ headerH = 0, openProduct, money = true,
                 </div>
               )}
               {custQuery.trim() && custMatches.length === 0 && (
-                <div style={{ fontSize: 12.5, color: "#8593a8", fontWeight: 600, marginTop: 8 }}>No match — add them on the Customers tab first.</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 8 }}>
+                  <span style={{ fontSize: 12.5, color: "#8593a8", fontWeight: 600 }}>No match.</span>
+                  <button style={{ ...goldBtn, padding: "6px 12px", fontSize: 12.5 }} onClick={() => setNewCust(true)}>+ New account “{custQuery.trim()}”</button>
+                </div>
               )}
             </div>
           )}
@@ -1020,6 +1024,21 @@ export default function InvoicesScreen({ headerH = 0, openProduct, money = true,
         <CustomerPeek crm={crm} custId={peekCust} onClose={() => setPeekCust(null)}
           onOpenFull={(id) => { setPeekCust(null); goCustomer(id); }}
           onInvoice={(id) => { setPeekCust(null); setSelId(id); }} />
+      )}
+      {newCust && (
+        <NewCustomerPeek crm={crm} updateCrm={updateCrm} me={me} startName={custQuery.trim()}
+          onClose={() => setNewCust(false)}
+          onDone={(id) => {
+            setInv((x) => {
+              x.customerId = id;
+              const fs = crm.sites.find((st) => st.customerId === id);
+              x.siteId = fs ? fs.id : "";
+              const c2 = crm.customers.find((cc) => cc.id === id);
+              if ((x.discountPct === "" || x.discountPct === null) && c2 && c2.discountPct) x.discountPct = c2.discountPct;
+            });
+            setCustQuery("");
+            setNewCust(false);
+          }} />
       )}
     </div>
   );

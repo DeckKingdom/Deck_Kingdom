@@ -3,7 +3,7 @@
 // open the next pop-over. Each has an "Open …" button for the full screen.
 import { useState, useRef, useEffect } from "react";
 import { NAVY, prettyDate } from "../../lib/core.js";
-import { gbp, invoiceTotals, isPaid, isSaleInvoice, mobileOf, DRIVERS, vanOptions, itemPending, sizeLabel, isGrassRoll, staffName } from "../../lib/crmCore.js";
+import { gbp, invoiceTotals, isPaid, isSaleInvoice, mobileOf, DRIVERS, vanOptions, itemPending, sizeLabel, isGrassRoll, staffName, blankCustomer, nextNumber } from "../../lib/crmCore.js";
 import { Icon, btn, goldBtn, lbl, inp, Chip, LockBar } from "./ui.jsx";
 import { useLock } from "./useLock.js";
 import LinesEditor from "./LinesEditor.jsx";
@@ -274,5 +274,65 @@ export function LockGuard({ k, crm, extra, children }) {
         {children}
       </fieldset>
     </>
+  );
+}
+
+
+// ===== new customer, without leaving the job =====
+// Typed a name on an invoice or quote and nobody matched? This window makes the
+// account on the spot — and catches a likely duplicate before it gets made.
+export function NewCustomerPeek({ crm, updateCrm, me, startName = "", onDone, onClose }) {
+  const [d, setD] = useState({ name: startName, contact: "", mobile: "", landline: "", email: "", address: "", town: "", postcode: "" });
+  const set = (k) => (e) => setD((x) => ({ ...x, [k]: e.target.value }));
+  const digits = (s) => String(s || "").replace(/\D/g, "");
+  const nm = d.name.trim().toLowerCase(), mo = digits(d.mobile), em = d.email.trim().toLowerCase();
+  const dupes = crm.customers.filter((c) =>
+    (nm && String(c.name || "").trim().toLowerCase() === nm) ||
+    (mo.length >= 10 && (digits(c.mobile) === mo || digits(c.landline) === mo)) ||
+    (em && String(c.email || "").trim().toLowerCase() === em)).slice(0, 3);
+  const save = () => {
+    if (!d.name.trim()) return;
+    const fresh = blankCustomer();
+    updateCrm((x) => {
+      const c = { ...fresh, ...d, id: fresh.id, name: d.name.trim(), source: "Manual entry",
+        accountNo: nextNumber(x.customers, "accountNo", x.numbering.account), createdBy: me || "", modifiedBy: me || "" };
+      x.customers.push(c);
+      x.numbering = { ...x.numbering, account: (Number(c.accountNo) || 0) + 1 };
+    });
+    onDone(fresh.id);
+  };
+  const field = (label, k, span) => (
+    <div style={span ? { gridColumn: "1 / -1" } : undefined}>
+      <div style={lbl}>{label}</div>
+      <input style={{ ...inp, width: "100%", boxSizing: "border-box" }} value={d[k]} onChange={set(k)} autoFocus={k === "name"} />
+    </div>
+  );
+  return (
+    <PeekShell title="New customer" width={470} onClose={onClose}>
+      <div style={{ padding: 14, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        {field("Name *", "name", true)}
+        {field("Contact person", "contact")}
+        {field("Mobile", "mobile")}
+        {field("Landline", "landline")}
+        {field("Email", "email")}
+        {field("Address", "address", true)}
+        {field("Town", "town")}
+        {field("Postcode", "postcode")}
+        {dupes.length > 0 && (
+          <div style={{ gridColumn: "1 / -1", background: "#FDF6E3", border: "1px solid #e9d396", borderRadius: 10, padding: "8px 10px", fontSize: 12.5, fontWeight: 600, color: "#7a5a10" }}>
+            Might already exist — click to use them instead:{" "}
+            {dupes.map((c) => (
+              <button key={c.id} style={{ ...linkBtn, color: NAVY, fontWeight: 800, textDecoration: "underline", marginRight: 10, fontSize: 12.5 }} onClick={() => onDone(c.id)}>
+                {c.name || "Unnamed"} #{c.accountNo || "—"}{c.postcode ? " · " + c.postcode : ""}
+              </button>
+            ))}
+          </div>
+        )}
+        <div style={{ gridColumn: "1 / -1", display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 2 }}>
+          <button style={btn} onClick={onClose}>Cancel</button>
+          <button style={{ ...goldBtn, opacity: d.name.trim() ? 1 : 0.5, cursor: d.name.trim() ? "pointer" : "default" }} disabled={!d.name.trim()} onClick={save}>Create &amp; use</button>
+        </div>
+      </div>
+    </PeekShell>
   );
 }
