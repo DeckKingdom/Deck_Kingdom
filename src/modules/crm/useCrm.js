@@ -10,6 +10,11 @@ import { getSessionEmail } from "../../data/auth.js";
 import { readCrmCache, writeCrmCache } from "../../data/crmCache.js";
 import { emptyCrm, normaliseCrm, carryRidingCollections } from "../../lib/crmCore.js";
 
+// Instant open (paint the device's cached copy while the live load runs) is
+// built and tested but OFF for now — Jon wants to see raw server speed first.
+// Flip to true to turn it back on everywhere.
+export const INSTANT_OPEN = false;
+
 const CHECK_MS = 4_000; // how often to look for changes made elsewhere
 const QUIET_MS = 5_000; // wait this long after the last edit here before reloading
 
@@ -61,7 +66,7 @@ export function useCrm(enabled) {
         if (d && !pending.current && !saving.current && lastEdit.current === editsAtStart) {
           adopt();
           setCrm(normaliseCrm(d));
-          if (storageMode === "supabase") writeCrmCache(rawRef.current); // the device cache gets the full book too
+          if (INSTANT_OPEN && storageMode === "supabase") writeCrmCache(rawRef.current); // the device cache gets the full book too
         } else {
           scheduleFill(2_000); // they started editing mid-fetch — this copy may be stale
         }
@@ -82,7 +87,7 @@ export function useCrm(enabled) {
     // once (read-only — updateCrm ignores edits while it shows) while the live
     // load runs. The guard on stale.current means a slow cache read can never
     // overwrite live data that beat it here.
-    if (storageMode === "supabase" && !loaded.current) {
+    if (INSTANT_OPEN && storageMode === "supabase" && !loaded.current) {
       readCrmCache().then((c) => {
         if (c && c.value && !loaded.current && stale.current === null) {
           stale.current = true;
@@ -121,7 +126,7 @@ export function useCrm(enabled) {
     setCrm(normaliseCrm(d || emptyCrm()));
     loaded.current = true;
     loading.current = false;
-    if (storageMode === "supabase") writeCrmCache(rawRef.current); // next open paints instantly
+    if (INSTANT_OPEN && storageMode === "supabase") writeCrmCache(rawRef.current); // next open paints instantly
     if (partial) scheduleFill(); // pull the rest of the history in behind the paint
   };
 
@@ -150,7 +155,7 @@ export function useCrm(enabled) {
           adopt();
           setCrm(normaliseCrm(d));
           setLastLive(new Date());
-          if (storageMode === "supabase") writeCrmCache(rawRef.current); // keep the instant-open copy current
+          if (INSTANT_OPEN && storageMode === "supabase") writeCrmCache(rawRef.current); // keep the instant-open copy current
         }
       } catch (e) {
         /* try again next time */

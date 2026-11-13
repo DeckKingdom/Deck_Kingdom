@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { crmStorage, storageMode } from "../data/crmStorage.js";
 import { readCrmCache, writeCrmCache } from "../data/crmCache.js";
+import { INSTANT_OPEN } from "./crm/useCrm.js";
 import { getSupabase } from "../data/supabaseClient.js";
 import { signOut } from "../data/auth.js";
 import { normaliseCrm, isVoidInvoice, isCollectionJob, invoiceTotals, isPaid, gbp, partKey, collNotesText } from "../lib/crmCore.js";
@@ -61,7 +62,7 @@ export default function DriverApp({ me, warehouse, switcher }) {
     // instant open: paint the phone's last copy straight away while the live
     // fetch runs — a lifesaver on van signal (ticks and drops write to the
     // database directly, so looking at a copy a minute old is safe)
-    if (storageMode === "supabase" && !gotLive.current) {
+    if (INSTANT_OPEN && storageMode === "supabase" && !gotLive.current) {
       readCrmCache().then((c) => { if (c && c.value && !gotLive.current) setCrm(normaliseCrm(JSON.parse(c.value))); }).catch(() => {});
     }
     try {
@@ -73,7 +74,7 @@ export default function DriverApp({ me, warehouse, switcher }) {
       if (!r || !r.value) r = await crmStorage.get("dk-crm");
       gotLive.current = true;
       setCrm(normaliseCrm(r && r.value ? JSON.parse(r.value) : {}));
-      if (storageMode === "supabase" && r && r.value) writeCrmCache(r.value); // next open paints instantly
+      if (INSTANT_OPEN && storageMode === "supabase" && r && r.value) writeCrmCache(r.value); // next open paints instantly
     } catch (e) {
       setErr("Couldn't load — check your signal, then tap Try again.");
     }
