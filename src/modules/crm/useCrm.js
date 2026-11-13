@@ -266,7 +266,10 @@ export function useCrm(enabled) {
       // structuredClone is several times faster than a JSON round-trip, and this
       // clone runs on every single edit — with years of records it's the
       // difference between typing feeling instant and typing feeling sticky
-      const next = fn(typeof structuredClone === "function" ? structuredClone(d) : JSON.parse(JSON.stringify(d)));
+      const cloned = typeof structuredClone === "function" ? structuredClone(d) : JSON.parse(JSON.stringify(d));
+      // a mutator that edits in place and forgets to `return` must never wipe the
+      // state (one did, on 13 Nov — every screen went down until a reload)
+      const next = fn(cloned) || cloned;
       carryRidingCollections(d, next); // collection notes follow their job round the schedule
       return next;
     });

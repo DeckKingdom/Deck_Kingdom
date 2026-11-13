@@ -298,6 +298,7 @@ export function NewCustomerPeek({ crm, updateCrm, me, startName = "", onDone, on
         accountNo: nextNumber(x.customers, "accountNo", x.numbering.account), createdBy: me || "", modifiedBy: me || "" };
       x.customers.push(c);
       x.numbering = { ...x.numbering, account: (Number(c.accountNo) || 0) + 1 };
+      return x;
     });
     onDone(fresh.id);
   };
