@@ -8,9 +8,11 @@ import {
   recordOrigin, blankInvoice, blankLine, nextNumber, blankSite, DRIVERS, invoiceTotals, gbp, isPaid,
   JOB_TYPES, PAYMENT_TYPES, PREP_FLAGS, FOLLOWUP_FLAGS, today, TIME_SLOTS, vanOptions,
   skuIndex, invoiceCost, buildPicks, pickLandedCost, jobCost, blankPick, invoiceLoadKg, applyInvoiceStockDeduction, releaseInvoiceLinks,
-  TRADE_COUNTER, isCollectionJob, TRADE_COUNTER_LABEL, quoteRef, sampleRef, isSaleInvoice, riskOf, staffName, isVoidInvoice, onSchedule, userInitials, isHistoric, SERVED_BY, sourceOptions } from "../../lib/crmCore.js";
+  TRADE_COUNTER, isCollectionJob, TRADE_COUNTER_LABEL, quoteRef, sampleRef, isSaleInvoice, riskOf, staffName, isVoidInvoice, onSchedule, userInitials, isHistoric, SERVED_BY, sourceOptions, mobileOf } from "../../lib/crmCore.js";
 import { ListHero, HeroStat, HeroAdd, SearchBox, RiskChip, WebStatusChip, Soon, DateInput, CalendarPop, usePhone, PrintButton, bandBtn, BandDelete, LockBar } from "./ui.jsx";
-import { invoiceEmailLink, invoiceEmailTo } from "../../lib/invoiceEmail.js";
+import { invoiceEmailLink, invoiceEmailTo, statementEmailLink, statementWaText } from "../../lib/invoiceEmail.js";
+import { waNumber, getWaMode } from "./CustomersScreen.jsx";
+import * as XLSX from "xlsx";
 import { Icon, Chip, Tg, Modal, selectAllProps, SuggestInput, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
 import { printInvoice, printJobSheet, printLoadingBill, printJobDocs } from "./printDocs.js";
 import { readableFor } from "./LinesEditor.jsx";
@@ -18,6 +20,8 @@ import LinesEditor from "./LinesEditor.jsx";
 import StockCheck from "./StockCheck.jsx";
 import { DeliverAddrCheck, useAddressGuard } from "./AddressGuard.jsx";
 import { tidyPostcode } from "../../lib/addressCheck.js";
+
+const waHref = (mobile, text) => (getWaMode() === "web" ? "https://web.whatsapp.com/send?phone=" : "whatsapp://send?phone=") + waNumber(mobile) + "&text=" + encodeURIComponent(text);
 
 const docBtn = { ...btn, padding: "6px 11px", fontSize: 12.5 };
 const navyBtn = { ...btn, background: "transparent", border: "1px solid #3a4f78", color: "#fff" };
@@ -149,6 +153,35 @@ export default function InvoicesScreen({ headerH = 0, openProduct, money = true,
   const filteredTotal = filter ? matches.reduce((t, i) => t + invoiceTotals(i).total, 0) : 0;
   const shown = matches.slice(0, 50);
 
+  // One customer in view (via the search box or a customer filter): offer a
+  // statement of account. The statement always covers their WHOLE account —
+  // every unpaid invoice — not just the rows the current search happens to show.
+  const stIds = [...new Set(matches.filter((i) => !isVoidInvoice(i)).map((i) => i.customerId).filter(Boolean))];
+  const stCust = (q || (filter && filter.customerId)) && stIds.length === 1 ? custById[stIds[0]] : null;
+  const stOwed = stCust ? sorted.filter((i) => i.customerId === stCust.id && !isVoidInvoice(i) && !isPaid(i) && invoiceTotals(i).total > 0) : [];
+  const stOwedTotal = stOwed.reduce((t, i) => t + invoiceTotals(i).total, 0);
+  const stMobile = stCust ? mobileOf(stCust) : "";
+  const exportStatement = () => {
+    const aoa = [["Invoice #", "Date", "Order ref", "Job", "Total £ inc VAT"]];
+    stOwed.forEach((i) => aoa.push([i.invNo || "", i.date || "", i.orderRef || "", i.jobType || "", Math.round(invoiceTotals(i).total * 100) / 100]));
+    aoa.push(["", "", "", "Total outstanding", Math.round(stOwedTotal * 100) / 100]);
+    try {
+      const ws = XLSX.utils.aoa_to_sheet(aoa);
+      ws["!cols"] = [10, 12, 18, 14, 16].map((wch) => ({ wch }));
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Statement");
+      const out = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+      const url = URL.createObjectURL(new Blob([out], { type: "application/octet-stream" }));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "statement-" + String(stCust.name || "customer").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") + "-" + today() + ".xlsx";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setNotice("The download was blocked here — it works on the live site (ops.deckkingdom.co.uk).");
+    }
+  };
+
   if (!inv)
     return (
       <div style={{ maxWidth: 1140, margin: "0 auto", padding: "18px 22px" }}>
@@ -233,6 +266,43 @@ export default function InvoicesScreen({ headerH = 0, openProduct, money = true,
         <div style={{ ...card, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "10px 14px", marginBottom: 10 }}>
           <SearchBox value={search} onChange={setSearch} placeholder="Search inv #, customer, order ref…" />
         </div>
+
+        {stCust && (
+          <div style={{ ...card, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "9px 14px", marginBottom: 10, borderColor: "#e9d396", background: "#F4B73E12" }}>
+            <Icon name="pound" size={15} stroke="#a05f10" />
+            <b style={{ fontSize: 13.5 }}>{stCust.name || "Customer"}</b>
+            <span style={{ fontSize: 13, fontWeight: 800, color: stOwed.length ? "#a05f10" : "#28713e" }}>
+              {stOwed.length
+                ? "outstanding " + (money ? gbp(stOwedTotal) + " across " : "") + stOwed.length + " invoice" + (stOwed.length === 1 ? "" : "s")
+                : "nothing outstanding"}
+            </span>
+            <span style={{ flex: 1 }} />
+            {stOwed.length > 0 && !(filter && filter.outstanding && filter.customerId === stCust.id) && (
+              <button style={{ ...btn, padding: "6px 11px", fontSize: 12.5 }} title="List only this customer's unpaid invoices" onClick={() => setFilter({ customerId: stCust.id, outstanding: true })}>
+                Show outstanding
+              </button>
+            )}
+            {stOwed.length > 0 && stMobile && (
+              <a href={waHref(stMobile, statementWaText(stCust, stOwed))} target="_blank" rel="noopener noreferrer"
+                style={{ ...btn, padding: "6px 11px", fontSize: 12.5, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 6 }}
+                title={"WhatsApp a statement of the " + stOwed.length + " unpaid invoice" + (stOwed.length === 1 ? "" : "s") + " to " + stMobile}>
+                <Icon name="wa" stroke="#128C7E" size={14} />WhatsApp statement
+              </a>
+            )}
+            {stOwed.length > 0 && String(stCust.email || "").trim() && (
+              <a href={statementEmailLink(stCust, stOwed)} target="_blank" rel="noopener noreferrer"
+                style={{ ...btn, padding: "6px 11px", fontSize: 12.5, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 6 }}
+                title={"Opens Gmail with a statement of the " + stOwed.length + " unpaid invoice" + (stOwed.length === 1 ? "" : "s") + " ready to send"}>
+                <Icon name="mail" stroke="#3b4c6b" size={14} />Email statement
+              </a>
+            )}
+            {stOwed.length > 0 && (
+              <button style={{ ...btn, padding: "6px 11px", fontSize: 12.5 }} onClick={exportStatement} title="Download the unpaid invoices as an Excel file">
+                <Icon name="doc" size={14} />Excel
+              </button>
+            )}
+          </div>
+        )}
         </div>
 
         <div style={card}>

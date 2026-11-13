@@ -10,6 +10,7 @@ import VansScreen from "./VansScreen.jsx";
 import QuotesScreen from "./QuotesScreen.jsx";
 import SamplesScreen from "./SamplesScreen.jsx";
 import ReviewsScreen, { reviewStage } from "./ReviewsScreen.jsx";
+import { statementWaText, statementEmail } from "../../lib/invoiceEmail.js";
 import { reviewSettingsOf, reviewExclusion, reviewText, customerDupeGroups, personKeyOf, reviewNext, reviewReminders, reviewChannel, orderSummary } from "../../lib/crmCore.js";
 import TasksScreen from "./TasksScreen.jsx";
 import PurchasesScreen from "./PurchasesScreen.jsx";
@@ -622,6 +623,18 @@ export default function run(React, renderToString) {
     assert(stockCheck(job, sc2).find((r) => r.sku === R("bd").sku).short === 2 && !job.picks.some(isColPick), "deleted collection releases the job");
     html = renderToString(React.createElement(StockCheck, { inv: job, crm: sc2, planner: pl2, updateCrm: noop, me: "x" }));
     assert(html.includes("Stock check") && html.includes("Collect the shortfall") && html.includes("1 part short"), "stock check renders");
+  }
+  {
+    // statement of account: one message carrying every unpaid invoice
+    const cust = { name: "BDS Builders", contact: "Dave Smith", email: "dave@bds.co.uk", mobile: "07700 900123" };
+    const owed = [
+      { invNo: 5722, date: "2026-11-03", lines: [{ qty: 1, price: 99.95, description: "Boards" }] },
+      { invNo: 5720, date: "2026-11-03", lines: [{ qty: 1, price: 15, description: "Clips" }] },
+    ];
+    const wa = statementWaText(cust, owed);
+    assert(wa.startsWith("Hi Dave,") && wa.includes("#5722") && wa.includes("#5720") && wa.includes("£114.95"), "WA statement: greeting, both invoices, the right total");
+    const em = statementEmail(cust, owed);
+    assert(em.to === "dave@bds.co.uk" && em.subject.includes("Statement") && em.body.includes("£114.95") && em.body.includes("0161 399 1837"), "email statement: addressed, totalled, with the pay-by-phone line");
   }
   console.log("smoke OK — all screens render, totals reconcile (1392 goods + 60 delivery = 1452 inc VAT, £242 VAT, £1210 net)");
 }

@@ -49,3 +49,38 @@ export const invoiceEmailLink = (inv, cust, site) => {
   const m = invoiceEmail(inv, cust, site);
   return "https://mail.google.com/mail/?view=cm&fs=1&to=" + encodeURIComponent(m.to) + "&su=" + encodeURIComponent(m.subject) + "&body=" + encodeURIComponent(m.body);
 };
+
+// ===== Statement of account: every unpaid invoice for one customer, in one message =====
+
+const stLines = (invoices) =>
+  invoices.map((i) => "  #" + (i.invNo || i.orderRef || "—") + " · " + prettyDate(i.date) + " · " + money(invoiceTotals(i).total)).join("\n");
+const stTotal = (invoices) => invoices.reduce((s, i) => s + invoiceTotals(i).total, 0);
+const PAY_LINE = "You can pay by bank transfer using the details on your invoice, or by card over the phone on 0161 399 1837.";
+
+export function statementEmail(cust, invoices) {
+  const name = first(cust && (cust.contact || cust.name));
+  const body = (name ? "Hi " + name : "Hi") + ",\n\n" +
+    "Here's a quick statement of your account with Deck Kingdom as of " + prettyDate(new Date().toISOString().slice(0, 10)) + ":\n\n" +
+    stLines(invoices) + "\n\n" +
+    "Total outstanding: " + money(stTotal(invoices)) + " (inc VAT)\n\n" +
+    PAY_LINE + " If any of these have already been paid, just let us know and we'll tick them off.\n\n" +
+    "Any questions, just reply to this email or call us on 0161 399 1837.\n\n" +
+    "Kind regards,\nThe Deck Kingdom Team\nDeck Kingdom Ltd · Unit A, 106 Whitelands Road, Ashton-under-Lyne OL6 6UG · deckkingdom.co.uk";
+  return { to: String((cust && cust.email) || "").trim(), subject: "Statement of account – Deck Kingdom", body };
+}
+
+export const statementEmailLink = (cust, invoices) => {
+  const m = statementEmail(cust, invoices);
+  return "https://mail.google.com/mail/?view=cm&fs=1&to=" + encodeURIComponent(m.to) + "&su=" + encodeURIComponent(m.subject) + "&body=" + encodeURIComponent(m.body);
+};
+
+// the WhatsApp twin: same figures, lighter sign-off
+export function statementWaText(cust, invoices) {
+  const name = first(cust && (cust.contact || cust.name));
+  return (name ? "Hi " + name : "Hi") + ",\n\n" +
+    "Quick statement of your account with Deck Kingdom (" + prettyDate(new Date().toISOString().slice(0, 10)) + "):\n\n" +
+    stLines(invoices) + "\n\n" +
+    "Total outstanding: " + money(stTotal(invoices)) + "\n\n" +
+    "You can pay by bank transfer (details on your invoice) or by card over the phone on 0161 399 1837. If any of these are already paid, just let us know 👍\n\n" +
+    "Thanks\nDeck Kingdom";
+}
