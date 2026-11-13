@@ -4,7 +4,10 @@
 const A4_PX = 794; // A4 width at 96dpi
 
 export async function htmlToPdfFile(html, fileName) {
-  const [{ jsPDF }, { default: html2canvas }] = await Promise.all([import("jspdf"), import("html2canvas")]);
+  const [{ jsPDF }, { default: html2canvas }] = await Promise.all([import("jspdf"), import("html2canvas")]).catch(() => {
+    // the chunk from the build this tab loaded is gone (ops was updated since)
+    throw new Error("ops has been updated since this page loaded — refresh the page and try again");
+  });
   const frame = document.createElement("iframe");
   frame.setAttribute("aria-hidden", "true");
   Object.assign(frame.style, { position: "fixed", left: "-10000px", top: "0", width: A4_PX + "px", height: "1200px", border: "0" });
