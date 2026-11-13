@@ -62,6 +62,7 @@ import { loadAllDrops } from "../data/drops.js";
 import { Icon, SuggestInput, abtn, DateInput, CalendarPop, selectAllProps, LockBar } from "./crm/ui.jsx";
 import { EmailSettings } from "./crm/EmailPanels.jsx";
 import { emailReady } from "../data/email.js";
+import Splash from "./Splash.jsx";
 
 const CRM_TABS = ["customers", "samples", "quotes", "invoices", "schedule", "reviews"];
 
@@ -674,6 +675,19 @@ export default function ImportPlanner() {
   const PLANNER_TABS = ["overview", "shipments", "completion", "landed", "products"];
   const plannerLockedBy = useLock(PLANNER_TABS.includes(tab) && access.canManage ? "planner" : "");
 
+  // The greeting screen that covers the load: solid until the imports data AND
+  // the CRM book have both landed (or errored), then fades out so the app
+  // appears fully formed — no blank page, no counts popping in.
+  const splashName = (access.name || "").split(" ")[0] || (storageMode === "supabase" ? "" : "Jon");
+  const splashReady = !!data && (!!crm || crmError || !crmOn);
+  const [splashGone, setSplashGone] = useState(false);
+  useEffect(() => {
+    if (splashReady && !splashGone) {
+      const t = setTimeout(() => setSplashGone(true), 550); // just past the .5s fade
+      return () => clearTimeout(t);
+    }
+  }, [splashReady, splashGone]);
+
   if (loadError)
     return (
       <div style={{ fontFamily: "Quicksand, sans-serif", padding: 40, textAlign: "center", color: NAVY }}>
@@ -733,13 +747,7 @@ export default function ImportPlanner() {
     }
   }, [data, access]);
 
-  if (!data)
-    return (
-      <div style={{ fontFamily: "Quicksand, sans-serif", padding: 40, textAlign: "center", color: NAVY }}>
-        <style>{`@import url('https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&display=swap');`}</style>
-        Loading planner…
-      </div>
-    );
+  if (!data) return <Splash name={splashName} />;
 
   const active = data.shipments.find((s) => s.id === activeId) || data.shipments[0];
   // shipment picker with ‹ › arrows to step through the records (same order as the list)
@@ -1494,6 +1502,7 @@ export default function ImportPlanner() {
         <span style={{ color: saveError ? "#ff8a9a" : "#8fa0c0", fontWeight: saveError ? 800 : 400, fontSize: 12, minWidth: 48, textAlign: "right" }}>{CRM_TABS.includes(tab) || saveError ? crmSave : saveState}</span>
       </div>
 
+      {!splashGone && <Splash name={splashName} fade={splashReady} />}
       {crmStale && (
         <div role="status" style={{ position: "fixed", left: "50%", bottom: 18, transform: "translateX(-50%)", zIndex: 900, display: "inline-flex", alignItems: "center", gap: 9, background: "#0B1F3F", color: "#fff", border: "2px solid #F4B73E", borderRadius: 999, padding: "9px 18px", boxShadow: "0 10px 30px rgba(11,31,63,.35)", fontSize: 13.5, fontWeight: 700, whiteSpace: "nowrap" }}>
           <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#F4B73E", animation: "dk-pulse 1s ease-in-out infinite" }} />

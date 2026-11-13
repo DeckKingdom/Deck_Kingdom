@@ -2,6 +2,7 @@
 // and a fuel form. The database only hands a driver the jobs and pick-ups planned for them.
 import { useState, useEffect, useMemo, useRef } from "react";
 import { crmStorage, storageMode } from "../data/crmStorage.js";
+import Splash from "./Splash.jsx";
 import { readCrmCache, writeCrmCache } from "../data/crmCache.js";
 import { INSTANT_OPEN } from "./crm/useCrm.js";
 import { getSupabase } from "../data/supabaseClient.js";
@@ -85,6 +86,17 @@ export default function DriverApp({ me, warehouse, switcher }) {
       try { if (ch) ch.unsubscribe(); } catch (e) { /* already gone */ }
     };
   }, []);
+
+  // greeting screen over the load: solid until the book (or an error) lands, then fades
+  const splashReady = !!crm || !!err;
+  const [splashGone, setSplashGone] = useState(false);
+  useEffect(() => {
+    if (splashReady && !splashGone) {
+      const t = setTimeout(() => setSplashGone(true), 550);
+      return () => clearTimeout(t);
+    }
+  }, [splashReady, splashGone]);
+  const splash = !splashGone ? <Splash name={driver || (me.fullName || "").split(" ")[0] || ""} fade={splashReady} /> : null;
 
   const gotLive = useRef(false); // once live data has painted, the cached copy may not overwrite it
   // silent = a background refresh (realtime / regained focus): the data updates
@@ -226,6 +238,7 @@ export default function DriverApp({ me, warehouse, switcher }) {
   if (mode === "tasks") {
     return (
       <div style={page}>
+        {splash}
         {header("My tasks")}
         {tabs}
         <div style={{ padding: 14 }}>{err && !crm ? errCard : <DriverTasks crm={crm} who={taskWho} setCrm={setCrm} full canAdd />}</div>
@@ -236,6 +249,7 @@ export default function DriverApp({ me, warehouse, switcher }) {
     if (err && !crm) return <div style={page}>{header("Loading")}{tabs}<div style={{ padding: 14 }}>{errCard}</div></div>;
     return (
       <div style={page}>
+        {splash}
         <LoadingMobile key={loads} crm={crm} driver={allVans ? null : driver} who={who} header={header} nav={tabs} />
         {warehouse && !switcher && <div style={{ padding: "0 14px" }}><button type="button" onClick={() => signOut().then(() => window.location.reload())}
           style={{ marginTop: 10, width: "100%", border: "1px solid #d5d9e0", background: "#fff", borderRadius: 12, padding: 12, fontFamily: "inherit", fontWeight: 700, color: "#5a6a85", cursor: "pointer" }}>Sign out</button></div>}
@@ -256,6 +270,7 @@ export default function DriverApp({ me, warehouse, switcher }) {
   // ===== home: 7 day buttons + fuel =====
   return (
     <div style={page}>
+      {splash}
       {header("Hi " + driver)}
       {tabs}
       <div style={{ padding: 14 }}>
