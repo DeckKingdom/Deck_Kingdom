@@ -158,17 +158,20 @@ export function printQuote(q, cust, site) {
   ${addrBlock("Details", ["Account #" + ((cust && cust.accountNo) || "—"), "Quote date: " + pretty(q.date), q.validUntil ? "Valid until: " + pretty(q.validUntil) : ""])}
 </div>
 <table><tr><th>Code</th><th>Description</th><th>Colour</th><th class="r">Qty</th><th class="r">Price inc VAT</th><th class="r">Total</th></tr>${lines}</table>
-<table class="totals">
-  <tr><td>Goods (inc VAT)</td><td class="r">${gb(t.goods)}</td></tr>
-  ${t.discount > 0 ? `<tr><td>Discount (${t.discountPct}%)</td><td class="r">−${gb(t.discount)}</td></tr>` : ""}
-  <tr><td>Delivery charge</td><td class="r">${gb(t.delivery)}</td></tr>
-  <tr><td>of which VAT (${Number(q.vatRate) || 20}%)</td><td class="r">${gb(t.vat)}</td></tr>
-  <tr><td>Net</td><td class="r">${gb(t.net)}</td></tr>
-  <tr class="final"><td>QUOTE TOTAL</td><td class="r">${gb(t.total)}</td></tr>
-</table>
+<div style="display:flex;gap:24px;align-items:flex-start">
+  ${bankBlock("Q-" + (q.quoteNo || ""))}
+  <table class="totals">
+    <tr><td>Goods (inc VAT)</td><td class="r">${gb(t.goods)}</td></tr>
+    ${t.discount > 0 ? `<tr><td>Discount (${t.discountPct}%)</td><td class="r">−${gb(t.discount)}</td></tr>` : ""}
+    <tr><td>Delivery charge</td><td class="r">${gb(t.delivery)}</td></tr>
+    <tr><td>of which VAT (${Number(q.vatRate) || 20}%)</td><td class="r">${gb(t.vat)}</td></tr>
+    <tr><td>Net</td><td class="r">${gb(t.net)}</td></tr>
+    <tr class="final"><td>QUOTE TOTAL</td><td class="r">${gb(t.total)}</td></tr>
+  </table>
+</div>
 ${String(q.notes || "").trim() ? `<div class="note">${esc(q.notes).replace(/\n/g, "<br>")}</div>` : ""}
-<div class="sub">${q.validUntil ? "This quotation is valid until " + esc(pretty(q.validUntil)) + ". " : ""}Prices include VAT. To go ahead, call ${esc(COMPANY.phone)} or email ${esc(COMPANY.email)} quoting Q-${esc(q.quoteNo || "")}.</div>
-<div class="foot">Thank you for your enquiry · ${esc(COMPANY.web)} · ${esc(COMPANY.phone)}</div>`;
+<div class="sub">${q.validUntil ? "This quotation is valid until " + esc(pretty(q.validUntil)) + ". " : ""}Prices include VAT. To go ahead, call ${esc(COMPANY.phone)} or email ${esc(COMPANY.email)} quoting Q-${esc(q.quoteNo || "")} — or pay by bank transfer with the quote number as the reference.</div>
+<div class="foot">${esc(regFoot)}<br>Thank you for your enquiry · ${esc(COMPANY.web)} · ${esc(COMPANY.phone)}</div>`;
 
   return openDoc(shell("Quote Q-" + (q.quoteNo || ""), body));
 }
