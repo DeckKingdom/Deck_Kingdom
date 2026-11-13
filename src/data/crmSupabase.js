@@ -362,7 +362,7 @@ async function loadAll(quick = false) {
   const T = (label, p) => {
     const s = performance.now();
     return Promise.resolve(p).then((r) => {
-      timings.push({ what: label, ms: Math.round(performance.now() - s), rows: Array.isArray(r) ? r.length : (r && Array.isArray(r.invoices) ? r.invoices.length + "+" + r.items.length : "") });
+      timings.push({ what: label, ms: Math.round(performance.now() - s), rows: Array.isArray(r) ? r.length : (r && Array.isArray(r.invoices) ? [r.invoices.length + "+" + r.items.length, r.customers && "cust " + r.customers.length, r.sites && "sites " + r.sites.length, r.samples && "smp " + r.samples.length].filter(Boolean).join(" · ") : "") });
       return r;
     });
   };
@@ -379,8 +379,8 @@ async function loadAll(quick = false) {
   }).catch((e) => { timings.push({ what: "QUICK PATH OFF — run 061", ms: 0, rows: String(e && e.message) }); return null; }));
   hotP.then((h) => { hot = h; });
   const [cs, ss, is_, ls, ps_, mps_, comps_, colls_, collItems_, moves_, vans_, vanChecks_, settings, quoteData, sampleData, taskData, staffRows, purchData] = await Promise.all([
-    T("customers", fetchAll(sb, "customers")),
-    T("sites", fetchAll(sb, "customer_sites")),
+    hotP.then((h) => (h && Array.isArray(h.customers) ? h.customers : T("customers", fetchAll(sb, "customers")))),
+    hotP.then((h) => (h && Array.isArray(h.sites) ? h.sites : T("sites", fetchAll(sb, "customer_sites")))),
     hotP.then((h) => (h ? h.invoices : T("invoices (full)", fetchAll(sb, "invoices")))),
     hotP.then((h) => (h ? h.items : T("invoice lines (full)", fetchAll(sb, "invoice_items")))),
     hotP.then((h) => (h ? h.picks : T("picks (full)", fetchAll(sb, "invoice_picks")))),
@@ -408,6 +408,8 @@ async function loadAll(quick = false) {
     })(),
     (async () => {
       try {
+        const h = await hotP;
+        if (h && Array.isArray(h.samples)) return { sm: h.samples, si: h.sampleItems || [] };
         const [sm, si] = await Promise.all([T("samples", fetchAll(sb, "samples")), T("sample items", fetchAll(sb, "sample_items"))]);
         return { sm, si };
       } catch (e) {
