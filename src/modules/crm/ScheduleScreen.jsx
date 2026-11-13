@@ -398,7 +398,7 @@ const isPostedJob = (inv) => /evri|post|courier|parcel|royal ?mail|dpd|\bups\b|\
 const isTudaJob = (inv) => /\btg\b|tuda/i.test((inv && inv.jobType) || "");
 
 // email Tuda Grass the delivery notes for the jobs they're couriering for us (opens Gmail ready to send)
-const TudaMailButton = ({ jobs, crm, siteById, custById, date, onSent, label }) => {
+const TudaMailButton = ({ jobs, crm, siteById, custById, date, onSent, label, vans }) => {
   const tudas = (crm.suppliers || []).filter((x) => /tuda/i.test(x.name || ""));
   const sup = tudas.find((x) => x.email) || tudas[0];
   const email = sup && sup.email ? String(sup.email).trim() : "";
@@ -420,7 +420,9 @@ const TudaMailButton = ({ jobs, crm, siteById, custById, date, onSent, label }) 
       (j.deliveryNotes || j.jobNotes ? "\nNotes: " + (j.deliveryNotes || j.jobNotes) : "");
   };
   const body = "Hi" + (sup && sup.contact ? " " + String(sup.contact).split(/\s+/)[0] : "") + ",\n\n" +
-    "Please could you send out the following direct to our customer" + (jobs.length === 1 ? "" : "s") + (when ? " for " + when : "") + ":\n\n" +
+    (vans
+      ? "Please can you send " + (jobs.length === 1 ? "this" : "these") + " out for us on one of your vans please?\n\n"
+      : "Please could you send out the following direct to our customer" + (jobs.length === 1 ? "" : "s") + (when ? " for " + when : "") + ":\n\n") +
     jobs.map(note).join("\n\n") +
     "\n\nPlease send tracking when dispatched. Any problems, call us on 0161 399 1837.\n\nKind regards,\nDeck Kingdom";
   const href = "https://mail.google.com/mail/?view=cm&fs=1&to=" + encodeURIComponent(email) + "&su=" + encodeURIComponent("Delivery note" + (jobs.length === 1 ? " #" + jobs[0].invNo : "s · " + jobs.map((j) => "#" + j.invNo).join(", ")) + " – Deck Kingdom" + (when ? " – " + when : "")) + "&body=" + encodeURIComponent(body);
@@ -1354,6 +1356,12 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
           </span>
           <span />
         </button>
+        {isTudaJob(i) && (
+          <div style={{ padding: "5px 0 8px", borderBottom: "1px solid #f0f2f6" }}>
+            <TudaMailButton jobs={[i]} crm={crm} siteById={siteById} custById={custById} vans label="Email job sheet to Tuda"
+              onSent={() => setInv(i.id, (t) => (t.supplierEmailedAt = new Date().toISOString()))} />
+          </div>
+        )}
       </div>
     );
   };
