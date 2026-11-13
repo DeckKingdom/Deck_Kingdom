@@ -72,6 +72,7 @@ class ErrorBoundary extends Component {
         <p style={{ fontSize: 13.5, color: "#5a6a85", marginBottom: 6 }}>Your data is safe — this is a display error. Refresh to carry on, and send Claude this message:</p>
         <code style={{ display: "inline-block", background: "#f3f5f8", border: "1px solid #e6e9ef", borderRadius: 8, padding: "8px 12px", fontSize: 12, maxWidth: 640, overflowWrap: "anywhere", marginBottom: 16 }}>
           {String(this.state.error && (this.state.error.message || this.state.error))}
+          {this.state.error && this.state.error.stack ? <span style={{ display: "block", marginTop: 8, textAlign: "left", whiteSpace: "pre-wrap", fontSize: 10.5, color: "#5a6a85" }}>{String(this.state.error.stack).split("\n").slice(1, 5).join("\n")}</span> : null}
         </code>
         <br />
         <button onClick={() => window.location.reload()} style={{ fontFamily: "inherit", fontSize: 14, fontWeight: 700, padding: "9px 18px", borderRadius: 8, border: "1px solid #F4B73E", background: "#F4B73E", color: "#0B1F3F", cursor: "pointer" }}>
