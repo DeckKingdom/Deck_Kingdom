@@ -42,6 +42,10 @@ export async function handle(req: Request, deps: { db: any; send: (acc: any, mai
   const subject = String(p.subject || "").trim() || "Deck Kingdom";
   const body = String(p.body || (p.test ? "Test email from Deck Kingdom Ops — your mailbox is linked and sending works." : ""));
   if (!body.trim()) return reply(400, { error: "The email is empty." });
+  // attachments: [{ name, base64 }] — a statement PDF, an invoice, up to ~9MB together
+  const atts = (Array.isArray(p.attachments) ? p.attachments : []).filter((a: any) => a && a.name && a.base64).slice(0, 5);
+  if (atts.reduce((t: number, a: any) => t + String(a.base64).length, 0) > 12_000_000)
+    return reply(400, { error: "The attachments are too big to email (9MB max together)." });
 
   try {
     await deps.send(acc, {
@@ -50,6 +54,7 @@ export async function handle(req: Request, deps: { db: any; send: (acc: any, mai
       bcc: acc.copy_me && !p.test ? acc.from_email : undefined,
       replyTo: acc.from_email,
       subject, text: body, html: toHtml(body),
+      attachments: atts.length ? atts.map((a: any) => ({ filename: String(a.name), content: String(a.base64), encoding: "base64" })) : undefined,
     });
   } catch (e) {
     const m = String((e as Error)?.message || e);
@@ -62,7 +67,8 @@ export async function handle(req: Request, deps: { db: any; send: (acc: any, mai
   if (p.test) return reply(200, { ok: true, test: true });
   const row = {
     sent_by: login, from_email: acc.from_email, to_email: to.join(", "), cc: cc.join(", "),
-    subject, body, customer_id: String(p.customerId || ""), site_id: String(p.siteId || ""),
+    subject, body: body + (atts.length ? "\n\n[attached: " + atts.map((a: any) => a.name).join(", ") + "]" : ""),
+    customer_id: String(p.customerId || ""), site_id: String(p.siteId || ""),
   };
   const { data: logged } = await deps.db.from("email_log").insert(row).select().maybeSingle();
   return reply(200, { ok: true, logged: logged || row });

@@ -10,7 +10,8 @@ import {
   skuIndex, invoiceCost, buildPicks, pickLandedCost, jobCost, blankPick, invoiceLoadKg, applyInvoiceStockDeduction, releaseInvoiceLinks,
   TRADE_COUNTER, isCollectionJob, TRADE_COUNTER_LABEL, quoteRef, sampleRef, isSaleInvoice, riskOf, staffName, isVoidInvoice, onSchedule, userInitials, isHistoric, SERVED_BY, sourceOptions, mobileOf } from "../../lib/crmCore.js";
 import { ListHero, HeroStat, HeroAdd, SearchBox, RiskChip, WebStatusChip, Soon, DateInput, CalendarPop, usePhone, PrintButton, bandBtn, BandDelete, LockBar } from "./ui.jsx";
-import { invoiceEmailLink, invoiceEmailTo, statementEmailLink, statementCaption } from "../../lib/invoiceEmail.js";
+import { invoiceEmailLink, invoiceEmailTo, statementEmailLink, statementEmail, statementCaption } from "../../lib/invoiceEmail.js";
+import { emailReady, sendEmail } from "../../data/email.js";
 import { waNumber } from "./CustomersScreen.jsx";
 import * as XLSX from "xlsx";
 import { Icon, Chip, Tg, Modal, selectAllProps, SuggestInput, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
@@ -197,26 +198,55 @@ export default function InvoicesScreen({ headerH = 0, openProduct, money = true,
     setStNote("Making the statement PDF…");
     try {
       const file = await statementPdf();
-      const how = await shareToWhatsApp(file, statementCaption(stCust, stOwed), stMobile ? waNumber(stMobile) : "");
-      setStNote(how === "downloaded" ? "Statement downloaded (" + file.name + ") — attach it in the WhatsApp chat that's opened." : "");
-      if (how === "downloaded") setTimeout(() => setStNote(""), 10000);
+      const caption = statementCaption(stCust, stOwed);
+      try { await navigator.clipboard.writeText(caption); } catch (e) { /* no clipboard here */ }
+      const how = await shareToWhatsApp(file, caption, stMobile ? waNumber(stMobile) : "");
+      setStNote(how === "shared" ? "PDF handed to sharing — the covering message is on your clipboard, paste it in the chat."
+        : how === "downloaded" ? "Statement downloaded (" + file.name + ") — attach it in the WhatsApp chat (message is on your clipboard)." : "");
+      if (how !== "cancelled") setTimeout(() => setStNote(""), 12000);
     } catch (e) {
       setStNote("Couldn't make the PDF — " + ((e && e.message) || "try again"));
       setTimeout(() => setStNote(""), 8000);
     }
   };
-  // Email: the PDF downloads and Gmail opens with the statement written out — attach the download
+  // Email: sent straight from ops with the PDF attached (the sender's linked
+  // mailbox). Until the mailbox is set up — or when the account has no email —
+  // it falls back to downloading the PDF and opening Gmail to attach by hand.
   const sendStatementEmail = async () => {
     setStNote("Making the statement PDF…");
     try {
       const file = await statementPdf();
+      const m = statementEmail(stCust, stOwed);
+      if (emailReady && m.to) {
+        try {
+          setStNote("Sending to " + m.to + "…");
+          const base64 = await new Promise((ok, no) => {
+            const r = new FileReader();
+            r.onload = () => ok(String(r.result).split(",")[1] || "");
+            r.onerror = () => no(r.error);
+            r.readAsDataURL(file);
+          });
+          await sendEmail({ to: m.to, subject: m.subject, body: m.body, customerId: stCust.id, attachments: [{ name: file.name, base64 }] });
+          setStNote("Statement emailed to " + m.to + " with the PDF attached ✓");
+          setTimeout(() => setStNote(""), 10000);
+          return;
+        } catch (e) {
+          const setup = (e && e.setup) || /isn't deployed|Email settings|026_email/i.test(String((e && e.message) || ""));
+          if (!setup) {
+            setStNote("Couldn't send — " + ((e && e.message) || "try again"));
+            setTimeout(() => setStNote(""), 10000);
+            return;
+          }
+          // sending isn't set up yet: fall through to the Gmail way
+        }
+      }
       const url = URL.createObjectURL(file);
       const a = document.createElement("a");
       a.href = url; a.download = file.name; document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 60000);
       window.open(statementEmailLink(stCust, stOwed), "_blank");
-      setStNote("Statement downloaded (" + file.name + ") — attach it to the Gmail draft that's opened.");
-      setTimeout(() => setStNote(""), 12000);
+      setStNote("Statement downloaded (" + file.name + ") — attach it to the Gmail draft that's opened." + (emailReady ? " Tip: link your mailbox under Email settings and this becomes one click with the PDF attached." : ""));
+      setTimeout(() => setStNote(""), 14000);
     } catch (e) {
       setStNote("Couldn't make the PDF — " + ((e && e.message) || "try again"));
       setTimeout(() => setStNote(""), 8000);
