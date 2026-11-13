@@ -2,7 +2,6 @@
 // and a fuel form. The database only hands a driver the jobs and pick-ups planned for them.
 import { useState, useEffect, useMemo, useRef } from "react";
 import { crmStorage, storageMode } from "../data/crmStorage.js";
-import { getSupabase } from "../data/supabaseClient.js";
 import { readCrmCache, writeCrmCache } from "../data/crmCache.js";
 import { INSTANT_OPEN } from "./crm/useCrm.js";
 import { getSupabase } from "../data/supabaseClient.js";
