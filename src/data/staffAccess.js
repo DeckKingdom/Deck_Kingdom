@@ -27,7 +27,8 @@ export async function saveAccess({ email, full_name, role, read_only, driver_nam
     return;
   }
   const row = { email: e, full_name: full_name || "", role, read_only: !!read_only };
-  // drivers always go by a name; a warehouse login may also drive (blank = doesn't)
-  row.driver_name = role === "driver" ? driver_name || String(full_name || "").split(" ")[0] : role === "warehouse" ? String(driver_name || "").trim() : "";
+  // drivers always go by a name; ANY other login may also carry one (blank = doesn't) —
+  // it links the login to that name on the schedule and on the phone app's runs and tasks
+  row.driver_name = role === "driver" ? driver_name || String(full_name || "").split(" ")[0] : String(driver_name || "").trim();
   await run(sb.from("staff_invites").upsert(row));
 }

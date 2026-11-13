@@ -16,6 +16,18 @@ const SUGGESTED = [
 const th = { textAlign: "left", fontSize: 10.5, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", padding: "8px 8px", borderBottom: "2px solid #e6e9ef", whiteSpace: "nowrap" };
 const td = { padding: "8px 8px", borderBottom: "1px solid #eef0f4", fontSize: 13.5, verticalAlign: "middle" };
 
+// the Name column, editable in place: type, then click away (or press Enter) to save
+function NameCell({ r, onSave, disabled }) {
+  const [v, setV] = useState(r.full_name || "");
+  useEffect(() => { setV(r.full_name || ""); }, [r.full_name]);
+  return (
+    <input style={{ ...inp, padding: "6px 8px", width: 110, fontWeight: 700 }} placeholder="Name" value={v} disabled={disabled}
+      onChange={(e) => setV(e.target.value)}
+      onBlur={() => { if (v.trim() !== (r.full_name || "")) onSave(v.trim()); }}
+      onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }} />
+  );
+}
+
 export default function UsersScreen({ me }) {
   const [rows, setRows] = useState(null);
   const [err, setErr] = useState("");
@@ -66,9 +78,10 @@ export default function UsersScreen({ me }) {
       </label>
     );
   };
-  // a warehouse login can also drive (e.g. Ian): their own runs on the phone's Deliveries tab
+  // any non-driver login can also carry a schedule name (e.g. Ian, or Jon himself):
+  // the phone app then shows that person's runs and tasks under this login
   const alsoDrives = (r, onChange, disabled) => (
-    <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600, color: NAVY, marginLeft: 12 }} title="If they also drive, the name they go by on the delivery schedule — their phone shows their own runs as well as loading every van">
+    <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600, color: NAVY, marginLeft: 12 }} title="The name they go by on the delivery schedule and phone app — links this login to that name's runs and tasks">
       Also drives as
       <select style={{ ...inp, width: 110, padding: "6px 8px" }} value={r.driver_name || ""} disabled={disabled} onChange={(e) => onChange(e.target.value)}>
         <option value="">—</option>
@@ -111,10 +124,10 @@ export default function UsersScreen({ me }) {
                 const self = r.email === meLc;
                 return (
                   <tr key={r.email} style={{ opacity: r.role === "none" ? 0.55 : 1 }}>
-                    <td style={{ ...td, fontWeight: 700 }}>{r.full_name || <span style={{ color: "#aab3c2" }}>—</span>}{self && <span style={{ fontSize: 11, color: "#8593a8", marginLeft: 6 }}>(you)</span>}</td>
+                    <td style={{ ...td, fontWeight: 700, whiteSpace: "nowrap" }}><NameCell r={r} onSave={(v) => save({ ...r, full_name: v })} disabled={busy === r.email} />{self && <span style={{ fontSize: 11, color: "#8593a8", marginLeft: 6 }}>(you)</span>}</td>
                     <td style={td}>{r.email}</td>
                     <td style={td}>{levelSelect(r.role, (v) => save({ ...r, role: v }), busy === r.email || self)}</td>
-                    <td style={td}>{r.role === "driver" ? driverSelect(r, (v) => save({ ...r, driver_name: v }), busy === r.email || self) : r.role !== "none" && <>{roToggle(r.read_only, (v) => save({ ...r, read_only: v }), busy === r.email || self)}{r.role === "warehouse" && alsoDrives(r, (v) => save({ ...r, driver_name: v }), busy === r.email || self)}</>}</td>
+                    <td style={td}>{r.role === "driver" ? driverSelect(r, (v) => save({ ...r, driver_name: v }), busy === r.email || self) : r.role !== "none" && <>{roToggle(r.read_only, (v) => save({ ...r, read_only: v }), busy === r.email || self)}{alsoDrives(r, (v) => save({ ...r, driver_name: v }), busy === r.email)}</>}</td>
                     <td style={{ ...td, fontSize: 12.5, fontWeight: 700, color: r.login ? "#28713e" : "#a05f10", whiteSpace: "nowrap" }}>
                       {r.login ? "Has a login" : "Needs a login ↓"}
                     </td>
