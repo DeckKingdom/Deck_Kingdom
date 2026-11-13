@@ -2,6 +2,7 @@
 // and a fuel form. The database only hands a driver the jobs and pick-ups planned for them.
 import { useState, useEffect, useMemo, useRef } from "react";
 import { crmStorage, storageMode } from "../data/crmStorage.js";
+import { getSupabase } from "../data/supabaseClient.js";
 import { readCrmCache, writeCrmCache } from "../data/crmCache.js";
 import { INSTANT_OPEN } from "./crm/useCrm.js";
 import { getSupabase } from "../data/supabaseClient.js";
@@ -54,10 +55,45 @@ export default function DriverApp({ me, warehouse, switcher }) {
   const [view, setView] = useState(null); // null = home · a yyyy-mm-dd = that day's runs · "fuel"
   const [loads, setLoads] = useState(0); // bumped on refresh so the day view re-checks drops and resets
   const [todayLoad, setTodayLoad] = useState(null); // today's loading reports, for the Loading tab's count
+  // The phone stays live like the office screens: the database pushes every
+  // committed change (audit_log over Realtime), and coming back to the tab
+  // reloads too. Without this the phone showed the book as it stood when it
+  // was opened — runs scheduled in the office afterwards never appeared.
+  const loadRef = useRef(null);
+  useEffect(() => {
+    if (storageMode !== "supabase") return;
+    let stop = false, ch = null, burst = null;
+    const vis = () => { if (!document.hidden && loadRef.current) loadRef.current(true); };
+    window.addEventListener("focus", vis);
+    document.addEventListener("visibilitychange", vis);
+    (async () => {
+      try {
+        const sb = await getSupabase();
+        ch = sb
+          .channel("dk-phone-live")
+          .on("postgres_changes", { event: "INSERT", schema: "public", table: "audit_log" }, (payload) => {
+            const r = (payload && payload.new) || {};
+            if (r.record_id === "fmBridgeLast" || r.record_id === "wooBridgeLast") return; // bridge heartbeats
+            if (burst) clearTimeout(burst);
+            burst = setTimeout(() => { if (!stop && loadRef.current) loadRef.current(true); }, 1200);
+          })
+          .subscribe();
+      } catch (e) { /* no realtime: focus + pull-to-refresh still cover it */ }
+    })();
+    return () => {
+      stop = true; if (burst) clearTimeout(burst);
+      window.removeEventListener("focus", vis); document.removeEventListener("visibilitychange", vis);
+      try { if (ch) ch.unsubscribe(); } catch (e) { /* already gone */ }
+    };
+  }, []);
+
   const gotLive = useRef(false); // once live data has painted, the cached copy may not overwrite it
-  const load = async () => {
+  // silent = a background refresh (realtime / regained focus): the data updates
+  // in place without bumping `loads`, so an open day view or a half-done stop
+  // confirmation isn't remounted underneath whoever's using it
+  const load = async (silent = false) => {
     setErr("");
-    setLoads((n) => n + 1);
+    if (!silent) setLoads((n) => n + 1);
     loadLoading([ymd(new Date())]).then(setTodayLoad).catch(() => {});
     // instant open: paint the phone's last copy straight away while the live
     // fetch runs — a lifesaver on van signal (ticks and drops write to the
@@ -79,6 +115,7 @@ export default function DriverApp({ me, warehouse, switcher }) {
       setErr("Couldn't load — check your signal, then tap Try again.");
     }
   };
+  loadRef.current = load;
   useEffect(() => { load(); }, []);
 
   // pull the screen down to refresh: a spinner drops in from the top while it reloads
@@ -153,6 +190,7 @@ export default function DriverApp({ me, warehouse, switcher }) {
         <div style={{ fontWeight: 800, fontSize: 17 }}>{title}</div>
         <div style={{ fontSize: 12, color: "#aeb9cf", fontWeight: 600 }}>{switcher ? (driver ? "Viewing as " + driver : "Loading · all vans") : (driver ? driver + " · " : warehouse ? "Warehouse · " : "") + "Deck Kingdom"}</div>
       </div>
+      <button type="button" onClick={() => load()} title="Refresh" aria-label="Refresh" style={{ border: "none", background: "rgba(255,255,255,.12)", color: "#fff", borderRadius: 10, width: 40, height: 40, cursor: "pointer", fontSize: 18, fontWeight: 800, flex: "none" }}>↻</button>
       {switcher && <button type="button" onClick={() => setPicking(true)} title="Switch driver / app" style={{ border: "none", background: GOLD, color: NAVY, borderRadius: 10, height: 40, padding: "0 10px", flex: "none", fontFamily: "inherit", fontWeight: 800, fontSize: 13, cursor: "pointer" }}>⇄ Switch</button>}
       {switcher && <button type="button" onClick={() => openPhoneApp(null)} title="Back to the office system" aria-label="Back to the office system" style={{ border: "none", background: "rgba(255,255,255,.12)", color: "#fff", borderRadius: 10, width: 40, height: 40, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", flex: "none" }}><Icon name="home" stroke="#fff" /></button>}
       {picking && <DriverPicker crm={crm} myName={switcher.myName} current={switcher.current} onClose={() => setPicking(false)} />}
