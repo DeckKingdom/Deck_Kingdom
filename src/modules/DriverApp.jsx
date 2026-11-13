@@ -1,7 +1,8 @@
 // Driver logins: a phone screen with just their own runs (today, tomorrow and the rest of the week)
 // and a fuel form. The database only hands a driver the jobs and pick-ups planned for them.
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { crmStorage, storageMode } from "../data/crmStorage.js";
+import { readCrmCache, writeCrmCache } from "../data/crmCache.js";
 import { getSupabase } from "../data/supabaseClient.js";
 import { signOut } from "../data/auth.js";
 import { normaliseCrm, isVoidInvoice, isCollectionJob, invoiceTotals, isPaid, gbp, partKey, collNotesText } from "../lib/crmCore.js";
@@ -52,10 +53,17 @@ export default function DriverApp({ me, warehouse, switcher }) {
   const [view, setView] = useState(null); // null = home · a yyyy-mm-dd = that day's runs · "fuel"
   const [loads, setLoads] = useState(0); // bumped on refresh so the day view re-checks drops and resets
   const [todayLoad, setTodayLoad] = useState(null); // today's loading reports, for the Loading tab's count
+  const gotLive = useRef(false); // once live data has painted, the cached copy may not overwrite it
   const load = async () => {
     setErr("");
     setLoads((n) => n + 1);
     loadLoading([ymd(new Date())]).then(setTodayLoad).catch(() => {});
+    // instant open: paint the phone's last copy straight away while the live
+    // fetch runs — a lifesaver on van signal (ticks and drops write to the
+    // database directly, so looking at a copy a minute old is safe)
+    if (storageMode === "supabase" && !gotLive.current) {
+      readCrmCache().then((c) => { if (c && c.value && !gotLive.current) setCrm(normaliseCrm(JSON.parse(c.value))); }).catch(() => {});
+    }
     try {
       // The phone only needs the live slice — this week's runs, open jobs, tasks,
       // collections — so take the one-round-trip quick path first. The full book
@@ -63,7 +71,9 @@ export default function DriverApp({ me, warehouse, switcher }) {
       let r = null;
       if (storageMode === "supabase") r = await crmStorage.get("dk-crm-quick").catch(() => null);
       if (!r || !r.value) r = await crmStorage.get("dk-crm");
+      gotLive.current = true;
       setCrm(normaliseCrm(r && r.value ? JSON.parse(r.value) : {}));
+      if (storageMode === "supabase" && r && r.value) writeCrmCache(r.value); // next open paints instantly
     } catch (e) {
       setErr("Couldn't load — check your signal, then tap Try again.");
     }

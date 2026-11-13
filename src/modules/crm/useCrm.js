@@ -7,6 +7,7 @@ import { useState, useEffect, useRef } from "react";
 import { crmStorage, latestChange, storageMode } from "../../data/crmStorage.js";
 import { getSupabase } from "../../data/supabaseClient.js";
 import { getSessionEmail } from "../../data/auth.js";
+import { readCrmCache, writeCrmCache } from "../../data/crmCache.js";
 import { emptyCrm, normaliseCrm, carryRidingCollections } from "../../lib/crmCore.js";
 
 const CHECK_MS = 4_000; // how often to look for changes made elsewhere
@@ -29,11 +30,17 @@ export function useCrm(enabled) {
   const lastEdit = useRef(0);
   const seen = useRef(0); // newest change from elsewhere already loaded
   const timer = useRef(null);
+  // instant open: null = undecided, true = showing the device's cached copy
+  // (read-only), false = live data has landed
+  const [crmStale, setCrmStale] = useState(false);
+  const stale = useRef(null);
+  const rawRef = useRef(""); // the last fetched JSON, kept to refresh the device cache cheaply
 
   const commitRef = useRef(null);
   const fetchCrm = async () => {
     const r = await crmStorage.get("dk-crm");
     commitRef.current = r && r.commit ? r.commit : null;
+    if (r && r.value) rawRef.current = r.value;
     return r && r.value ? JSON.parse(r.value) : null;
   };
   // the data just fetched is now what's on screen: make it the baseline for the next save
@@ -54,6 +61,7 @@ export function useCrm(enabled) {
         if (d && !pending.current && !saving.current && lastEdit.current === editsAtStart) {
           adopt();
           setCrm(normaliseCrm(d));
+          if (storageMode === "supabase") writeCrmCache(rawRef.current); // the device cache gets the full book too
         } else {
           scheduleFill(2_000); // they started editing mid-fetch — this copy may be stale
         }
@@ -70,6 +78,19 @@ export function useCrm(enabled) {
     if (loading.current) return;
     loading.current = true;
     setCrmError(false);
+    // instant paint: whatever this device loaded last time goes on screen at
+    // once (read-only — updateCrm ignores edits while it shows) while the live
+    // load runs. The guard on stale.current means a slow cache read can never
+    // overwrite live data that beat it here.
+    if (storageMode === "supabase" && !loaded.current) {
+      readCrmCache().then((c) => {
+        if (c && c.value && !loaded.current && stale.current === null) {
+          stale.current = true;
+          setCrmStale(true);
+          setCrm(normaliseCrm(JSON.parse(c.value)));
+        }
+      }).catch(() => {});
+    }
     let d = null, partial = false;
     try {
       seen.current = await latestChange(getSessionEmail()).catch(() => seen.current);
@@ -81,6 +102,7 @@ export function useCrm(enabled) {
           d = JSON.parse(q.value);
           commitRef.current = q.commit || null;
           partial = !!q.partial;
+          rawRef.current = q.value;
         }
       }
       if (!d) d = await fetchCrm();
@@ -93,10 +115,13 @@ export function useCrm(enabled) {
         return;
       }
     }
+    stale.current = false; // live data from here on: cached copy stands down, edits allowed
+    setCrmStale(false);
     adopt();
     setCrm(normaliseCrm(d || emptyCrm()));
     loaded.current = true;
     loading.current = false;
+    if (storageMode === "supabase") writeCrmCache(rawRef.current); // next open paints instantly
     if (partial) scheduleFill(); // pull the rest of the history in behind the paint
   };
 
@@ -125,6 +150,7 @@ export function useCrm(enabled) {
           adopt();
           setCrm(normaliseCrm(d));
           setLastLive(new Date());
+          if (storageMode === "supabase") writeCrmCache(rawRef.current); // keep the instant-open copy current
         }
       } catch (e) {
         /* try again next time */
@@ -227,6 +253,7 @@ export function useCrm(enabled) {
   }, []);
 
   const updateCrm = (fn) => {
+    if (stale.current) return; // looking at the cached copy: edits wait the few seconds until live data lands
     dirty.current = true;
     pending.current = true;
     lastEdit.current = Date.now();
@@ -246,8 +273,10 @@ export function useCrm(enabled) {
     pending.current = true;
     loaded.current = true;
     lastEdit.current = Date.now();
+    stale.current = false;
+    setCrmStale(false);
     setCrm(normaliseCrm(d));
   };
 
-  return { crm, updateCrm, replaceCrm, crmError, loadCrm, crmSave, saveError, saveNotice, lastLive };
+  return { crm, updateCrm, replaceCrm, crmError, loadCrm, crmSave, saveError, saveNotice, lastLive, crmStale };
 }

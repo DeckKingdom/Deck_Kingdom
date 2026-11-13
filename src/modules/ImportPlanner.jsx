@@ -249,7 +249,7 @@ export default function ImportPlanner() {
 
   // ===== CRM module (customers / invoices / schedule) =====
   const [crmOn, setCrmOn] = useState(false);
-  const { crm, updateCrm: updateCrmRaw, replaceCrm, crmError, loadCrm, crmSave, saveError, saveNotice, lastLive } = useCrm(crmOn);
+  const { crm, updateCrm: updateCrmRaw, replaceCrm, crmError, loadCrm, crmSave, saveError, saveNotice, lastLive, crmStale } = useCrm(crmOn);
   // read-only logins can look but not change: edits are ignored with a short note
   const updateCrm = (fn) => {
     if (!access.canEdit) { setRoNote(true); return; }
@@ -1494,6 +1494,13 @@ export default function ImportPlanner() {
         <span style={{ color: saveError ? "#ff8a9a" : "#8fa0c0", fontWeight: saveError ? 800 : 400, fontSize: 12, minWidth: 48, textAlign: "right" }}>{CRM_TABS.includes(tab) || saveError ? crmSave : saveState}</span>
       </div>
 
+      {crmStale && (
+        <div role="status" style={{ position: "fixed", left: "50%", bottom: 18, transform: "translateX(-50%)", zIndex: 900, display: "inline-flex", alignItems: "center", gap: 9, background: "#0B1F3F", color: "#fff", border: "2px solid #F4B73E", borderRadius: 999, padding: "9px 18px", boxShadow: "0 10px 30px rgba(11,31,63,.35)", fontSize: 13.5, fontWeight: 700, whiteSpace: "nowrap" }}>
+          <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#F4B73E", animation: "dk-pulse 1s ease-in-out infinite" }} />
+          Showing your last visit — catching up with live changes… editing unlocks in a moment
+          <style>{"@keyframes dk-pulse{50%{opacity:.25}}"}</style>
+        </div>
+      )}
       {saveNotice && !saveError && (
         <div role="status" style={{ position: "fixed", left: "50%", bottom: 18, transform: "translateX(-50%)", zIndex: 900, width: "min(620px, calc(100vw - 32px))", boxSizing: "border-box", background: "#0B1F3F", color: "#fff", border: "2px solid #F4B73E", borderRadius: 12, padding: "12px 16px", boxShadow: "0 10px 30px rgba(11,31,63,.35)", fontSize: 14, fontWeight: 700 }}>
           🔢 {saveNotice}

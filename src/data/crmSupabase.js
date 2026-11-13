@@ -313,8 +313,8 @@ function rowsFromData(d) {
 }
 
 async function fetchAll(sb, table) {
-  // first page tells us the total, the rest come down in parallel — a big
-  // table used to mean a chain of round trips, one after the other
+  // first page tells us the total; a few extra pages come down in parallel,
+  // a huge table is walked one id-page at a time (see below)
   const page = 1000;
   // paginate on the primary key (indexed, cheap) — sorting by position on big
   // tables was timing out on busy nights; the order screens expect is applied here instead
@@ -322,13 +322,31 @@ async function fetchAll(sb, table) {
   if (first.error) throw new Error(first.error.message);
   const out = first.data || [];
   const total = first.count == null ? out.length : first.count;
-  if (total > page) {
+  const extraPages = Math.ceil(Math.max(0, total - page) / page);
+  if (extraPages > 0 && extraPages <= 4) {
     const jobs = [];
     for (let from = page; from < total; from += page) jobs.push(sb.from(table).select("*").order("id").range(from, from + page - 1));
     const rest = await Promise.all(jobs);
     for (const r of rest) {
       if (r.error) throw new Error(r.error.message);
       out.push(...r.data);
+    }
+  } else if (extraPages > 4) {
+    // a really big table (the 10k+ invoice lines): walk it by id instead — each
+    // page is an index seek the database answers cheaply even on a bad night,
+    // and one request at a time can't flood the server (a burst of deep-offset
+    // pages was coming back as 500s whenever the instance was under load)
+    let last = out.length ? out[out.length - 1].id : "";
+    while (last && out.length < total) {
+      let r = await sb.from(table).select("*").gt("id", last).order("id").limit(page);
+      if (r.error) {
+        await new Promise((ok) => setTimeout(ok, 900)); // one breath, then one retry
+        r = await sb.from(table).select("*").gt("id", last).order("id").limit(page);
+      }
+      if (r.error) throw new Error(r.error.message);
+      if (!r.data || !r.data.length) break;
+      out.push(...r.data);
+      last = r.data[r.data.length - 1].id;
     }
   }
   out.sort((a, b) => ((Number(a.position) || 0) - (Number(b.position) || 0)) || (String(a.id) < String(b.id) ? -1 : String(a.id) > String(b.id) ? 1 : 0));
