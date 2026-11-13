@@ -178,7 +178,10 @@ export default function DriverApp({ me, warehouse, switcher }) {
   const byDay = useMemo(() => {
     const m = {};
     if (!crm) return m;
-    (crm.invoices || []).filter((i) => !isVoidInvoice(i) && i.deliveryDate && mine(i)).forEach((i) => (m[i.deliveryDate] = m[i.deliveryDate] || []).push({ kind: "inv", obj: i }));
+    (crm.invoices || []).filter((i) => !isVoidInvoice(i) && i.deliveryDate
+      // the warehouse (and the office viewing as anyone) also sees the day's customer
+      // collections — they hand those over and confirm them with ticks + a photo
+      && (mine(i) || ((warehouse || !!switcher) && isCollectionJob(i)))).forEach((i) => (m[i.deliveryDate] = m[i.deliveryDate] || []).push({ kind: "inv", obj: i }));
     (crm.collections || []).filter((c) => c.collectDate && mine(c)).forEach((c) => (m[c.collectDate] = m[c.collectDate] || []).push({ kind: "col", obj: c }));
     Object.values(m).forEach((l) => l.sort((a, b) => (Number(a.obj.runNo) || 99) - (Number(b.obj.runNo) || 99) || (Number(a.obj.dropNo) || 99) - (Number(b.obj.dropNo) || 99)));
     return m;
@@ -467,10 +470,10 @@ function DayRuns({ date, stops, crm, header, onBack, driver, who, onCheckLoad })
     const target = x.kind === "col"
       ? { pickup: true, title: "Complete pick-up", name: o.supplier || "Supplier", ref: "COL-" + o.collectionNo, collectionId: o.id,
           rows: (o.items || []).map((it, k) => ({ qty: it.qty, text: it.description || it.sku, colour: it.colour, code: it.sku || "", lineIndex: k })) }
-      : { title: "Complete drop " + (o.dropNo || ""), name: (custById[o.customerId] || {}).name || "Customer", ref: "#" + o.invNo, invoiceId: o.id, invNo: o.invNo,
+      : { title: isCollectionJob(o) ? "Confirm handover" : "Complete drop " + (o.dropNo || ""), name: (custById[o.customerId] || {}).name || "Customer", ref: "#" + o.invNo, invoiceId: o.id, invNo: o.invNo,
           owed: !isPaid(o) ? invoiceTotals(o).total : 0,
           rows: invLines(o).map(({ l, i }) => ({ qty: l.qty, text: l.description || l.code, colour: l.colour, code: l.code || "", lineIndex: i })) };
-    return <CompleteDrop target={{ ...target, driver: o.driver || "" }} header={header} date={date}
+    return <CompleteDrop target={{ ...target, driver: o.driver || driver || "" }} header={header} date={date}
       onBack={() => setCompleting(null)} onSaved={(conf) => { setDrops((m) => ({ ...m, [conf.collectionId ? "col:" + conf.collectionId : conf.invoiceId]: conf })); setCompleting(null); window.scrollTo(0, 0); }} />;
   }
 
@@ -654,8 +657,9 @@ function DayRuns({ date, stops, crm, header, onBack, driver, who, onCheckLoad })
                 {!isDone && rs.counts && rs.counts["boxes:" + o.id] && Number(rs.counts["boxes:" + o.id].qtyLoaded) > 0 && <div style={{ marginTop: 8, background: "#fff6dd", border: "1px solid #f0d58c", borderRadius: 8, padding: "8px 10px", fontSize: 14, fontWeight: 800, color: "#6b5305" }}>📦 {rs.counts["boxes:" + o.id].qtyLoaded} accessory box{Number(rs.counts["boxes:" + o.id].qtyLoaded) === 1 ? "" : "es"} for this drop</div>}
                 {o.jobNotes && <div style={{ marginTop: 8, background: "#fff8e6", borderRadius: 8, padding: "8px 10px", fontSize: 13.5, fontWeight: 600 }}>{o.jobNotes}</div>}
                 {owed > 0 && <div style={{ marginTop: 8, background: "#fde8ea", color: RED, borderRadius: 8, padding: "8px 10px", fontSize: 14, fontWeight: 800 }}>Payment to take: {gbp(owed)}</div>}
-                {isCur && completeBtn(x, "Complete this drop", !addr)}
-                {isDone && doneLine(conf, false)}
+                {isCur && !coll && completeBtn(x, "Complete this drop", !addr)}
+                {coll && !isDone && completeBtn(x, "Confirm handover — ticks & photo", true)}
+                {isDone && doneLine(conf, coll)}
               </div>
             </div>
           );
