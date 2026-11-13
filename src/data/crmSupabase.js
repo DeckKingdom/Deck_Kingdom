@@ -384,14 +384,16 @@ async function loadAll(quick = false) {
     hotP.then((h) => (h ? h.invoices : T("invoices (full)", fetchAll(sb, "invoices")))),
     hotP.then((h) => (h ? h.items : T("invoice lines (full)", fetchAll(sb, "invoice_items")))),
     hotP.then((h) => (h ? h.picks : T("picks (full)", fetchAll(sb, "invoice_picks")))),
-    T("products", fetchAll(sb, "master_products")),
-    T("components", fetchAll(sb, "product_components")),
-    T("collections", fetchAll(sb, "collections")),
-    T("collection items", fetchAll(sb, "collection_items")),
+    hotP.then((h) => (h && Array.isArray(h.products) ? h.products : T("products", fetchAll(sb, "master_products")))),
+    hotP.then((h) => (h && Array.isArray(h.components) ? h.components : T("components", fetchAll(sb, "product_components")))),
+    hotP.then((h) => (h && Array.isArray(h.collections) ? h.collections : T("collections", fetchAll(sb, "collections")))),
+    hotP.then((h) => (h && Array.isArray(h.collectionItems) ? h.collectionItems : T("collection items", fetchAll(sb, "collection_items")))),
     hotP.then((h) => (h ? [] : T("stock movements", fetchAll(sb, "stock_movements")))),
-    T("vans", fetchAll(sb, "vans")),
-    T("van checks", fetchAll(sb, "van_checks")),
+    hotP.then((h) => (h && Array.isArray(h.vans) ? h.vans : T("vans", fetchAll(sb, "vans")))),
+    hotP.then((h) => (h && Array.isArray(h.vanChecks) ? h.vanChecks : T("van checks", fetchAll(sb, "van_checks")))),
     (async () => {
+      const h = await hotP;
+      if (h && Array.isArray(h.settings)) return h.settings;
       // crm_settings has no position/id ordering columns — plain select
       const { data, error } = await sb.from("crm_settings").select("*");
       if (error) throw new Error(error.message);
@@ -400,6 +402,8 @@ async function loadAll(quick = false) {
     (async () => {
       // tolerant: a missing quotes table (SQL not run yet) must not stop the CRM loading
       try {
+        const h = await hotP;
+        if (h && Array.isArray(h.quotes)) return { q: h.quotes, qi: h.quoteItems || [] };
         const [q, qi] = await Promise.all([T("quotes", fetchAll(sb, "quotes")), T("quote items", fetchAll(sb, "quote_items"))]);
         return { q, qi };
       } catch (e) {
@@ -418,6 +422,8 @@ async function loadAll(quick = false) {
     })(),
     (async () => {
       try {
+        const h0 = await hotP;
+        if (h0 && Array.isArray(h0.tasks)) return { tk: h0.tasks, lg: [] }; // the fill brings the tick log
         const since = new Date(Date.now() - TASK_LOG_DAYS * 86400000).toISOString().slice(0, 10);
         const [tk, lg] = await Promise.all([
           fetchAll(sb, "tasks"),
@@ -441,6 +447,8 @@ async function loadAll(quick = false) {
     (async () => {
       // staff logins, for assigning tasks (read-only here)
       try {
+        const h = await hotP;
+        if (h && Array.isArray(h.staff)) return h.staff;
         let { data, error } = await sb.from("profiles").select("email, full_name, role, driver_name");
         if (error) ({ data, error } = await sb.from("profiles").select("email, full_name, role"));
         return error ? [] : data || [];
@@ -450,6 +458,8 @@ async function loadAll(quick = false) {
     })(),
     (async () => {
       try {
+        const h = await hotP;
+        if (h && Array.isArray(h.suppliers)) return { sp: h.suppliers, pu: h.purchases || [] };
         const [sp, pu] = await Promise.all([T("suppliers", fetchAll(sb, "suppliers")), T("purchases", fetchAll(sb, "purchases"))]);
         return { sp, pu };
       } catch (e) {
