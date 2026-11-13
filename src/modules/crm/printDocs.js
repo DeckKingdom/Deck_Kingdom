@@ -22,7 +22,19 @@ const COMPANY = {
   phone: "0161 399 1837",
   email: "info@deckkingdom.co.uk",
   web: "deckkingdom.co.uk",
+  companyNo: "14085154",
+  vatNo: "426 4430 12",
+  bank: { name: "Deck Kingdom Limited", sort: "82-61-37", account: "20556647" },
 };
+// the registered-company line on customer-facing paperwork
+const regFoot = `${COMPANY.name} · Company No. ${COMPANY.companyNo} · VAT No. ${COMPANY.vatNo}`;
+const bankBlock = (ref) => `
+<div class="blk"><h3>Payment by bank transfer</h3>
+  <div>Account name: <b>${esc(COMPANY.bank.name)}</b></div>
+  <div>Sort code: <b>${esc(COMPANY.bank.sort)}</b> · Account number: <b>${esc(COMPANY.bank.account)}</b></div>
+  ${ref ? `<div>Reference: <b>${esc(ref)}</b></div>` : ""}
+  <div style="margin-top:4px;color:#5a6a85">Or by card over the phone on ${esc(COMPANY.phone)}.</div>
+</div>`;
 
 const shell = (title, body, noPrint) => `<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title>
 <style>
@@ -110,15 +122,18 @@ const invoiceBody = (inv, cust, site) => {
   ${addrBlock("Details", ["Account #" + ((cust && cust.accountNo) || "—"), inv.orderRef ? "Order ref: " + inv.orderRef : "", inv.jobType, inv.deliveryDate ? "Delivery: " + pretty(inv.deliveryDate) + (inv.deliveryTime ? " " + inv.deliveryTime : "") : "", inv.paymentType ? "Payment: " + inv.paymentType + (inv.paymentDate ? " (" + pretty(inv.paymentDate) + ")" : "") : ""])}
 </div>
 <table><tr><th>Code</th><th>Description</th><th>Colour</th><th class="r">Qty</th><th class="r">Price inc VAT</th><th class="r">Total</th></tr>${lines}</table>
-<table class="totals">
-  <tr><td>Goods (inc VAT)</td><td class="r">${gb(t.goods)}</td></tr>
-  ${t.discount > 0 ? `<tr><td>Discount (${t.discountPct}%)</td><td class="r">−${gb(t.discount)}</td></tr>` : ""}
-  <tr><td>Delivery charge</td><td class="r">${gb(t.delivery)}</td></tr>
-  <tr><td>of which VAT (${Number(inv.vatRate) || 20}%)</td><td class="r">${gb(t.vat)}</td></tr>
-  <tr><td>Net</td><td class="r">${gb(t.net)}</td></tr>
-  <tr class="final"><td>TOTAL</td><td class="r">${gb(t.total)}</td></tr>
-</table>
-<div class="foot">Thank you for your order · ${esc(COMPANY.web)} · ${esc(COMPANY.phone)}</div>`;
+<div style="display:flex;gap:24px;align-items:flex-start">
+  ${bankBlock("Invoice #" + (inv.invNo || inv.orderRef || ""))}
+  <table class="totals">
+    <tr><td>Goods (inc VAT)</td><td class="r">${gb(t.goods)}</td></tr>
+    ${t.discount > 0 ? `<tr><td>Discount (${t.discountPct}%)</td><td class="r">−${gb(t.discount)}</td></tr>` : ""}
+    <tr><td>Delivery charge</td><td class="r">${gb(t.delivery)}</td></tr>
+    <tr><td>of which VAT (${Number(inv.vatRate) || 20}%)</td><td class="r">${gb(t.vat)}</td></tr>
+    <tr><td>Net</td><td class="r">${gb(t.net)}</td></tr>
+    <tr class="final"><td>TOTAL</td><td class="r">${gb(t.total)}</td></tr>
+  </table>
+</div>
+<div class="foot">${esc(regFoot)}<br>Thank you for your order · ${esc(COMPANY.web)} · ${esc(COMPANY.phone)}</div>`;
   return body;
 };
 export function printInvoice(inv, cust, site) {
@@ -352,9 +367,12 @@ export function statementPdfHtml(cust, invoices) {
   ${addrBlock("Summary", [invoices.length + " unpaid invoice" + (invoices.length === 1 ? "" : "s"), "Total outstanding: " + gb(total)])}
 </div>
 <table><tr><th>Invoice</th><th>Date</th><th>Order ref</th><th>Job</th><th class="r">Total inc VAT</th></tr>${rows}</table>
-<table class="totals"><tr class="final"><td>TOTAL OUTSTANDING</td><td class="r">${gb(total)}</td></tr></table>
-<div class="note">You can pay by bank transfer using the details on your invoice, or by card over the phone on ${esc(COMPANY.phone)}. If any of these have already been paid, please let us know and we'll mark them off.</div>
-<div class="foot">Thank you · ${esc(COMPANY.web)} · ${esc(COMPANY.phone)} · ${esc(COMPANY.email)}</div>`;
+<div style="display:flex;gap:24px;align-items:flex-start">
+  ${bankBlock("your invoice number(s)")}
+  <table class="totals"><tr class="final"><td>TOTAL OUTSTANDING</td><td class="r">${gb(total)}</td></tr></table>
+</div>
+<div class="note">If any of these have already been paid, please let us know and we'll mark them off.</div>
+<div class="foot">${esc(regFoot)}<br>Thank you · ${esc(COMPANY.web)} · ${esc(COMPANY.phone)} · ${esc(COMPANY.email)}</div>`;
   return shell("Statement of account", `<div class="pdfpage">${body}</div>`, true);
 }
 

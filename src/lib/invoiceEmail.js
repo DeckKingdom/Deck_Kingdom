@@ -27,7 +27,7 @@ export function invoiceEmail(inv, cust, site) {
   const ref = inv.invNo ? "#" + inv.invNo : inv.orderRef || "";
   const payLine = isVoidInvoice(inv) ? "This order was cancelled / refunded."
     : paid ? "Paid" + (inv.paymentType ? " by " + inv.paymentType : "") + (inv.paymentDate ? " on " + prettyDate(inv.paymentDate) : "") + " — thank you."
-    : "Balance due: " + money(t.total) + ". You can pay by card over the phone on 0161 399 1837 — please quote " + (inv.invNo ? "invoice #" + inv.invNo : "order " + ref) + ".";
+    : "Balance due: " + money(t.total) + ". You can pay by bank transfer — Deck Kingdom Limited, sort code 82-61-37, account number 20556647, reference " + (inv.invNo ? "#" + inv.invNo : ref) + " — or by card over the phone on 0161 399 1837.";
   const body = (name ? "Hi " + name : "Hi") + ",\n\n" +
     "Here's your invoice from Deck Kingdom.\n\n" +
     (inv.invNo ? "Invoice #" + inv.invNo : "Order " + ref) + " · " + prettyDate(inv.date) + (inv.invNo && inv.orderRef ? " · your ref " + inv.orderRef : "") + "\n" +
@@ -55,7 +55,7 @@ export const invoiceEmailLink = (inv, cust, site) => {
 const stLines = (invoices) =>
   invoices.map((i) => "  #" + (i.invNo || i.orderRef || "—") + " · " + prettyDate(i.date) + " · " + money(invoiceTotals(i).total)).join("\n");
 const stTotal = (invoices) => invoices.reduce((s, i) => s + invoiceTotals(i).total, 0);
-const PAY_LINE = "You can pay by bank transfer using the details on your invoice, or by card over the phone on 0161 399 1837.";
+const PAY_LINE = "You can pay by bank transfer — Deck Kingdom Limited, sort code 82-61-37, account number 20556647, reference your invoice number — or by card over the phone on 0161 399 1837.";
 
 export function statementEmail(cust, invoices) {
   const name = first(cust && (cust.contact || cust.name));
@@ -81,7 +81,7 @@ export function statementWaText(cust, invoices) {
     "Quick statement of your account with Deck Kingdom (" + prettyDate(new Date().toISOString().slice(0, 10)) + "):\n\n" +
     stLines(invoices) + "\n\n" +
     "Total outstanding: " + money(stTotal(invoices)) + "\n\n" +
-    "You can pay by bank transfer (details on your invoice) or by card over the phone on 0161 399 1837. If any of these are already paid, just let us know 👍\n\n" +
+    "You can pay by bank transfer — Deck Kingdom Limited, sort code 82-61-37, account number 20556647 (reference your invoice number) — or by card over the phone on 0161 399 1837. If any of these are already paid, just let us know 👍\n\n" +
     "Thanks\nDeck Kingdom";
 }
 
@@ -91,5 +91,5 @@ export function statementCaption(cust, invoices) {
   return (name ? "Hi " + name : "Hi") + ",\n\n" +
     "Please find attached a statement of your account with Deck Kingdom — " +
     invoices.length + " unpaid invoice" + (invoices.length === 1 ? "" : "s") + ", total " + money(stTotal(invoices)) + ".\n\n" +
-    "You can pay by bank transfer (details on your invoice) or by card over the phone on 0161 399 1837. If any of these are already paid, just let us know 👍\n\nThanks\nDeck Kingdom";
+    "You can pay by bank transfer — Deck Kingdom Limited, sort code 82-61-37, account number 20556647 (reference your invoice number) — or by card over the phone on 0161 399 1837. If any of these are already paid, just let us know 👍\n\nThanks\nDeck Kingdom";
 }

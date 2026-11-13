@@ -634,7 +634,7 @@ export default function run(React, renderToString) {
     const wa = statementWaText(cust, owed);
     assert(wa.startsWith("Hi Dave,") && wa.includes("#5722") && wa.includes("#5720") && wa.includes("£114.95"), "WA statement: greeting, both invoices, the right total");
     const em = statementEmail(cust, owed);
-    assert(em.to === "dave@bds.co.uk" && em.subject.includes("Statement") && em.body.includes("£114.95") && em.body.includes("0161 399 1837"), "email statement: addressed, totalled, with the pay-by-phone line");
+    assert(em.to === "dave@bds.co.uk" && em.subject.includes("Statement") && em.body.includes("£114.95") && em.body.includes("82-61-37") && em.body.includes("20556647"), "email statement: addressed, totalled, with the real bank details");
   }
   console.log("smoke OK — all screens render, totals reconcile (1392 goods + 60 delivery = 1452 inc VAT, £242 VAT, £1210 net)");
 }
