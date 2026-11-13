@@ -372,7 +372,13 @@ async function loadAll(quick = false) {
   // (open, unpaid, last 90 days) with its lines and picks; stock movements and
   // the task log wait for the background fill that follows straight after.
   let hot = null;
-  const hotP = !quick ? Promise.resolve(null) : T("hot slice (rpc)", sb.rpc("crm_hot_invoices", { p_days: 90 }).then((r) => {
+  // How far back the first paint reaches. Open/unpaid work always comes
+  // whatever its age; this only sets the history window. Anything older paints
+  // when the background fill lands seconds later — until then the
+  // vs-last-month figure, the 90-day samples stat and older review nudges
+  // read low. 30 keeps the slice (and the login) about half the size of 90.
+  const QUICK_DAYS = 30;
+  const hotP = !quick ? Promise.resolve(null) : T("hot slice (rpc)", sb.rpc("crm_hot_invoices", { p_days: QUICK_DAYS }).then((r) => {
     if (!r.error && r.data && Array.isArray(r.data.invoices)) return r.data;
     timings.push({ what: "QUICK PATH OFF — run 061", ms: 0, rows: String((r.error && r.error.message) || "") });
     return null;
