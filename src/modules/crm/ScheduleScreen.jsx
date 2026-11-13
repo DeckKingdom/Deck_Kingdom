@@ -637,7 +637,14 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
     let live = true;
     const pull = () => {
       const from = addDays(today(), -10), to = addDays(today(), 3);
-      const dates = [...new Set(crm.invoices.filter((x) => x.driver && x.deliveryDate >= from && x.deliveryDate <= to).map((x) => x.deliveryDate))];
+      // every date that can carry a confirmation: driven jobs, customer
+      // collections (no driver — confirmed at the warehouse), and supplier
+      // pick-ups by their own collect date (a pick-up's photo used to only
+      // show if a driven job happened to share its exact date)
+      const dates = [...new Set([
+        ...crm.invoices.filter((x) => (x.driver || isCollectionJob(x)) && x.deliveryDate >= from && x.deliveryDate <= to).map((x) => x.deliveryDate),
+        ...(crm.collections || []).filter((x) => x.collectDate && x.collectDate >= from && x.collectDate <= to).map((x) => x.collectDate),
+      ])];
       loadDrops(dates).then((m) => live && setDrops(m)).catch(() => {});
     };
     pull();
