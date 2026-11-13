@@ -10,18 +10,17 @@ import {
   skuIndex, invoiceCost, buildPicks, pickLandedCost, jobCost, blankPick, invoiceLoadKg, applyInvoiceStockDeduction, releaseInvoiceLinks,
   TRADE_COUNTER, isCollectionJob, TRADE_COUNTER_LABEL, quoteRef, sampleRef, isSaleInvoice, riskOf, staffName, isVoidInvoice, onSchedule, userInitials, isHistoric, SERVED_BY, sourceOptions, mobileOf } from "../../lib/crmCore.js";
 import { ListHero, HeroStat, HeroAdd, SearchBox, RiskChip, WebStatusChip, Soon, DateInput, CalendarPop, usePhone, PrintButton, bandBtn, BandDelete, LockBar } from "./ui.jsx";
-import { invoiceEmailLink, invoiceEmailTo, statementEmailLink, statementWaText } from "../../lib/invoiceEmail.js";
-import { waNumber, getWaMode } from "./CustomersScreen.jsx";
+import { invoiceEmailLink, invoiceEmailTo, statementEmailLink, statementCaption } from "../../lib/invoiceEmail.js";
+import { waNumber } from "./CustomersScreen.jsx";
 import * as XLSX from "xlsx";
 import { Icon, Chip, Tg, Modal, selectAllProps, SuggestInput, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
-import { printInvoice, printJobSheet, printLoadingBill, printJobDocs } from "./printDocs.js";
+import { printInvoice, printJobSheet, printLoadingBill, printJobDocs, statementPdfHtml } from "./printDocs.js";
+import { htmlToPdfFile, shareToWhatsApp } from "./pdfShare.js";
 import { readableFor } from "./LinesEditor.jsx";
 import LinesEditor from "./LinesEditor.jsx";
 import StockCheck from "./StockCheck.jsx";
 import { DeliverAddrCheck, useAddressGuard } from "./AddressGuard.jsx";
 import { tidyPostcode } from "../../lib/addressCheck.js";
-
-const waHref = (mobile, text) => (getWaMode() === "web" ? "https://web.whatsapp.com/send?phone=" : "whatsapp://send?phone=") + waNumber(mobile) + "&text=" + encodeURIComponent(text);
 
 const docBtn = { ...btn, padding: "6px 11px", fontSize: 12.5 };
 const navyBtn = { ...btn, background: "transparent", border: "1px solid #3a4f78", color: "#fff" };
@@ -64,6 +63,7 @@ const loadRange = () => { try { return JSON.parse(localStorage.getItem("dk-sales
 
 export default function InvoicesScreen({ headerH = 0, openProduct, money = true, newFollowUp, crm, updateCrm, askConfirm, selId, setSelId, goCustomer, openQuote, openSample, openCollection, me, planner, updatePlanner, filter, setFilter }) {
   const [search, setSearch] = useState("");
+  const [stNote, setStNote] = useState(""); // statement-of-account progress / hints
   const phone = usePhone();
   const [peekCust, setPeekCust] = useState(null); // account peeked from the invoice editor
   const [range, setRangeState] = useState(loadRange); // the sales summary's period (remembered on this computer)
@@ -186,6 +186,42 @@ export default function InvoicesScreen({ headerH = 0, openProduct, money = true,
       setNotice("The download was blocked here — it works on the live site (ops.deckkingdom.co.uk).");
     }
   };
+  const statementPdf = () => {
+    const name = "Statement - " + String(stCust.name || "customer").replace(/[^\w\- ]+/g, "").trim() + " - " + today() + ".pdf";
+    return htmlToPdfFile(statementPdfHtml(stCust, stOwed), name);
+  };
+  // WhatsApp: on phones / the WhatsApp app the share sheet opens with the PDF
+  // attached; elsewhere the PDF downloads and the chat opens ready to attach it.
+  // No mobile on the account? WhatsApp opens on its own chat picker.
+  const sendStatementWa = async () => {
+    setStNote("Making the statement PDF…");
+    try {
+      const file = await statementPdf();
+      const how = await shareToWhatsApp(file, statementCaption(stCust, stOwed), stMobile ? waNumber(stMobile) : "");
+      setStNote(how === "downloaded" ? "Statement downloaded (" + file.name + ") — attach it in the WhatsApp chat that's opened." : "");
+      if (how === "downloaded") setTimeout(() => setStNote(""), 10000);
+    } catch (e) {
+      setStNote("Couldn't make the PDF — " + ((e && e.message) || "try again"));
+      setTimeout(() => setStNote(""), 8000);
+    }
+  };
+  // Email: the PDF downloads and Gmail opens with the statement written out — attach the download
+  const sendStatementEmail = async () => {
+    setStNote("Making the statement PDF…");
+    try {
+      const file = await statementPdf();
+      const url = URL.createObjectURL(file);
+      const a = document.createElement("a");
+      a.href = url; a.download = file.name; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      window.open(statementEmailLink(stCust, stOwed), "_blank");
+      setStNote("Statement downloaded (" + file.name + ") — attach it to the Gmail draft that's opened.");
+      setTimeout(() => setStNote(""), 12000);
+    } catch (e) {
+      setStNote("Couldn't make the PDF — " + ((e && e.message) || "try again"));
+      setTimeout(() => setStNote(""), 8000);
+    }
+  };
 
   if (!inv)
     return (
@@ -285,25 +321,24 @@ export default function InvoicesScreen({ headerH = 0, openProduct, money = true,
                 ? "outstanding " + (money ? gbp(stOwedTotal) + " across " : "") + stOwed.length + " invoice" + (stOwed.length === 1 ? "" : "s")
                 : "nothing outstanding"}
             </span>
+            {stNote && <span style={{ fontSize: 12.5, fontWeight: 700, color: "#a05f10" }}>{stNote}</span>}
             <span style={{ flex: 1 }} />
             {stOwed.length > 0 && !(filter && filter.outstanding && filter.customerId === stCust.id) && (
               <button style={{ ...btn, padding: "6px 11px", fontSize: 12.5 }} title="List only this customer's unpaid invoices" onClick={() => setFilter({ customerId: stCust.id, outstanding: true })}>
                 Show outstanding
               </button>
             )}
-            {stOwed.length > 0 && stMobile && (
-              <a href={waHref(stMobile, statementWaText(stCust, stOwed))} target="_blank" rel="noopener noreferrer"
-                style={{ ...btn, padding: "6px 11px", fontSize: 12.5, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 6 }}
-                title={"WhatsApp a statement of the " + stOwed.length + " unpaid invoice" + (stOwed.length === 1 ? "" : "s") + " to " + stMobile}>
+            {stOwed.length > 0 && (
+              <button style={{ ...btn, padding: "6px 11px", fontSize: 12.5 }} onClick={sendStatementWa}
+                title={stMobile ? "WhatsApp the statement PDF to " + stMobile : "No mobile on the account — WhatsApp opens on its chat picker, with the PDF ready to attach"}>
                 <Icon name="wa" stroke="#128C7E" size={14} />WhatsApp statement
-              </a>
+              </button>
             )}
-            {stOwed.length > 0 && String(stCust.email || "").trim() && (
-              <a href={statementEmailLink(stCust, stOwed)} target="_blank" rel="noopener noreferrer"
-                style={{ ...btn, padding: "6px 11px", fontSize: 12.5, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 6 }}
-                title={"Opens Gmail with a statement of the " + stOwed.length + " unpaid invoice" + (stOwed.length === 1 ? "" : "s") + " ready to send"}>
+            {stOwed.length > 0 && (
+              <button style={{ ...btn, padding: "6px 11px", fontSize: 12.5 }} onClick={sendStatementEmail}
+                title={(String(stCust.email || "").trim() ? "Downloads the statement PDF and opens Gmail to " + stCust.email : "No email on the account — downloads the PDF and opens a blank Gmail draft") + " — attach the download before sending"}>
                 <Icon name="mail" stroke="#3b4c6b" size={14} />Email statement
-              </a>
+              </button>
             )}
             {stOwed.length > 0 && (
               <button style={{ ...btn, padding: "6px 11px", fontSize: 12.5 }} onClick={exportStatement} title="Download the unpaid invoices as an Excel file">

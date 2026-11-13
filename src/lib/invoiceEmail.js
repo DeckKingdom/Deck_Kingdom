@@ -84,3 +84,12 @@ export function statementWaText(cust, invoices) {
     "You can pay by bank transfer (details on your invoice) or by card over the phone on 0161 399 1837. If any of these are already paid, just let us know 👍\n\n" +
     "Thanks\nDeck Kingdom";
 }
+
+// the short message that travels WITH the statement PDF
+export function statementCaption(cust, invoices) {
+  const name = first(cust && (cust.contact || cust.name));
+  return (name ? "Hi " + name : "Hi") + ",\n\n" +
+    "Please find attached a statement of your account with Deck Kingdom — " +
+    invoices.length + " unpaid invoice" + (invoices.length === 1 ? "" : "s") + ", total " + money(stTotal(invoices)) + ".\n\n" +
+    "You can pay by bank transfer (details on your invoice) or by card over the phone on 0161 399 1837. If any of these are already paid, just let us know 👍\n\nThanks\nDeck Kingdom";
+}

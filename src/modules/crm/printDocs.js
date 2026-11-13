@@ -340,6 +340,24 @@ export function runDocsHtml(rows, kinds, { custOf, siteOf, crm, planner, title }
   return shell(title || "Run", body, true);
 }
 
+// ===== Statement of account: one page listing a customer's unpaid invoices =====
+export function statementPdfHtml(cust, invoices) {
+  const total = invoices.reduce((t, i) => t + invoiceTotals(i).total, 0);
+  const rows = invoices.map((i) => `
+    <tr><td><b>#${esc(i.invNo || i.orderRef || "—")}</b></td><td>${pretty(i.date)}</td><td>${esc(i.orderRef || "")}</td><td>${esc(i.jobType || "")}</td>
+    <td class="r"><b>${gb(invoiceTotals(i).total)}</b></td></tr>`).join("");
+  const body = head("Statement", (cust && cust.accountNo) || "", pretty(new Date().toISOString().slice(0, 10))) + `
+<div class="grid">
+  ${addrBlock("Statement for", [cust && cust.name, cust && cust.address, cust && [cust.town, cust.postcode].filter(Boolean).join(" ")])}
+  ${addrBlock("Summary", [invoices.length + " unpaid invoice" + (invoices.length === 1 ? "" : "s"), "Total outstanding: " + gb(total)])}
+</div>
+<table><tr><th>Invoice</th><th>Date</th><th>Order ref</th><th>Job</th><th class="r">Total inc VAT</th></tr>${rows}</table>
+<table class="totals"><tr class="final"><td>TOTAL OUTSTANDING</td><td class="r">${gb(total)}</td></tr></table>
+<div class="note">You can pay by bank transfer using the details on your invoice, or by card over the phone on ${esc(COMPANY.phone)}. If any of these have already been paid, please let us know and we'll mark them off.</div>
+<div class="foot">Thank you · ${esc(COMPANY.web)} · ${esc(COMPANY.phone)} · ${esc(COMPANY.email)}</div>`;
+  return shell("Statement of account", `<div class="pdfpage">${body}</div>`, true);
+}
+
 // ===== pending deliveries waiting longer than N days (Delivery Schedule › Pending › Print) =====
 export function printPendingList(jobs, { days, custOf, siteOf, isPaid, daysOf }) {
   const rows = [...jobs].sort((a, b) => (daysOf(b) || 0) - (daysOf(a) || 0));

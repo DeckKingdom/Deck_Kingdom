@@ -64,7 +64,7 @@ export async function shareToWhatsApp(file, text, phone) {
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 60000);
   const chat = document.createElement("a");
-  chat.href = "whatsapp://send?phone=" + phone + "&text=" + encodeURIComponent(text + "\n\n(" + file.name + " attached)");
+  chat.href = "whatsapp://send?" + (phone ? "phone=" + phone + "&" : "") + "text=" + encodeURIComponent(text + "\n\n(" + file.name + " attached)");
   chat.click();
   return "downloaded";
 }
