@@ -53,7 +53,12 @@ export const salesRange = (key, custom, tod) => {
   else if (key === "custom" && custom && custom.from && custom.to && custom.from <= custom.to) {
     from = custom.from; to = custom.to; const n = daysBetween(from, to) + 1; pFrom = addDays(from, -n); pTo = addDays(from, -1); vs = "the " + n + " days before";
   } else { from = mStart; to = tod; pFrom = addMonths(mStart, -1); pTo = toDate(pFrom, [from, to]); vs = "last month to date"; }
-  return { from, to, pFrom, pTo, vs };
+  // the same stretch a year earlier (skipped where the main comparison IS last year)
+  const yFrom = addMonths(from, -12), yTo = addMonths(to, -12);
+  const vsY = key === "year" || key === "lastYear" ? ""
+    : from.slice(0, 7) === to.slice(0, 7) ? new Date(yFrom + "T12:00:00").toLocaleDateString("en-GB", { month: "short", year: "numeric" })
+    : "same time last year";
+  return { from, to, pFrom, pTo, vs, yFrom, yTo, vsY };
 };
 const loadRange = () => { try { return JSON.parse(localStorage.getItem("dk-sales-range") || "null") || { key: "month" }; } catch (e) { return { key: "month" }; } };
 
@@ -219,7 +224,8 @@ export default function InvoicesScreen({ headerH = 0, openProduct, money = true,
           const today_ = sched.filter((i) => i.deliveryDate === tod && !i.deliveryCompleted).length;
           const week = sched.filter((i) => i.deliveryDate >= tod && i.deliveryDate <= weekEnd && !i.deliveryCompleted).length;
           const toBook = sched.filter((i) => !i.deliveryDate && !i.deliveryCompleted && i.jobType !== "Back Order").length;
-          const sales = thisM.filter(isSaleInvoice);
+          const sales = thisM.filter((i) => isSaleInvoice(i) && invoiceTotals(i).total > 0); // a £0.00 invoice isn't an order
+          const salesYr = rg.vsY ? sum(between(rg.yFrom, rg.yTo)) : 0;
           const feeds = [["FileMaker feed", crm.fmBridge, 30], ["Website feed", crm.wooBridge, 24 * 60]].filter(([, fd]) => fd && fd.at);
           return (
             <ListHero title="Invoices"
@@ -238,7 +244,10 @@ export default function InvoicesScreen({ headerH = 0, openProduct, money = true,
               </span>}
               action={rangePick}>
               {money && <HeroStat label={"Sales · " + rangeName} value={gbp(salesNow)}
-                sub={salesLast ? (salesNow >= salesLast ? "▲ " : "▼ ") + gbp(Math.abs(salesNow - salesLast)) + " vs " + rg.vs : "inc VAT"} />}
+                sub={[
+                  salesLast ? (salesNow >= salesLast ? "▲ " : "▼ ") + gbp(Math.abs(salesNow - salesLast)) + " vs " + rg.vs : "",
+                  salesYr ? (salesNow >= salesYr ? "▲ " : "▼ ") + gbp(Math.abs(salesNow - salesYr)) + " vs " + rg.vsY : "",
+                ].filter(Boolean).join(" · ") || "inc VAT"} />}
               <HeroStat label="Awaiting payment" value={money ? gbp(owed) : awaiting.length.toLocaleString("en-GB")} tone={awaiting.length ? "#f6c48a" : undefined}
                 sub={awaiting.length + " invoice" + (awaiting.length === 1 ? "" : "s") + (awaiting.length ? " · click to list" : "")}
                 onClick={awaiting.length ? () => setFilter({ outstanding: true }) : undefined} />
