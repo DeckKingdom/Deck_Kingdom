@@ -405,7 +405,8 @@ const isTudaJob = (inv) => /\btg\b|tuda/i.test((inv && inv.jobType) || "");
 // starts well after the screen is up and never holds up the opening load.
 const DRIVER_HR = 15;
 const MILE_COST = (4.54609 * 1.90) / 30; // £ per mile at 30 mpg, £1.90/litre
-function RunCost({ pcs }) {
+const UNLOAD_MIN = 30; // allowed per drop for unloading
+function RunCost({ pcs, drops = 0 }) {
   const [est, setEst] = useState(null);
   const key = pcs.join(">");
   useEffect(() => {
@@ -423,10 +424,13 @@ function RunCost({ pcs }) {
     return () => { live = false; clearTimeout(t); };
   }, [key]);
   if (!est) return null;
-  const cost = (est.min / 60) * DRIVER_HR + est.mi * MILE_COST;
-  const h = Math.floor(est.min / 60), m = Math.round(est.min % 60);
+  const unload = drops * UNLOAD_MIN;
+  const totMin = est.min + unload;
+  const cost = (totMin / 60) * DRIVER_HR + est.mi * MILE_COST;
+  const h = Math.floor(totMin / 60), m = Math.round(totMin % 60);
+  const dh = Math.floor(est.min / 60), dm = Math.round(est.min % 60);
   return (
-    <span title={"Estimated run cost, out and back: " + Math.round(est.mi) + " miles · " + (h ? h + "h " : "") + m + "m driving\nDriver £" + DRIVER_HR + "/hr = £" + ((est.min / 60) * DRIVER_HR).toFixed(2) + "\nFuel at 30 mpg, £1.90/litre = £" + (est.mi * MILE_COST).toFixed(2)}
+    <span title={"Estimated run cost, out and back: " + Math.round(est.mi) + " miles\n" + (dh ? dh + "h " : "") + dm + "m driving" + (unload ? " + " + (unload >= 60 ? Math.floor(unload / 60) + "h " : "") + (unload % 60 || "") + (unload % 60 ? "m" : "") + " unloading (" + drops + " drop" + (drops === 1 ? "" : "s") + " × " + UNLOAD_MIN + "m)" : "") + "\nDriver £" + DRIVER_HR + "/hr = £" + ((totMin / 60) * DRIVER_HR).toFixed(2) + "\nFuel at 30 mpg, £1.90/litre = £" + (est.mi * MILE_COST).toFixed(2)}
       style={{ fontSize: 11.5, fontWeight: 800, color: "#185FA5", background: "#185FA511", border: "1px solid #c6d8ea", borderRadius: 999, padding: "2px 8px", whiteSpace: "nowrap" }}>
       {"\u2248"} £{Math.round(cost)} · {Math.round(est.mi)} mi · {h ? h + "h" : ""}{m}m
     </span>
@@ -1545,7 +1549,7 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
                     return String(st.postcode || cu.postcode || "").trim();
                   }).filter((pc, ix, arr) => pc && pc.toUpperCase() !== String(arr[ix - 1] || "").toUpperCase());
                   const mapUrl = runPcs.length ? "https://www.google.com/maps/dir/" + ["OL6 6UG", ...runPcs, "OL6 6UG"].map((pc) => encodeURIComponent(pc)).join("/") : "";
-                  const costChip = money && !custGroup && !postGroup && runPcs.length ? <RunCost pcs={runPcs} /> : null;
+                  const costChip = money && !custGroup && !postGroup && runPcs.length ? <RunCost pcs={runPcs} drops={sameRun.filter((x) => x.kind === "inv").length} /> : null;
                   const mapBtn = !custGroup && !postGroup && mapUrl ? (
                     <a href={mapUrl} target="_blank" rel="noopener noreferrer" onClick={(ev) => ev.stopPropagation()}
                       title="See this run in Google Maps — from the warehouse, every stop in order, back again"
