@@ -15,6 +15,7 @@ import LinesEditor, { SizeRow, applySize, skuOption, SKU_COLS, SKU_LIST_W } from
 import { JOB_TYPES, isBackOrder, skuIndex, PAYMENT_TYPES, stockCheck, partKey, isColPick, blankPick, blankCollectionItem, itemPending, collectionLineOpen, editCollectionLine, removeCollectionLine, isGrassRoll, sizeLabel, purchaseCost, outwardOf, collNotesText, mergeablePickups, mergePickups, collectionDropGroups, releaseInvoiceLinks, releaseCollectionPicks } from "../../lib/crmCore.js";
 import StockCheck from "./StockCheck.jsx";
 import { loadDrops, dropPhotoUrl } from "../../data/drops.js";
+import { roadLegsAddr, addrKey } from "../../data/fleetApi.js";
 import { Modal } from "./ui.jsx";
 import { reopenConfirmations } from "./DropSync.jsx";
 import DropPhotos from "./DropPhotos.jsx";
@@ -398,6 +399,40 @@ const isPostedJob = (inv) => /evri|post|courier|parcel|royal ?mail|dpd|\bups\b|\
 const isTudaJob = (inv) => /\btg\b|tuda/i.test((inv && inv.jobType) || "");
 
 // email Tuda Grass the delivery notes for the jobs they're couriering for us (opens Gmail ready to send)
+// Estimated run cost from real road miles + drive time (Google via the
+// route-miles function, cached per leg in this browser). Jon's numbers:
+// £15/hr driver, 30 mpg at £1.90 a litre. Deliberately lazy — the lookup
+// starts well after the screen is up and never holds up the opening load.
+const DRIVER_HR = 15;
+const MILE_COST = (4.54609 * 1.90) / 30; // £ per mile at 30 mpg, £1.90/litre
+function RunCost({ pcs }) {
+  const [est, setEst] = useState(null);
+  const key = pcs.join(">");
+  useEffect(() => {
+    let live = true;
+    setEst(null);
+    const t = setTimeout(async () => {
+      const stops = ["OL6 6UG", ...pcs, "OL6 6UG"];
+      const legs = stops.slice(1).map((to, i) => ({ from: stops[i], to }));
+      const got = await roadLegsAddr(legs);
+      if (!live) return;
+      let mi = 0, min = 0, all = true;
+      legs.forEach((l) => { const r = got[addrKey(l.from, l.to)]; if (r) { mi += Number(r.miles) || 0; min += Number(r.minutes) || 0; } else all = false; });
+      if (all && mi > 0) setEst({ mi, min });
+    }, 800);
+    return () => { live = false; clearTimeout(t); };
+  }, [key]);
+  if (!est) return null;
+  const cost = (est.min / 60) * DRIVER_HR + est.mi * MILE_COST;
+  const h = Math.floor(est.min / 60), m = Math.round(est.min % 60);
+  return (
+    <span title={"Estimated run cost, out and back: " + Math.round(est.mi) + " miles · " + (h ? h + "h " : "") + m + "m driving\nDriver £" + DRIVER_HR + "/hr = £" + ((est.min / 60) * DRIVER_HR).toFixed(2) + "\nFuel at 30 mpg, £1.90/litre = £" + (est.mi * MILE_COST).toFixed(2)}
+      style={{ fontSize: 11.5, fontWeight: 800, color: "#185FA5", background: "#185FA511", border: "1px solid #c6d8ea", borderRadius: 999, padding: "2px 8px", whiteSpace: "nowrap" }}>
+      {"\u2248"} £{Math.round(cost)} · {Math.round(est.mi)} mi · {h ? h + "h" : ""}{m}m
+    </span>
+  );
+}
+
 const TudaMailButton = ({ jobs, crm, siteById, custById, date, onSent, label, vans }) => {
   const tudas = (crm.suppliers || []).filter((x) => /tuda/i.test(x.name || ""));
   const sup = tudas.find((x) => x.email) || tudas[0];
@@ -1504,14 +1539,13 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
                   const nDrops = sameRun.filter((x) => x.kind === "inv").length, nPicks = sameRun.length - nDrops;
                   // the run on a map: OL6 6UG, every stop in run order, back to OL6 6UG —
                   // one look tells you whether the order makes sense
-                  const mapUrl = (() => {
-                    const pcs = sameRun.map((x) => {
-                      if (x.kind === "col") return String(x.obj.postcode || "").trim();
-                      const st = siteById[x.obj.siteId] || {}, cu = custById[x.obj.customerId] || {};
-                      return String(st.postcode || cu.postcode || "").trim();
-                    }).filter((pc, ix, arr) => pc && pc.toUpperCase() !== String(arr[ix - 1] || "").toUpperCase());
-                    return pcs.length ? "https://www.google.com/maps/dir/" + ["OL6 6UG", ...pcs, "OL6 6UG"].map((pc) => encodeURIComponent(pc)).join("/") : "";
-                  })();
+                  const runPcs = sameRun.map((x) => {
+                    if (x.kind === "col") return String(x.obj.postcode || "").trim();
+                    const st = siteById[x.obj.siteId] || {}, cu = custById[x.obj.customerId] || {};
+                    return String(st.postcode || cu.postcode || "").trim();
+                  }).filter((pc, ix, arr) => pc && pc.toUpperCase() !== String(arr[ix - 1] || "").toUpperCase());
+                  const mapUrl = runPcs.length ? "https://www.google.com/maps/dir/" + ["OL6 6UG", ...runPcs, "OL6 6UG"].map((pc) => encodeURIComponent(pc)).join("/") : "";
+                  const costChip = money && !custGroup && !postGroup && runPcs.length ? <RunCost pcs={runPcs} /> : null;
                   const mapBtn = !custGroup && !postGroup && mapUrl ? (
                     <a href={mapUrl} target="_blank" rel="noopener noreferrer" onClick={(ev) => ev.stopPropagation()}
                       title="See this run in Google Maps — from the warehouse, every stop in order, back again"
@@ -1530,6 +1564,7 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
                       <span style={{ fontWeight: 600, color: "#5a6a85", fontSize: 12, whiteSpace: "nowrap" }}>
                         {[nDrops ? nDrops + (custGroup ? " collecting" : " drop" + (nDrops === 1 ? "" : "s")) : "", nPicks ? nPicks + " pick-up" + (nPicks === 1 ? "" : "s") : "", runKg && !loose ? Math.round(runKg).toLocaleString("en-GB") + " kg" : ""].filter(Boolean).join(" · ")}
                       </span>
+                      {costChip}
                       {mapBtn}
                       {!loose && <PrintMenu title="Print or save this run's paperwork" send={sendOptions(sameRun, g.date)} onSavePhone={saveDriverPhone} jobs={sameRun.some((x) => x.kind === "inv")} collCount={sameRun.filter((x) => x.kind === "col").length} onPick={(kk) => printJobs(sameRun.filter((x) => x.kind === "inv").map((x) => x.obj), kk, dayLabel(g.date) + " · " + (custGroup ? "Customer collections" : (e.obj.runNo ? "Run " + e.obj.runNo : "No run") + (e.obj.driver ? " · " + e.obj.driver : "")), sameRun.filter((x) => x.kind === "col").map((x) => x.obj))} />}
                     </div>
@@ -1560,6 +1595,7 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
                           {runKg ? Math.round(runKg).toLocaleString("en-GB") + " kg" : "—"}
                         </span>
                         <span style={{ gridColumn: "12 / -1", display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 5 }}>
+                          {costChip}
                           {mapBtn}
                           <PrintMenu title="Print or save this run's paperwork" send={sendOptions(sameRun, g.date)} onSavePhone={saveDriverPhone} jobs={sameRun.some((x) => x.kind === "inv")} collCount={sameRun.filter((x) => x.kind === "col").length} onPick={(kk) => printJobs(sameRun.filter((x) => x.kind === "inv").map((x) => x.obj), kk, dayLabel(g.date) + " · " + (custGroup ? "Customer collections" : (e.obj.runNo ? "Run " + e.obj.runNo : "No run") + (e.obj.driver ? " · " + e.obj.driver : "")), sameRun.filter((x) => x.kind === "col").map((x) => x.obj))} />
                         </span>
