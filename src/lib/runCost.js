@@ -45,13 +45,22 @@ const posted = (inv) => /evri|post|courier|parcel|royal ?mail|dpd|\bups\b|\btg\b
 // deliveries in drop order with their supplier pick-ups (pick-ups first, the
 // way they ride the schedule). Returns [{ date, drops, pcs, fees, feesNet }],
 // newest first; runs with no postcoded stops are left out and counted.
+// a collection's postcode, falling back to its supplier's record
+export const collPostcode = (crm, c) => {
+  let pc = String(c.postcode || "").trim();
+  if (pc) return pc;
+  const sup = (crm.suppliers || []).find((x) => x.id === c.supplierId) ||
+    (crm.suppliers || []).find((x) => (x.name || "").toLowerCase() === String(c.supplier || "").toLowerCase());
+  return String((sup && sup.postcode) || "").trim();
+};
+
 export const runGroups = (crm, from, to) => {
   const custById = Object.fromEntries((crm.customers || []).map((c) => [c.id, c]));
   const siteById = Object.fromEntries((crm.sites || []).map((s) => [s.id, s]));
   const map = new Map();
   const slot = (date, driver, runNo) => {
     const k = date + "|" + (driver || "") + "|" + (runNo || "");
-    if (!map.has(k)) map.set(k, { date, stops: [], drops: 0, feeDrops: 0, freeDrops: 0, smallFree: 0, warrFree: 0, fees: 0, feesNet: 0 });
+    if (!map.has(k)) map.set(k, { date, stops: [], drops: 0, picks: 0, feeDrops: 0, freeDrops: 0, smallFree: 0, warrFree: 0, fees: 0, feesNet: 0 });
     return map.get(k);
   };
   (crm.invoices || []).forEach((i) => {
@@ -75,8 +84,10 @@ export const runGroups = (crm, from, to) => {
     const d = c.collectDate || "";
     if (!d || (from && d < from) || (to && d > to)) return;
     if (!(c.driver || c.runNo)) return; // not on a van run
-    const pc = String(c.postcode || "").trim();
-    if (pc) slot(d, c.driver, c.runNo).stops.push({ ord: 0, sub: 0, pc });
+    const g = slot(d, c.driver, c.runNo);
+    g.picks += 1; // a pick-up takes loading time like a drop takes unloading
+    const pc = collPostcode(crm, c);
+    if (pc) g.stops.push({ ord: 0, sub: 0, pc });
   });
   let skipped = 0;
   const runs = [];
@@ -88,7 +99,7 @@ export const runGroups = (crm, from, to) => {
     // the same route with the warranty re-visit stops taken out — what the run
     // would have looked like if we hadn't had to go back
     const pcs2 = collapse(sorted.filter((s) => !s.warr));
-    runs.push({ date: g.date, drops: g.drops, feeDrops: g.feeDrops, freeDrops: g.freeDrops, smallFree: g.smallFree, warrFree: g.warrFree, pcs, pcs2, fees: g.fees, feesNet: g.feesNet });
+    runs.push({ date: g.date, drops: g.drops, picks: g.picks, feeDrops: g.feeDrops, freeDrops: g.freeDrops, smallFree: g.smallFree, warrFree: g.warrFree, pcs, pcs2, fees: g.fees, feesNet: g.feesNet });
   });
   runs.sort((a, b) => (a.date < b.date ? 1 : -1));
   return { runs, skipped };

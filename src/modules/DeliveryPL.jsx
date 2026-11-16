@@ -131,21 +131,21 @@ export default function DeliveryPLCard({ crm, card, sect, onLeak }) {
         let mi = 0, min = 0, ok = true;
         legs.forEach((l) => { const g = got[addrKey(l.from, l.to)]; if (g) { mi += Number(g.miles) || 0; min += Number(g.minutes) || 0; } else ok = false; });
         if (ok && mi > 0) {
-          const { cost, totMin } = priceRun(mi, min, r.drops);
+          const { cost, totMin } = priceRun(mi, min, r.drops + (r.picks || 0));
           // what the run would have cost without its warranty re-visit stops
           let cost2 = cost;
           const wf = r.warrFree || 0;
           if (wf > 0) {
             const pcs2 = r.pcs2 || [];
             if (!pcs2.length) cost2 = 0;
-            else if (pcs2.join("|") === r.pcs.join("|")) cost2 = priceRun(mi, min, r.drops - wf).cost;
+            else if (pcs2.join("|") === r.pcs.join("|")) cost2 = priceRun(mi, min, r.drops - wf + (r.picks || 0)).cost;
             else {
               const legs2 = runLegList(pcs2);
               const got2 = await roadLegsAddr(legs2).catch(() => ({}));
               if (!live) return;
               let mi2 = 0, min2 = 0, ok2 = true;
               legs2.forEach((l) => { const g2 = got2[addrKey(l.from, l.to)]; if (g2) { mi2 += Number(g2.miles) || 0; min2 += Number(g2.minutes) || 0; } else ok2 = false; });
-              cost2 = ok2 && mi2 > 0 ? priceRun(mi2, min2, r.drops - wf).cost : cost - (wf * UNLOAD_MIN / 60) * DRIVER_HR;
+              cost2 = ok2 && mi2 > 0 ? priceRun(mi2, min2, r.drops - wf + (r.picks || 0)).cost : cost - (wf * UNLOAD_MIN / 60) * DRIVER_HR;
             }
           }
           a.cost2 += cost2;
@@ -214,7 +214,7 @@ export default function DeliveryPLCard({ crm, card, sect, onLeak }) {
             })()}
           </div>
           <div style={{ fontSize: 11, fontWeight: 600, color: "#aab3c2", marginTop: 8 }}>
-            £{DRIVER_HR}/hr driver · 30 mpg @ £1.90/l · {UNLOAD_MIN}m per drop · out and back from OL6
+            £{DRIVER_HR}/hr driver · 30 mpg @ £1.90/l · {UNLOAD_MIN}m per drop or pick-up · out and back from OL6
             {missing ? " · " + missing + " run" + (missing === 1 ? "" : "s") + " unpriceable" : ""}
           </div>
         </>
