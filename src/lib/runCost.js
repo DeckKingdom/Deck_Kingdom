@@ -25,6 +25,18 @@ export const priceRun = (miles, driveMin, drops) => {
 export const isVanDeliveryJob = (i) => !isVoidInvoice(i) && !isCollectionJob(i) && !posted(i);
 export const isLeakFreeDrop = (i) => isVanDeliveryJob(i) && !((Number(i.deliveryCharge) || 0) > 0) && invoiceTotals(i).total < FREE_LEAK_LIMIT;
 
+// Does a free drop look like a warranty job / re-visit rather than a sale we
+// under-charged? Signals: nothing (or less) was charged at all, or the job's
+// notes mention warranty / replacement / re-visit language. Line descriptions
+// only count for the unambiguous words, so "damaged - clearance" sales don't match.
+const WARR_NOTES = /warrant|replace|re-?visit|re-?deliver|redeliver|goodwill|free of charge|\bfoc\b|\bn\/c\b|no charge|snag|remedial|rectif|our (mistake|error|fault)|wrong (item|colou?r|board|length|product)|sent (the )?wrong|damaged|missing|short[- ]?(sent|delivered)/i;
+const WARR_LINES = /warrant|replacement|re-?visit|goodwill|free of charge|\bfoc\b|no charge/i;
+export const isWarrantyLook = (i) => {
+  if (!(invoiceTotals(i).total > 0)) return true;
+  if (WARR_NOTES.test([i.jobType, i.jobNotes, i.orderRef, i.paymentType].join(" "))) return true;
+  return (i.lines || []).some((l) => WARR_LINES.test(l.description || ""));
+};
+
 // jobs that go by post or courier rather than on a van
 const posted = (inv) => /evri|post|courier|parcel|royal ?mail|dpd|\bups\b|\btg\b/i.test((inv && inv.jobType) || "");
 
@@ -39,7 +51,7 @@ export const runGroups = (crm, from, to) => {
   const map = new Map();
   const slot = (date, driver, runNo) => {
     const k = date + "|" + (driver || "") + "|" + (runNo || "");
-    if (!map.has(k)) map.set(k, { date, stops: [], drops: 0, feeDrops: 0, freeDrops: 0, smallFree: 0, fees: 0, feesNet: 0 });
+    if (!map.has(k)) map.set(k, { date, stops: [], drops: 0, feeDrops: 0, freeDrops: 0, smallFree: 0, warrFree: 0, fees: 0, feesNet: 0 });
     return map.get(k);
   };
   (crm.invoices || []).forEach((i) => {
@@ -51,7 +63,7 @@ export const runGroups = (crm, from, to) => {
     const g = slot(d, i.driver, i.runNo);
     g.drops += 1;
     if ((Number(i.deliveryCharge) || 0) > 0) g.feeDrops += 1;
-    else { g.freeDrops += 1; if (invoiceTotals(i).total < FREE_LEAK_LIMIT) g.smallFree += 1; }
+    else { g.freeDrops += 1; if (invoiceTotals(i).total < FREE_LEAK_LIMIT) { g.smallFree += 1; if (isWarrantyLook(i)) g.warrFree += 1; } }
     g.fees += Number(i.deliveryCharge) || 0;
     g.feesNet += (Number(i.deliveryCharge) || 0) / (1 + (Number(i.vatRate) || 20) / 100);
     if (pc) g.stops.push({ ord: 1, sub: Number(i.dropNo) || 99, pc });
@@ -71,7 +83,7 @@ export const runGroups = (crm, from, to) => {
       .map((s) => s.pc)
       .filter((pc, ix, arr) => pc.toUpperCase() !== String(arr[ix - 1] || "").toUpperCase());
     if (!pcs.length) { skipped += 1; return; }
-    runs.push({ date: g.date, drops: g.drops, feeDrops: g.feeDrops, freeDrops: g.freeDrops, smallFree: g.smallFree, pcs, fees: g.fees, feesNet: g.feesNet });
+    runs.push({ date: g.date, drops: g.drops, feeDrops: g.feeDrops, freeDrops: g.freeDrops, smallFree: g.smallFree, warrFree: g.warrFree, pcs, fees: g.fees, feesNet: g.feesNet });
   });
   runs.sort((a, b) => (a.date < b.date ? 1 : -1));
   return { runs, skipped };

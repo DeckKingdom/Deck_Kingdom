@@ -119,10 +119,10 @@ export default function DeliveryPLCard({ crm, card, sect, onLeak }) {
 
   useEffect(() => {
     let live = true;
-    setAgg({ done: 0, total: grouped.runs.length, priced: 0, mi: 0, cost: 0, driver: 0, drops: 0, feeDrops: 0, freeDrops: 0, smallFree: 0, fees: 0, feesNet: 0, noRoute: 0, byDate: {} });
+    setAgg({ done: 0, total: grouped.runs.length, priced: 0, mi: 0, cost: 0, driver: 0, drops: 0, feeDrops: 0, freeDrops: 0, smallFree: 0, warrFree: 0, fees: 0, feesNet: 0, noRoute: 0, byDate: {} });
     if (!grouped.runs.length) return undefined;
     const t = setTimeout(async () => {
-      const a = { done: 0, total: grouped.runs.length, priced: 0, mi: 0, cost: 0, driver: 0, drops: 0, feeDrops: 0, freeDrops: 0, smallFree: 0, fees: 0, feesNet: 0, noRoute: 0, byDate: {} };
+      const a = { done: 0, total: grouped.runs.length, priced: 0, mi: 0, cost: 0, driver: 0, drops: 0, feeDrops: 0, freeDrops: 0, smallFree: 0, warrFree: 0, fees: 0, feesNet: 0, noRoute: 0, byDate: {} };
       for (const r of grouped.runs) {
         if (!live) return;
         const legs = runLegList(r.pcs);
@@ -132,7 +132,7 @@ export default function DeliveryPLCard({ crm, card, sect, onLeak }) {
         legs.forEach((l) => { const g = got[addrKey(l.from, l.to)]; if (g) { mi += Number(g.miles) || 0; min += Number(g.minutes) || 0; } else ok = false; });
         if (ok && mi > 0) {
           const { cost, totMin } = priceRun(mi, min, r.drops);
-          a.priced += 1; a.mi += mi; a.cost += cost; a.driver += (totMin / 60) * DRIVER_HR; a.drops += r.drops; a.feeDrops += r.feeDrops; a.freeDrops += r.freeDrops; a.smallFree += r.smallFree; a.fees += r.fees; a.feesNet += r.feesNet;
+          a.priced += 1; a.mi += mi; a.cost += cost; a.driver += (totMin / 60) * DRIVER_HR; a.drops += r.drops; a.feeDrops += r.feeDrops; a.freeDrops += r.freeDrops; a.smallFree += r.smallFree; a.warrFree += r.warrFree || 0; a.fees += r.fees; a.feesNet += r.feesNet;
           const b = a.byDate[r.date] || (a.byDate[r.date] = { f: 0, c: 0, d: 0 });
           b.f += r.feesNet; b.c += cost; b.d += r.drops;
         } else a.noRoute += 1;
@@ -143,7 +143,7 @@ export default function DeliveryPLCard({ crm, card, sect, onLeak }) {
     return () => { live = false; clearTimeout(t); };
   }, [grouped]);
 
-  const a = agg || { done: 0, total: 0, priced: 0, mi: 0, cost: 0, driver: 0, drops: 0, feeDrops: 0, freeDrops: 0, smallFree: 0, fees: 0, feesNet: 0, noRoute: 0, byDate: {} };
+  const a = agg || { done: 0, total: 0, priced: 0, mi: 0, cost: 0, driver: 0, drops: 0, feeDrops: 0, freeDrops: 0, smallFree: 0, warrFree: 0, fees: 0, feesNet: 0, noRoute: 0, byDate: {} };
   const pl = a.feesNet - a.cost;
   const busy = a.done < a.total;
   const missing = grouped.skipped + a.noRoute;
@@ -178,7 +178,10 @@ export default function DeliveryPLCard({ crm, card, sect, onLeak }) {
             <span>{a.drops.toLocaleString("en-GB")} drop{a.drops === 1 ? "" : "s"}: <b style={{ color: NAVY }}>{a.feeDrops.toLocaleString("en-GB")}</b> with a delivery fee · <b style={{ color: NAVY }}>{a.freeDrops.toLocaleString("en-GB")}</b> without{a.smallFree > 0 ? <span> — <button onClick={() => onLeak && onLeak(grouped.from, grouped.to)} title="See exactly which jobs these were"
                   style={{ fontFamily: "inherit", border: "none", background: "none", padding: 0, cursor: "pointer", color: RED, fontWeight: 800, fontSize: 13, textDecoration: "underline" }}>
                   {a.smallFree.toLocaleString("en-GB")}
-                </button> of those under £{FREE_LEAK_LIMIT.toLocaleString("en-GB")} order value</span> : null}</span>
+                </button> of those under £{FREE_LEAK_LIMIT.toLocaleString("en-GB")} order value{a.warrFree > 0 ? <span> · <button onClick={() => onLeak && onLeak(grouped.from, grouped.to, true)} title="Jobs whose notes, lines or £0 total say warranty / replacement / re-visit"
+                  style={{ fontFamily: "inherit", border: "none", background: "none", padding: 0, cursor: "pointer", color: "#b07a1f", fontWeight: 800, fontSize: 13, textDecoration: "underline" }}>
+                  {a.warrFree.toLocaleString("en-GB")}
+                </button> <span style={{ color: "#8593a8" }}>look like warranty / re-visits</span></span> : null}</span> : null}</span>
             {pl < 0 && a.drops > 0 && (
               <span>Break even: add <b style={{ color: RED }}>£{(Math.abs(pl) / a.drops).toFixed(2)}</b> to every drop{a.feeDrops > 0 && a.feeDrops < a.drops ? <span style={{ color: "#8593a8" }}> — or £{(Math.abs(pl) / a.feeDrops).toFixed(2)} on just the fee-paying ones</span> : null}</span>
             )}

@@ -13,7 +13,7 @@ import { ListHero, HeroStat, HeroAdd, SearchBox, RiskChip, WebStatusChip, Soon, 
 import { invoiceEmailLink, invoiceEmailTo, statementEmailLink, statementEmail, statementCaption } from "../../lib/invoiceEmail.js";
 import { emailReady, sendEmail } from "../../data/email.js";
 import { waNumber } from "./CustomersScreen.jsx";
-import { isLeakFreeDrop, FREE_LEAK_LIMIT } from "../../lib/runCost.js";
+import { isLeakFreeDrop, isWarrantyLook, FREE_LEAK_LIMIT } from "../../lib/runCost.js";
 import * as XLSX from "xlsx";
 import { Icon, Chip, Tg, Modal, selectAllProps, SuggestInput, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
 import { printInvoice, printJobSheet, printLoadingBill, printJobDocs, statementPdfHtml } from "./printDocs.js";
@@ -152,6 +152,7 @@ export default function InvoicesScreen({ headerH = 0, openProduct, money = true,
     if (filter && filter.freeSmall) {
       const f = filter.freeSmall;
       if (!i.deliveryDate || (f.from && i.deliveryDate < f.from) || (f.to && i.deliveryDate > f.to) || !isLeakFreeDrop(i)) return false;
+      if (f.warr && !isWarrantyLook(i)) return false;
     }
     return true;
   });
@@ -334,7 +335,7 @@ export default function InvoicesScreen({ headerH = 0, openProduct, money = true,
             <span style={{ fontSize: 12, fontWeight: 700, color: "#8a0b20", letterSpacing: 0.4, textTransform: "uppercase" }}>Filtered:</span>
             {filterCust && <Chip tone="red">{filterCust.name || "Customer"}</Chip>}
             {filter.outstanding && <Chip tone="red">Outstanding only</Chip>}
-            {filter.freeSmall && <Chip tone="red">{"Free delivery · under £" + FREE_LEAK_LIMIT.toLocaleString("en-GB") + " order"}</Chip>}
+            {filter.freeSmall && <Chip tone="red">{"Free delivery · under £" + FREE_LEAK_LIMIT.toLocaleString("en-GB") + " order" + (filter.freeSmall.warr ? " · warranty / re-visit look" : "")}</Chip>}
             <span style={{ fontSize: 13, fontWeight: 700 }}>
               {matches.length} invoice{matches.length === 1 ? "" : "s"}{money ? " · " + gbp(filteredTotal) : ""}{filter.outstanding ? " outstanding" : ""}
             </span>
