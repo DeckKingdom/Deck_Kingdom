@@ -10,7 +10,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { today, gbp } from "../lib/crmCore.js";
 import { addDays } from "../lib/core.js";
 import { roadLegsAddr, addrKey } from "../data/fleetApi.js";
-import { runGroups, runLegList, priceRun, DRIVER_HR, UNLOAD_MIN } from "../lib/runCost.js";
+import { runGroups, runLegList, priceRun, DRIVER_HR, MILE_COST, UNLOAD_MIN } from "../lib/runCost.js";
 
 const NAVY = "#0B1F3F", RED = "#C94F4F", GREEN = "#28713e";
 const PERIODS = [["7", "7 days"], ["30", "30 days"], ["90", "90 days"], ["year", "This year"], ["all", "All time"]];
@@ -27,10 +27,10 @@ export default function DeliveryPLCard({ crm, card, sect }) {
 
   useEffect(() => {
     let live = true;
-    setAgg({ done: 0, total: grouped.runs.length, priced: 0, mi: 0, cost: 0, fees: 0, feesNet: 0, noRoute: 0 });
+    setAgg({ done: 0, total: grouped.runs.length, priced: 0, mi: 0, cost: 0, driver: 0, fees: 0, feesNet: 0, noRoute: 0 });
     if (!grouped.runs.length) return undefined;
     const t = setTimeout(async () => {
-      const a = { done: 0, total: grouped.runs.length, priced: 0, mi: 0, cost: 0, fees: 0, feesNet: 0, noRoute: 0 };
+      const a = { done: 0, total: grouped.runs.length, priced: 0, mi: 0, cost: 0, driver: 0, fees: 0, feesNet: 0, noRoute: 0 };
       for (const r of grouped.runs) {
         if (!live) return;
         const legs = runLegList(r.pcs);
@@ -39,8 +39,8 @@ export default function DeliveryPLCard({ crm, card, sect }) {
         let mi = 0, min = 0, ok = true;
         legs.forEach((l) => { const g = got[addrKey(l.from, l.to)]; if (g) { mi += Number(g.miles) || 0; min += Number(g.minutes) || 0; } else ok = false; });
         if (ok && mi > 0) {
-          const { cost } = priceRun(mi, min, r.drops);
-          a.priced += 1; a.mi += mi; a.cost += cost; a.fees += r.fees; a.feesNet += r.feesNet;
+          const { cost, totMin } = priceRun(mi, min, r.drops);
+          a.priced += 1; a.mi += mi; a.cost += cost; a.driver += (totMin / 60) * DRIVER_HR; a.fees += r.fees; a.feesNet += r.feesNet;
         } else a.noRoute += 1;
         a.done += 1;
         if (a.done % 4 === 0 || a.done === a.total) setAgg({ ...a });
@@ -49,7 +49,7 @@ export default function DeliveryPLCard({ crm, card, sect }) {
     return () => { live = false; clearTimeout(t); };
   }, [grouped]);
 
-  const a = agg || { done: 0, total: 0, priced: 0, mi: 0, cost: 0, fees: 0, feesNet: 0, noRoute: 0 };
+  const a = agg || { done: 0, total: 0, priced: 0, mi: 0, cost: 0, driver: 0, fees: 0, feesNet: 0, noRoute: 0 };
   const pl = a.feesNet - a.cost;
   const busy = a.done < a.total;
   const missing = grouped.skipped + a.noRoute;
@@ -80,7 +80,7 @@ export default function DeliveryPLCard({ crm, card, sect }) {
           </div>
           <div style={{ fontSize: 13, fontWeight: 600, color: "#5a6a85", marginTop: 8, display: "grid", gap: 3 }}>
             <span>Fees charged: <b style={{ color: NAVY }}>{gbp(a.fees)}</b> <span style={{ color: "#8593a8" }}>({gbp(a.feesNet)} ex VAT)</span></span>
-            <span>Estimated run cost: <b style={{ color: NAVY }}>{gbp(a.cost)}</b> · {a.priced} run{a.priced === 1 ? "" : "s"} · {Math.round(a.mi).toLocaleString("en-GB")} mi</span>
+            <span>Estimated run cost: <b style={{ color: NAVY }}>{gbp(a.cost)}</b> <span style={{ color: "#8593a8" }}>(driver {gbp(a.driver)} · fuel {gbp(a.mi * MILE_COST)})</span> · {a.priced} run{a.priced === 1 ? "" : "s"} · {Math.round(a.mi).toLocaleString("en-GB")} mi</span>
           </div>
           <div style={{ fontSize: 11, fontWeight: 600, color: "#aab3c2", marginTop: 8 }}>
             £{DRIVER_HR}/hr driver · 30 mpg @ £1.90/l · {UNLOAD_MIN}m per drop · out and back from OL6
