@@ -36,19 +36,22 @@ function PLTrend({ byDate, from, to }) {
     const keyOf = (iso) => (mode === "day" ? iso : mode === "week" ? weekStart(iso) : iso.slice(0, 7) + "-01");
     const next = (iso) => (mode === "day" ? shiftDay(iso, 1) : mode === "week" ? shiftDay(iso, 7) : (iso.slice(0, 7) === "9999-12" ? "" : new Date(Date.UTC(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)), 1, 12)).toISOString().slice(0, 8) + "01"));
     const sums = {};
-    dates.forEach((d) => { const k = keyOf(d); const t = sums[k] || (sums[k] = { f: 0, c: 0 }); t.f += byDate[d].f; t.c += byDate[d].c; });
+    dates.forEach((d) => { const k = keyOf(d); const t = sums[k] || (sums[k] = { f: 0, c: 0, d: 0 }); t.f += byDate[d].f; t.c += byDate[d].c; t.d += byDate[d].d || 0; });
     const out = [];
     for (let k = keyOf(start), guard = 0; k && k <= to && guard < 600; k = next(k), guard += 1) {
-      out.push({ k, label: mode === "month" ? fmtMonth(k) : fmtDay(k), f: (sums[k] || {}).f || 0, c: (sums[k] || {}).c || 0 });
+      const t = sums[k] || { f: 0, c: 0, d: 0 };
+      out.push({ k, label: mode === "month" ? fmtMonth(k) : fmtDay(k), f: t.f, c: t.c, u: t.d > 0 ? Math.max(0, (t.c - t.f) / t.d) : 0 });
     }
     return out;
   }, [byDate, from, to]);
   if (buckets.length < 2) return null;
-  const W = 700, H = 170, L = 46, R = 10, T = 12, B = 22;
+  const W = 700, H = 170, L = 46, R = 44, T = 12, B = 22;
   const max = Math.max(1, ...buckets.flatMap((b) => [b.f, b.c])) * 1.1;
+  const maxU = Math.max(1, ...buckets.map((b) => b.u)) * 1.1;
   const x = (i) => L + (i / (buckets.length - 1)) * (W - L - R);
   const y = (v) => T + (1 - v / max) * (H - T - B);
-  const path = (key) => buckets.map((b, i) => (i ? "L" : "M") + x(i).toFixed(1) + " " + y(b[key]).toFixed(1)).join(" ");
+  const yU = (v) => T + (1 - v / maxU) * (H - T - B);
+  const path = (key) => buckets.map((b, i) => (i ? "L" : "M") + x(i).toFixed(1) + " " + (key === "u" ? yU(b.u) : y(b[key])).toFixed(1)).join(" ");
   const ticks = [max / 1.1, max / 2.2, 0];
   const nLab = Math.min(6, buckets.length);
   const labIdx = Array.from({ length: nLab }, (_, i) => Math.round((i / (nLab - 1)) * (buckets.length - 1)));
@@ -63,6 +66,7 @@ function PLTrend({ byDate, from, to }) {
       <div style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 2 }}>
         <span style={{ fontSize: 12, fontWeight: 700, color: "#5a6a85" }}><span style={{ display: "inline-block", width: 9, height: 9, borderRadius: "50%", background: BLUE, marginRight: 5 }} />Fees (ex VAT)</span>
         <span style={{ fontSize: 12, fontWeight: 700, color: "#5a6a85" }}><span style={{ display: "inline-block", width: 9, height: 9, borderRadius: "50%", background: ORANGE, marginRight: 5 }} />Run cost</span>
+        <span style={{ fontSize: 12, fontWeight: 700, color: "#5a6a85" }}><span style={{ display: "inline-block", width: 9, height: 9, borderRadius: "50%", background: RED, marginRight: 5 }} />Add per drop to break even <span style={{ color: "#aab3c2" }}>(right axis)</span></span>
       </div>
       <div style={{ position: "relative" }}>
         <svg viewBox={"0 0 " + W + " " + H} style={{ width: "100%", height: "auto", display: "block" }} onMouseMove={onMove} onMouseLeave={() => setHov(null)}>
@@ -70,18 +74,21 @@ function PLTrend({ byDate, from, to }) {
             <g key={i}>
               <line x1={L} x2={W - R} y1={y(tv)} y2={y(tv)} stroke="#eef0f4" strokeWidth="1" />
               <text x={L - 6} y={y(tv) + 3.5} textAnchor="end" fontSize="10" fill="#8593a8" fontFamily="inherit">{fmtMoney(tv)}</text>
+              <text x={W - R + 6} y={y(tv) + 3.5} textAnchor="start" fontSize="10" fill={RED} fontFamily="inherit">{"£" + (maxU * (1 - (y(tv) - T) / (H - T - B))).toFixed(0)}</text>
             </g>
           ))}
           {labIdx.map((i) => (
             <text key={i} x={x(i)} y={H - 6} textAnchor="middle" fontSize="10" fill="#8593a8" fontFamily="inherit">{buckets[i].label}</text>
           ))}
           {hb && <line x1={x(hov)} x2={x(hov)} y1={T} y2={H - B} stroke="#d5d9e0" strokeWidth="1" />}
+          <path d={path("u")} fill="none" stroke={RED} strokeWidth="1.5" strokeDasharray="5 4" strokeLinejoin="round" />
           <path d={path("c")} fill="none" stroke={ORANGE} strokeWidth="2" strokeLinejoin="round" />
           <path d={path("f")} fill="none" stroke={BLUE} strokeWidth="2" strokeLinejoin="round" />
           {hb && (
             <g>
               <circle cx={x(hov)} cy={y(hb.c)} r="3.5" fill={ORANGE} stroke="#fff" strokeWidth="1.5" />
               <circle cx={x(hov)} cy={y(hb.f)} r="3.5" fill={BLUE} stroke="#fff" strokeWidth="1.5" />
+              <circle cx={x(hov)} cy={yU(hb.u)} r="3" fill={RED} stroke="#fff" strokeWidth="1.5" />
             </g>
           )}
         </svg>
@@ -90,6 +97,7 @@ function PLTrend({ byDate, from, to }) {
             <div style={{ fontSize: 12, fontWeight: 800, color: NAVY, marginBottom: 3 }}>{hb.label}</div>
             <div style={{ fontSize: 12, fontWeight: 700, color: "#5a6a85" }}><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: BLUE, marginRight: 5 }} />Fees {gbp(hb.f)}</div>
             <div style={{ fontSize: 12, fontWeight: 700, color: "#5a6a85" }}><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: ORANGE, marginRight: 5 }} />Run cost {gbp(hb.c)}</div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "#5a6a85" }}><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: RED, marginRight: 5 }} />Add per drop £{hb.u.toFixed(2)}</div>
           </div>
         )}
       </div>
@@ -125,8 +133,8 @@ export default function DeliveryPLCard({ crm, card, sect, onLeak }) {
         if (ok && mi > 0) {
           const { cost, totMin } = priceRun(mi, min, r.drops);
           a.priced += 1; a.mi += mi; a.cost += cost; a.driver += (totMin / 60) * DRIVER_HR; a.drops += r.drops; a.feeDrops += r.feeDrops; a.freeDrops += r.freeDrops; a.smallFree += r.smallFree; a.fees += r.fees; a.feesNet += r.feesNet;
-          const b = a.byDate[r.date] || (a.byDate[r.date] = { f: 0, c: 0 });
-          b.f += r.feesNet; b.c += cost;
+          const b = a.byDate[r.date] || (a.byDate[r.date] = { f: 0, c: 0, d: 0 });
+          b.f += r.feesNet; b.c += cost; b.d += r.drops;
         } else a.noRoute += 1;
         a.done += 1;
         if (a.done % 4 === 0 || a.done === a.total) setAgg({ ...a });
