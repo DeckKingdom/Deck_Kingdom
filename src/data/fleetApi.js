@@ -66,7 +66,7 @@ export async function roadLegsAddr(legs) {
         data.legs.forEach((r, n) => { if (r && r.miles != null) { out[chunk[n].k] = r; cache[chunk[n].k] = r; } });
       }
       const keys = Object.keys(cache);
-      if (keys.length > 3000) keys.slice(0, keys.length - 3000).forEach((k) => delete cache[k]);
+      if (keys.length > 20000) keys.slice(0, keys.length - 20000).forEach((k) => delete cache[k]); // all-time history fits
       localStorage.setItem(AKEY, JSON.stringify(cache));
     } catch (e) { /* not set up yet: the chip just doesn't show */ }
   }

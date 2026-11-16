@@ -16,6 +16,7 @@ import { JOB_TYPES, isBackOrder, skuIndex, PAYMENT_TYPES, stockCheck, partKey, i
 import StockCheck from "./StockCheck.jsx";
 import { loadDrops, dropPhotoUrl } from "../../data/drops.js";
 import { roadLegsAddr, addrKey } from "../../data/fleetApi.js";
+import { DRIVER_HR, MILE_COST, UNLOAD_MIN } from "../../lib/runCost.js";
 import { Modal } from "./ui.jsx";
 import { reopenConfirmations } from "./DropSync.jsx";
 import DropPhotos from "./DropPhotos.jsx";
@@ -403,9 +404,6 @@ const isTudaJob = (inv) => /\btg\b|tuda/i.test((inv && inv.jobType) || "");
 // route-miles function, cached per leg in this browser). Jon's numbers:
 // £15/hr driver, 30 mpg at £1.90 a litre. Deliberately lazy — the lookup
 // starts well after the screen is up and never holds up the opening load.
-const DRIVER_HR = 15;
-const MILE_COST = (4.54609 * 1.90) / 30; // £ per mile at 30 mpg, £1.90/litre
-const UNLOAD_MIN = 30; // allowed per drop for unloading
 function RunCost({ pcs, drops = 0, fees = 0, feesNet = 0 }) {
   const [est, setEst] = useState(null);
   const key = pcs.join(">");
@@ -433,6 +431,8 @@ function RunCost({ pcs, drops = 0, fees = 0, feesNet = 0 }) {
     <span title={"Estimated run cost, out and back: " + Math.round(est.mi) + " miles\n" + (dh ? dh + "h " : "") + dm + "m driving" + (unload ? " + " + (unload >= 60 ? Math.floor(unload / 60) + "h " : "") + (unload % 60 || "") + (unload % 60 ? "m" : "") + " unloading (" + drops + " drop" + (drops === 1 ? "" : "s") + " × " + UNLOAD_MIN + "m)" : "") + "\nDriver £" + DRIVER_HR + "/hr = £" + ((totMin / 60) * DRIVER_HR).toFixed(2) + "\nFuel at 30 mpg, £1.90/litre = £" + (est.mi * MILE_COST).toFixed(2) + (fees > 0 ? "\n\nDelivery fees charged: £" + fees.toFixed(2) + " (£" + feesNet.toFixed(2) + " ex VAT)\nRun P/L: " + (feesNet - cost >= 0 ? "+" : "\u2212") + "£" + Math.abs(feesNet - cost).toFixed(2) + " (fees ex VAT \u2212 run cost)" : "\n\nNo delivery fees charged on this run\nRun P/L: \u2212£" + cost.toFixed(2))}
       style={{ fontSize: 11.5, fontWeight: 800, color: "#185FA5", background: "#185FA511", border: "1px solid #c6d8ea", borderRadius: 999, padding: "2px 8px", whiteSpace: "nowrap" }}>
       {"\u2248"} £{Math.round(cost)} · {Math.round(est.mi)} mi · {h ? h + "h" : ""}{m}m
+      {" · "}
+      <b style={{ color: feesNet - cost >= 0 ? "#28713e" : RED }}>{feesNet - cost >= 0 ? "+" : "\u2212"}£{Math.abs(Math.round(feesNet - cost))}</b>
     </span>
   );
 }

@@ -14,6 +14,7 @@ import { Icon, Chip, card, sect, lbl, inp, btn, goldBtn, RiskChip } from "./crm/
 import WebsiteCard from "./WebsiteCard.jsx";
 import ReviewsCard from "./ReviewsCard.jsx";
 import { CollectionPeek, InvoicePeek } from "./crm/Peeks.jsx";
+import DeliveryPLCard from "./DeliveryPL.jsx";
 import { samplesIn, SAMPLE_GROUPS, printAllToSend, emailFollowUpGroup, markAllSent } from "./crm/sampleActions.js";
 import { analyticsReady } from "../data/analytics.js";
 import { TaskModal, TasksSchemaNotice, PRIORITY_TONES, STATUS_TONES } from "./crm/TasksScreen.jsx";
@@ -432,6 +433,11 @@ export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTa
               )}
             </div>
           </div>
+          {money && (
+            <div className="dk-home-cell" style={{ gridColumn: "span 2", minWidth: 0 }}>
+              <DeliveryPLCard crm={crm} card={card} sect={sect} />
+            </div>
+          )}
       </div>
 
       {draft && crm && <TaskModal crm={crm} updateCrm={updateCrm} me={me} draft={draft} askConfirm={askConfirm} onClose={() => setDraft(null)} />}
