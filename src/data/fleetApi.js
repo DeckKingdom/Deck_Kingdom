@@ -46,3 +46,29 @@ export async function roadLegs(legs) {
   }
   return out;
 }
+
+// road legs by postcode/address (schedule run costs): [{ from: "OL6 6UG", to: "N14 7LX" }]
+// same shape as roadLegs, cached separately and keyed by the text
+const AKEY = "dk-road-addr";
+export const addrKey = (a, b) => (String(a) + ">" + String(b)).toUpperCase();
+export async function roadLegsAddr(legs) {
+  let cache = {};
+  try { cache = JSON.parse(localStorage.getItem(AKEY) || "{}"); } catch (e) { /* */ }
+  const out = {}, todo = [];
+  legs.forEach((l) => { const k = addrKey(l.from, l.to); if (cache[k]) out[k] = cache[k]; else if (!todo.some((t) => t.k === k)) todo.push({ k, from: l.from, to: l.to }); });
+  if (todo.length && storageMode === "supabase") {
+    try {
+      const sb = await getSupabase();
+      for (let i = 0; i < todo.length; i += 50) {
+        const chunk = todo.slice(i, i + 50);
+        const { data, error } = await sb.functions.invoke("route-miles", { body: { legs: chunk.map((t) => ({ from: { address: t.from + ", UK" }, to: { address: t.to + ", UK" } })) } });
+        if (error || !data || data.setup || !Array.isArray(data.legs)) break;
+        data.legs.forEach((r, n) => { if (r && r.miles != null) { out[chunk[n].k] = r; cache[chunk[n].k] = r; } });
+      }
+      const keys = Object.keys(cache);
+      if (keys.length > 3000) keys.slice(0, keys.length - 3000).forEach((k) => delete cache[k]);
+      localStorage.setItem(AKEY, JSON.stringify(cache));
+    } catch (e) { /* not set up yet: the chip just doesn't show */ }
+  }
+  return out;
+}

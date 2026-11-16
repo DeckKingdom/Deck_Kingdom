@@ -4,7 +4,7 @@
 // Secrets (Supabase -> Edge Functions -> Secrets):
 //   GOOGLE_MAPS_KEY   a Google Maps Platform API key with the Routes API turned on
 // Deploy: Edge Functions -> Deploy a new function -> Via editor -> name  route-miles  -> paste -> Deploy.
-// Body: { legs: [{ from: { lat, lng }, to: { lat, lng } }, ...] }  ->  { legs: [{ miles, minutes } | null, ...] }
+// Body: { legs: [{ from, to }, ...] } where from/to are { lat, lng } or { address: "OL6 6UG, UK" }  ->  { legs: [{ miles, minutes } | null, ...] }
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const CORS = {
@@ -15,7 +15,7 @@ const CORS = {
 const reply = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { ...CORS, "Content-Type": "application/json" } });
 
-const pt = (p: any) => ({ location: { latLng: { latitude: Number(p.lat), longitude: Number(p.lng) } } });
+const pt = (p: any) => (p && p.address ? { address: String(p.address) } : { location: { latLng: { latitude: Number(p.lat), longitude: Number(p.lng) } } });
 
 async function leg(key: string, from: any, to: any, fetcher = fetch) {
   const r = await fetcher("https://routes.googleapis.com/directions/v2:computeRoutes", {
