@@ -1502,6 +1502,23 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
                   const custGroup = key === "3|customer"; // customers collecting from the warehouse
                   const postGroup = key === "1|posted"; // going by post / courier
                   const nDrops = sameRun.filter((x) => x.kind === "inv").length, nPicks = sameRun.length - nDrops;
+                  // the run on a map: OL6 6UG, every stop in run order, back to OL6 6UG —
+                  // one look tells you whether the order makes sense
+                  const mapUrl = (() => {
+                    const pcs = sameRun.map((x) => {
+                      if (x.kind === "col") return String(x.obj.postcode || "").trim();
+                      const st = siteById[x.obj.siteId] || {}, cu = custById[x.obj.customerId] || {};
+                      return String(st.postcode || cu.postcode || "").trim();
+                    }).filter((pc, ix, arr) => pc && pc.toUpperCase() !== String(arr[ix - 1] || "").toUpperCase());
+                    return pcs.length ? "https://www.google.com/maps/dir/" + ["OL6 6UG", ...pcs, "OL6 6UG"].map((pc) => encodeURIComponent(pc)).join("/") : "";
+                  })();
+                  const mapBtn = !custGroup && !postGroup && mapUrl ? (
+                    <a href={mapUrl} target="_blank" rel="noopener noreferrer" onClick={(ev) => ev.stopPropagation()}
+                      title="See this run in Google Maps — from the warehouse, every stop in order, back again"
+                      style={{ display: "inline-flex", alignItems: "center", padding: "3px 6px", borderRadius: 8, border: "1px solid #d5d9e0", background: "#fff", textDecoration: "none" }}>
+                      <Icon name="pin" size={13} stroke="#185FA5" />
+                    </a>
+                  ) : null;
                   const runKg = sameRun.reduce((t, x) => t + ((x.kind === "inv" ? invoiceLoadKg(x.obj, crm) : collKg(x.obj)) || 0), 0);
                   const canMove = key.startsWith("0|") && new Set(g.rows.map(runKey).filter((x) => x.startsWith("0|"))).size > 1;
                   const isOver = overRun === g.date + key && runDrag && runDrag.key !== key;
@@ -1513,6 +1530,7 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
                       <span style={{ fontWeight: 600, color: "#5a6a85", fontSize: 12, whiteSpace: "nowrap" }}>
                         {[nDrops ? nDrops + (custGroup ? " collecting" : " drop" + (nDrops === 1 ? "" : "s")) : "", nPicks ? nPicks + " pick-up" + (nPicks === 1 ? "" : "s") : "", runKg && !loose ? Math.round(runKg).toLocaleString("en-GB") + " kg" : ""].filter(Boolean).join(" · ")}
                       </span>
+                      {mapBtn}
                       {!loose && <PrintMenu title="Print or save this run's paperwork" send={sendOptions(sameRun, g.date)} onSavePhone={saveDriverPhone} jobs={sameRun.some((x) => x.kind === "inv")} collCount={sameRun.filter((x) => x.kind === "col").length} onPick={(kk) => printJobs(sameRun.filter((x) => x.kind === "inv").map((x) => x.obj), kk, dayLabel(g.date) + " · " + (custGroup ? "Customer collections" : (e.obj.runNo ? "Run " + e.obj.runNo : "No run") + (e.obj.driver ? " · " + e.obj.driver : "")), sameRun.filter((x) => x.kind === "col").map((x) => x.obj))} />}
                     </div>
                   ) : key !== prevKey ? (
@@ -1541,7 +1559,8 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
                           style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", paddingRight: 8, fontWeight: 800 }}>
                           {runKg ? Math.round(runKg).toLocaleString("en-GB") + " kg" : "—"}
                         </span>
-                        <span style={{ gridColumn: "12 / -1", display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
+                        <span style={{ gridColumn: "12 / -1", display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 5 }}>
+                          {mapBtn}
                           <PrintMenu title="Print or save this run's paperwork" send={sendOptions(sameRun, g.date)} onSavePhone={saveDriverPhone} jobs={sameRun.some((x) => x.kind === "inv")} collCount={sameRun.filter((x) => x.kind === "col").length} onPick={(kk) => printJobs(sameRun.filter((x) => x.kind === "inv").map((x) => x.obj), kk, dayLabel(g.date) + " · " + (custGroup ? "Customer collections" : (e.obj.runNo ? "Run " + e.obj.runNo : "No run") + (e.obj.driver ? " · " + e.obj.driver : "")), sameRun.filter((x) => x.kind === "col").map((x) => x.obj))} />
                         </span>
                       </>}
