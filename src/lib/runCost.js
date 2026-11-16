@@ -62,11 +62,14 @@ export const runGroups = (crm, from, to) => {
     const pc = String(st.postcode || cu.postcode || "").trim();
     const g = slot(d, i.driver, i.runNo);
     g.drops += 1;
-    if ((Number(i.deliveryCharge) || 0) > 0) g.feeDrops += 1;
-    else { g.freeDrops += 1; if (invoiceTotals(i).total < FREE_LEAK_LIMIT) { g.smallFree += 1; if (isWarrantyLook(i)) g.warrFree += 1; } }
+    if ((Number(i.deliveryCharge) || 0) > 0) g.feeDrops += 1; else g.freeDrops += 1;
+    let warr = false;
+    if ((Number(i.deliveryCharge) || 0) > 0) ; else if (invoiceTotals(i).total < FREE_LEAK_LIMIT && isWarrantyLook(i)) warr = true;
+    if (warr) g.warrFree += 1;
+    if (!((Number(i.deliveryCharge) || 0) > 0) && invoiceTotals(i).total < FREE_LEAK_LIMIT) g.smallFree += 1;
     g.fees += Number(i.deliveryCharge) || 0;
     g.feesNet += (Number(i.deliveryCharge) || 0) / (1 + (Number(i.vatRate) || 20) / 100);
-    if (pc) g.stops.push({ ord: 1, sub: Number(i.dropNo) || 99, pc });
+    if (pc) g.stops.push({ ord: 1, sub: Number(i.dropNo) || 99, pc, warr });
   });
   (crm.collections || []).forEach((c) => {
     const d = c.collectDate || "";
@@ -77,13 +80,15 @@ export const runGroups = (crm, from, to) => {
   });
   let skipped = 0;
   const runs = [];
+  const collapse = (stops) => stops.map((s) => s.pc).filter((pc, ix, arr) => pc.toUpperCase() !== String(arr[ix - 1] || "").toUpperCase());
   map.forEach((g) => {
-    const pcs = g.stops
-      .sort((a, b) => a.ord - b.ord || a.sub - b.sub)
-      .map((s) => s.pc)
-      .filter((pc, ix, arr) => pc.toUpperCase() !== String(arr[ix - 1] || "").toUpperCase());
+    const sorted = g.stops.sort((a, b) => a.ord - b.ord || a.sub - b.sub);
+    const pcs = collapse(sorted);
     if (!pcs.length) { skipped += 1; return; }
-    runs.push({ date: g.date, drops: g.drops, feeDrops: g.feeDrops, freeDrops: g.freeDrops, smallFree: g.smallFree, warrFree: g.warrFree, pcs, fees: g.fees, feesNet: g.feesNet });
+    // the same route with the warranty re-visit stops taken out — what the run
+    // would have looked like if we hadn't had to go back
+    const pcs2 = collapse(sorted.filter((s) => !s.warr));
+    runs.push({ date: g.date, drops: g.drops, feeDrops: g.feeDrops, freeDrops: g.freeDrops, smallFree: g.smallFree, warrFree: g.warrFree, pcs, pcs2, fees: g.fees, feesNet: g.feesNet });
   });
   runs.sort((a, b) => (a.date < b.date ? 1 : -1));
   return { runs, skipped };

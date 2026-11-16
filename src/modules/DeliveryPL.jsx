@@ -119,10 +119,10 @@ export default function DeliveryPLCard({ crm, card, sect, onLeak }) {
 
   useEffect(() => {
     let live = true;
-    setAgg({ done: 0, total: grouped.runs.length, priced: 0, mi: 0, cost: 0, driver: 0, drops: 0, feeDrops: 0, freeDrops: 0, smallFree: 0, warrFree: 0, fees: 0, feesNet: 0, noRoute: 0, byDate: {} });
+    setAgg({ done: 0, total: grouped.runs.length, priced: 0, mi: 0, cost: 0, cost2: 0, driver: 0, drops: 0, feeDrops: 0, freeDrops: 0, smallFree: 0, warrFree: 0, fees: 0, feesNet: 0, noRoute: 0, byDate: {} });
     if (!grouped.runs.length) return undefined;
     const t = setTimeout(async () => {
-      const a = { done: 0, total: grouped.runs.length, priced: 0, mi: 0, cost: 0, driver: 0, drops: 0, feeDrops: 0, freeDrops: 0, smallFree: 0, warrFree: 0, fees: 0, feesNet: 0, noRoute: 0, byDate: {} };
+      const a = { done: 0, total: grouped.runs.length, priced: 0, mi: 0, cost: 0, cost2: 0, driver: 0, drops: 0, feeDrops: 0, freeDrops: 0, smallFree: 0, warrFree: 0, fees: 0, feesNet: 0, noRoute: 0, byDate: {} };
       for (const r of grouped.runs) {
         if (!live) return;
         const legs = runLegList(r.pcs);
@@ -132,6 +132,23 @@ export default function DeliveryPLCard({ crm, card, sect, onLeak }) {
         legs.forEach((l) => { const g = got[addrKey(l.from, l.to)]; if (g) { mi += Number(g.miles) || 0; min += Number(g.minutes) || 0; } else ok = false; });
         if (ok && mi > 0) {
           const { cost, totMin } = priceRun(mi, min, r.drops);
+          // what the run would have cost without its warranty re-visit stops
+          let cost2 = cost;
+          const wf = r.warrFree || 0;
+          if (wf > 0) {
+            const pcs2 = r.pcs2 || [];
+            if (!pcs2.length) cost2 = 0;
+            else if (pcs2.join("|") === r.pcs.join("|")) cost2 = priceRun(mi, min, r.drops - wf).cost;
+            else {
+              const legs2 = runLegList(pcs2);
+              const got2 = await roadLegsAddr(legs2).catch(() => ({}));
+              if (!live) return;
+              let mi2 = 0, min2 = 0, ok2 = true;
+              legs2.forEach((l) => { const g2 = got2[addrKey(l.from, l.to)]; if (g2) { mi2 += Number(g2.miles) || 0; min2 += Number(g2.minutes) || 0; } else ok2 = false; });
+              cost2 = ok2 && mi2 > 0 ? priceRun(mi2, min2, r.drops - wf).cost : cost - (wf * UNLOAD_MIN / 60) * DRIVER_HR;
+            }
+          }
+          a.cost2 += cost2;
           a.priced += 1; a.mi += mi; a.cost += cost; a.driver += (totMin / 60) * DRIVER_HR; a.drops += r.drops; a.feeDrops += r.feeDrops; a.freeDrops += r.freeDrops; a.smallFree += r.smallFree; a.warrFree += r.warrFree || 0; a.fees += r.fees; a.feesNet += r.feesNet;
           const b = a.byDate[r.date] || (a.byDate[r.date] = { f: 0, c: 0, d: 0 });
           b.f += r.feesNet; b.c += cost; b.d += r.drops;
@@ -143,7 +160,7 @@ export default function DeliveryPLCard({ crm, card, sect, onLeak }) {
     return () => { live = false; clearTimeout(t); };
   }, [grouped]);
 
-  const a = agg || { done: 0, total: 0, priced: 0, mi: 0, cost: 0, driver: 0, drops: 0, feeDrops: 0, freeDrops: 0, smallFree: 0, warrFree: 0, fees: 0, feesNet: 0, noRoute: 0, byDate: {} };
+  const a = agg || { done: 0, total: 0, priced: 0, mi: 0, cost: 0, cost2: 0, driver: 0, drops: 0, feeDrops: 0, freeDrops: 0, smallFree: 0, warrFree: 0, fees: 0, feesNet: 0, noRoute: 0, byDate: {} };
   const pl = a.feesNet - a.cost;
   const busy = a.done < a.total;
   const missing = grouped.skipped + a.noRoute;
@@ -185,6 +202,16 @@ export default function DeliveryPLCard({ crm, card, sect, onLeak }) {
             {pl < 0 && a.drops > 0 && (
               <span>Break even: add <b style={{ color: RED }}>£{(Math.abs(pl) / a.drops).toFixed(2)}</b> to every drop{a.feeDrops > 0 && a.feeDrops < a.drops ? <span style={{ color: "#8593a8" }}> — or £{(Math.abs(pl) / a.feeDrops).toFixed(2)} on just the fee-paying ones</span> : null}</span>
             )}
+            {a.warrFree > 0 && a.cost2 < a.cost && (() => {
+              const pl2 = a.feesNet - a.cost2, d2 = a.drops - a.warrFree, saving = a.cost - a.cost2;
+              return (
+                <span style={{ paddingTop: 2, marginTop: 2, borderTop: "1px dashed #e3e7ee" }}>
+                  Without the {a.warrFree.toLocaleString("en-GB")} warranty re-visits: <b style={{ color: pl2 >= 0 ? GREEN : RED }}>{pl2 >= 0 ? "+" : "−"}£{Math.abs(pl2).toLocaleString("en-GB", { maximumFractionDigits: 0 })}</b>
+                  {pl2 < 0 && d2 > 0 ? <span> · break even <b style={{ color: RED }}>£{(Math.abs(pl2) / d2).toFixed(2)}</b> per drop</span> : null}
+                  <span> — potential saving <b style={{ color: GREEN }}>{gbp(saving)}</b></span>
+                </span>
+              );
+            })()}
           </div>
           <div style={{ fontSize: 11, fontWeight: 600, color: "#aab3c2", marginTop: 8 }}>
             £{DRIVER_HR}/hr driver · 30 mpg @ £1.90/l · {UNLOAD_MIN}m per drop · out and back from OL6
