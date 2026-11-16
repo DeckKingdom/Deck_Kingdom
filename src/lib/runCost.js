@@ -21,6 +21,10 @@ export const priceRun = (miles, driveMin, drops) => {
   return { totMin, cost: (totMin / 60) * DRIVER_HR + miles * MILE_COST };
 };
 
+// is this invoice a van delivery at all / a free drop that didn't earn it?
+export const isVanDeliveryJob = (i) => !isVoidInvoice(i) && !isCollectionJob(i) && !posted(i);
+export const isLeakFreeDrop = (i) => isVanDeliveryJob(i) && !((Number(i.deliveryCharge) || 0) > 0) && invoiceTotals(i).total < FREE_LEAK_LIMIT;
+
 // jobs that go by post or courier rather than on a van
 const posted = (inv) => /evri|post|courier|parcel|royal ?mail|dpd|\bups\b|\btg\b/i.test((inv && inv.jobType) || "");
 

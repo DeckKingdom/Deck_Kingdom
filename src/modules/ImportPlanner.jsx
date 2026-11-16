@@ -1535,7 +1535,8 @@ export default function ImportPlanner() {
               </div>
             </div>
           )}
-          <HomeScreen money={access.money} canTab={access.canTab} data={data} crm={crm} updateCrm={updateCrm} me={me} askConfirm={setConfirmBox} setTab={setTab} openInvoice={openInvoice} openCollection={openCollection} openShipment={(id) => { setActiveId(id); setTab("shipments"); }} openReviews={openReviews} addShipment={addShipment} newInvoice={() => (crm ? newInvoiceFor("", "") : setTab("invoices"))} />
+          <HomeScreen money={access.money} canTab={access.canTab} data={data} crm={crm} updateCrm={updateCrm} me={me} askConfirm={setConfirmBox} setTab={setTab} openInvoice={openInvoice} openCollection={openCollection} openShipment={(id) => { setActiveId(id); setTab("shipments"); }} openReviews={openReviews} addShipment={addShipment} newInvoice={() => (crm ? newInvoiceFor("", "") : setTab("invoices"))}
+            openLeakDrops={(from, to) => { setInvFilter({ freeSmall: { from, to } }); setSelInvoiceId(null); setTab("invoices"); }} />
         </>
       )}
 

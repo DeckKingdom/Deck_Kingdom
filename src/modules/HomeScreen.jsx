@@ -40,7 +40,7 @@ const Report = ({ label, value, sub, tone, onClick }) => (
 
 const rowStyle = { display: "flex", gap: 11, alignItems: "flex-start", padding: "9px 0", borderBottom: "1px solid #f0f2f6" };
 
-export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTab, addShipment, newInvoice, openInvoice, openCollection, openShipment, openReviews, money = true, canTab = () => true }) {
+export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTab, addShipment, newInvoice, openInvoice, openCollection, openShipment, openReviews, openLeakDrops, money = true, canTab = () => true }) {
   const tod = today();
   const [viewAs, setViewAs] = useState(me || "");
   const [draft, setDraft] = useState(null);
@@ -458,7 +458,7 @@ export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTa
           </div>
           {money && (
             <div className="dk-home-cell" style={{ gridColumn: "span 2", minWidth: 0 }}>
-              <DeliveryPLCard crm={crm} card={card} sect={sect} />
+              <DeliveryPLCard crm={crm} card={card} sect={sect} onLeak={openLeakDrops} />
             </div>
           )}
       </div>
