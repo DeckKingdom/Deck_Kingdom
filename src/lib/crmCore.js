@@ -2661,15 +2661,16 @@ export const partSuppliers = (crm, planner, sku, description, colourHint) => {
   // the line's stock row by SKU — or, when the code was typed loosely, by its description + colour
   const me = rows.find((r) => lc(r.sku) === lc(sku))
     || (description && rows.find((r) => r.active !== false && lc(r.name) === lc(description) && (!colourHint || lc(r.colour) === lc(colourHint) || colourSeg(lists, r.colour) === colourSeg(lists, colourHint))));
-  const out = partAlternatives(crm, me ? me.sku : sku).map((row) => ({ row, productId: row.importProductId || "", addColour: "" }));
+  // the line's own supplier version is a collection option too — being short of
+  // TG's post adaptor doesn't stop Tuda Grass being the obvious place to get more
+  const out = (me && me.active !== false && !me.isKit ? [{ row: me, productId: me.importProductId || "", addColour: "" }] : [])
+    .concat(partAlternatives(crm, me ? me.sku : sku).map((row) => ({ row, productId: row.importProductId || "", addColour: "" })));
   const products = (planner && planner.products) || [];
   const mine = me && products.find((p) => p.id === me.importProductId);
   const key = mine && masterKey(mine);
   if (!key) return out;
   const colour = String(me.colour || colourHint || "").trim();
   const seg = colourSeg(lists, colour);
-  // include this supplier's own row for the matched product when the line's code was loose
-  if (lc(me.sku) !== lc(sku) && !out.some((o) => o.row.id === me.id)) out.push({ row: me, productId: mine.id, addColour: "" });
   products.forEach((q) => {
     if (q.id === mine.id || q.isKit || masterKey(q) !== key) return;
     if (out.some((o) => o.productId === q.id)) return;
