@@ -27,10 +27,10 @@ export default function DeliveryPLCard({ crm, card, sect }) {
 
   useEffect(() => {
     let live = true;
-    setAgg({ done: 0, total: grouped.runs.length, priced: 0, mi: 0, cost: 0, driver: 0, fees: 0, feesNet: 0, noRoute: 0 });
+    setAgg({ done: 0, total: grouped.runs.length, priced: 0, mi: 0, cost: 0, driver: 0, drops: 0, feeDrops: 0, freeDrops: 0, fees: 0, feesNet: 0, noRoute: 0 });
     if (!grouped.runs.length) return undefined;
     const t = setTimeout(async () => {
-      const a = { done: 0, total: grouped.runs.length, priced: 0, mi: 0, cost: 0, driver: 0, fees: 0, feesNet: 0, noRoute: 0 };
+      const a = { done: 0, total: grouped.runs.length, priced: 0, mi: 0, cost: 0, driver: 0, drops: 0, feeDrops: 0, freeDrops: 0, fees: 0, feesNet: 0, noRoute: 0 };
       for (const r of grouped.runs) {
         if (!live) return;
         const legs = runLegList(r.pcs);
@@ -40,7 +40,7 @@ export default function DeliveryPLCard({ crm, card, sect }) {
         legs.forEach((l) => { const g = got[addrKey(l.from, l.to)]; if (g) { mi += Number(g.miles) || 0; min += Number(g.minutes) || 0; } else ok = false; });
         if (ok && mi > 0) {
           const { cost, totMin } = priceRun(mi, min, r.drops);
-          a.priced += 1; a.mi += mi; a.cost += cost; a.driver += (totMin / 60) * DRIVER_HR; a.fees += r.fees; a.feesNet += r.feesNet;
+          a.priced += 1; a.mi += mi; a.cost += cost; a.driver += (totMin / 60) * DRIVER_HR; a.drops += r.drops; a.feeDrops += r.feeDrops; a.freeDrops += r.freeDrops; a.fees += r.fees; a.feesNet += r.feesNet;
         } else a.noRoute += 1;
         a.done += 1;
         if (a.done % 4 === 0 || a.done === a.total) setAgg({ ...a });
@@ -49,7 +49,7 @@ export default function DeliveryPLCard({ crm, card, sect }) {
     return () => { live = false; clearTimeout(t); };
   }, [grouped]);
 
-  const a = agg || { done: 0, total: 0, priced: 0, mi: 0, cost: 0, driver: 0, fees: 0, feesNet: 0, noRoute: 0 };
+  const a = agg || { done: 0, total: 0, priced: 0, mi: 0, cost: 0, driver: 0, drops: 0, feeDrops: 0, freeDrops: 0, fees: 0, feesNet: 0, noRoute: 0 };
   const pl = a.feesNet - a.cost;
   const busy = a.done < a.total;
   const missing = grouped.skipped + a.noRoute;
@@ -81,6 +81,10 @@ export default function DeliveryPLCard({ crm, card, sect }) {
           <div style={{ fontSize: 13, fontWeight: 600, color: "#5a6a85", marginTop: 8, display: "grid", gap: 3 }}>
             <span>Fees charged: <b style={{ color: NAVY }}>{gbp(a.fees)}</b> <span style={{ color: "#8593a8" }}>({gbp(a.feesNet)} ex VAT)</span></span>
             <span>Estimated run cost: <b style={{ color: NAVY }}>{gbp(a.cost)}</b> <span style={{ color: "#8593a8" }}>(driver {gbp(a.driver)} · fuel {gbp(a.mi * MILE_COST)})</span> · {a.priced} run{a.priced === 1 ? "" : "s"} · {Math.round(a.mi).toLocaleString("en-GB")} mi</span>
+            <span>{a.drops.toLocaleString("en-GB")} drop{a.drops === 1 ? "" : "s"}: <b style={{ color: NAVY }}>{a.feeDrops.toLocaleString("en-GB")}</b> with a delivery fee · <b style={{ color: NAVY }}>{a.freeDrops.toLocaleString("en-GB")}</b> without</span>
+            {pl < 0 && a.drops > 0 && (
+              <span>Break even: add <b style={{ color: RED }}>£{(Math.abs(pl) / a.drops).toFixed(2)}</b> to every drop{a.feeDrops > 0 && a.feeDrops < a.drops ? <span style={{ color: "#8593a8" }}> — or £{(Math.abs(pl) / a.feeDrops).toFixed(2)} on just the fee-paying ones</span> : null}</span>
+            )}
           </div>
           <div style={{ fontSize: 11, fontWeight: 600, color: "#aab3c2", marginTop: 8 }}>
             £{DRIVER_HR}/hr driver · 30 mpg @ £1.90/l · {UNLOAD_MIN}m per drop · out and back from OL6

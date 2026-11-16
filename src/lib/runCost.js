@@ -1,12 +1,12 @@
 // Pricing a delivery run — Jon's numbers: £15/hr driver, 30 mpg at £1.90 a
-// litre, and 30 minutes allowed per drop for unloading. Road miles and drive
+// litre, and 20 minutes allowed per drop for unloading. Road miles and drive
 // times come from the route-miles function (Google), cached per leg in the
 // browser. Used by the schedule's run chips and Home's Delivery P/L card.
 import { isVoidInvoice, isCollectionJob } from "./crmCore.js";
 
 export const DRIVER_HR = 15;
 export const MILE_COST = (4.54609 * 1.9) / 30; // £ per mile at 30 mpg, £1.90/litre
-export const UNLOAD_MIN = 30; // allowed per drop for unloading
+export const UNLOAD_MIN = 20; // allowed per drop for unloading (Jon's average)
 export const BASE_PC = "OL6 6UG";
 
 // postcodes (consecutive duplicates already collapsed) -> the out-and-back legs
@@ -34,7 +34,7 @@ export const runGroups = (crm, from, to) => {
   const map = new Map();
   const slot = (date, driver, runNo) => {
     const k = date + "|" + (driver || "") + "|" + (runNo || "");
-    if (!map.has(k)) map.set(k, { date, stops: [], drops: 0, fees: 0, feesNet: 0 });
+    if (!map.has(k)) map.set(k, { date, stops: [], drops: 0, feeDrops: 0, freeDrops: 0, fees: 0, feesNet: 0 });
     return map.get(k);
   };
   (crm.invoices || []).forEach((i) => {
@@ -45,6 +45,7 @@ export const runGroups = (crm, from, to) => {
     const pc = String(st.postcode || cu.postcode || "").trim();
     const g = slot(d, i.driver, i.runNo);
     g.drops += 1;
+    if ((Number(i.deliveryCharge) || 0) > 0) g.feeDrops += 1; else g.freeDrops += 1;
     g.fees += Number(i.deliveryCharge) || 0;
     g.feesNet += (Number(i.deliveryCharge) || 0) / (1 + (Number(i.vatRate) || 20) / 100);
     if (pc) g.stops.push({ ord: 1, sub: Number(i.dropNo) || 99, pc });
@@ -64,7 +65,7 @@ export const runGroups = (crm, from, to) => {
       .map((s) => s.pc)
       .filter((pc, ix, arr) => pc.toUpperCase() !== String(arr[ix - 1] || "").toUpperCase());
     if (!pcs.length) { skipped += 1; return; }
-    runs.push({ date: g.date, drops: g.drops, pcs, fees: g.fees, feesNet: g.feesNet });
+    runs.push({ date: g.date, drops: g.drops, feeDrops: g.feeDrops, freeDrops: g.freeDrops, pcs, fees: g.fees, feesNet: g.feesNet });
   });
   runs.sort((a, b) => (a.date < b.date ? 1 : -1));
   return { runs, skipped };
