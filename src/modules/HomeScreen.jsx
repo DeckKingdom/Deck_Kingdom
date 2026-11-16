@@ -367,8 +367,25 @@ export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTa
             {crm && (() => {
               // fleet: every renewal date across the vans, soonest first
               const dates = (crm.vans || []).filter((v) => v.active !== false).flatMap((v) =>
-                RENEWAL_FIELDS.map(([k, label]) => ({ van: v.name || "Van", label, date: v[k] || "", d: daysUntil(v[k]) }))
+                RENEWAL_FIELDS.map(([k, label]) => ({ van: v.name || "Van", vanId: v.id, key: k, label, date: v[k] || "", d: daysUntil(v[k]) }))
               );
+              // ✓ on a due row: log it done today on the van and move the date on a year
+              const markDone = (x) => {
+                const t = today();
+                const next = (Number(t.slice(0, 4)) + 1) + t.slice(4);
+                askConfirm && askConfirm({
+                  message: x.van + " — " + x.label.toLowerCase() + " done? It's logged on the van today and the date moves to " + prettyDate(next) + " — adjust in Vans if the schedule differs.",
+                  confirmLabel: "Done today",
+                  action: () =>
+                    updateCrm((c) => {
+                      const v = (c.vans || []).find((vv) => vv.id === x.vanId);
+                      if (!v) return c;
+                      v[x.key] = next;
+                      v.notes = ((v.notes ? v.notes + "\n" : "") + x.label + " done " + prettyDate(t) + (x.date ? " (was due " + prettyDate(x.date) + ")" : "")).trim();
+                      return c;
+                    }),
+                });
+              };
               const set = dates.filter((x) => x.d !== null).sort((a, b) => a.d - b.d);
               const missing = dates.filter((x) => !x.date).length;
               const chip = (d) => d < 0 ? { bg: "#fde8ea", fg: "#9b1c2e", txt: Math.abs(d) + "d overdue" } : d === 0 ? { bg: "#fde8ea", fg: "#9b1c2e", txt: "today" } : d <= 30 ? { bg: "#fdf3e4", fg: "#8a5a14", txt: "in " + d + "d" } : { bg: "#f1f3f7", fg: "#5a6a85", txt: "in " + d + "d" };
@@ -389,6 +406,12 @@ export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTa
                         <span style={{ flex: 1, color: "#5a6a85" }}>{x.label}</span>
                         <span style={{ color: "#5a6a85", fontSize: 12.5 }}>{prettyDate(x.date)}</span>
                         <span style={{ fontSize: 11, fontWeight: 800, color: c.fg, background: c.bg, borderRadius: 999, padding: "2px 8px", minWidth: 62, textAlign: "center" }}>{c.txt}</span>
+                        {x.d <= 30 && (
+                          <button onClick={() => markDone(x)} title={"Done — log today's " + x.label.toLowerCase() + " on the van and move the date on a year"}
+                            style={{ fontFamily: "inherit", border: "1px solid #bfe3ca", background: "#3FA55C14", color: "#28713e", borderRadius: 8, padding: "2px 8px", fontSize: 11.5, fontWeight: 800, cursor: "pointer", flex: "none" }}>
+                            ✓ Done
+                          </button>
+                        )}
                       </div>
                     );
                   })}
