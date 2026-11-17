@@ -7,7 +7,7 @@
 import { useEffect, useState } from "react";
 import { NAVY, GOLD, RED } from "../lib/core.js";
 import { runsOn, loadState, shortLinesOf, canCheck, shortName } from "../lib/loading.js";
-import { loadLoading, setLoaded, setBoxes, boxKey, completeReport, checkReport, reopenReport, loadPhotoUrl } from "../data/loading.js";
+import { loadLoading, setLoaded, setBoxes, boxKey, setLoadOn, completeReport, checkReport, reopenReport, loadPhotoUrl } from "../data/loading.js";
 import { shrinkPhoto } from "../data/drops.js";
 
 const GREEN = "#28713e", BLUE = "#185FA5", AMBER = "#a06d00";
@@ -20,14 +20,21 @@ const label = { display: "block", fontSize: 12, fontWeight: 800, letterSpacing: 
 const bigBtn = (on, bg = GREEN) => ({ width: "100%", border: "none", borderRadius: 12, padding: 15, fontFamily: "inherit", fontWeight: 800, fontSize: 17, background: on ? bg : "#e6e9ef", color: on ? "#fff" : "#8593a8", cursor: on ? "pointer" : "default" });
 const tickBox = (on) => ({ width: 26, height: 26, flex: "none", borderRadius: 7, border: "2px solid " + (on ? GREEN : "#c4cbd6"), background: on ? GREEN : "#fff", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontWeight: 900, fontSize: 15, boxSizing: "border-box" });
 const runName = (r) => (r.van || "No van") + " · " + r.driver + (r.runNo ? " · Run " + r.runNo : "");
+const shiftYmd = (sd, n) => { const d = new Date(sd + "T12:00:00"); d.setDate(d.getDate() + n); return ymd(d); };
+const dow = (sd) => new Date(sd + "T12:00:00").getDay();
+// vans load the evening before they go out; a weekend "day before" pulls back to Friday
+const defLoadDay = (del) => { let d = shiftYmd(del, -1); while (dow(d) === 0 || dow(d) === 6) d = shiftYmd(d, -1); return d; };
+const loadChoices = (del) => { const out = []; for (let d = defLoadDay(del); d <= del; d = shiftYmd(d, 1)) out.push(d); return out; };
+const wkShort = (sd) => new Date(sd + "T12:00:00").toLocaleDateString("en-GB", { weekday: "short" });
+const dmShort = (sd) => new Date(sd + "T12:00:00").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
 
 export default function LoadingMobile({ crm, driver, who, header, onBack, nav }) {
-  const [day, setDay] = useState(null);
   const [runKey, setRunKey] = useState(null);
+  const [runDate, setRunDate] = useState(null);
   const [data, setData] = useState(null); // { reports, counts }
   const [err, setErr] = useState("");
   const [n, setN] = useState(0);
-  const dates = Array.from({ length: 7 }, (_, k) => { const d = new Date(); d.setDate(d.getDate() + k); return ymd(d); });
+  const dates = Array.from({ length: 8 }, (_, k) => { const d = new Date(); d.setDate(d.getDate() + k); return ymd(d); });
   useEffect(() => {
     let live = true;
     const pull = () => loadLoading(dates).then((d) => { if (live) { setData(d); setErr(""); } }).catch((e) => live && setErr(/load_|relation|column/.test(String(e && e.message)) ? "Loading isn't switched on yet — ask the office to run loading.sql." : "Couldn't reach the office system — check your signal and tap ↻."));
@@ -39,8 +46,8 @@ export default function LoadingMobile({ crm, driver, who, header, onBack, nav })
   const runsFor = (d) => (crm ? runsOn(crm, d, driver) : []);
   const stateOf = (r) => loadState(r, data && data.counts[r.key], data && data.reports[r.key]);
 
-  if (runKey && day) {
-    const run = runsFor(day).find((r) => r.key === runKey);
+  if (runKey && runDate) {
+    const run = runsFor(runDate).find((r) => r.key === runKey);
     if (!run) return <div>{header("Loading", () => setRunKey(null))}<div style={{ padding: 14 }}><div style={cardS}>This run isn't on the schedule any more.</div></div></div>;
     return <LoadRun run={run} data={data} who={who} header={header} err={err}
       onBack={() => { setRunKey(null); refresh(); }} onChanged={refresh}
@@ -49,41 +56,25 @@ export default function LoadingMobile({ crm, driver, who, header, onBack, nav })
       onClosed={(rep) => setData((d) => ({ ...d, reports: { ...d.reports, [run.key]: { ...rep, id: run.key } } }))} />;
   }
 
-  if (day) {
-    const runs = runsFor(day);
-    return (
-      <div>
-        {header(new Date(day + "T00:00:00").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" }) + " · loading", () => setDay(null))}
-        {nav}
-        <div style={{ padding: 14 }}>
-          {err && <div style={{ ...cardS, borderColor: "#f4b9c1", background: "#fdf3f4", color: RED, fontWeight: 700 }}>{err}</div>}
-          {runs.length === 0 && <div style={{ ...cardS, textAlign: "center", color: "#8593a8", fontWeight: 700 }}>No vans going out {driver ? "for you " : ""}this day.</div>}
-          {runs.map((r) => {
-            const st = stateOf(r);
-            const rep = data && data.reports[r.key];
-            const short = st.complete && rep && (rep.shortLines || []).length;
-            const chk = st.submitted && canCheck(rep, who);
-            const tone = short ? RED : st.complete ? GREEN : st.submitted ? BLUE : st.loaded || st.part ? AMBER : NAVY;
-            return (
-              <button key={r.key} type="button" onClick={() => setRunKey(r.key)}
-                style={{ ...cardS, width: "100%", textAlign: "left", fontFamily: "inherit", color: NAVY, cursor: "pointer", borderLeft: "6px solid " + tone, display: "block" }}>
-                <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-                  <b style={{ fontSize: 17, flex: 1 }}>{r.van || "No van"}</b>
-                  <span style={{ fontSize: 12, fontWeight: 800, color: tone }}>{st.submitted ? (chk ? "👀 CHECK NEEDED" : "WAITING FOR A CHECK") : short ? "⚠ WENT OUT SHORT" : st.complete ? "✓ LOADED & CHECKED" : st.loaded || st.part ? "PART LOADED" : "NOT STARTED"}</span>
-                </div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: "#5a6a85", marginTop: 2 }}>{r.driver}{r.runNo ? " · Run " + r.runNo : ""} · {r.jobs.length} drop{r.jobs.length === 1 ? "" : "s"}{r.pickups.length ? " · " + r.pickups.length + " pick-up" + (r.pickups.length === 1 ? "" : "s") : ""}</div>
-                <div style={{ fontSize: 12.5, fontWeight: 600, color: "#8593a8", marginTop: 4 }}>
-                  {st.submitted ? "Loaded by " + shortName(rep.completedBy) + " at " + hm(rep.completedAt) + (chk ? " — tap to double-check it" : " — someone else needs to double-check it") : st.complete && rep && rep.completedAt ? "Loaded by " + shortName(rep.completedBy) + (rep.checkedBy ? " · checked by " + shortName(rep.checkedBy) : "") + (short ? " · " + short + " line" + (short === 1 ? "" : "s") + " missing" : "")
-                    : st.loaded + " of " + st.total + " lines on" + (st.part ? " · " + st.part + " part" : "") + (st.allocated ? " · " + st.allocated + " on pick-ups" : "") + (st.unscheduled ? " · " + st.unscheduled + " pick-up not booked" : "")}
-                </div>
-                {!st.complete && st.total > 0 && <div style={{ height: 6, background: "#eef1f6", borderRadius: 4, marginTop: 8, overflow: "hidden" }}><div style={{ height: "100%", width: (100 * (st.loaded + st.allocated) / st.total) + "%", background: GOLD }} /></div>}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-    );
-  }
+  // ===== one scroll: every van under the day it gets loaded =====
+  const today = ymd(new Date());
+  const moveLoad = (r, del, c) => {
+    const v = c === defLoadDay(del) ? "" : c;
+    setData((d) => d && ({ ...d, reports: { ...d.reports, [r.key]: { ...(d.reports[r.key] || { id: r.key, date: r.date, driver: r.driver, runNo: r.runNo, van: r.van, status: "open" }), loadOn: v } } }));
+    setLoadOn(r, v).catch(() => setErr("Couldn't move the loading day — if this keeps happening, ask the office to run 066_load_on.sql."));
+  };
+  const groups = (() => {
+    const m = new Map();
+    dates.forEach((del) => runsFor(del).forEach((r) => {
+      const rep = data && data.reports[r.key];
+      const st = stateOf(r);
+      const ld = (rep && rep.loadOn) || defLoadDay(del);
+      const gk = ld < today ? today : ld;
+      if (!m.has(gk)) m.set(gk, []);
+      m.get(gk).push({ r, st, rep, del, ld, late: ld < today && !(st.complete || st.submitted) });
+    }));
+    return [...m.entries()].sort((x, y) => x[0].localeCompare(y[0]));
+  })();
 
   return (
     <div>
@@ -91,23 +82,52 @@ export default function LoadingMobile({ crm, driver, who, header, onBack, nav })
       {nav}
       <div style={{ padding: 14 }}>
         {err && <div style={{ ...cardS, borderColor: "#f4b9c1", background: "#fdf3f4", color: RED, fontWeight: 700 }}>{err}</div>}
-        <div style={{ fontSize: 13, fontWeight: 700, color: "#5a6a85", margin: "0 2px 10px" }}>Pick the day, then the van to load.</div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-          {dates.map((d, k) => {
-            const runs = runsFor(d);
-            const done = runs.filter((r) => stateOf(r).complete).length;
-            const toCheck = runs.filter((r) => canCheck(data && data.reports[r.key], who)).length;
-            const first = k === 0;
-            const dd = new Date(d + "T00:00:00");
-            return (
-              <button key={d} type="button" onClick={() => setDay(d)}
-                style={{ gridColumn: first ? "span 2" : undefined, minHeight: first ? 92 : 80, borderRadius: 16, border: "1px solid " + (first ? GOLD : "#e6e9ef"), background: first ? GOLD : "#fff", color: NAVY, fontFamily: "inherit", textAlign: "left", padding: "12px 14px", cursor: "pointer", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
-                <span style={{ fontWeight: 800, fontSize: first ? 19 : 16 }}>{k === 0 ? "Today" : k === 1 ? "Tomorrow" : dd.toLocaleDateString("en-GB", { weekday: "long" })} ({runs.length} van{runs.length === 1 ? "" : "s"})</span>
-                <span style={{ fontSize: 12.5, fontWeight: 700, color: first ? NAVY : "#8593a8" }}>{dd.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}{runs.length ? " · " + done + " loaded" : ""}{toCheck ? <b style={{ color: BLUE }}> · {toCheck} to check</b> : null}</span>
-              </button>
-            );
-          })}
-        </div>
+        <div style={{ fontSize: 12.5, fontWeight: 700, color: "#8593a8", margin: "0 2px 4px" }}>Vans sit under the day they get loaded — the evening before they go out. Weekend runs land on Friday unless you move them.</div>
+        {groups.length === 0 && <div style={{ ...cardS, textAlign: "center", color: "#8593a8", fontWeight: 700, marginTop: 10 }}>No vans to load in the next week{driver ? " for you" : ""}.</div>}
+        {groups.map(([gk, list]) => {
+          const dels = [...new Set(list.map((x) => x.del))].sort();
+          return (
+            <div key={gk}>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 8, margin: "16px 2px 8px", flexWrap: "wrap" }}>
+                <b style={{ fontSize: 15.5, color: NAVY }}>{gk === today ? "Load today" : gk === shiftYmd(today, 1) ? "Load tomorrow" : "Load " + new Date(gk + "T12:00:00").toLocaleDateString("en-GB", { weekday: "long" })}</b>
+                <span style={{ fontSize: 12.5, fontWeight: 700, color: "#8593a8" }}>{dmShort(gk)} · out {dels.map(dmShort).join(" + ")}</span>
+                {gk === today && <span style={{ fontSize: 10.5, fontWeight: 800, borderRadius: 999, padding: "2px 8px", background: GOLD, color: NAVY }}>NOW</span>}
+              </div>
+              {list.map(({ r, st, rep, del, ld, late }) => {
+                const short = st.complete && rep && (rep.shortLines || []).length;
+                const chk = st.submitted && canCheck(rep, who);
+                const tone = late ? RED : short ? RED : st.complete ? GREEN : st.submitted ? BLUE : st.loaded || st.part ? AMBER : NAVY;
+                const choices = loadChoices(del);
+                return (
+                  <div key={r.key} role="button" tabIndex={0} onClick={() => { setRunKey(r.key); setRunDate(r.date); }}
+                    style={{ ...cardS, cursor: "pointer", borderLeft: "6px solid " + tone }}>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                      <b style={{ fontSize: 17, flex: 1 }}>{r.van || "No van"}</b>
+                      <span style={{ fontSize: 12, fontWeight: 800, color: tone }}>{late ? "⚠ SHOULD BE ON — out " + wkShort(del) : st.submitted ? (chk ? "👀 CHECK NEEDED" : "WAITING FOR A CHECK") : short ? "⚠ WENT OUT SHORT" : st.complete ? "✓ LOADED & CHECKED" : st.loaded || st.part ? "PART LOADED" : "NOT STARTED"}</span>
+                    </div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "#5a6a85", marginTop: 2 }}>{r.driver}{r.runNo ? " · Run " + r.runNo : ""} · {r.jobs.length} drop{r.jobs.length === 1 ? "" : "s"}{r.pickups.length ? " · " + r.pickups.length + " pick-up" + (r.pickups.length === 1 ? "" : "s") : ""} · out {dmShort(del)}</div>
+                    <div style={{ fontSize: 12.5, fontWeight: 600, color: "#8593a8", marginTop: 4 }}>
+                      {st.submitted ? "Loaded by " + shortName(rep.completedBy) + " at " + hm(rep.completedAt) + (chk ? " — tap to double-check it" : " — someone else needs to double-check it") : st.complete && rep && rep.completedAt ? "Loaded by " + shortName(rep.completedBy) + (rep.checkedBy ? " · checked by " + shortName(rep.checkedBy) : "") + (short ? " · " + short + " line" + (short === 1 ? "" : "s") + " missing" : "")
+                        : st.loaded + " of " + st.total + " lines on" + (st.part ? " · " + st.part + " part" : "") + (st.allocated ? " · " + st.allocated + " on pick-ups" : "") + (st.unscheduled ? " · " + st.unscheduled + " pick-up not booked" : "")}
+                    </div>
+                    {!st.complete && st.total > 0 && <div style={{ height: 6, background: "#eef1f6", borderRadius: 4, marginTop: 8, overflow: "hidden" }}><div style={{ height: "100%", width: (100 * (st.loaded + st.allocated) / st.total) + "%", background: GOLD }} /></div>}
+                    {choices.length > 1 && !st.complete && !st.submitted && (
+                      <div onClick={(e) => e.stopPropagation()} style={{ marginTop: 9, display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", cursor: "default" }}>
+                        <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: 0.4, color: "#8593a8" }}>LOAD IT:</span>
+                        {choices.map((c) => (
+                          <button key={c} type="button" onClick={() => moveLoad(r, del, c)}
+                            style={{ border: "1px solid " + (c === ld ? BLUE : "#d5d9e0"), background: c === ld ? BLUE : "#fff", color: c === ld ? "#fff" : NAVY, borderRadius: 999, padding: "4px 11px", fontFamily: "inherit", fontWeight: 800, fontSize: 12, cursor: "pointer" }}>
+                            {wkShort(c)}{c === del ? " am" : ""}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

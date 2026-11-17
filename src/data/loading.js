@@ -5,7 +5,7 @@ import { getSupabase } from "./supabaseClient.js";
 const LR = "dk-load-reports", LL = "dk-load-lines";
 const lget = (k) => { try { return JSON.parse(localStorage.getItem(k) || "[]"); } catch (e) { return []; } };
 const lset = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* */ } };
-const repFromRow = (r) => ({ id: r.id, date: r.run_date, driver: r.driver, runNo: r.run_no, van: r.van, status: r.status, completedAt: r.completed_at, completedBy: r.completed_by, checked: r.checked || [], photoPaths: r.photo_paths || [], notes: r.notes || "", updatedAt: r.updated_at,
+const repFromRow = (r) => ({ id: r.id, date: r.run_date, driver: r.driver, runNo: r.run_no, van: r.van, status: r.status, completedAt: r.completed_at, completedBy: r.completed_by, checked: r.checked || [], photoPaths: r.photo_paths || [], notes: r.notes || "", updatedAt: r.updated_at, loadOn: r.load_on || "",
   shortLines: r.short_lines || [], alertState: r.alert_state || "", resolvedAt: r.resolved_at || "", resolvedBy: r.resolved_by || "", resolution: r.resolution || "", followups: r.followups || {}, checkedBy: r.checked_by || "", checkedAt: r.checked_at || "", sentBack: r.sent_back || "" });
 const lineFromRow = (r) => ({ reportId: r.report_id, itemKey: r.item_key, qtyNeeded: Number(r.qty_needed) || 0, qtyLoaded: Number(r.qty_loaded) || 0, loadedBy: r.loaded_by, loadedAt: r.loaded_at, boxed: !!r.boxed });
 
@@ -56,6 +56,20 @@ export async function setLoaded(run, item, qty, who, opts = {}) {
   }
   return { reportId: run.key, itemKey: item.key, qtyNeeded: item.qty, qtyLoaded: qty, boxed: !!opts.boxed, loadedBy: who || "", loadedAt: row.loaded_at };
 }
+// when the loader wants this van loaded (weekend runs: Friday by default, movable)
+export async function setLoadOn(run, date) {
+  if (storageMode === "supabase") {
+    const sb = await getSupabase();
+    await ensureReport(sb, run);
+    const { error } = await sb.from("load_reports").update({ load_on: date || null }).eq("id", run.key);
+    if (error) throw error;
+  } else {
+    const has = lget(LR).some((r) => r.id === run.key);
+    lset(LR, has ? lget(LR).map((r) => (r.id === run.key ? { ...r, loadOn: date || "" } : r))
+      : [...lget(LR), { id: run.key, date: run.date, driver: run.driver, runNo: run.runNo, van: run.van, status: "open", loadOn: date || "" }]);
+  }
+}
+
 // accessory boxes for a job on this van
 export const boxKey = (invId) => "boxes:" + invId;
 export const setBoxes = (run, invId, n, who) => setLoaded(run, { key: boxKey(invId), qty: 0 }, n, who);
