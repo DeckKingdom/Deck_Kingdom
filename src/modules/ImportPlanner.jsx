@@ -600,6 +600,7 @@ export default function ImportPlanner() {
         n.jobNotes = "Follow-up to invoice #" + (o.invNo || "—") + " — missing / broken: ";
         n.deliveryCharge = 0;
         n.discountPct = "";
+        n.paymentType = "Follow-up — already paid";
         n.paymentDate = todayStr(); // nothing to pay, so it doesn't sit in "awaiting payment"
         updateCrm((c) => {
           c.invoices.unshift(n);
@@ -623,6 +624,7 @@ export default function ImportPlanner() {
     n.deliveryCharge = 0;
     n.discountPct = "";
     n.paymentDate = todayStr();
+    n.paymentType = "Follow-up — already paid";
     n.lines = j.items.map((x) => {
       const l = (o.lines || [])[x.idx] || {};
       return { ...blankLine(), code: l.code || x.code || "", description: l.description || x.text || "", colour: l.colour || x.colour || "", qty: x.missing, price: 0 };
@@ -647,6 +649,7 @@ export default function ImportPlanner() {
     n.deliveryCharge = 0;
     n.discountPct = "";
     n.paymentDate = todayStr();
+    n.paymentType = "Follow-up — already paid";
     n.lines = left.map((x) => {
       const l = (o.lines || [])[x.lineIndex] || {};
       return { ...blankLine(), code: l.code || x.code || "", description: l.description || x.text || "", colour: l.colour || x.colour || "", qty: x.remaining, price: 0 };
