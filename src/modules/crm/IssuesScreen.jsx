@@ -2,7 +2,7 @@
 // payment not taken, or a note - and every van that was loaded short. Each stays LIVE until it's sorted: by hand ("Mark sorted"), or on
 // its own once the follow-up job is delivered and / or the job shows paid.
 import { useEffect, useMemo, useState } from "react";
-import { InvoicePeek } from "./Peeks.jsx";
+import { InvoicePeek, useHoverPeek } from "./Peeks.jsx";
 import { NAVY, RED, GOLD, prettyDateTime } from "../../lib/core.js";
 import { gbp } from "../../lib/crmCore.js";
 import { ListHero, HeroStat, Chip, card, sect, lbl, inp, btn, goldBtn, Modal, SearchBox } from "./ui.jsx";
@@ -38,6 +38,16 @@ export default function IssuesScreen({ crm, updateCrm, me, openInvoice, openColl
   const [peekInv, setPeekInv] = useState(null);
   const [openLoad, setOpenLoad] = useState(null);
   const [reload, setReload] = useState(0);
+  const [marking, setMarking] = useState(null);
+  const hp = useHoverPeek(setPeekInv);
+  const hover = (id) => { const b = hp.bind(id); return { ...b, onClick: (e) => { e.stopPropagation(); b.onClick(); } }; };
+  const sortBtn = { ...btn, background: "#28713e", borderColor: "#28713e", color: "#fff", padding: "6px 12px", fontSize: 12.5 };
+  const markSorted = (e, x) => {
+    e.stopPropagation();
+    setMarking(x.r.id);
+    updateDrops([x.r.id], { resolved_at: new Date().toISOString(), resolved_by: me || "office", resolution: "", alert_state: x.r.alertState === "open" ? "dismissed" : x.r.alertState })
+      .then(() => setReload((n) => n + 1)).catch(() => {}).finally(() => setMarking(null));
+  };
   useEffect(() => {
     let live = true;
     const pull = () => loadAllDrops().then((l) => live && setRows(l)).catch((e) => live && setErr(/column|drop_confirmations/.test(String(e && e.message)) ? "Run driver-app-all.sql in Supabase to switch delivery issues on." : String((e && e.message) || e)));
@@ -96,12 +106,17 @@ export default function IssuesScreen({ crm, updateCrm, me, openInvoice, openColl
           </div>
           <div style={{ flex: 1, display: "flex", gap: 6, flexWrap: "wrap" }}>
             {l.jobs.map((j) => (
-              <Chip key={j.invId} tone={j.sorted ? "green" : "red"} title={j.items.map((i) => i.missing + "× " + i.text).join(", ")}>
-                {j.sorted ? "✓ " : ""}{j.customer} #{j.invNo} — {j.items.reduce((t, i) => t + (Number(i.missing) || 0), 0)} missing{j.fu ? " · follow-up #" + j.fu.invNo + (j.sorted ? " delivered" : "") : ""}
-              </Chip>
+              <span key={j.invId} {...hover(j.invId)} style={{ cursor: "pointer" }}>
+                <Chip tone={j.sorted ? "green" : "red"} title={j.items.map((i) => i.missing + "× " + i.text).join(", ")}>
+                  {j.sorted ? "✓ " : ""}{j.customer} #{j.invNo} — {j.items.reduce((t, i) => t + (Number(i.missing) || 0), 0)} missing{j.fu ? " · follow-up #" + j.fu.invNo + (j.sorted ? " delivered" : "") : ""}
+                </Chip>
+              </span>
             ))}
             {l.rep.notes && <Chip tone="gold" title={l.rep.notes}>Reason given</Chip>}
           </div>
+          {l.live && canEdit && <button style={sortBtn} disabled={marking === "load:" + l.rep.id} title="Mark this short load sorted"
+            onClick={(e) => { e.stopPropagation(); setMarking("load:" + l.rep.id); Promise.resolve(shortLoads.resolve(l.rep, "")).catch(() => {}).finally(() => setMarking(null)); }}>
+            {marking === "load:" + l.rep.id ? "…" : "✓ Sorted"}</button>}
           {l.live ? <Chip tone="red" style={{ fontSize: 12.5 }}>LIVE</Chip>
             : <Chip tone="green" style={{ fontSize: 12.5 }} title={l.rep.resolution || ""}>{l.rep.resolvedAt ? (/^Posted/.test(l.rep.resolution) ? "📮 Posted " : "Sorted ") + dayLabel(String(l.rep.resolvedAt).slice(0, 10)) : "Sorted itself"}</Chip>}
         </div>
@@ -109,7 +124,9 @@ export default function IssuesScreen({ crm, updateCrm, me, openInvoice, openColl
         <div key={x.r.id} onClick={() => setOpen(x.r.id)}
           style={{ ...card, cursor: "pointer", display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap", padding: "12px 16px", borderLeft: "6px solid " + (x.live ? RED : "#3FA55C") }}>
           <div style={{ minWidth: 190 }}>
-            <div style={{ fontWeight: 800, fontSize: 15, color: x.r.collectionId ? "#185FA5" : NAVY }}>{nameOf(x)} <span style={{ fontSize: 12, color: "#8593a8" }}>{refOf(x)}</span></div>
+            <div style={{ fontWeight: 800, fontSize: 15, color: x.r.collectionId ? "#185FA5" : NAVY }}>
+              {x.inv ? <span {...hover(x.inv.id)} style={{ cursor: "pointer", textDecoration: "underline", textDecorationColor: "#c8cfdb" }}>{nameOf(x)}</span> : nameOf(x)}
+              {" "}<span style={{ fontSize: 12, color: "#8593a8" }}>{refOf(x)}</span></div>
             <div style={{ fontSize: 12.5, fontWeight: 600, color: "#5a6a85" }}>{dayLabel(String(x.r.at).slice(0, 10))} · {x.r.driver}{x.live ? " · live " + ageDays(x) + "d" : ""}</div>
           </div>
           <div style={{ flex: 1, display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -120,6 +137,8 @@ export default function IssuesScreen({ crm, updateCrm, me, openInvoice, openColl
             ))}
           </div>
           {x.r.collectionId && x.r.supplierEmailedAt && <Chip tone="blue" title={"Supplier emailed " + prettyDateTime(x.r.supplierEmailedAt)}>✉ Supplier emailed</Chip>}
+          {x.live && canEdit && <button style={sortBtn} disabled={marking === x.r.id} title="Mark sorted — happy it's dealt with (you can make it live again from the issue)"
+            onClick={(e) => markSorted(e, x)}>{marking === x.r.id ? "…" : "✓ Sorted"}</button>}
           {x.live ? <Chip tone="red" style={{ fontSize: 12.5 }}>LIVE</Chip>
             : <Chip tone="green" style={{ fontSize: 12.5 }} title={x.r.resolvedAt ? "Sorted by " + String(x.r.resolvedBy || "").split("@")[0] + (x.r.resolution ? ": " + x.r.resolution : "") : "Sorted itself"}>{x.r.resolvedAt ? "Sorted " + dayLabel(String(x.r.resolvedAt).slice(0, 10)) : "Sorted itself"}</Chip>}
         </div>
