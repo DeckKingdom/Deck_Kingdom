@@ -314,6 +314,18 @@ const maskAddr = (address, postcode) => {
   const out = outwardCode(postcode);
   return [a ? a.slice(0, 5) + (a.length > 5 ? "…" : "") : "", out ? out + " •••" : ""].filter(Boolean).join("  ·  ");
 };
+// shorten the "For Kfm Solutions Limited · RH10 1AB, ..." note lines so they fit
+// a phone card: legal suffixes dropped, two words of the name, outward postcode
+const shortBiz = (name) => String(name || "").trim().replace(/[,.]?\s*\b(limited|ltd|plc|llp|inc|co|company)\b\.?\s*$/i, "").trim().split(/\s+/).slice(0, 2).join(" ");
+const shortFor = (txt) => String(txt || "").split("\n").map((line) => {
+  if (!/^For /i.test(line)) return line;
+  return "For " + line.slice(4).split(/,\s*(?=[^·,]+(?:·|$))/).map((seg) => {
+    const parts = seg.split("·").map((x) => x.trim());
+    const pc = parts[1] ? outwardCode(parts[1]) || parts[1] : "";
+    return pc ? shortBiz(parts[0]) + " · " + pc : shortBiz(parts[0]) || seg.trim();
+  }).join(", ");
+}).join("\n");
+
 const invLines = (o) => (o.lines || []).map((l, i) => ({ l, i })).filter(({ l }) => l.qty && (l.description || l.code));
 
 function NavButtons({ dest, onNav, done }) {
@@ -575,6 +587,12 @@ function DayRuns({ date, stops, crm, header, onBack, driver, who, onCheckLoad })
                   <div style={{ fontSize: 13, fontWeight: 700, color: isCur ? "#185FA5" : "#5a6a85", marginTop: 3 }}>
                     {isCur ? "Next stop" : "Supplier pick-up"}{o.collectTime ? " · " + o.collectTime : ""}{forJobs.length ? " · for " + forJobs.map((j) => "#" + j.invNo).join(", ") : ""}
                   </div>
+                  <div style={{ marginTop: 5 }}>
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 800, borderRadius: 999, padding: "2px 9px", background: o.emailedAt ? "#eaf6ee" : "#fff2f4", color: o.emailedAt ? GREEN : RED, border: "1px solid " + (o.emailedAt ? "#bfe3ca" : "#f4b9c1") }}
+                      title={o.emailedAt ? "The office emailed the order to the supplier" : "The office hasn't emailed this order to the supplier yet — they may not be expecting you"}>
+                      ✉ {o.emailedAt ? "Order emailed" + (isNaN(new Date(o.emailedAt)) ? "" : " " + new Date(o.emailedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })) : "Order not emailed"}
+                    </span>
+                  </div>
                   {addr && addrBlock(open, isCur, o, addr, x)}
                   {!open && rs.open && cur && note("Opens after " + stopName(cur) + " is confirmed")}
                   {o.phone && <a href={telHref(o.phone)} style={{ display: "block", marginTop: 8, color: "#185FA5", fontWeight: 700, fontSize: 14, textDecoration: "none" }}>📞 {o.phone}{o.contact ? " · " + o.contact : ""}</a>}
@@ -582,7 +600,7 @@ function DayRuns({ date, stops, crm, header, onBack, driver, who, onCheckLoad })
                     const r = conf && (conf.items || [])[k];
                     return { qty: it.qty, text: it.description || it.sku, colour: it.colour, mark: r ? (r.short ? "short" : "ok") : null };
                   })} />
-                  {o.notes && <div style={{ marginTop: 8, background: "#fff8e6", borderRadius: 8, padding: "8px 10px", fontSize: 13.5, fontWeight: 600 }}>{collNotesText(crm, o.notes)}</div>}
+                  {o.notes && <div style={{ marginTop: 8, background: "#fff8e6", borderRadius: 8, padding: "8px 10px", fontSize: 13.5, fontWeight: 600 }}>{shortFor(collNotesText(crm, o.notes))}</div>}
                   {isCur && completeBtn(x, "Complete this pick-up", !addr)}
                   {isDone && doneLine(conf, true)}
                 </div>
