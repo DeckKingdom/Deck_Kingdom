@@ -178,10 +178,8 @@ export default function DriverApp({ me, warehouse, switcher }) {
   const byDay = useMemo(() => {
     const m = {};
     if (!crm) return m;
-    (crm.invoices || []).filter((i) => !isVoidInvoice(i) && i.deliveryDate
-      // the warehouse (and the office viewing as anyone) also sees the day's customer
-      // collections — they hand those over and confirm them with ticks + a photo
-      && (mine(i) || ((warehouse || !!switcher) && isCollectionJob(i)))).forEach((i) => (m[i.deliveryDate] = m[i.deliveryDate] || []).push({ kind: "inv", obj: i }));
+    // customer collections live in their own tab now — runs are driven stops only
+    (crm.invoices || []).filter((i) => !isVoidInvoice(i) && i.deliveryDate && mine(i) && !isCollectionJob(i)).forEach((i) => (m[i.deliveryDate] = m[i.deliveryDate] || []).push({ kind: "inv", obj: i }));
     (crm.collections || []).filter((c) => c.collectDate && mine(c)).forEach((c) => (m[c.collectDate] = m[c.collectDate] || []).push({ kind: "col", obj: c }));
     Object.values(m).forEach((l) => l.sort((a, b) => (Number(a.obj.runNo) || 99) - (Number(b.obj.runNo) || 99) || (Number(a.obj.dropNo) || 99) - (Number(b.obj.dropNo) || 99)));
     return m;
@@ -219,14 +217,16 @@ export default function DriverApp({ me, warehouse, switcher }) {
   const tKey = ymd(new Date());
   const nLoad = crm && todayLoad ? runsOn(crm, tKey, allVans ? null : driver).filter((r) => !loadState(r, todayLoad.counts[r.key], todayLoad.reports[r.key]).complete).length : 0;
   const nDel = driver ? (byDay[tKey] || []).filter((x) => !(x.kind === "col" ? x.obj.collected : x.obj.deliveryCompleted)).length : 0;
-  const counts = { loading: nLoad, deliveries: nDel, tasks: nTasks };
-  const tabList = [["loading", "Loading"], ...(driver ? [["deliveries", "Deliveries"]] : []), ["tasks", "Tasks"]];
+  const collFrom = ymd(addDaysTo(new Date(), -14));
+  const nColl = crm ? (crm.invoices || []).filter((i) => !isVoidInvoice(i) && isCollectionJob(i) && i.deliveryDate && i.deliveryDate >= collFrom && i.deliveryDate <= tKey && !i.deliveryCompleted).length : 0;
+  const counts = { loading: nLoad, deliveries: nDel, collections: nColl, tasks: nTasks };
+  const tabList = [["loading", "Loading"], ...(driver ? [["deliveries", "Runs"]] : []), ["collections", "Collections"], ["tasks", "Tasks"]];
   const tabs = (
     <div style={{ display: "flex", gap: 8, padding: "12px 14px 0", position: "sticky", top: 68, zIndex: 4, background: "#f3f5f8" }}>
       {tabList.map(([k, l]) => (
         <button key={k} type="button" onClick={() => { setMode(k); setView(null); }}
           style={{ position: "relative", flex: 1, minWidth: 0, borderRadius: 12, padding: "11px 4px", fontFamily: "inherit", fontWeight: 800, fontSize: "clamp(13px, 3.9vw, 15px)", cursor: "pointer", border: "1px solid " + (mode === k ? NAVY : "#d5d9e0"), background: mode === k ? NAVY : "#fff", color: mode === k ? "#fff" : NAVY, whiteSpace: "nowrap" }}>
-          {l}{counts[k] > 0 && <span title={k === "loading" ? "Vans still to load or check today" : k === "deliveries" ? "Stops still to do today" : "Tasks still to do"} style={{ position: "absolute", top: -7, right: -4, minWidth: 20, height: 20, borderRadius: 99, background: RED, color: "#fff", border: "2px solid #f3f5f8", fontSize: 11.5, fontWeight: 800, display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "0 5px", boxSizing: "border-box", lineHeight: 1 }}>{counts[k]}</span>}
+          {l}{counts[k] > 0 && <span title={k === "loading" ? "Vans still to load or check today" : k === "deliveries" ? "Stops still to do today" : k === "collections" ? "Customer collections waiting to be handed over" : "Tasks still to do"} style={{ position: "absolute", top: -7, right: -4, minWidth: 20, height: 20, borderRadius: 99, background: RED, color: "#fff", border: "2px solid #f3f5f8", fontSize: 11.5, fontWeight: 800, display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "0 5px", boxSizing: "border-box", lineHeight: 1 }}>{counts[k]}</span>}
         </button>
       ))}
     </div>
@@ -259,6 +259,10 @@ export default function DriverApp({ me, warehouse, switcher }) {
       </div>
     );
   }
+  if (mode === "collections") {
+    if (err && !crm) return <div style={page}>{header("Collections")}{tabs}<div style={{ padding: 14 }}>{errCard}</div></div>;
+    return <CollectionsTab crm={crm} header={header} nav={tabs} splash={splash} errCard={errCard} driver={driver} who={who} />;
+  }
   if (!driver) {
     return (
       <div style={page}>{header("Driver")}
@@ -270,7 +274,7 @@ export default function DriverApp({ me, warehouse, switcher }) {
   if (view === "fuel") return <FuelForm driver={driver} vans={(crm && crm.vans) || []} header={header} onBack={() => setView(null)} />;
   if (view) return <DayRuns key={view + ":" + loads} driver={driver} who={who} onCheckLoad={() => { setMode("loading"); setView(null); }} date={view} stops={byDay[view] || []} crm={crm} header={header} onBack={() => setView(null)} />;
 
-  // ===== home: 7 day buttons + fuel =====
+  // ===== home: run cards grouped by day, fuel on top =====
   return (
     <div style={page}>
       {splash}
@@ -278,27 +282,153 @@ export default function DriverApp({ me, warehouse, switcher }) {
       {tabs}
       <div style={{ padding: 14 }}>
         {errCard}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-          {days.map((d, n) => {
-            const k = ymd(d), count = crm ? (byDay[k] || []).filter((x) => !(x.kind === "col" ? x.obj.collected : x.obj.deliveryCompleted)).length : null;
-            const first = n === 0;
-            return (
-              <button key={k} type="button" onClick={() => setView(k)}
-                style={{ gridColumn: first ? "span 2" : undefined, minHeight: first ? 96 : 84, borderRadius: 16, border: "1px solid " + (first ? GOLD : "#e6e9ef"), background: first ? GOLD : "#fff", color: NAVY, fontFamily: "inherit", textAlign: "left", padding: "12px 14px", cursor: "pointer", display: "flex", flexDirection: "column", justifyContent: "space-between", boxShadow: "0 1px 0 rgba(11,31,63,.04)" }}>
-                <span style={{ fontWeight: 800, fontSize: first ? 19 : 16 }}>{dayName(d, n)} {count === null ? "" : "(" + count + ")"}</span>
-                <span style={{ fontSize: 12.5, fontWeight: 700, color: first ? NAVY : "#8593a8" }}>{d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })}</span>
-              </button>
-            );
-          })}
-          <button type="button" onClick={() => setView("fuel")}
-            style={{ gridColumn: "span 2", minHeight: 84, borderRadius: 16, border: "1px solid " + NAVY, background: NAVY, color: "#fff", fontFamily: "inherit", textAlign: "left", padding: "12px 14px", cursor: "pointer", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
-            <span style={{ fontWeight: 800, fontSize: 16 }}>Fuel</span>
-            <span style={{ fontSize: 12.5, fontWeight: 700, color: "#aeb9cf" }}>Log a fill-up</span>
-          </button>
-        </div>
+        <button type="button" onClick={() => setView("fuel")}
+          style={{ width: "100%", border: "none", borderRadius: 12, padding: "13px 14px", fontFamily: "inherit", fontWeight: 800, fontSize: 15, background: NAVY, color: "#fff", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+          <span>⛽ Fuel — log a fill-up</span><span style={{ color: "#aeb9cf" }}>›</span>
+        </button>
+        {crm && days.every((d) => !(byDay[ymd(d)] || []).length) && <div style={{ ...cardS, textAlign: "center", color: "#8593a8", fontWeight: 700, marginTop: 12 }}>No runs booked for you in the next 7 days.</div>}
+        {days.map((d, n) => {
+          const k = ymd(d), stops = byDay[k] || [];
+          if (!stops.length) return null;
+          const runs = new Map();
+          stops.forEach((x) => { const r = String(x.obj.runNo || "") || "—"; if (!runs.has(r)) runs.set(r, []); runs.get(r).push(x); });
+          return (
+            <div key={k}>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 8, margin: "16px 2px 8px" }}>
+                <b style={{ fontSize: 15.5, color: NAVY }}>{n === 0 ? "Today" : n === 1 ? "Tomorrow" : d.toLocaleDateString("en-GB", { weekday: "long" })}</b>
+                <span style={{ fontSize: 12.5, fontWeight: 700, color: "#8593a8" }}>{d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })}</span>
+                {n === 0 && <span style={{ fontSize: 10.5, fontWeight: 800, borderRadius: 999, padding: "2px 8px", background: GOLD, color: NAVY }}>TODAY</span>}
+              </div>
+              {[...runs.entries()].map(([rn, list]) => {
+                const nDrops = list.filter((x) => x.kind === "inv").length;
+                const nPicks = list.filter((x) => x.kind === "col").length;
+                const doneN = list.filter((x) => (x.kind === "col" ? x.obj.collected : x.obj.deliveryCompleted)).length;
+                const all = list.length > 0 && doneN >= list.length;
+                return (
+                  <div key={rn} role="button" tabIndex={0} onClick={() => setView(k)}
+                    style={{ ...cardS, cursor: "pointer", borderLeft: "6px solid " + (all ? GREEN : n === 0 ? GOLD : NAVY) }}>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                      <b style={{ fontSize: 17, flex: 1 }}>{rn === "—" ? "No run number" : "Run " + rn}</b>
+                      <span style={{ fontSize: 12, fontWeight: 800, color: all ? GREEN : doneN ? "#a06d00" : "#8593a8" }}>{all ? "✓ ALL DONE" : doneN ? doneN + " of " + list.length + " done" : list.length + " stop" + (list.length === 1 ? "" : "s")}</span>
+                    </div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "#5a6a85", marginTop: 2 }}>
+                      {nDrops} drop{nDrops === 1 ? "" : "s"}{nPicks ? " · " + nPicks + " pick-up" + (nPicks === 1 ? "" : "s") : ""}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
         {switcher ? <button type="button" onClick={() => openPhoneApp(null)}
           style={{ marginTop: 22, width: "100%", border: "1px solid #d5d9e0", background: "#fff", borderRadius: 12, padding: 12, fontFamily: "inherit", fontWeight: 800, color: NAVY, cursor: "pointer" }}>🏠 Back to the office system</button> : <button type="button" onClick={() => signOut().then(() => window.location.reload())}
           style={{ marginTop: 22, width: "100%", border: "1px solid #d5d9e0", background: "#fff", borderRadius: 12, padding: 12, fontFamily: "inherit", fontWeight: 700, color: "#5a6a85", cursor: "pointer" }}>Sign out</button>}
+      </div>
+    </div>
+  );
+}
+
+// ===== customer collections: hand-overs at the warehouse, their own tab =====
+function CollectionsTab({ crm, header, nav, splash, errCard, driver, who }) {
+  const today = ymd(new Date());
+  const jobs = useMemo(() => {
+    const from = ymd(addDaysTo(new Date(), -14)), to = ymd(addDaysTo(new Date(), 7));
+    return ((crm && crm.invoices) || []).filter((i) => !isVoidInvoice(i) && isCollectionJob(i) && i.deliveryDate && i.deliveryDate >= from && i.deliveryDate <= to)
+      .sort((x, y) => x.deliveryDate.localeCompare(y.deliveryDate) || (Number(x.invNo) || 0) - (Number(y.invNo) || 0));
+  }, [crm]);
+  const dateKey = [...new Set(jobs.map((j) => j.deliveryDate))].join("|");
+  const [drops, setDrops] = useState({});
+  const [dErr, setDErr] = useState("");
+  useEffect(() => {
+    let live = true;
+    if (dateKey) loadDrops(dateKey.split("|")).then((m) => live && setDrops(m)).catch(() => live && setDErr("Couldn't check which handovers are done — tap ↻ to try again."));
+    return () => { live = false; };
+  }, [dateKey]);
+  const [completing, setCompleting] = useState(null);
+  const [showDone, setShowDone] = useState(false);
+  const custById = {}, siteById = {};
+  ((crm && crm.customers) || []).forEach((c) => (custById[c.id] = c));
+  ((crm && crm.sites) || []).forEach((st) => (siteById[st.id] = st));
+  const done = (i) => !!(drops[i.id] || i.deliveryCompleted);
+  if (completing) {
+    const o = completing;
+    const target = { title: "Confirm handover", name: (custById[o.customerId] || {}).name || "Customer", ref: "#" + o.invNo, invoiceId: o.id, invNo: o.invNo,
+      owed: !isPaid(o) && o.paymentType === "COD" ? invoiceTotals(o).total : 0, driver: o.driver || driver || "warehouse",
+      rows: invLines(o).map(({ l, i }) => ({ qty: l.qty, text: l.description || l.code, colour: l.colour, code: l.code || "", lineIndex: i })) };
+    return <CompleteDrop target={target} header={header} date={o.deliveryDate} onBack={() => setCompleting(null)}
+      onSaved={(conf) => { setDrops((m) => ({ ...m, [conf.invoiceId]: conf })); setCompleting(null); window.scrollTo(0, 0); }} />;
+  }
+  const dayTitle = (k) => (k === today ? "Today" : k === ymd(addDaysTo(new Date(), 1)) ? "Tomorrow" : new Date(k + "T12:00:00").toLocaleDateString("en-GB", { weekday: "long" }));
+  const groupsOf = (list) => { const m = new Map(); list.forEach((j) => { if (!m.has(j.deliveryDate)) m.set(j.deliveryDate, []); m.get(j.deliveryDate).push(j); }); return [...m.entries()]; };
+  const jobCard = (o) => {
+    const c = custById[o.customerId] || {}, st = siteById[o.siteId] || {};
+    const conf = drops[o.id], isDone = done(o);
+    const tel = c.mobile || c.landline || st.phone || "";
+    const owed = !isPaid(o) && o.paymentType === "COD" ? invoiceTotals(o).total : 0;
+    return (
+      <div key={o.id} style={{ ...cardS, borderLeft: "5px solid " + (isDone ? GREEN : GOLD), opacity: isDone ? 0.75 : 1 }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
+          <b style={{ fontSize: 17, flex: 1 }}>{c.name || "Customer"}</b>
+          <span style={{ fontSize: 12, fontWeight: 800, color: "#8593a8" }}>#{o.invNo}</span>
+        </div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "#a06d00", marginTop: 3 }}>Collecting from the warehouse{o.deliveryTime ? " · " + o.deliveryTime : ""}</div>
+        {tel && <a href={telHref(tel)} style={{ display: "block", marginTop: 8, color: "#185FA5", fontWeight: 700, fontSize: 14, textDecoration: "none" }}>📞 {tel}</a>}
+        <div style={{ marginTop: 8, borderTop: "1px solid #eef1f6", paddingTop: 4 }}>
+          {invLines(o).map(({ l, i }) => (
+            <div key={i} style={{ display: "flex", gap: 8, fontSize: 14, padding: "3px 0" }}>
+              <b style={{ minWidth: 34, textAlign: "right" }}>{l.qty}×</b>
+              <span style={{ flex: 1 }}>{l.description || l.code}{l.colour ? <span style={{ color: "#5a6a85" }}> · {l.colour}</span> : null}</span>
+            </div>
+          ))}
+        </div>
+        {o.jobNotes && <div style={{ marginTop: 8, background: "#fff8e6", borderRadius: 8, padding: "8px 10px", fontSize: 13.5, fontWeight: 600 }}>{o.jobNotes}</div>}
+        {owed > 0 && !isDone && <div style={{ marginTop: 8, background: "#fde8ea", color: RED, borderRadius: 8, padding: "8px 10px", fontSize: 14, fontWeight: 800 }}>Payment to take: {gbp(owed)}</div>}
+        {!isDone && (
+          <button type="button" onClick={() => setCompleting(o)}
+            style={{ marginTop: 10, width: "100%", border: "none", borderRadius: 12, padding: 15, fontFamily: "inherit", fontWeight: 800, fontSize: 17, background: GREEN, color: "#fff", cursor: "pointer" }}>
+            ✓ Confirm handover — ticks & photo
+          </button>
+        )}
+        {isDone && (
+          <div style={{ marginTop: 8, color: GREEN, fontWeight: 800, fontSize: 13 }}>
+            ✓ {conf ? "Handed over " + new Date(conf.at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) + " · " + ((conf.photoPaths || []).length > 1 ? conf.photoPaths.length + " photos" : "photo taken") : "Collected"}
+          </div>
+        )}
+      </div>
+    );
+  };
+  const pend = jobs.filter((j) => !done(j)), fin = jobs.filter(done);
+  return (
+    <div style={page}>
+      {splash}
+      {header("Collections")}
+      {nav}
+      <div style={{ padding: 14 }}>
+        {errCard}
+        {dErr && <div style={{ ...cardS, borderColor: "#f4b9c1", background: "#fdf3f4", color: RED, fontWeight: 700 }}>{dErr}</div>}
+        <div style={{ fontSize: 12.5, fontWeight: 700, color: "#8593a8", margin: "0 2px 4px" }}>Customers collecting from the warehouse — confirm each handover with ticks and a photo.</div>
+        {crm && pend.length === 0 && <div style={{ ...cardS, textAlign: "center", color: GREEN, fontWeight: 800, marginTop: 12 }}>✓ Nothing waiting to be collected.</div>}
+        {groupsOf(pend).map(([k, list]) => (
+          <div key={k}>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 8, margin: "16px 2px 8px" }}>
+              <b style={{ fontSize: 15.5, color: k < today ? RED : NAVY }}>{k < today ? "Still here" : dayTitle(k)}</b>
+              <span style={{ fontSize: 12.5, fontWeight: 700, color: k < today ? RED : "#8593a8" }}>{prettyDate(k)}</span>
+            </div>
+            {list.map(jobCard)}
+          </div>
+        ))}
+        {fin.length > 0 && showDone && (
+          <div>
+            <div style={{ margin: "16px 2px 8px", fontWeight: 800, fontSize: 15.5, color: "#8593a8" }}>Handed over</div>
+            {fin.slice().reverse().map(jobCard)}
+          </div>
+        )}
+        {fin.length > 0 && (
+          <button type="button" onClick={() => setShowDone((v) => !v)}
+            style={{ display: "block", margin: "10px auto 0", border: "none", background: "none", color: "#185FA5", fontFamily: "inherit", fontWeight: 800, fontSize: 13.5, cursor: "pointer" }}>
+            {showDone ? "Hide handed over" : "Show " + fin.length + " handed over"}
+          </button>
+        )}
       </div>
     </div>
   );
