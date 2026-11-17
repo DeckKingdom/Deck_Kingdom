@@ -7,7 +7,9 @@ import { readCrmCache, writeCrmCache } from "../data/crmCache.js";
 import { INSTANT_OPEN } from "./crm/useCrm.js";
 import { getSupabase } from "../data/supabaseClient.js";
 import { signOut } from "../data/auth.js";
-import { normaliseCrm, isVoidInvoice, isCollectionJob, invoiceTotals, isPaid, gbp, partKey, collNotesText } from "../lib/crmCore.js";
+import { normaliseCrm, isVoidInvoice, isCollectionJob, invoiceTotals, isPaid, gbp, partKey, collNotesText, invoiceLoadKg, skuIndex } from "../lib/crmCore.js";
+import { runLegList, priceRun, collPostcode } from "../lib/runCost.js";
+import { roadLegsAddr, addrKey } from "../data/fleetApi.js";
 import { NAVY, GOLD, RED, uid, prettyDate, prettyDateTime } from "../lib/core.js";
 import { Icon } from "./crm/ui.jsx";
 import { loadDrops, saveDrop, shrinkPhoto, loadEvents, logEvent } from "../data/drops.js";
@@ -19,6 +21,29 @@ import DriverTasks, { tasksOutstanding } from "./DriverTasks.jsx";
 import { outwardCode, tidyPostcode, googleNavHref, appleNavHref, isApple } from "../lib/addressCheck.js";
 
 const GREEN = "#28713e";
+// a pick-up's weight, from the product book's kg per sku
+const collKgOf = (crm, col) => { const by = skuIndex(crm); let kg = 0, any = false; (col.items || []).forEach((it) => { const mp = by[String(it.sku || "").trim().toLowerCase()]; const w = mp && Number(mp.weightKg); if (w) { kg += w * (Number(it.qty) || 0); any = true; } }); return any ? kg : null; };
+// road miles + out-and-back time for a run card, looked up lazily so the list paints first
+function RunMilesChip({ pcs, drops }) {
+  const [got, setGot] = useState(null);
+  useEffect(() => {
+    let live = true;
+    if (!pcs.length) return undefined;
+    const t = setTimeout(() => {
+      const legs = runLegList(pcs);
+      roadLegsAddr(legs).then((m) => {
+        if (!live) return;
+        let mi = 0, min = 0, ok = true;
+        legs.forEach((l) => { const g = m[addrKey(l.from, l.to)]; if (g) { mi += Number(g.miles) || 0; min += Number(g.minutes) || 0; } else ok = false; });
+        if (ok && mi > 0) setGot({ mi, totMin: priceRun(mi, min, drops).totMin });
+      }).catch(() => {});
+    }, 700);
+    return () => { live = false; clearTimeout(t); };
+  }, [pcs.join("|")]);
+  if (!got) return null;
+  const h = Math.floor(got.totMin / 60), mn = Math.round(got.totMin % 60);
+  return <div style={{ fontSize: 12.5, fontWeight: 700, color: "#5a6a85", marginTop: 4 }}>≈ {Math.round(got.mi)} mi · {h ? h + "h" : ""}{h ? String(mn).padStart(2, "0") : mn}m out and back</div>;
+}
 const ymd = (d) => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
 const addDaysTo = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
 const telHref = (n) => "tel:" + String(n || "").replace(/[^\d+]/g, "");
@@ -105,7 +130,7 @@ export default function DriverApp({ me, warehouse, switcher }) {
   const load = async (silent = false) => {
     setErr("");
     if (!silent) setLoads((n) => n + 1);
-    loadLoading([ymd(new Date())]).then(setTodayLoad).catch(() => {});
+    loadLoading(Array.from({ length: 7 }, (_, n2) => ymd(addDaysTo(new Date(), n2)))).then(setTodayLoad).catch(() => {});
     // instant open: paint the phone's last copy straight away while the live
     // fetch runs — a lifesaver on van signal (ticks and drops write to the
     // database directly, so looking at a copy a minute old is safe)
@@ -292,6 +317,10 @@ export default function DriverApp({ me, warehouse, switcher }) {
           if (!stops.length) return null;
           const runs = new Map();
           stops.forEach((x) => { const r = String(x.obj.runNo || "") || "—"; if (!runs.has(r)) runs.set(r, []); runs.get(r).push(x); });
+          const runsInfo = crm ? runsOn(crm, k, driver) : [];
+          const custBy = {}, siteBy = {};
+          ((crm && crm.customers) || []).forEach((c) => (custBy[c.id] = c));
+          ((crm && crm.sites) || []).forEach((st2) => (siteBy[st2.id] = st2));
           return (
             <div key={k}>
               <div style={{ display: "flex", alignItems: "baseline", gap: 8, margin: "16px 2px 8px" }}>
@@ -304,16 +333,33 @@ export default function DriverApp({ me, warehouse, switcher }) {
                 const nPicks = list.filter((x) => x.kind === "col").length;
                 const doneN = list.filter((x) => (x.kind === "col" ? x.obj.collected : x.obj.deliveryCompleted)).length;
                 const all = list.length > 0 && doneN >= list.length;
+                const ri = runsInfo.find((r2) => String(r2.runNo || "") === (rn === "—" ? "" : rn));
+                const lst = ri && todayLoad ? loadState(ri, todayLoad.counts[ri.key], todayLoad.reports[ri.key]) : null;
+                const rep = ri && todayLoad ? todayLoad.reports[ri.key] : null;
+                const van = (ri && ri.van) || (rep && rep.van) || "";
+                const kg = list.reduce((t, x) => t + ((x.kind === "inv" ? invoiceLoadKg(x.obj, crm) : collKgOf(crm, x.obj)) || 0), 0);
+                const pcsFull = list
+                  .map((x) => (x.kind === "col" ? collPostcode(crm, x.obj) : String((siteBy[x.obj.siteId] || {}).postcode || (custBy[x.obj.customerId] || {}).postcode || "").trim()))
+                  .filter(Boolean)
+                  .filter((pc, ix, arr) => pc.toUpperCase() !== String(arr[ix - 1] || "").toUpperCase());
+                const loadLbl = !lst ? "" : lst.complete ? "✓ LOADED & CHECKED" : lst.submitted ? "WAITING FOR A CHECK" : lst.loaded || lst.part ? "PART LOADED" : "NOT LOADED";
+                const loadCol = !lst ? "#8593a8" : lst.complete ? GREEN : lst.submitted ? "#185FA5" : lst.loaded || lst.part ? "#a06d00" : "#8593a8";
                 return (
                   <div key={rn} role="button" tabIndex={0} onClick={() => setView(k)}
                     style={{ ...cardS, cursor: "pointer", borderLeft: "6px solid " + (all ? GREEN : n === 0 ? GOLD : NAVY) }}>
                     <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-                      <b style={{ fontSize: 17, flex: 1 }}>{rn === "—" ? "No run number" : "Run " + rn}</b>
-                      <span style={{ fontSize: 12, fontWeight: 800, color: all ? GREEN : doneN ? "#a06d00" : "#8593a8" }}>{all ? "✓ ALL DONE" : doneN ? doneN + " of " + list.length + " done" : list.length + " stop" + (list.length === 1 ? "" : "s")}</span>
+                      <b style={{ fontSize: 17, flex: 1 }}>{rn === "—" ? "No run number" : "Run " + rn}{van ? " · " + van : ""}</b>
+                      <span style={{ fontSize: 12, fontWeight: 800, color: all ? GREEN : doneN ? "#a06d00" : loadCol }}>{all ? "✓ ALL DONE" : doneN ? doneN + " of " + list.length + " done" : loadLbl || list.length + " stop" + (list.length === 1 ? "" : "s")}</span>
                     </div>
                     <div style={{ fontSize: 13, fontWeight: 700, color: "#5a6a85", marginTop: 2 }}>
-                      {nDrops} drop{nDrops === 1 ? "" : "s"}{nPicks ? " · " + nPicks + " pick-up" + (nPicks === 1 ? "" : "s") : ""}
+                      {(switcher || warehouse) && (ri && ri.driver) ? ri.driver + " · " : ""}{nDrops} drop{nDrops === 1 ? "" : "s"}{nPicks ? " · " + nPicks + " pick-up" + (nPicks === 1 ? "" : "s") : ""}{kg ? " · " + Math.round(kg).toLocaleString("en-GB") + " kg" : ""}
                     </div>
+                    {pcsFull.length > 0 && (
+                      <div style={{ fontSize: 12.5, fontWeight: 700, color: "#185FA5", marginTop: 4 }}>
+                        {pcsFull.map((pc) => outwardCode(pc) || pc).join(" › ")}
+                      </div>
+                    )}
+                    <RunMilesChip pcs={pcsFull} drops={list.length} />
                   </div>
                 );
               })}
