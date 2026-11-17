@@ -103,7 +103,7 @@ export default function ImportPlanner() {
   // costs, margins, P/L or management screens — until the unmarked dot in the
   // header is tapped and the PIN entered. A minute without touching the screen
   // (or a reload) drops back to office mode by itself, so a walk-away is safe.
-  const MONEY_PIN = "1837";
+  const MONEY_PIN = "7654";
   const [finOn, setFinOn] = useState(false);
   const [pinAsk, setPinAsk] = useState(false);
   const [pinVal, setPinVal] = useState("");
