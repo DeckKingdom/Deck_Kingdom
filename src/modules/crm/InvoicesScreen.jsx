@@ -622,7 +622,8 @@ export default function InvoicesScreen({ headerH = 0, openProduct, money = true,
               const caption = invoiceWaCaption(inv, cust, site);
               try { await navigator.clipboard.writeText(caption); } catch { /* fine */ }
               const how = await shareToWhatsApp(file, caption, cust && cust.mobile ? waNumber(cust.mobile) : "");
-              setNotice(how === "downloaded" ? "PDF downloaded — attach it in the WhatsApp chat that's opened (the message is on your clipboard)." : "");
+              setNotice(how === "shared" ? "Sent to the share sheet. WhatsApp drops the caption when a file is attached — the message is on your clipboard, long-press the chat box and paste."
+                : how === "downloaded" ? "PDF downloaded — attach it in the WhatsApp chat that's opened (the message is on your clipboard)." : "");
             } catch (e) {
               setNotice(String((e && e.message) || e));
             }

@@ -19,7 +19,16 @@ export async function htmlToPdfFile(html, fileName) {
     doc.close();
     await new Promise((r) => setTimeout(r, 150));
     if (doc.fonts && doc.fonts.ready) await Promise.race([doc.fonts.ready, new Promise((r) => setTimeout(r, 2500))]);
+    // paperwork without .pdfpage markers (invoices, quotes) renders as one flowing page
+    if (!doc.querySelector(".pdfpage")) {
+      const w = doc.createElement("div");
+      w.className = "pdfpage";
+      while (doc.body.firstChild) w.appendChild(doc.body.firstChild);
+      doc.body.appendChild(w);
+      await new Promise((r) => setTimeout(r, 50));
+    }
     const pages = [...doc.querySelectorAll(".pdfpage")];
+    if (!pages.length || pages.every((el) => !el.offsetHeight)) throw new Error("the paperwork came out empty — try again");
     const pdf = new jsPDF({ unit: "mm", format: "a4", compress: true });
     const W = 210, H = 297;
     let first = true;
