@@ -454,7 +454,7 @@ function DayRuns({ date, stops, crm, header, onBack, driver, who, onCheckLoad })
   const loadRuns = crm ? runsOn(crm, date, driver) : [];
   const runState = (r) => {
     const run = loadRuns.find((x) => x.runNo === String(r || ""));
-    if (!run) return { total: 0, done: 0, open: !!evs && !evErr && !!loadData, rep: null };
+    if (!run) return { total: 0, done: 0, open: !!evs && !evErr && !!loadData, rep: null, st: null, counts: {} };
     const st = loadState(run, loadData && loadData.counts[run.key], loadData && loadData.reports[run.key]);
     return { total: st.total, done: st.loaded + st.allocated, open: !!loadData && !loadErr && st.complete, rep: loadData && loadData.reports[run.key], st, counts: (loadData && loadData.counts[run.key]) || {} };
   };
