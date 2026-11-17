@@ -158,7 +158,9 @@ function RunReport({ run, data, me, canEdit, canManage, onClose, onChanged, setC
                     {x.src ? (x.src.scheduled
                       ? <button className="dk-title-link" onClick={() => openCollection(x.src.col.id)} style={{ color: BLUE, fontWeight: 700, fontSize: 12.5 }}>On pick-up COL-{x.src.col.collectionNo}{x.src.col.collected ? " · collected" : ""}</button>
                       : <span style={{ color: RED, fontWeight: 800, fontSize: 12.5 }}>COL-{x.src.col.collectionNo} not booked — give it a date & driver</span>)
-                      : full ? <Chip tone="green">Loaded</Chip> : got > 0 ? <Chip tone="amber">{x.qty - got} to go</Chip> : <Chip>Not loaded</Chip>}
+                      : full ? <Chip tone="green">Loaded</Chip> : got > 0 ? <Chip tone="amber">{x.qty - got} to go</Chip>
+                      : x.from ? <button className="dk-title-link" onClick={() => openCollection(x.from.col.id)} style={{ color: "#28713e", fontWeight: 800, fontSize: 12.5 }}>Collected on COL-{x.from.col.collectionNo} — count it on</button>
+                      : <Chip>Not loaded</Chip>}
                   </td>
                   <td style={{ ...td, color: "#8593a8", fontSize: 12 }}>{c ? String(c.loadedBy || "").split("@")[0] + " " + hm(c.loadedAt) : ""}</td>
                 </tr>

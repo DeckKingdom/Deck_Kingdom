@@ -194,7 +194,8 @@ function LoadRun({ run, data, who, header, err, onBack, onChanged, onCount, onBo
                 <button key={x.key} type="button" disabled={locked} onClick={() => setCounting(x)}
                   style={{ display: "flex", gap: 10, alignItems: "center", width: "100%", border: "none", borderTop: "1px solid #f3f5f8", background: "none", fontFamily: "inherit", color: NAVY, textAlign: "left", fontSize: 14.5, padding: "10px 0", cursor: locked ? "default" : "pointer" }}>
                   <span style={{ ...tickBox(full), ...(part ? { borderColor: GOLD, background: "#fff6dd", color: "#a06d00" } : {}) }}>{full ? "✓" : part ? "½" : ""}</span>
-                  <span style={{ flex: 1 }}><b>{x.qty}×</b> {x.line.description || x.line.code}{x.line.colour ? <span style={{ color: "#5a6a85" }}> · {x.line.colour}</span> : null}</span>
+                  <span style={{ flex: 1 }}><b>{x.qty}×</b> {x.line.description || x.line.code}{x.line.colour ? <span style={{ color: "#5a6a85" }}> · {x.line.colour}</span> : null}
+                    {x.from ? <span style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#28713e" }}>✓ Collected on COL-{x.from.col.collectionNo} — count it onto the van</span> : null}</span>
                   <span style={{ fontSize: 13, fontWeight: 800, color: full ? GREEN : part ? AMBER : "#aab3c2", whiteSpace: "nowrap", textAlign: "right" }}>{got} / {x.qty}{c && c.boxed ? <span style={{ display: "block", fontSize: 11, color: "#8a5a00" }}>📦 in box</span> : null}</span>
                 </button>
               );

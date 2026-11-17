@@ -44,8 +44,11 @@ export function runsOn(crm, date, onlyDriver) {
     r.jobs.forEach((inv) => {
       if (inv.deliveryCompleted) return; // already delivered: nothing to load
       invLinesOf(inv).forEach(({ l, i }) => {
-        const src = pickupForLine(crm, inv, l);
-        r.lines.push({ key: inv.id + ":" + i, inv, line: l, idx: i, qty: Number(l.qty) || 0, customer: (custs[inv.customerId] || {}).name || "Customer", src });
+        const p = pickupForLine(crm, inv, l);
+        // once the pick-up is ticked as collected the goods are in hand, so the
+        // line counts (and gets ticked) like any other; until then it just rides
+        const from = p && p.col.collected ? p : null;
+        r.lines.push({ key: inv.id + ":" + i, inv, line: l, idx: i, qty: Number(l.qty) || 0, customer: (custs[inv.customerId] || {}).name || "Customer", src: from ? null : p, from });
       });
     });
     return r;
