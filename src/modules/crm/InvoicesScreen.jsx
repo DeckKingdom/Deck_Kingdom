@@ -10,13 +10,13 @@ import {
   skuIndex, invoiceCost, buildPicks, pickLandedCost, jobCost, blankPick, invoiceLoadKg, applyInvoiceStockDeduction, releaseInvoiceLinks,
   TRADE_COUNTER, isCollectionJob, TRADE_COUNTER_LABEL, quoteRef, sampleRef, isSaleInvoice, riskOf, staffName, isVoidInvoice, onSchedule, userInitials, isHistoric, SERVED_BY, sourceOptions, mobileOf } from "../../lib/crmCore.js";
 import { ListHero, HeroStat, HeroAdd, SearchBox, RiskChip, WebStatusChip, Soon, DateInput, CalendarPop, usePhone, PrintButton, bandBtn, BandDelete, LockBar } from "./ui.jsx";
-import { invoiceEmailLink, invoiceEmailTo, statementEmailLink, statementEmail, statementCaption } from "../../lib/invoiceEmail.js";
+import { invoiceEmailLink, invoiceEmailTo, statementEmailLink, statementEmail, statementCaption, invoiceWaCaption } from "../../lib/invoiceEmail.js";
 import { emailReady, sendEmail } from "../../data/email.js";
 import { waNumber } from "./CustomersScreen.jsx";
 import { isLeakFreeDrop, isWarrantyLook, FREE_LEAK_LIMIT } from "../../lib/runCost.js";
 import * as XLSX from "xlsx";
 import { Icon, Chip, Tg, Modal, selectAllProps, SuggestInput, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
-import { printInvoice, printJobSheet, printLoadingBill, printJobDocs, statementPdfHtml } from "./printDocs.js";
+import { printInvoice, printJobSheet, printLoadingBill, printJobDocs, statementPdfHtml, invoicePdfHtml } from "./printDocs.js";
 import { htmlToPdfFile, shareToWhatsApp } from "./pdfShare.js";
 import { readableFor } from "./LinesEditor.jsx";
 import LinesEditor from "./LinesEditor.jsx";
@@ -613,6 +613,22 @@ export default function InvoicesScreen({ headerH = 0, openProduct, money = true,
               <Icon name="mail" stroke="#fff" size={14} />Email invoice
             </a>
           : <span style={{ ...bandBtn, opacity: 0.45, cursor: "default" }} title="Add an email address to the customer (or site) first"><Icon name="mail" stroke="#fff" size={14} />Email invoice</span>}
+        <button style={{ ...bandBtn, background: "#1fa855", borderColor: "#1fa855" }}
+          title={"Send the invoice PDF over WhatsApp" + ((cust && cust.mobile) ? " to " + cust.mobile : " — pick the chat yourself (no mobile on the account)")}
+          onClick={async () => {
+            try {
+              setNotice("Making the invoice PDF…");
+              const file = await htmlToPdfFile(invoicePdfHtml(inv, cust, site), "Deck Kingdom invoice " + (inv.invNo || inv.orderRef || "") + ".pdf");
+              const caption = invoiceWaCaption(inv, cust, site);
+              try { await navigator.clipboard.writeText(caption); } catch { /* fine */ }
+              const how = await shareToWhatsApp(file, caption, cust && cust.mobile ? waNumber(cust.mobile) : "");
+              setNotice(how === "downloaded" ? "PDF downloaded — attach it in the WhatsApp chat that's opened (the message is on your clipboard)." : "");
+            } catch (e) {
+              setNotice(String((e && e.message) || e));
+            }
+          }}>
+          <Icon name="wa" stroke="#fff" size={14} />WhatsApp
+        </button>
         {newFollowUp && (
           <button style={bandBtn} title="Something missing or broken? Create a follow-up job to post or deliver it" onClick={() => newFollowUp(inv.id)}>
             <Icon name="wrench" stroke="#fff" size={14} />Follow-up job

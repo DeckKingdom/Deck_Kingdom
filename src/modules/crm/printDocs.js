@@ -139,6 +139,8 @@ const invoiceBody = (inv, cust, site) => {
 export function printInvoice(inv, cust, site) {
   return openDoc(shell("Invoice " + (inv.invNo || ""), invoiceBody(inv, cust, site)));
 }
+// the same paper as HTML, for turning into a PDF to send over WhatsApp
+export const invoicePdfHtml = (inv, cust, site) => shell("Invoice " + (inv.invNo || ""), invoiceBody(inv, cust, site));
 
 // Customer quotation: same layout as the invoice, with validity and notes.
 export function printQuote(q, cust, site) {

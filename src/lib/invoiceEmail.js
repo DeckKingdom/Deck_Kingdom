@@ -57,6 +57,18 @@ const stLines = (invoices) =>
 const stTotal = (invoices) => invoices.reduce((s, i) => s + invoiceTotals(i).total, 0);
 const PAY_LINE = "You can pay by bank transfer — Deck Kingdom Limited, sort code 82-61-37, account number 20556647, reference your invoice number — or by card over the phone on 0161 399 1837.";
 
+// short caption for WhatsApp — the PDF carries the detail
+export function invoiceWaCaption(inv, cust, site) {
+  const t = invoiceTotals(inv);
+  const name = first((site && site.contact) || (cust && (cust.contact || cust.name)));
+  const ref = inv.invNo ? "#" + inv.invNo : inv.orderRef || "";
+  const pay = isVoidInvoice(inv) ? ""
+    : isPaid(inv) ? "Paid — thank you."
+    : "Balance due: " + money(t.total) + ". Pay by bank transfer — Deck Kingdom Limited, sort code 82-61-37, account number 20556647, reference " + ref + " — or by card on 0161 399 1837.";
+  return (name ? "Hi " + name : "Hi") + " — your Deck Kingdom invoice " + ref + " is attached. Total " + money(t.total) + " inc VAT." +
+    (pay ? "\n" + pay : "") + "\nAny questions, just message us back.";
+}
+
 export function statementEmail(cust, invoices) {
   const name = first(cust && (cust.contact || cust.name));
   const body = (name ? "Hi " + name : "Hi") + ",\n\n" +
