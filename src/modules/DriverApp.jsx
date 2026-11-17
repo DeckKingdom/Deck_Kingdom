@@ -351,11 +351,15 @@ export default function DriverApp({ me, warehouse, switcher }) {
                       <b style={{ fontSize: 17, flex: 1 }}>{rn === "—" ? "No run number" : "Run " + rn}{van ? " · " + van : ""}</b>
                       <span style={{ fontSize: 12, fontWeight: 800, color: all ? GREEN : doneN ? "#a06d00" : loadCol }}>{all ? "✓ ALL DONE" : doneN ? doneN + " of " + list.length + " done" : loadLbl || list.length + " stop" + (list.length === 1 ? "" : "s")}</span>
                     </div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: "#5a6a85", marginTop: 3, lineHeight: 1.5 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "#5a6a85", marginTop: 3 }}>
                       {(switcher || warehouse) && (ri && ri.driver) ? ri.driver + " · " : ""}{nDrops} drop{nDrops === 1 ? "" : "s"}{nPicks ? " · " + nPicks + " pick-up" + (nPicks === 1 ? "" : "s") : ""}{kg ? " · " + Math.round(kg).toLocaleString("en-GB") + " kg" : ""}
-                      {pcsFull.length > 0 && <span style={{ color: "#185FA5" }}> · {pcsFull.map((pc) => outwardCode(pc) || pc).join(" › ")}</span>}
-                      <RunMilesChip pcs={pcsFull} drops={list.length} />
                     </div>
+                    {pcsFull.length > 0 && (
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "#5a6a85", marginTop: 4, lineHeight: 1.5 }}>
+                        <span style={{ color: "#185FA5" }}>{pcsFull.map((pc) => outwardCode(pc) || pc).join(" › ")}</span>
+                        <RunMilesChip pcs={pcsFull} drops={list.length} />
+                      </div>
+                    )}
                   </div>
                 );
               })}
