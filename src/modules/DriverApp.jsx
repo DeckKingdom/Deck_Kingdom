@@ -42,7 +42,7 @@ function RunMilesChip({ pcs, drops }) {
   }, [pcs.join("|")]);
   if (!got) return null;
   const h = Math.floor(got.totMin / 60), mn = Math.round(got.totMin % 60);
-  return <div style={{ fontSize: 12.5, fontWeight: 700, color: "#5a6a85", marginTop: 4 }}>≈ {Math.round(got.mi)} mi · {h ? h + "h" : ""}{h ? String(mn).padStart(2, "0") : mn}m out and back</div>;
+  return <span> · ≈{Math.round(got.mi)} mi · est. run time <b style={{ color: NAVY }}>{h ? h + "h" : ""}{h ? String(mn).padStart(2, "0") : mn}m</b></span>;
 }
 const ymd = (d) => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
 const addDaysTo = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
@@ -351,15 +351,11 @@ export default function DriverApp({ me, warehouse, switcher }) {
                       <b style={{ fontSize: 17, flex: 1 }}>{rn === "—" ? "No run number" : "Run " + rn}{van ? " · " + van : ""}</b>
                       <span style={{ fontSize: 12, fontWeight: 800, color: all ? GREEN : doneN ? "#a06d00" : loadCol }}>{all ? "✓ ALL DONE" : doneN ? doneN + " of " + list.length + " done" : loadLbl || list.length + " stop" + (list.length === 1 ? "" : "s")}</span>
                     </div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: "#5a6a85", marginTop: 2 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "#5a6a85", marginTop: 3, lineHeight: 1.5 }}>
                       {(switcher || warehouse) && (ri && ri.driver) ? ri.driver + " · " : ""}{nDrops} drop{nDrops === 1 ? "" : "s"}{nPicks ? " · " + nPicks + " pick-up" + (nPicks === 1 ? "" : "s") : ""}{kg ? " · " + Math.round(kg).toLocaleString("en-GB") + " kg" : ""}
+                      {pcsFull.length > 0 && <span style={{ color: "#185FA5" }}> · {pcsFull.map((pc) => outwardCode(pc) || pc).join(" › ")}</span>}
+                      <RunMilesChip pcs={pcsFull} drops={list.length} />
                     </div>
-                    {pcsFull.length > 0 && (
-                      <div style={{ fontSize: 12.5, fontWeight: 700, color: "#185FA5", marginTop: 4 }}>
-                        {pcsFull.map((pc) => outwardCode(pc) || pc).join(" › ")}
-                      </div>
-                    )}
-                    <RunMilesChip pcs={pcsFull} drops={list.length} />
                   </div>
                 );
               })}
