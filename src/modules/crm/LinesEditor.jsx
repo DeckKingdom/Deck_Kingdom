@@ -242,6 +242,17 @@ export default function LinesEditor({ doc, edit, crm, readOnly, toolbar, onOpenP
     );
   };
 
+  // ===== phone: stacked line cards + a full-screen product picker =====
+  const [phone, setPhone] = useState(() => typeof window !== "undefined" && window.innerWidth > 0 && window.innerWidth <= 700);
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return undefined;
+    const mq = window.matchMedia("(max-width: 700px)");
+    const fn = () => setPhone(mq.matches);
+    if (mq.addEventListener) mq.addEventListener("change", fn); else if (mq.addListener) mq.addListener(fn);
+    return () => { if (mq.removeEventListener) mq.removeEventListener("change", fn); else if (mq.removeListener) mq.removeListener(fn); };
+  }, []);
+  const [picker, setPicker] = useState(false);
+
   const discPrice = (l) => ((Number(l.price) || 0) * (1 - disc / 100)).toFixed(2);
   const discCell = (l) => disc > 0 ? (
     <td style={{ ...td, textAlign: "right", width: 92, whiteSpace: "nowrap", fontWeight: 700, color: "#8a5a00" }} title={"Price after the " + disc + "% account discount"}>
@@ -249,6 +260,64 @@ export default function LinesEditor({ doc, edit, crm, readOnly, toolbar, onOpenP
     </td>
   ) : null;
   const lineTotal = (l) => ((Number(l.qty) || 0) * (Number(l.price) || 0)).toLocaleString("en-GB", { minimumFractionDigits: 2 });
+
+  if (phone && !readOnly) {
+    return (
+      <>
+        {doc.lines.map((l) => (
+          <div key={l.id} style={{ border: "1px solid #e6e9ef", borderRadius: 12, padding: "10px 12px", marginBottom: 8, background: "#fff" }}>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <input style={{ ...inp, fontWeight: 700, flex: 1, fontSize: 15, padding: "9px 10px" }} value={l.description} placeholder="Description" {...selectAllProps} onChange={(e) => setLine(l.id, "description", e.target.value)} />
+              <button style={{ ...abtn, border: "none", color: RED, flex: "none" }} title="Remove line"
+                onClick={() => edit((x) => (x.lines = x.lines.filter((y) => y.id !== l.id)))}>
+                <Icon name="x" stroke={RED} />
+              </button>
+            </div>
+            {(readableFor(bySku, l.code) || l.code) ? <div style={{ fontSize: 11, fontWeight: 700, color: "#8593a8", marginTop: 4, letterSpacing: 0.3 }}>{readableFor(bySku, l.code) || l.code}</div> : null}
+            {needsSize(l) && <SizeRow line={l} onSize={(k, v) => edit((x) => { const y = x.lines.find((z) => z.id === l.id); if (y) applySize(y, k, v); })} />}
+            <div style={{ display: "flex", gap: 8, marginTop: 9, alignItems: "center" }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <ColourSelect line={l} crm={crm} bySku={bySku} onPick={(colour, sku) => edit((x) => {
+                  const y = x.lines.find((z) => z.id === l.id);
+                  if (!y) return;
+                  y.colour = colour;
+                  if (sku) y.code = sku;
+                })} />
+              </div>
+              <div style={{ width: 78, flex: "none" }}>
+                <QtyCell value={l.qty} onChange={(v) => setLine(l.id, "qty", v)} />
+              </div>
+              <input style={{ ...numInp, width: 86, flex: "none" }} inputMode="decimal" title="Price £ inc VAT" value={l.price} {...selectAllProps} onChange={(e) => setLine(l.id, "price", e.target.value)} />
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 10, marginTop: 8, fontSize: 13.5 }}>
+              {disc > 0 && <span style={{ fontWeight: 700, color: "#8a5a00", background: "#fdf3dc", borderRadius: 6, padding: "3px 8px" }} title={"Price after the " + disc + "% account discount"}>less {disc}%: £{discPrice(l)}</span>}
+              <span style={{ fontWeight: 800 }}>Line £{lineTotal(l)}</span>
+            </div>
+          </div>
+        ))}
+        <button style={{ ...btn, width: "100%", justifyContent: "center", padding: "13px 0", fontSize: 15, background: NAVY, color: "#fff", borderColor: NAVY, marginTop: 4 }}
+          onClick={() => setPicker(true)}>
+          <Icon name="plus" stroke="#fff" />Add line
+        </button>
+        {picker && (
+          <PhoneSkuPicker crm={crm} onClose={() => setPicker(false)}
+            onBlank={() => { edit((x) => x.lines.push(blankLine())); setPicker(false); }}
+            onPick={(mp2) => {
+              edit((x) => {
+                const l = blankLine();
+                l.code = mp2.sku;
+                l.description = mp2.name;
+                if (mp2.colour) l.colour = mp2.colour;
+                if (mp2.priceIncVat !== "" && mp2.priceIncVat !== null && mp2.priceIncVat !== undefined) l.price = Number(mp2.priceIncVat);
+                l.qty = 1;
+                x.lines.push(l);
+              });
+              setPicker(false);
+            }} />
+        )}
+      </>
+    );
+  }
 
   return (
     <>
@@ -333,6 +402,60 @@ export default function LinesEditor({ doc, edit, crm, readOnly, toolbar, onOpenP
         </button>
       )}
     </>
+  );
+}
+
+// Full-screen product search for phones: type, tap, the line is filled in.
+function PhoneSkuPicker({ crm, onPick, onBlank, onClose }) {
+  const [q, setQ] = useState("");
+  const prods = useMemo(
+    () => (crm.masterProducts || []).filter((p) => p.active !== false && p.sku && !(p.grade && !(Number(p.stock) > 0))),
+    [crm.masterProducts]
+  );
+  const t = q.trim().toLowerCase();
+  const hits = useMemo(() => {
+    if (!t) return [];
+    const words = t.split(/\s+/);
+    return prods
+      .map((p) => {
+        const hay = [p.name, p.sku, p.family, p.colour].join(" ").toLowerCase();
+        if (!words.every((w) => hay.includes(w))) return null;
+        return { p, rank: String(p.name || "").toLowerCase().startsWith(t) ? 0 : String(p.name || "").toLowerCase().includes(t) ? 1 : 2 };
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.rank - b.rank || String(a.p.name).localeCompare(String(b.p.name)))
+      .map((x) => x.p)
+      .slice(0, 60);
+  }, [t, prods]);
+  const price = (p) => (p.priceIncVat !== "" && p.priceIncVat !== null && p.priceIncVat !== undefined ? "£" + Number(p.priceIncVat).toFixed(2) : "");
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 1100, background: "#f3f5f8", display: "flex", flexDirection: "column" }}>
+      <div style={{ padding: "12px 12px 10px", background: NAVY, display: "flex", gap: 8, alignItems: "center", flex: "none" }}>
+        <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search products — name, code or colour"
+          style={{ flex: 1, border: "none", borderRadius: 10, padding: "12px 12px", fontFamily: "inherit", fontSize: 16, fontWeight: 600, outline: "none" }} />
+        <button type="button" onClick={onClose} style={{ border: "none", background: "rgba(255,255,255,.14)", color: "#fff", borderRadius: 10, padding: "12px 13px", fontFamily: "inherit", fontWeight: 800, fontSize: 14, cursor: "pointer", flex: "none" }}>Cancel</button>
+      </div>
+      <div style={{ flex: 1, overflowY: "auto", padding: "10px 12px 30px" }}>
+        {!t && <div style={{ textAlign: "center", color: "#8593a8", fontWeight: 700, fontSize: 13.5, marginTop: 26 }}>Start typing to search {prods.length.toLocaleString("en-GB")} products…</div>}
+        {t && hits.length === 0 && <div style={{ textAlign: "center", color: "#8593a8", fontWeight: 700, fontSize: 13.5, marginTop: 26 }}>Nothing matches "{q}".</div>}
+        {hits.map((p) => (
+          <button key={p.sku} type="button" onClick={() => onPick(p)}
+            style={{ display: "flex", gap: 10, alignItems: "center", width: "100%", textAlign: "left", background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, padding: "11px 12px", marginBottom: 7, fontFamily: "inherit", cursor: "pointer" }}>
+            <span style={{ flex: 1, minWidth: 0 }}>
+              <span style={{ display: "block", fontWeight: 700, fontSize: 14.5, color: NAVY }}>{p.name}{gradeOf(p) ? <span style={{ color: "#a05f10" }}> · {gradeOf(p).label}</span> : null}</span>
+              <span style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: "#8593a8", marginTop: 2 }}>
+                {(p.family && p.family.includes("/") ? p.family : p.sku)}{p.colour ? " · " + p.colour : ""}{Number(p.stock) > 0 ? " · " + Number(p.stock) + " in stock" : ""}
+              </span>
+            </span>
+            <b style={{ flex: "none", fontSize: 14.5 }}>{price(p)}</b>
+          </button>
+        ))}
+        <button type="button" onClick={onBlank}
+          style={{ display: "block", width: "100%", border: "1px dashed #c4cbd6", background: "none", borderRadius: 12, padding: 12, fontFamily: "inherit", fontWeight: 700, fontSize: 13.5, color: "#5a6a85", cursor: "pointer", marginTop: 8 }}>
+          + Add a blank line instead
+        </button>
+      </div>
+    </div>
   );
 }
 
