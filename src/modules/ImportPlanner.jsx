@@ -85,7 +85,7 @@ export default function ImportPlanner() {
   const [activeId, setActiveId] = useState(null);
   const [tab, setTab] = useState("home");
   // this login's access level (admin / manager / office / warehouse, optionally read only)
-  const [access, setAccess] = useState(() => {
+  const [realAccess, setAccess] = useState(() => {
     if (storageMode === "supabase") return LOADING_ACCESS;
     // local preview only: ?as=office&ro=1 shows the app as that level
     try { const q = new URLSearchParams(window.location.search); if (q.get("as")) return accessFor(q.get("as"), q.get("ro") === "1"); } catch (e) { /* ignore */ }
@@ -99,6 +99,28 @@ export default function ImportPlanner() {
     const t = setInterval(get, 60_000); // a level changed by the admin applies within a minute
     return () => { live = false; clearInterval(t); };
   }, []);
+  // Financials switch: logins with money access start in "office mode" — no
+  // costs, margins, P/L or management screens — until the unmarked dot in the
+  // header is tapped and the PIN entered. A minute without touching the screen
+  // (or a reload) drops back to office mode by itself, so a walk-away is safe.
+  const MONEY_PIN = "1837";
+  const [finOn, setFinOn] = useState(false);
+  const [pinAsk, setPinAsk] = useState(false);
+  const [pinVal, setPinVal] = useState("");
+  const [pinBad, setPinBad] = useState(false);
+  const access = useMemo(
+    () => (realAccess.money && !finOn ? { ...accessFor("office", realAccess.readOnly), name: realAccess.name || "" } : realAccess),
+    [realAccess, finOn]
+  );
+  useEffect(() => {
+    if (!finOn) return undefined;
+    let t;
+    const arm = () => { clearTimeout(t); t = setTimeout(() => setFinOn(false), 60_000); };
+    const evs = ["pointermove", "pointerdown", "keydown", "wheel", "touchstart", "scroll"];
+    evs.forEach((e) => window.addEventListener(e, arm, { passive: true }));
+    arm();
+    return () => { clearTimeout(t); evs.forEach((e) => window.removeEventListener(e, arm)); };
+  }, [finOn]);
   // never sit on a screen this login can't open
   useEffect(() => { if (access.known && !access.canTab(tab)) setTab("home"); }, [access, tab]);
   const [roNote, setRoNote] = useState(false);
@@ -1492,6 +1514,26 @@ export default function ImportPlanner() {
         />
         {access.known && access.readOnly && (
           <span title="Your login can look at everything it can open, but changes aren't saved" style={{ fontSize: 11.5, fontWeight: 800, letterSpacing: 0.4, textTransform: "uppercase", color: NAVY, background: GOLD, borderRadius: 999, padding: "3px 10px" }}>Read only</span>
+        )}
+        {realAccess.money && (
+          <span style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
+            <button type="button" aria-label=" "
+              onClick={() => { if (finOn) setFinOn(false); else { setPinVal(""); setPinBad(false); setPinAsk((v) => !v); } }}
+              style={{ border: "none", background: "none", cursor: "pointer", padding: "6px 4px", display: "inline-flex", alignItems: "center" }}>
+              <span style={{ width: 6, height: 6, borderRadius: "50%", background: finOn ? "#F4B73E" : "#2c3f63" }} />
+            </button>
+            {pinAsk && !finOn && (
+              <form
+                onSubmit={(ev) => { ev.preventDefault(); if (pinVal === MONEY_PIN) { setFinOn(true); setPinAsk(false); } else { setPinBad(true); setPinVal(""); } }}
+                onKeyDown={(ev) => { if (ev.key === "Escape") setPinAsk(false); }}
+                style={{ position: "absolute", top: 28, right: -6, zIndex: 950, background: "#fff", border: "1px solid #d5d9e0", borderRadius: 10, boxShadow: "0 10px 30px rgba(11,31,63,.25)", padding: 9, display: "flex", gap: 6 }}>
+                <input autoFocus type="password" inputMode="numeric" autoComplete="off" value={pinVal} placeholder={pinBad ? "Try again" : "PIN"}
+                  onChange={(ev) => { setPinVal(ev.target.value); setPinBad(false); }}
+                  style={{ width: 76, fontFamily: "inherit", fontSize: 14, fontWeight: 700, padding: "6px 8px", border: "1.5px solid " + (pinBad ? "#C94F4F" : "#d5d9e0"), borderRadius: 8, outline: "none", color: "#0B1F3F", boxSizing: "border-box" }} />
+                <button type="submit" style={{ border: "none", borderRadius: 8, padding: "6px 11px", fontFamily: "inherit", fontWeight: 800, fontSize: 13, background: "#0B1F3F", color: "#fff", cursor: "pointer" }}>OK</button>
+              </form>
+            )}
+          </span>
         )}
         {crm && storageMode === "supabase" && (
           <span title={"Live: changes from FileMaker, the website and other staff appear by themselves within about 10 seconds" + (lastLive ? " — last pulled in at " + lastLive.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : "")}
