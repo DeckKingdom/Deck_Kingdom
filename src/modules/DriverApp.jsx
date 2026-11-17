@@ -471,7 +471,7 @@ function DayRuns({ date, stops, crm, header, onBack, driver, who, onCheckLoad })
       ? { pickup: true, title: "Complete pick-up", name: o.supplier || "Supplier", ref: "COL-" + o.collectionNo, collectionId: o.id,
           rows: (o.items || []).map((it, k) => ({ qty: it.qty, text: it.description || it.sku, colour: it.colour, code: it.sku || "", lineIndex: k })) }
       : { title: isCollectionJob(o) ? "Confirm handover" : "Complete drop " + (o.dropNo || ""), name: (custById[o.customerId] || {}).name || "Customer", ref: "#" + o.invNo, invoiceId: o.id, invNo: o.invNo,
-          owed: !isPaid(o) ? invoiceTotals(o).total : 0,
+          owed: !isPaid(o) && o.paymentType === "COD" ? invoiceTotals(o).total : 0,
           rows: invLines(o).map(({ l, i }) => ({ qty: l.qty, text: l.description || l.code, colour: l.colour, code: l.code || "", lineIndex: i })) };
     return <CompleteDrop target={{ ...target, driver: o.driver || driver || "" }} header={header} date={date}
       onBack={() => setCompleting(null)} onSaved={(conf) => { setDrops((m) => ({ ...m, [conf.collectionId ? "col:" + conf.collectionId : conf.invoiceId]: conf })); setCompleting(null); window.scrollTo(0, 0); }} />;
@@ -595,7 +595,7 @@ function DayRuns({ date, stops, crm, header, onBack, driver, who, onCheckLoad })
           const addr = [a.address, a.town, tidyPostcode(a.postcode)].filter(Boolean).join(", ");
           const tel = (st && (st.mobile || st.landline)) || c.mobile || c.landline || "";
           const coll = isCollectionJob(o);
-          const owed = !isPaid(o) ? invoiceTotals(o).total : 0;
+          const owed = !isPaid(o) && o.paymentType === "COD" ? invoiceTotals(o).total : 0;
           const wait = !isDone && !coll ? waitingOn(x) : [];
           const lines = invLines(o);
           const loading = false; // counting on happens in the Loading tab now
