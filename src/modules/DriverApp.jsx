@@ -246,12 +246,15 @@ export default function DriverApp({ me, warehouse, switcher }) {
   const collFrom = ymd(addDaysTo(new Date(), -14));
   const nColl = crm ? (crm.invoices || []).filter((i) => !isVoidInvoice(i) && isCollectionJob(i) && i.deliveryDate && i.deliveryDate >= collFrom && i.deliveryDate <= tKey && !i.deliveryCompleted).length : 0;
   const counts = { loading: nLoad, deliveries: nDel, collections: nColl, tasks: nTasks };
-  const tabList = [["loading", "Loading"], ...(driver ? [["deliveries", "Runs"]] : []), ["collections", "Collections"], ["tasks", "Tasks"]];
+  // drivers who only drive — no task list on their phones
+  const hideTasks = ["brian", "martin", "mark"].includes(String(driver || "").trim().toLowerCase());
+  useEffect(() => { if (hideTasks && mode === "tasks") setMode(driver ? "deliveries" : "loading"); }, [hideTasks, mode, driver]);
+  const tabList = [["loading", "Vans to load"], ...(driver ? [["deliveries", "Delivery runs"]] : []), ["collections", "Trade Counter Collections"], ...(hideTasks ? [] : [["tasks", "Tasks"]])];
   const tabs = (
     <div style={{ display: "flex", gap: 8, padding: "12px 14px 0", position: "sticky", top: 68, zIndex: 4, background: "#f3f5f8" }}>
       {tabList.map(([k, l]) => (
         <button key={k} type="button" onClick={() => { setMode(k); setView(null); }}
-          style={{ position: "relative", flex: 1, minWidth: 0, borderRadius: 12, padding: "11px 4px", fontFamily: "inherit", fontWeight: 800, fontSize: "clamp(13px, 3.9vw, 15px)", cursor: "pointer", border: "1px solid " + (mode === k ? NAVY : "#d5d9e0"), background: mode === k ? NAVY : "#fff", color: mode === k ? "#fff" : NAVY, whiteSpace: "nowrap" }}>
+          style={{ position: "relative", flex: 1, minWidth: 0, borderRadius: 12, padding: "8px 3px", fontFamily: "inherit", fontWeight: 800, fontSize: "clamp(11.5px, 3.3vw, 14px)", lineHeight: 1.2, cursor: "pointer", border: "1px solid " + (mode === k ? NAVY : "#d5d9e0"), background: mode === k ? NAVY : "#fff", color: mode === k ? "#fff" : NAVY, display: "flex", alignItems: "center", justifyContent: "center", minHeight: 46 }}>
           {l}{counts[k] > 0 && <span title={k === "loading" ? "Vans still to load or check today" : k === "deliveries" ? "Stops still to do today" : k === "collections" ? "Customer collections waiting to be handed over" : "Tasks still to do"} style={{ position: "absolute", top: -7, right: -4, minWidth: 20, height: 20, borderRadius: 99, background: RED, color: "#fff", border: "2px solid #f3f5f8", fontSize: 11.5, fontWeight: 800, display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "0 5px", boxSizing: "border-box", lineHeight: 1 }}>{counts[k]}</span>}
         </button>
       ))}
