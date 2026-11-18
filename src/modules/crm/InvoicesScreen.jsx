@@ -1,6 +1,6 @@
 // Invoices tab: searchable list -> invoice entry screen per the approved
 // mockup. Prices are entered inc VAT; VAT is backed out of the total.
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { CustomerPeek, NewCustomerPeek, InvoicePeek } from "./Peeks.jsx";
 import { useLock } from "./useLock.js";
 import { NAVY, GOLD, RED, uid, prettyDate, prettyDateTime, addMonths, addDays, daysBetween } from "../../lib/core.js";
@@ -70,6 +70,75 @@ export default function InvoicesScreen({ headerH = 0, openProduct, money = true,
   const phone = usePhone();
   const [peekCust, setPeekCust] = useState(null); // account peeked from the invoice editor
   const [listNote, setListNote] = useState("");
+  // bulk chase: one email per customer with outstanding invoices — their invoice
+  // PDF (or a statement when they have several) attached, sent via the ops mailbox
+  const [bulk, setBulk] = useState(null);
+  const bulkStop = useRef(false);
+  const b64Of = (file) => new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(",")[1] || ""); r.onerror = () => no(r.error); r.readAsDataURL(file); });
+  const bulkEmailOutstanding = (list) => {
+    if (!emailReady) {
+      setListNote("One-click sending needs the ops mailbox first — run 026_email.sql, deploy send-email, and link info@deckkingdom.co.uk under Email settings. Until then, use the envelope on each row.");
+      return;
+    }
+    const groups = new Map();
+    list.forEach((i) => { const k = i.customerId || i.id; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(i); });
+    const todo = [...groups.values()];
+    askConfirm({
+      message: "Email " + todo.length + " customer" + (todo.length === 1 ? "" : "s") + " about " + list.length + " outstanding invoice" + (list.length === 1 ? "" : "s") + "? Each gets one email from info@deckkingdom.co.uk with their invoice PDF attached (a statement when they have several).",
+      confirmLabel: "Send them all",
+      action: async () => {
+        bulkStop.current = false;
+        const st2 = { done: 0, total: todo.length, sent: 0, noEmail: 0, fail: 0 };
+        setBulk({ ...st2 });
+        for (const invs of todo) {
+          if (bulkStop.current) break;
+          const c2 = custById[invs[0].customerId];
+          const site2 = siteById[invs[0].siteId];
+          const to = invoiceEmailTo(c2, site2);
+          try {
+            if (!to) st2.noEmail += 1;
+            else if (invs.length === 1) {
+              const i0 = invs[0];
+              const file = await htmlToPdfFile(invoicePdfHtml(i0, c2, site2), "Deck Kingdom invoice " + (i0.invNo || i0.orderRef || "") + ".pdf");
+              const m = invoiceAttachEmail(i0, c2, site2);
+              await sendEmail({ to, subject: m.subject, body: m.body, customerId: c2 && c2.id, attachments: [{ name: file.name, base64: await b64Of(file) }] });
+              st2.sent += 1;
+            } else {
+              const file = await htmlToPdfFile(statementPdfHtml(c2, invs), "deck-kingdom-statement-" + today() + ".pdf");
+              const m = statementEmail(c2, invs);
+              await sendEmail({ to: m.to || to, subject: m.subject, body: m.body, customerId: c2 && c2.id, attachments: [{ name: file.name, base64: await b64Of(file) }] });
+              st2.sent += 1;
+            }
+          } catch { st2.fail += 1; }
+          st2.done += 1;
+          setBulk({ ...st2 });
+          await new Promise((r) => setTimeout(r, 300));
+        }
+        setBulk({ ...st2, finished: true });
+      },
+    });
+  };
+  const exportOutstanding = (list) => {
+    const aoa = [["Invoice", "Date", "Customer", "Email", "Days old", "Job type", "Total £"]];
+    let tot = 0;
+    list.forEach((i) => {
+      const c2 = custById[i.customerId];
+      const t = invoiceTotals(i).total;
+      tot += t;
+      const age = i.date ? Math.max(0, Math.round((Date.now() - new Date(i.date + "T00:00:00").getTime()) / 86400000)) : "";
+      aoa.push([i.invNo || i.orderRef || "", i.date || "", (c2 && c2.name) || "", invoiceEmailTo(c2, siteById[i.siteId]) || "", age, i.jobType || "", Math.round(t * 100) / 100]);
+    });
+    aoa.push(["", "", "", "", "", "Total outstanding", Math.round(tot * 100) / 100]);
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws["!cols"] = [{ wch: 10 }, { wch: 11 }, { wch: 30 }, { wch: 30 }, { wch: 8 }, { wch: 18 }, { wch: 12 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Outstanding");
+    const out = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+    const url = URL.createObjectURL(new Blob([out], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+    const a = document.createElement("a");
+    a.href = url; a.download = "outstanding-invoices-" + today() + ".xlsx"; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  };
 
   const [peekInv, setPeekInv] = useState(null); // job peeked from the list
   const [newCust, setNewCust] = useState(false); // create-an-account window over the editor
@@ -340,6 +409,25 @@ export default function InvoicesScreen({ headerH = 0, openProduct, money = true,
             {filterCust && <Chip tone="red">{filterCust.name || "Customer"}</Chip>}
             {filter.outstanding && <Chip tone="red">Outstanding only</Chip>}
             {filter.freeSmall && <Chip tone="red">{"Free delivery · under £" + FREE_LEAK_LIMIT.toLocaleString("en-GB") + " order" + (filter.freeSmall.warr ? " · warranty / re-visit look" : "")}</Chip>}
+            {filter.outstanding && !filter.customerId && (
+              <span style={{ display: "flex", gap: 8, alignItems: "center", marginLeft: "auto" }}>
+                {bulk && (
+                  <span style={{ fontSize: 12.5, fontWeight: 700, color: bulk.finished ? "#28713e" : "#5a6a85" }}>
+                    {bulk.finished
+                      ? "✓ " + bulk.sent + " emailed" + (bulk.noEmail ? " · " + bulk.noEmail + " no email address" : "") + (bulk.fail ? " · " + bulk.fail + " failed" : "")
+                      : "Emailing " + bulk.done + " of " + bulk.total + "…"}
+                  </span>
+                )}
+                {bulk && !bulk.finished
+                  ? <button style={{ ...btn, padding: "6px 11px", fontSize: 12.5 }} onClick={() => { bulkStop.current = true; }}>Stop</button>
+                  : <button style={{ ...btn, padding: "6px 11px", fontSize: 12.5 }} title="One email per customer from the ops mailbox: their invoice PDF attached, or a statement when they have several" onClick={() => bulkEmailOutstanding(matches)}>
+                      <Icon name="mail" size={14} />Email all outstanding
+                    </button>}
+                <button style={{ ...btn, padding: "6px 11px", fontSize: 12.5 }} title="Download the outstanding list as an Excel file" onClick={() => exportOutstanding(matches)}>
+                  <Icon name="doc" size={14} />Excel list
+                </button>
+              </span>
+            )}
             <span style={{ fontSize: 13, fontWeight: 700 }}>
               {matches.length} invoice{matches.length === 1 ? "" : "s"}{money ? " · " + gbp(filteredTotal) : ""}{filter.outstanding ? " outstanding" : ""}
             </span>
