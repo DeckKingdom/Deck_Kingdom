@@ -349,8 +349,8 @@ export default function DriverApp({ me, warehouse, switcher }) {
                   .map((x) => (x.kind === "col" ? collPostcode(crm, x.obj) : String((siteBy[x.obj.siteId] || {}).postcode || (custBy[x.obj.customerId] || {}).postcode || "").trim()))
                   .filter(Boolean)
                   .filter((pc, ix, arr) => pc.toUpperCase() !== String(arr[ix - 1] || "").toUpperCase());
-                const loadLbl = !lst ? "" : lst.complete ? "✓ LOADED & CHECKED" : lst.submitted ? "WAITING FOR A CHECK" : lst.loaded || lst.part ? "PART LOADED" : "NOT LOADED";
-                const loadCol = !lst ? "#8593a8" : lst.complete ? GREEN : lst.submitted ? "#185FA5" : lst.loaded || lst.part ? "#a06d00" : "#8593a8";
+                const loadLbl = !lst ? "" : lst.stale ? "⚠ NEW ITEMS TO LOAD" : lst.complete ? "✓ LOADED & CHECKED" : lst.submitted ? "WAITING FOR A CHECK" : lst.loaded || lst.part ? "PART LOADED" : "NOT LOADED";
+                const loadCol = !lst ? "#8593a8" : lst.stale ? RED : lst.complete ? GREEN : lst.submitted ? "#185FA5" : lst.loaded || lst.part ? "#a06d00" : "#8593a8";
                 return (
                   <div key={rn} role="button" tabIndex={0} onClick={() => setView(k)}
                     style={{ ...cardS, cursor: "pointer", borderLeft: "6px solid " + (all ? GREEN : n === 0 ? GOLD : NAVY) }}>
@@ -418,6 +418,17 @@ function CollectionsTab({ crm, header, nav, splash, errCard, driver, who }) {
       onSaved={(conf) => { setDrops((m) => ({ ...m, [conf.invoiceId]: conf })); setCompleting(null); window.scrollTo(0, 0); }} />;
   }
   const dayTitle = (k) => (k === today ? "Today" : k === ymd(addDaysTo(new Date(), 1)) ? "Tomorrow" : new Date(k + "T12:00:00").toLocaleDateString("en-GB", { weekday: "long" }));
+  // picked & palletised, ready for the customer — shared with the office's "parts ready" prep flag
+  const [pickedLocal, setPickedLocal] = useState({});
+  const pickedOf = (o) => (pickedLocal[o.id] !== undefined ? pickedLocal[o.id] : !!(o.flags && o.flags.partsReady));
+  const togglePicked = async (o) => {
+    const next = !pickedOf(o);
+    setPickedLocal((m) => ({ ...m, [o.id]: next }));
+    try {
+      const sb = await getSupabase();
+      await sb.from("invoices").update({ flags: { ...(o.flags || {}), partsReady: next } }).eq("id", o.id);
+    } catch { setPickedLocal((m) => ({ ...m, [o.id]: !next })); }
+  };
   const groupsOf = (list) => { const m = new Map(); list.forEach((j) => { if (!m.has(j.deliveryDate)) m.set(j.deliveryDate, []); m.get(j.deliveryDate).push(j); }); return [...m.entries()]; };
   const jobCard = (o) => {
     const c = custById[o.customerId] || {}, st = siteById[o.siteId] || {};
@@ -431,6 +442,13 @@ function CollectionsTab({ crm, header, nav, splash, errCard, driver, who }) {
           <span style={{ fontSize: 12, fontWeight: 800, color: "#8593a8" }}>#{o.invNo}</span>
         </div>
         <div style={{ fontSize: 13, fontWeight: 700, color: "#a06d00", marginTop: 3 }}>Collecting from the warehouse{o.deliveryTime ? " · " + o.deliveryTime : ""}</div>
+        {!isDone && (
+          <button type="button" onClick={() => togglePicked(o)}
+            title={pickedOf(o) ? "Marked picked — tap if it's not actually ready" : "Tap once it's picked and on a pallet ready for them"}
+            style={{ marginTop: 7, border: "1.5px solid " + (pickedOf(o) ? "#bfe3ca" : "#f4d78f"), background: pickedOf(o) ? "#eef8f1" : "#fff8e6", color: pickedOf(o) ? GREEN : "#a05f10", borderRadius: 999, padding: "5px 12px", fontFamily: "inherit", fontWeight: 800, fontSize: 12.5, cursor: "pointer" }}>
+            {pickedOf(o) ? "✓ Picked — on a pallet ready for collection" : "Not picked yet — tap when it's on a pallet"}
+          </button>
+        )}
         {tel && <a href={telHref(tel)} style={{ display: "block", marginTop: 8, color: "#185FA5", fontWeight: 700, fontSize: 14, textDecoration: "none" }}>📞 {tel}</a>}
         <div style={{ marginTop: 8, borderTop: "1px solid #eef1f6", paddingTop: 4 }}>
           {invLines(o).map(({ l, i }) => (

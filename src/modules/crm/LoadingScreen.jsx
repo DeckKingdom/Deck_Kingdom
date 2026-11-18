@@ -70,7 +70,7 @@ export default function LoadingScreen({ crm, me, canEdit, canManage, openInvoice
               style={{ ...card, margin: 0, textAlign: "left", fontFamily: "inherit", color: NAVY, cursor: "pointer", borderTop: "5px solid " + tone }}>
               <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
                 <b style={{ fontSize: 17, flex: 1 }}>{r.van || "No van"}</b>
-                <Chip tone={st.submitted ? "blue" : short ? "red" : st.complete ? "green" : st.unscheduled ? "red" : st.loaded || st.part ? "amber" : "grey"}>{st.submitted ? (canCheck(rep, me) ? "👀 Check needed" : "Waiting for a check") : short ? "Went out short ⚠" : st.complete ? "Loaded & checked ✓" : st.loaded || st.part ? "Part loaded" : "Not started"}</Chip>
+                <Chip tone={st.stale ? "red" : st.submitted ? "blue" : short ? "red" : st.complete ? "green" : st.unscheduled ? "red" : st.loaded || st.part ? "amber" : "grey"}>{st.stale ? "New items to load ⚠" : st.submitted ? (canCheck(rep, me) ? "👀 Check needed" : "Waiting for a check") : short ? "Went out short ⚠" : st.complete ? "Loaded & checked ✓" : st.loaded || st.part ? "Part loaded" : "Not started"}</Chip>
               </div>
               <div style={{ fontSize: 13, fontWeight: 700, color: "#5a6a85", marginTop: 2 }}>{r.driver}{r.runNo ? " · Run " + r.runNo : ""} · {r.jobs.length} drop{r.jobs.length === 1 ? "" : "s"}{r.pickups.length ? " · " + r.pickups.length + " pick-up" + (r.pickups.length === 1 ? "" : "s") : ""}</div>
               <div style={{ fontSize: 12.5, fontWeight: 600, color: "#8593a8", marginTop: 6 }}>

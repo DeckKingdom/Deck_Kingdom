@@ -99,14 +99,14 @@ export default function LoadingMobile({ crm, driver, who, header, onBack, nav })
               {list.map(({ r, st, rep, del, ld, late }) => {
                 const short = st.complete && rep && (rep.shortLines || []).length;
                 const chk = st.submitted && canCheck(rep, who);
-                const tone = late ? RED : short ? RED : st.complete ? GREEN : st.submitted ? BLUE : st.loaded || st.part ? AMBER : NAVY;
+                const tone = st.stale ? RED : late ? RED : short ? RED : st.complete ? GREEN : st.submitted ? BLUE : st.loaded || st.part ? AMBER : NAVY;
                 const choices = loadChoices(del);
                 return (
                   <div key={r.key} role="button" tabIndex={0} onClick={() => { setRunKey(r.key); setRunDate(r.date); }}
                     style={{ ...cardS, cursor: "pointer", borderLeft: "6px solid " + tone }}>
                     <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
                       <b style={{ fontSize: 17, flex: 1 }}>{r.van || "No van"}</b>
-                      <span style={{ fontSize: 12, fontWeight: 800, color: tone }}>{late ? "⚠ SHOULD BE ON — out " + wkShort(del) : st.submitted ? (chk ? "👀 CHECK NEEDED" : "WAITING FOR A CHECK") : short ? "⚠ WENT OUT SHORT" : st.complete ? "✓ LOADED & CHECKED" : st.loaded || st.part ? "PART LOADED" : "NOT STARTED"}</span>
+                      <span style={{ fontSize: 12, fontWeight: 800, color: tone }}>{st.stale ? "⚠ NEW ITEMS TO LOAD" : late ? "⚠ SHOULD BE ON — out " + wkShort(del) : st.submitted ? (chk ? "👀 CHECK NEEDED" : "WAITING FOR A CHECK") : short ? "⚠ WENT OUT SHORT" : st.complete ? "✓ LOADED & CHECKED" : st.loaded || st.part ? "PART LOADED" : "NOT STARTED"}</span>
                     </div>
                     <div style={{ fontSize: 13, fontWeight: 700, color: "#5a6a85", marginTop: 2 }}>{r.driver}{r.runNo ? " · Run " + r.runNo : ""} · {r.jobs.length} drop{r.jobs.length === 1 ? "" : "s"}{r.pickups.length ? " · " + r.pickups.length + " pick-up" + (r.pickups.length === 1 ? "" : "s") : ""} · out {dmShort(del)}</div>
                     <div style={{ fontSize: 12.5, fontWeight: 600, color: "#8593a8", marginTop: 4 }}>
@@ -167,6 +167,7 @@ function LoadRun({ run, data, who, header, err, onBack, onChanged, onCount, onBo
       <div style={{ padding: 14 }}>
         {(err || msg) && <div style={{ ...cardS, borderColor: "#f4b9c1", background: "#fdf3f4", color: RED, fontWeight: 700 }}>{err || msg}</div>}
         {!locked && rep && rep.sentBack && <div style={{ ...cardS, borderColor: "#f4b9c1", background: "#fdf3f4", color: RED, fontWeight: 800 }}>↩ Sent back after the double-check — {rep.sentBack}. Fix the counts and submit again.</div>}
+        {st.stale && <div style={{ ...cardS, borderColor: "#f4d78f", background: "#fff8e6", color: "#6b5305", fontWeight: 800 }}>⚠ New items were added to this run after the van was closed — count them on below and it closes itself again.</div>}
         {st.submitted && rep && (
           <div style={{ ...cardS, background: "#eef5fd", borderColor: "#c6dcf3" }}>
             <div style={{ color: BLUE, fontWeight: 800 }}>Loaded by {shortName(rep.completedBy)} at {hm(rep.completedAt)} — waiting for a double-check</div>

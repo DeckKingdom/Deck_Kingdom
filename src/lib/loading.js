@@ -67,9 +67,15 @@ export function loadState(run, counts, report) {
   });
   const total = run.lines.length;
   const ready = part === 0 && todo === 0 && unscheduled === 0; // everything on the van or booked on a pick-up
-  const complete = total === 0 || !!(report && report.status === "complete");
-  const submitted = !complete && !!(report && report.status === "submitted");
-  return { loaded, part, todo, allocated, unscheduled, total, ready, submitted, complete };
+  // a job added to the run AFTER the van was submitted/checked: its lines have no
+  // count rows and aren't recorded as short, so the closed report no longer covers
+  // the run — surface it as "new items to load" instead of a false green tick
+  const closedRep = !!(report && (report.status === "complete" || report.status === "submitted"));
+  const shortKeys = new Set(((report && report.shortLines) || []).map((x) => x.key));
+  const stale = closedRep && total > 0 && run.lines.some((x) => !x.src && (counts || {})[x.key] === undefined && !shortKeys.has(x.key));
+  const complete = !stale && (total === 0 || !!(report && report.status === "complete"));
+  const submitted = !stale && !complete && !!(report && report.status === "submitted");
+  return { loaded, part, todo, allocated, unscheduled, total, ready, submitted, complete, stale };
 }
 // can this person do the double-check? (anyone but whoever loaded and submitted it)
 export const canCheck = (report, who) => !!report && report.status === "submitted" && lc(report.completedBy) !== lc(who);
