@@ -12,6 +12,7 @@ import {
 import { ListHero, HeroStat, HeroAdd, SearchBox, RiskChip, WebStatusChip, Soon, DateInput, CalendarPop, usePhone, PrintButton, bandBtn, BandDelete, LockBar } from "./ui.jsx";
 import { invoiceEmailLink, invoiceEmailTo, statementEmailLink, statementEmail, statementCaption, invoiceWaCaption, invoiceAttachEmail, invoiceAttachEmailLink } from "../../lib/invoiceEmail.js";
 import { emailReady, sendEmail } from "../../data/email.js";
+import { emailInvoiceWithPdf } from "./invoiceEmailPdf.js";
 import { waNumber } from "./CustomersScreen.jsx";
 import { isLeakFreeDrop, isWarrantyLook, FREE_LEAK_LIMIT } from "../../lib/runCost.js";
 import * as XLSX from "xlsx";
@@ -69,40 +70,7 @@ export default function InvoicesScreen({ headerH = 0, openProduct, money = true,
   const phone = usePhone();
   const [peekCust, setPeekCust] = useState(null); // account peeked from the invoice editor
   const [listNote, setListNote] = useState("");
-  // one flow for every Email-invoice button: make the PDF, then either send it
-  // one-click (mailbox linked) or download it and open a Gmail draft to attach
-  const emailInvoiceWithPdf = async (inv2, c2, st2, say) => {
-    try {
-      say("Making the invoice PDF…");
-      const file = await htmlToPdfFile(invoicePdfHtml(inv2, c2, st2), "Deck Kingdom invoice " + (inv2.invNo || inv2.orderRef || "") + ".pdf");
-      const m = invoiceAttachEmail(inv2, c2, st2);
-      if (emailReady && m.to) {
-        try {
-          say("Sending to " + m.to + "…");
-          const base64 = await new Promise((ok, no) => {
-            const r = new FileReader();
-            r.onload = () => ok(String(r.result).split(",")[1] || "");
-            r.onerror = () => no(r.error);
-            r.readAsDataURL(file);
-          });
-          await sendEmail({ to: m.to, subject: m.subject, body: m.body, customerId: c2 && c2.id, attachments: [{ name: file.name, base64 }] });
-          say("Invoice emailed to " + m.to + " with the PDF attached ✓");
-          return;
-        } catch (e2) {
-          const setup = (e2 && e2.setup) || /isn't deployed|Email settings|026_email/i.test(String((e2 && e2.message) || ""));
-          if (!setup) { say("Couldn't send — " + ((e2 && e2.message) || "try again")); return; }
-        }
-      }
-      const url = URL.createObjectURL(file);
-      const a = document.createElement("a");
-      a.href = url; a.download = file.name; document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 60000);
-      window.open(invoiceAttachEmailLink(inv2, c2, st2), "_blank");
-      say("PDF downloaded (" + file.name + ") — attach it to the Gmail draft that's opened.");
-    } catch (e) {
-      say(String((e && e.message) || e));
-    }
-  };
+
   const [peekInv, setPeekInv] = useState(null); // job peeked from the list
   const [newCust, setNewCust] = useState(false); // create-an-account window over the editor
   const [range, setRangeState] = useState(loadRange); // the sales summary's period (remembered on this computer)

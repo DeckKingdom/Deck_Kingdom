@@ -17,6 +17,7 @@ import StockCheck from "./StockCheck.jsx";
 import { loadDrops, dropPhotoUrl } from "../../data/drops.js";
 import { roadLegsAddr, addrKey } from "../../data/fleetApi.js";
 import { DRIVER_HR, MILE_COST, UNLOAD_MIN, collPostcode } from "../../lib/runCost.js";
+import { emailInvoiceWithPdf } from "./invoiceEmailPdf.js";
 import { Modal } from "./ui.jsx";
 import { reopenConfirmations } from "./DropSync.jsx";
 import DropPhotos from "./DropPhotos.jsx";
@@ -77,18 +78,39 @@ const deliveryText = (i, c) => {
     (isCollectionJob(i) ? "Your order is ready to collect" + (when ? " from " + when : "") + " at Whitelands Road, Ashton-under-Lyne, OL6 6UG — please call before you come." : when ? "Your delivery is booked for " + when + slot + "." : "We're arranging your delivery date and will be in touch shortly.") +
     " Any questions, just reply or call 0161 399 1837.";
 };
-const NotifyButtons = ({ i, c, onSent = () => {} }) => {
+const NotifyButtons = ({ i, c, site = null, onSent = () => {} }) => {
   const phone = phoneOf(c);
   const email = emailOf(c);
   const text = deliveryText(i, c);
+  const [menu, setMenu] = useState(false);
+  const [note, setNote] = useState("");
+  const say = (t) => { setNote(t); if (/✓|downloaded/.test(t)) setTimeout(() => setNote(""), 12000); };
   const b = (bg) => ({ width: 26, height: 26, borderRadius: 8, border: "none", background: bg, display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0, textDecoration: "none" });
+  const item = { display: "block", width: "100%", textAlign: "left", border: "none", background: "none", fontFamily: "inherit", fontWeight: 700, fontSize: 12.5, color: "#0B1F3F", padding: "7px 9px", borderRadius: 7, cursor: "pointer", textDecoration: "none", whiteSpace: "nowrap" };
   return (
     <div style={{ display: "flex", gap: 5 }}>
       {phone ? <a href={"whatsapp://send?phone=" + phone + "&text=" + encodeURIComponent(text)} onClick={() => onSent("wa")} title={"WhatsApp the delivery update to " + c.mobile} style={b("#25D36622")}><Icon name="wa" stroke="#128C7E" size={14} /></a>
         : <span title="No mobile number" style={{ ...b("#f0f2f6"), cursor: "default", opacity: 0.5 }}><Icon name="wa" stroke="#aab3c2" size={14} /></span>}
-      {email ? <a href={gmailLink(i, c, email)} onClick={() => onSent("email")}
-          target="_blank" rel="noopener noreferrer" title={"Email the delivery update to " + email} style={b("#185FA51a")}><Icon name="mail" stroke="#185FA5" size={13} /></a>
-        : <span title="No email address" style={{ ...b("#f0f2f6"), cursor: "default", opacity: 0.5 }}><Icon name="mail" stroke="#aab3c2" size={13} /></span>}
+      {email ? (
+        <span style={{ position: "relative", display: "inline-flex" }}>
+          <button type="button" onClick={() => setMenu((v) => !v)} title={"Email " + email + " — delivery update or the invoice PDF"} style={b("#185FA51a")}><Icon name="mail" stroke="#185FA5" size={13} /></button>
+          {menu && (
+            <>
+              <span onClick={() => setMenu(false)} style={{ position: "fixed", inset: 0, zIndex: 940 }} />
+              <span style={{ position: "absolute", top: 30, right: 0, zIndex: 950, background: "#fff", border: "1px solid #d5d9e0", borderRadius: 10, boxShadow: "0 10px 30px rgba(11,31,63,.2)", padding: 5, display: "flex", flexDirection: "column", minWidth: 200 }}>
+                <a href={gmailLink(i, c, email)} target="_blank" rel="noopener noreferrer" onClick={() => { onSent("email"); setMenu(false); }} style={item}>🗓 Delivery update email</a>
+                <button type="button" onClick={() => { setMenu(false); emailInvoiceWithPdf(i, c, site, say); }} style={item}>📎 Email the invoice (PDF)</button>
+              </span>
+            </>
+          )}
+        </span>
+      ) : <span title="No email address" style={{ ...b("#f0f2f6"), cursor: "default", opacity: 0.5 }}><Icon name="mail" stroke="#aab3c2" size={13} /></span>}
+      {note && (
+        <div style={{ position: "fixed", left: "50%", bottom: 18, transform: "translateX(-50%)", zIndex: 990, background: "#0B1F3F", color: "#fff", borderRadius: 12, padding: "10px 14px", fontSize: 13.5, fontWeight: 700, boxShadow: "0 12px 34px rgba(11,31,63,.4)", display: "flex", gap: 10, alignItems: "center", maxWidth: "min(520px, 90vw)" }}>
+          <span>{note}</span>
+          <button type="button" onClick={() => setNote("")} style={{ border: "none", background: "none", color: "#aeb9cf", fontFamily: "inherit", fontWeight: 800, cursor: "pointer", flex: "none" }}>✕</button>
+        </div>
+      )}
     </div>
   );
 };
@@ -1138,7 +1160,7 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
           return (
             <div style={{ ...sep, position: "relative" }}>
               <span style={{ display: "inline-flex", gap: 5 }}>
-                <NotifyButtons i={i} c={c} onSent={(via) => markSent([i.id], [via])} />
+                <NotifyButtons i={i} c={c} site={siteById[i.siteId] || null} onSent={(via) => markSent([i.id], [via])} />
                 <PrintMenu send={sendOptions([{ kind: "inv", obj: i }], i.deliveryDate)} onSavePhone={saveDriverPhone} onPick={(k) => printJobs([i], k, "#" + (i.invNo || "") + " paperwork")} />
                 {newFollowUp && <button type="button" title="Follow-up job — something missing or broken that needs posting or delivering" onClick={() => newFollowUp(i.id)}
                   style={{ width: 26, height: 26, borderRadius: 8, border: "none", background: "#eef1f6", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0, flex: "none" }}><Icon name="wrench" stroke={NAVY} size={14} /></button>}
@@ -1201,7 +1223,7 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
           <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
             {tel ? <a href={"tel:" + tel} title="Call" style={{ ...mini, background: "#eef1f6" }}><Icon name="phone" stroke={NAVY} size={16} /></a> : null}
             {addr ? <a href={"https://www.google.com/maps/dir/?api=1&destination=" + encodeURIComponent(addr)} target="_blank" rel="noopener noreferrer" title="Directions" style={{ ...mini, background: "#eef1f6" }}><Icon name="pin" stroke={NAVY} size={16} /></a> : null}
-            <NotifyButtons i={i} c={c} onSent={(via) => markSent([i.id], [via])} />
+            <NotifyButtons i={i} c={c} site={siteById[i.siteId] || null} onSent={(via) => markSent([i.id], [via])} />
             <PrintMenu send={sendOptions([{ kind: "inv", obj: i }], i.deliveryDate)} onSavePhone={saveDriverPhone} onPick={(k) => printJobs([i], k, "#" + (i.invNo || "") + " paperwork")} />
             <span style={{ flex: 1 }} />
             <span style={{ fontSize: 12, fontWeight: 700, color: "#8593a8" }}>{i.invNo ? "#" + i.invNo : i.orderRef || ""}</span>
@@ -1790,7 +1812,7 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
                         {ns.state === "none" ? "Not told yet" : (ns.state === "ok" ? "Told " : "Changed · told ") + shortStamp(ns.n.at) + " · " + (ns.n.via || []).map((v) => (v === "wa" ? "WA" : "email")).join("+")}
                       </div>
                       <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                        <NotifyButtons i={i} c={c} onSent={(via) => markSent([i.id], [via])} />
+                        <NotifyButtons i={i} c={c} site={siteById[i.siteId] || null} onSent={(via) => markSent([i.id], [via])} />
                         <button type="button" disabled={!ph && !em} onClick={() => both(i, c)}
                           style={{ ...btn, padding: "5px 10px", fontSize: 12, opacity: !ph && !em ? 0.5 : 1, whiteSpace: "nowrap" }}>{ns.state === "ok" ? "Send again" : "Send both"}</button>
                       </div>
