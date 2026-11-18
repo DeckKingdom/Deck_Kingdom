@@ -1125,11 +1125,13 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
           </div>
         )}
         {showPrep && (
-          <div style={{ display: "flex", gap: 3 }}>
-            {FOLLOWUP_FLAGS.map(([k, label, icon]) => (
-              <Tg key={k} on={i.flags[k]} title={label} icon={icon} onClick={() => setFlag(i.id, k)} />
-            ))}
-          </div>
+          c && c.noFollowUps
+            ? <span style={{ fontSize: 10.5, fontWeight: 700, color: "#8593a8", alignSelf: "center", whiteSpace: "nowrap" }} title="This account is ticked No follow-ups — it's never chased for reviews, photos or social">no f-ups</span>
+            : <div style={{ display: "flex", gap: 3 }}>
+                {FOLLOWUP_FLAGS.map(([k, label, icon]) => (
+                  <Tg key={k} on={i.flags[k]} title={label} icon={icon} onClick={() => setFlag(i.id, k)} />
+                ))}
+              </div>
         )}
         {(() => {
           const ns = notifyState(i, crm);

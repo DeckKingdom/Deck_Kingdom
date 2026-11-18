@@ -717,6 +717,7 @@ export default function CustomersScreen({ money = true, crm, updateCrm, askConfi
                 <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 7 }}>
                   <Chip tone="navy">Account #{sel.accountNo || "—"}</Chip>
                   {sel.trader && <Chip tone="red" style={{ background: RED, color: "#fff", border: "none" }}>Trade</Chip>}
+                  {sel.noFollowUps && <Chip title="This account is never chased after delivery — no review asks, photos, social or sample follow-ups">No follow-ups</Chip>}
                   {Number(sel.discountPct) > 0 && <Chip tone="gold">−{Number(sel.discountPct)}% discount</Chip>}
                   {sel.source && <Chip tone="navy">Source · {sel.source}</Chip>}
                   <button title="Edit account" onClick={() => openCustDraft({ ...sel })} style={{ width: 28, height: 28, borderRadius: 8, border: "1px solid #33466b", background: "transparent", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0, flex: "none" }}>
@@ -1052,9 +1053,14 @@ export default function CustomersScreen({ money = true, crm, updateCrm, askConfi
                 onChange={(e) => setCustDraft({ ...custDraft, discountPct: e.target.value })} />
             </div>
           </div>
-          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13.5, fontWeight: 700, margin: "14px 0" }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13.5, fontWeight: 700, margin: "14px 0 8px" }}>
             <input type="checkbox" checked={custDraft.trader} onChange={(e) => setCustDraft({ ...custDraft, trader: e.target.checked })} />
             Trade customer
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13.5, fontWeight: 700, margin: "0 0 14px" }}
+            title="Tick for accounts that shouldn't be chased after delivery — no review asks, photo requests, social or sample follow-ups">
+            <input type="checkbox" checked={!!custDraft.noFollowUps} onChange={(e) => setCustDraft({ ...custDraft, noFollowUps: e.target.checked })} />
+            No follow-ups <span style={{ fontWeight: 600, color: "#8593a8" }}>— never ask for reviews / photos</span>
           </label>
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
             <button style={btn} onClick={() => setCustDraft(null)}>Cancel</button>

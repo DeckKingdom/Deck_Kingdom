@@ -125,7 +125,7 @@ const purchaseToRow = (p, i) => {
 const snake = (k) => k.replace(/[A-Z]/g, (m) => "_" + m.toLowerCase());
 
 const customerToRow = (c, i) => {
-  const row = { id: c.id, account_no: intOrNull(c.accountNo), trader: c.trader === true, discount_pct: num(c.discountPct), position: i };
+  const row = { id: c.id, account_no: intOrNull(c.accountNo), trader: c.trader === true, no_follow_ups: c.noFollowUps === true, discount_pct: num(c.discountPct), position: i };
   CUSTOMER_FIELDS.forEach((k) => (row[snake(k)] = str(c[k])));
   return row;
 };
@@ -491,7 +491,7 @@ async function loadAll(quick = false) {
   sample2Ready = !!(sampleData && sampleData.sm && sampleData.sm.length && Object.prototype.hasOwnProperty.call(sampleData.sm[0], "followed_up2_date"));
 
   const customers = cs.map((r) => {
-    const c = { id: r.id, accountNo: r.account_no, trader: r.trader === true, discountPct: nv(r.discount_pct), updatedAt: r.updated_at || "" };
+    const c = { id: r.id, accountNo: r.account_no, trader: r.trader === true, noFollowUps: r.no_follow_ups === true, discountPct: nv(r.discount_pct), updatedAt: r.updated_at || "" };
     CUSTOMER_FIELDS.forEach((k) => (c[k] = nv(r[snake(k)])));
     return c;
   });

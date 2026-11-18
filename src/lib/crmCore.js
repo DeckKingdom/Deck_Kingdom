@@ -153,6 +153,7 @@ export const blankCustomer = () => ({
   email: "",
   source: "",
   trader: false,
+  noFollowUps: false, // ticked = never chased after delivery (reviews, photos, social)
   discountPct: "",
   contactMethod: "",
   created: today(),
@@ -3094,8 +3095,18 @@ export const nudgeDue = (inv, tod) => reviewNext(inv, tod) === "nudge";
 // and only appears when there's actually something to send or check.
 // which jobs the review pipeline covers: delivered sales we took to them —
 // collections and trade-counter walk-ins stay out
+// accounts ticked "no follow-ups" are never chased (cached index, rebuilt when the list changes)
+export const custNoFollowUps = (crm, customerId) => {
+  if (!crm) return false;
+  if (!crm.__nfu || crm.__nfu.src !== crm.customers) {
+    const set = new Set();
+    (crm.customers || []).forEach((c) => { if (c.noFollowUps === true) set.add(c.id); });
+    crm.__nfu = { src: crm.customers, set };
+  }
+  return crm.__nfu.set.has(customerId);
+};
 export const reviewable = (inv, crm) =>
-  inv.deliveryCompleted && isSaleInvoice(inv) && onSchedule(inv, crm) && !isCollectionJob(inv) && inv.siteId !== TRADE_COUNTER;
+  inv.deliveryCompleted && isSaleInvoice(inv) && onSchedule(inv, crm) && !isCollectionJob(inv) && inv.siteId !== TRADE_COUNTER && !custNoFollowUps(crm, inv.customerId);
 const reviewHasEmail = (c) => /@/.test(String((c && c.email) || ""));
 // the best WhatsApp-able number we hold: the mobile field first, but older
 // records sometimes have the mobile sat in the landline field
