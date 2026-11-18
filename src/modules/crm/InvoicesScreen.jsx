@@ -68,6 +68,41 @@ export default function InvoicesScreen({ headerH = 0, openProduct, money = true,
   const [stNote, setStNote] = useState(""); // statement-of-account progress / hints
   const phone = usePhone();
   const [peekCust, setPeekCust] = useState(null); // account peeked from the invoice editor
+  const [listNote, setListNote] = useState("");
+  // one flow for every Email-invoice button: make the PDF, then either send it
+  // one-click (mailbox linked) or download it and open a Gmail draft to attach
+  const emailInvoiceWithPdf = async (inv2, c2, st2, say) => {
+    try {
+      say("Making the invoice PDF…");
+      const file = await htmlToPdfFile(invoicePdfHtml(inv2, c2, st2), "Deck Kingdom invoice " + (inv2.invNo || inv2.orderRef || "") + ".pdf");
+      const m = invoiceAttachEmail(inv2, c2, st2);
+      if (emailReady && m.to) {
+        try {
+          say("Sending to " + m.to + "…");
+          const base64 = await new Promise((ok, no) => {
+            const r = new FileReader();
+            r.onload = () => ok(String(r.result).split(",")[1] || "");
+            r.onerror = () => no(r.error);
+            r.readAsDataURL(file);
+          });
+          await sendEmail({ to: m.to, subject: m.subject, body: m.body, customerId: c2 && c2.id, attachments: [{ name: file.name, base64 }] });
+          say("Invoice emailed to " + m.to + " with the PDF attached ✓");
+          return;
+        } catch (e2) {
+          const setup = (e2 && e2.setup) || /isn't deployed|Email settings|026_email/i.test(String((e2 && e2.message) || ""));
+          if (!setup) { say("Couldn't send — " + ((e2 && e2.message) || "try again")); return; }
+        }
+      }
+      const url = URL.createObjectURL(file);
+      const a = document.createElement("a");
+      a.href = url; a.download = file.name; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      window.open(invoiceAttachEmailLink(inv2, c2, st2), "_blank");
+      say("PDF downloaded (" + file.name + ") — attach it to the Gmail draft that's opened.");
+    } catch (e) {
+      say(String((e && e.message) || e));
+    }
+  };
   const [peekInv, setPeekInv] = useState(null); // job peeked from the list
   const [newCust, setNewCust] = useState(false); // create-an-account window over the editor
   const [range, setRangeState] = useState(loadRange); // the sales summary's period (remembered on this computer)
@@ -393,6 +428,12 @@ export default function InvoicesScreen({ headerH = 0, openProduct, money = true,
             <div style={{ textAlign: "center", padding: "30px 10px", color: "#5a6a85", fontWeight: 600 }}>No invoices yet.</div>
           ) : (
             <>
+              {listNote && (
+                <div style={{ margin: "0 0 10px", background: "#fff8e6", border: "1px solid #f4d78f", color: "#6b5305", borderRadius: 10, padding: "9px 12px", fontSize: 13.5, fontWeight: 700, display: "flex", justifyContent: "space-between", gap: 10 }}>
+                  <span>{listNote}</span>
+                  <button style={{ border: "none", background: "none", fontFamily: "inherit", fontWeight: 800, cursor: "pointer", color: "#6b5305" }} onClick={() => setListNote("")}>✕</button>
+                </div>
+              )}
               <div className="dk-bleed" style={{ overflowX: "auto" }}>
                 <table className="dk-t" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 780 }}>
                   <thead>
@@ -437,7 +478,7 @@ export default function InvoicesScreen({ headerH = 0, openProduct, money = true,
                             {(() => {
                               const c = custById[i.customerId], st = siteById[i.siteId], to = invoiceEmailTo(c, st);
                               return to && !isVoidInvoice(i)
-                                ? <a style={{ ...abtn, marginRight: 6, display: "inline-flex", verticalAlign: "middle" }} title={"Email invoice #" + (i.invNo || "") + " to " + to} href={invoiceEmailLink(i, c, st)} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}><Icon name="mail" /></a>
+                                ? <button style={{ ...abtn, marginRight: 6, display: "inline-flex", verticalAlign: "middle" }} title={"Email invoice #" + (i.invNo || "") + " as a PDF to " + to} onClick={(e) => { e.stopPropagation(); emailInvoiceWithPdf(i, c, st, setListNote); }}><Icon name="mail" /></button>
                                 : <span style={{ ...abtn, marginRight: 6, display: "inline-flex", verticalAlign: "middle", opacity: 0.35, cursor: "default" }} title={isVoidInvoice(i) ? "Refunded / cancelled" : "No email address on this customer"}><Icon name="mail" /></span>;
                             })()}
                             <button style={{ ...abtn, verticalAlign: "middle" }} title="Open" onClick={(e) => { e.stopPropagation(); setSelId(i.id); }}><Icon name="pen" /></button>
@@ -610,38 +651,7 @@ export default function InvoicesScreen({ headerH = 0, openProduct, money = true,
         }} />
         {invoiceEmailTo(cust, site)
           ? <button style={{ ...bandBtn }} title={"Email the invoice as a PDF to " + invoiceEmailTo(cust, site) + " with a short check-the-details note"}
-              onClick={async () => {
-                try {
-                  setNotice("Making the invoice PDF…");
-                  const file = await htmlToPdfFile(invoicePdfHtml(inv, cust, site), "Deck Kingdom invoice " + (inv.invNo || inv.orderRef || "") + ".pdf");
-                  const m = invoiceAttachEmail(inv, cust, site);
-                  if (emailReady && m.to) {
-                    try {
-                      setNotice("Sending to " + m.to + "…");
-                      const base64 = await new Promise((ok, no) => {
-                        const r = new FileReader();
-                        r.onload = () => ok(String(r.result).split(",")[1] || "");
-                        r.onerror = () => no(r.error);
-                        r.readAsDataURL(file);
-                      });
-                      await sendEmail({ to: m.to, subject: m.subject, body: m.body, customerId: cust && cust.id, attachments: [{ name: file.name, base64 }] });
-                      setNotice("Invoice emailed to " + m.to + " with the PDF attached ✓");
-                      return;
-                    } catch (e2) {
-                      const setup = (e2 && e2.setup) || /isn't deployed|Email settings|026_email/i.test(String((e2 && e2.message) || ""));
-                      if (!setup) { setNotice("Couldn't send — " + ((e2 && e2.message) || "try again")); return; }
-                    }
-                  }
-                  const url = URL.createObjectURL(file);
-                  const a = document.createElement("a");
-                  a.href = url; a.download = file.name; document.body.appendChild(a); a.click(); a.remove();
-                  setTimeout(() => URL.revokeObjectURL(url), 60000);
-                  window.open(invoiceAttachEmailLink(inv, cust, site), "_blank");
-                  setNotice("PDF downloaded (" + file.name + ") — attach it to the Gmail draft that's opened.");
-                } catch (e) {
-                  setNotice(String((e && e.message) || e));
-                }
-              }}>
+              onClick={() => emailInvoiceWithPdf(inv, cust, site, setNotice)}>
               <Icon name="mail" stroke="#fff" size={14} />Email invoice
             </button>
           : <span style={{ ...bandBtn, opacity: 0.45, cursor: "default" }} title="Add an email address to the customer (or site) first"><Icon name="mail" stroke="#fff" size={14} />Email invoice</span>}
