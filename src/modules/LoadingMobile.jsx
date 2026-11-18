@@ -31,6 +31,7 @@ const dmShort = (sd) => new Date(sd + "T12:00:00").toLocaleDateString("en-GB", {
 export default function LoadingMobile({ crm, driver, who, header, onBack, nav }) {
   const [runKey, setRunKey] = useState(null);
   const [runDate, setRunDate] = useState(null);
+  const [showDone2, setShowDone2] = useState(false); // loaded & checked vans tucked away
   const [data, setData] = useState(null); // { reports, counts }
   const [err, setErr] = useState("");
   const [n, setN] = useState(0);
@@ -63,7 +64,6 @@ export default function LoadingMobile({ crm, driver, who, header, onBack, nav })
     setData((d) => d && ({ ...d, reports: { ...d.reports, [r.key]: { ...(d.reports[r.key] || { id: r.key, date: r.date, driver: r.driver, runNo: r.runNo, van: r.van, status: "open" }), loadOn: v } } }));
     setLoadOn(r, v).catch(() => setErr("Couldn't move the loading day — if this keeps happening, ask the office to run 066_load_on.sql."));
   };
-  const [showDone2, setShowDone2] = useState(false);
   let doneHidden = 0;
   const groups = (() => {
     const m = new Map();

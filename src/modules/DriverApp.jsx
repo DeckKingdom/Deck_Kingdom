@@ -405,6 +405,7 @@ function CollectionsTab({ crm, header, nav, splash, errCard, driver, who }) {
   }, [dateKey]);
   const [completing, setCompleting] = useState(null);
   const [showDone, setShowDone] = useState(false);
+  const [pickedLocal, setPickedLocal] = useState({});
   const custById = {}, siteById = {};
   ((crm && crm.customers) || []).forEach((c) => (custById[c.id] = c));
   ((crm && crm.sites) || []).forEach((st) => (siteById[st.id] = st));
@@ -419,7 +420,6 @@ function CollectionsTab({ crm, header, nav, splash, errCard, driver, who }) {
   }
   const dayTitle = (k) => (k === today ? "Today" : k === ymd(addDaysTo(new Date(), 1)) ? "Tomorrow" : new Date(k + "T12:00:00").toLocaleDateString("en-GB", { weekday: "long" }));
   // picked & palletised, ready for the customer — shared with the office's "parts ready" prep flag
-  const [pickedLocal, setPickedLocal] = useState({});
   const pickedOf = (o) => (pickedLocal[o.id] !== undefined ? pickedLocal[o.id] : !!(o.flags && o.flags.partsReady));
   const togglePicked = async (o) => {
     const next = !pickedOf(o);
