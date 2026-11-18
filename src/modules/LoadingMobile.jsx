@@ -63,11 +63,14 @@ export default function LoadingMobile({ crm, driver, who, header, onBack, nav })
     setData((d) => d && ({ ...d, reports: { ...d.reports, [r.key]: { ...(d.reports[r.key] || { id: r.key, date: r.date, driver: r.driver, runNo: r.runNo, van: r.van, status: "open" }), loadOn: v } } }));
     setLoadOn(r, v).catch(() => setErr("Couldn't move the loading day — if this keeps happening, ask the office to run 066_load_on.sql."));
   };
+  const [showDone2, setShowDone2] = useState(false);
+  let doneHidden = 0;
   const groups = (() => {
     const m = new Map();
     dates.forEach((del) => runsFor(del).forEach((r) => {
       const rep = data && data.reports[r.key];
       const st = stateOf(r);
+      if (st.complete && !showDone2) { doneHidden += 1; return; } // loaded & checked: out of the way
       const ld = (rep && rep.loadOn) || defLoadDay(del);
       const gk = ld < today ? today : ld;
       if (!m.has(gk)) m.set(gk, []);
@@ -83,7 +86,7 @@ export default function LoadingMobile({ crm, driver, who, header, onBack, nav })
       <div style={{ padding: 14 }}>
         {err && <div style={{ ...cardS, borderColor: "#f4b9c1", background: "#fdf3f4", color: RED, fontWeight: 700 }}>{err}</div>}
         <div style={{ fontSize: 12.5, fontWeight: 700, color: "#8593a8", margin: "0 2px 4px" }}>Vans sit under the day they get loaded — the evening before they go out. Weekend runs land on Friday unless you move them.</div>
-        {groups.length === 0 && <div style={{ ...cardS, textAlign: "center", color: "#8593a8", fontWeight: 700, marginTop: 10 }}>No vans to load in the next week{driver ? " for you" : ""}.</div>}
+        {groups.length === 0 && <div style={{ ...cardS, textAlign: "center", color: doneHidden ? GREEN : "#8593a8", fontWeight: 700, marginTop: 10 }}>{doneHidden ? "✓ Everything's loaded and checked." : "No vans to load in the next week" + (driver ? " for you" : "") + "."}</div>}
         {groups.map(([gk, list]) => {
           const dels = [...new Set(list.map((x) => x.del))].sort();
           return (
@@ -128,6 +131,12 @@ export default function LoadingMobile({ crm, driver, who, header, onBack, nav })
             </div>
           );
         })}
+        {(doneHidden > 0 || showDone2) && (
+          <button type="button" onClick={() => setShowDone2((v) => !v)}
+            style={{ display: "block", margin: "12px auto 0", border: "none", background: "none", color: "#185FA5", fontFamily: "inherit", fontWeight: 800, fontSize: 13.5, cursor: "pointer" }}>
+            {showDone2 ? "Hide loaded & checked" : "Show " + doneHidden + " loaded & checked"}
+          </button>
+        )}
       </div>
     </div>
   );

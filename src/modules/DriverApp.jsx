@@ -77,7 +77,8 @@ export default function DriverApp({ me, warehouse, switcher }) {
     return s ? s.email : "";
   })();
   const [err, setErr] = useState("");
-  const [view, setView] = useState(null); // null = home · a yyyy-mm-dd = that day's runs · "fuel"
+  const [view, setView] = useState(null);
+  const [showAllDone, setShowAllDone] = useState(false); // finished runs tucked away on the home list // null = home · a yyyy-mm-dd = that day's runs · "fuel"
   const [loads, setLoads] = useState(0); // bumped on refresh so the day view re-checks drops and resets
   const [todayLoad, setTodayLoad] = useState(null); // today's loading reports, for the Loading tab's count
   // The phone stays live like the office screens: the database pushes every
@@ -300,6 +301,7 @@ export default function DriverApp({ me, warehouse, switcher }) {
   if (view) return <DayRuns key={view + ":" + loads} driver={driver} who={who} onCheckLoad={() => { setMode("loading"); setView(null); }} date={view} stops={byDay[view] || []} crm={crm} header={header} onBack={() => setView(null)} />;
 
   // ===== home: run cards grouped by day, fuel on top =====
+  const hiddenDone = { n: 0 };
   return (
     <div style={page}>
       {splash}
@@ -307,6 +309,7 @@ export default function DriverApp({ me, warehouse, switcher }) {
       {tabs}
       <div style={{ padding: 14 }}>
         {errCard}
+        {null /* done runs tuck away below */}
         <button type="button" onClick={() => setView("fuel")}
           style={{ width: "100%", border: "none", borderRadius: 12, padding: "13px 14px", fontFamily: "inherit", fontWeight: 800, fontSize: 15, background: NAVY, color: "#fff", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
           <span>⛽ Fuel — log a fill-up</span><span style={{ color: "#aeb9cf" }}>›</span>
@@ -333,6 +336,7 @@ export default function DriverApp({ me, warehouse, switcher }) {
                 const nPicks = list.filter((x) => x.kind === "col").length;
                 const doneN = list.filter((x) => (x.kind === "col" ? x.obj.collected : x.obj.deliveryCompleted)).length;
                 const all = list.length > 0 && doneN >= list.length;
+                if (all && !showAllDone) { hiddenDone.n += 1; return null; }
                 const ri = runsInfo.find((r2) => String(r2.runNo || "") === (rn === "—" ? "" : rn));
                 const lst = ri && todayLoad ? loadState(ri, todayLoad.counts[ri.key], todayLoad.reports[ri.key]) : null;
                 const rep = ri && todayLoad ? todayLoad.reports[ri.key] : null;
@@ -366,6 +370,12 @@ export default function DriverApp({ me, warehouse, switcher }) {
             </div>
           );
         })}
+        {(hiddenDone.n > 0 || showAllDone) && (
+          <button type="button" onClick={() => setShowAllDone((v) => !v)}
+            style={{ display: "block", margin: "12px auto 0", border: "none", background: "none", color: "#185FA5", fontFamily: "inherit", fontWeight: 800, fontSize: 13.5, cursor: "pointer" }}>
+            {showAllDone ? "Hide finished runs" : "Show " + hiddenDone.n + " finished run" + (hiddenDone.n === 1 ? "" : "s")}
+          </button>
+        )}
         {switcher ? <button type="button" onClick={() => openPhoneApp(null)}
           style={{ marginTop: 22, width: "100%", border: "1px solid #d5d9e0", background: "#fff", borderRadius: 12, padding: 12, fontFamily: "inherit", fontWeight: 800, color: NAVY, cursor: "pointer" }}>🏠 Back to the office system</button> : <button type="button" onClick={() => signOut().then(() => window.location.reload())}
           style={{ marginTop: 22, width: "100%", border: "1px solid #d5d9e0", background: "#fff", borderRadius: 12, padding: 12, fontFamily: "inherit", fontWeight: 700, color: "#5a6a85", cursor: "pointer" }}>Sign out</button>}

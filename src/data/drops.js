@@ -54,6 +54,11 @@ export async function saveDrop(conf, photoBlobs) {
     const row = { id: conf.id, user_id: user.id, driver: conf.driver, kind: conf.collectionId ? "collection" : "job", invoice_id: conf.invoiceId || "", collection_id: conf.collectionId || "", inv_no: String(conf.invNo || ""), delivery_date: conf.date, items: conf.items, photo_path: paths[0] || "", photo_paths: paths, notes: conf.notes || "", payment: conf.payment || {}, lat: conf.lat ?? null, lng: conf.lng ?? null, accuracy_m: conf.acc ?? null };
     let ins = await sb.from("drop_confirmations").insert(row);
     if (ins.error && /photo_paths/.test(ins.error.message)) { const { photo_paths, ...old } = row; ins = await sb.from("drop_confirmations").insert(old); } // SQL not updated yet: first photo only
+    // a confirmed pick-up can't be double-checked back at the yard — the goods go
+    // straight out — so completing it also closes the collection on the schedule
+    if (!ins.error && conf.collectionId) {
+      try { await sb.from("collections").update({ collected: true }).eq("id", conf.collectionId); } catch { /* the office tick still works */ }
+    }
     if (ins.error) throw new Error(ins.error.message);
     return { ...conf, photoPath: paths[0], photoPaths: paths, at: new Date().toISOString() };
   }
