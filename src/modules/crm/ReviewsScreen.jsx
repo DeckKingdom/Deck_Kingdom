@@ -347,7 +347,7 @@ export default function ReviewsScreen({ crm, updateCrm, askConfirm, openInvoice,
                         <span style={{ fontSize: 12, fontWeight: 600, color: "#8593a8", paddingLeft: 14 }}>↳ same customer</span>
                       ) : (
                         <>
-                          <button {...(c ? hpCust.bind(c.id) : {})} title="Peek at the account — rests open on hover, click to pin"
+                          <button {...hpInv.bind(i.id)} title="What they ordered — rests open on hover, click to pin (the Account button inside goes to their account)"
                             style={{ ...linkBtn, fontSize: 13, fontWeight: 700, color: "#1a2b4a" }}>
                             {(c && c.name) || "—"}
                           </button>

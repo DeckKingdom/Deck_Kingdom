@@ -35,6 +35,7 @@ export function useCrm(enabled) {
   const lastEdit = useRef(0);
   const seen = useRef(0); // newest change from elsewhere already loaded
   const timer = useRef(null);
+  const fireNow = useRef(null);
   // instant open: null = undecided, true = showing the device's cached copy
   // (read-only), false = live data has landed
   const [crmStale, setCrmStale] = useState(false);
@@ -222,7 +223,7 @@ export function useCrm(enabled) {
     if (!loaded.current || !crm || !dirty.current || !pending.current) return;
     setCrmSave("Saving…");
     if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(async () => {
+    const fire = async () => {
       saving.current = true;
       pending.current = false;
       try {
@@ -244,8 +245,25 @@ export function useCrm(enabled) {
       } finally {
         saving.current = false;
       }
-    }, 600);
+    };
+    fireNow.current = fire;
+    timer.current = setTimeout(fire, 350);
   }, [crm]);
+
+  // leaving the tab (switching away, closing) flushes any pending save at once,
+  // so the leave-site warning almost never has anything left to warn about
+  useEffect(() => {
+    const flush = () => {
+      if (pending.current && fireNow.current && !saving.current) {
+        if (timer.current) clearTimeout(timer.current);
+        fireNow.current();
+      }
+    };
+    const onVis = () => { if (document.visibilityState === "hidden") flush(); };
+    document.addEventListener("visibilitychange", onVis);
+    window.addEventListener("pagehide", flush);
+    return () => { document.removeEventListener("visibilitychange", onVis); window.removeEventListener("pagehide", flush); };
+  }, []);
 
   // never lose unsaved work to a refresh / closed tab without a warning
   useEffect(() => {
