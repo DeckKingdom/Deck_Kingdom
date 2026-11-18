@@ -336,7 +336,7 @@ const DayPill = ({ value, onChange, placeholder = "Date", paid, what = "", full 
     <span style={{ position: "relative", flex: "none" }}>
       <button type="button" title={ok ? what + d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" }) + " — click to change" : what ? what.trim() + " — not yet" : "Set a date"}
         onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setCal((c) => (c ? null : r)); }}
-        style={{ ...pill, width: full ? 74 : 46, padding: "3px 6px", textAlign: "center", color: ok ? (paid ? "#28713e" : NAVY) : "#5a6a85", background: ok ? (paid ? "#eef8f1" : "#fff") : "#f3f5f9", borderColor: ok && paid ? "#bfe3ca" : "#c9d0db" }}>
+        style={{ ...pill, width: full ? (paid && !ok ? 84 : 74) : 46, padding: "3px 6px", textAlign: "center", color: ok ? (paid ? "#28713e" : NAVY) : paid ? "#a05f10" : "#5a6a85", background: ok ? (paid ? "#eef8f1" : "#fff") : paid ? "#fdf3dc" : "#f3f5f9", borderColor: ok && paid ? "#bfe3ca" : !ok && paid ? "#f4d78f" : "#c9d0db" }}>
         {ok ? (full ? d.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "2-digit" }) : ordinal(d.getDate())) : placeholder}
       </button>
       {cal && <CalendarPop value={value} anchor={cal} onPick={(v) => onChange(v)} onClose={() => setCal(null)} />}
@@ -1115,7 +1115,7 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
           <span style={{ width: 104, flex: "none" }}>
             <PillSelect value={i.paymentType || ""} options={PAYMENT_TYPES} placeholder="Payment" tone={isPaid(i) ? "#28713e" : NAVY} onChange={(v) => setInv(i.id, (t) => (t.paymentType = v))} />
           </span>
-          <DayPill value={i.paymentDate} placeholder="Paid" paid full what="Paid " onChange={(v) => setInv(i.id, (t) => (t.paymentDate = v))} />
+          <DayPill value={i.paymentDate} placeholder="Not paid" paid full what="Paid " onChange={(v) => setInv(i.id, (t) => (t.paymentDate = v))} />
         </div>
         {showPrep && (
           <div style={{ display: "flex", gap: 3 }}>
@@ -1395,7 +1395,11 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
           <span style={{ fontSize: 11.5, color: "#5a6a85", fontWeight: 600 }}>
             {(st && st.postcode) || (c && c.postcode) || "—"} · <span style={{ color: isCollectionJob(i) ? "#9a7408" : "#5a6a85" }}>{i.jobType || "—"}</span>{(() => { const w = invoiceLoadKg(i, crm); return w ? " · " + Math.round(w).toLocaleString("en-GB") + " kg" : ""; })()}
           </span>
-          <span />
+          <span style={{ justifySelf: "end" }}>
+            {isPaid(i)
+              ? <span style={{ fontSize: 10, fontWeight: 800, borderRadius: 999, padding: "1px 7px", background: "#eef8f1", color: "#28713e", border: "1px solid #bfe3ca" }}>Paid</span>
+              : <span style={{ fontSize: 10, fontWeight: 800, borderRadius: 999, padding: "1px 7px", background: "#fdf3dc", color: "#a05f10", border: "1px solid #f4d78f", whiteSpace: "nowrap" }}>{i.paymentType === "COD" ? "COD on drop" : "Awaiting payment"}</span>}
+          </span>
         </button>
         {isTudaJob(i) && (
           <div style={{ padding: "5px 0 8px", borderBottom: "1px solid #f0f2f6" }}>
