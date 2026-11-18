@@ -114,7 +114,16 @@ export default function ReviewsScreen({ crm, updateCrm, askConfirm, openInvoice,
     });
   const saveRs = (next) => updateCrm((c) => { c.reviewSettings = next; return c; });
   const toggleSkip = (invId) => saveRs({ ...rs, skip: rs.skip.includes(invId) ? rs.skip.filter((x) => x !== invId) : [...rs.skip, invId] });
-  const toggleOptOut = (custId) => saveRs({ ...rs, optOut: rs.optOut.includes(custId) ? rs.optOut.filter((x) => x !== custId) : [...rs.optOut, custId] });
+  // turning reviews off for a customer sets the account's No follow-ups tick
+  // (same switch as the customer editor); turning back on clears both it and
+  // any old-style opt-out entry
+  const toggleOptOut = (custId) => updateCrm((cr) => {
+    const cu = (cr.customers || []).find((x) => x.id === custId);
+    const off = (cu && cu.noFollowUps === true) || rs.optOut.includes(custId);
+    if (cu) cu.noFollowUps = !off;
+    cr.reviewSettings = { ...rs, optOut: rs.optOut.filter((x) => x !== custId) };
+    return cr;
+  });
   const setRule = (k, v) => saveRs({ ...rs, rules: { ...rs.rules, [k]: v } });
 
   // the pool: delivered sales (what a review can be asked for), newest delivery first
@@ -320,7 +329,7 @@ export default function ReviewsScreen({ crm, updateCrm, askConfirm, openInvoice,
                 const msgKind = reviewNext(i, tod);
                 const mob = mobileOf(c); // the mobile field, or a mobile parked in the landline field
                 const em = c && /@/.test(String(c.email || "")) ? String(c.email).trim() : "";
-                const optedOut = c && rs.optOut.includes(c.id);
+                const optedOut = c && (c.noFollowUps === true || rs.optOut.includes(c.id));
                 const tooSoon = st === "To ask" && askTooSoon(i, tod);
                 const dim = excl || tooSoon ? { opacity: 0.55 } : isMember ? { opacity: 0.8 } : null;
                 return (
@@ -413,9 +422,13 @@ export default function ReviewsScreen({ crm, updateCrm, askConfirm, openInvoice,
                         style={{ ...linkBtn, padding: 2, lineHeight: 0, marginRight: 2 }}>
                         <Icon name="slash" stroke={rs.skip.includes(i.id) ? "#C64545" : "#aab3c2"} size={14} />
                       </button>
-                      <button onClick={() => c && toggleOptOut(c.id)} title={optedOut ? "Account opted out of review asks — switch back on" : "Opt this whole account out of review asks"}
-                        style={{ ...linkBtn, padding: 2, lineHeight: 0 }}>
-                        <Icon name="userx" stroke={optedOut ? "#C64545" : "#aab3c2"} size={14} />
+                      <button onClick={() => c && toggleOptOut(c.id)}
+                        title={optedOut ? "Reviews are off for this whole account (No follow-ups on the customer record) — click to switch back on" : "Turn off reviews for this customer — sets No follow-ups on their account, so they're never chased again"}
+                        style={{ ...linkBtn, padding: 0, marginLeft: 2, verticalAlign: "middle" }}>
+                        <span style={{ display: "inline-block", fontSize: 10, fontWeight: 800, borderRadius: 999, padding: "2px 8px", whiteSpace: "nowrap",
+                          background: optedOut ? "#C64545" : "#fff", color: optedOut ? "#fff" : "#8593a8", border: "1px solid " + (optedOut ? "#C64545" : "#d5d9e0") }}>
+                          {optedOut ? "Reviews off" : "Turn off"}
+                        </span>
                       </button>
                     </td>
                   </tr>
