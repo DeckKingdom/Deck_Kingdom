@@ -6,7 +6,7 @@ import { NAVY, GOLD, RED, prettyDate, prettyDateTime, addDays as addDaysC } from
 import {
   originText, recordOrigin, userInitials,
   blankCustomer, blankSite, nextNumber, SOURCES, sourceOptions,
-  invoiceTotals, gbp, isPaid, isSaleInvoice, today as todayC, followUpDone, FOLLOWUP_FLAGS, FIELD_FORMATS, CONTACT_METHODS,
+  invoiceTotals, gbp, isPaid, isSaleInvoice, today as todayC, followUpDone, FOLLOWUP_FLAGS, FIELD_FORMATS, CONTACT_METHODS, custRating,
   TRADE_COUNTER, TRADE_COUNTER_LABEL, quoteTotals, quoteStatus, quoteInvoice, quoteRef, QUOTE_TONES, sampleRef, sampleStatus, sampleInvoice, SAMPLE_TONES,
   isVoidInvoice,
 } from "../../lib/crmCore.js";
@@ -718,6 +718,15 @@ export default function CustomersScreen({ money = true, crm, updateCrm, askConfi
                   <Chip tone="navy">Account #{sel.accountNo || "—"}</Chip>
                   {sel.trader && <Chip tone="red" style={{ background: RED, color: "#fff", border: "none" }}>Trade</Chip>}
                   {sel.noFollowUps && <Chip title="This account is never chased after delivery — no review asks, photos, social or sample follow-ups">No follow-ups</Chip>}
+                  {(() => {
+                    const r = custRating(crm, sel);
+                    const payTxt = r.median === null ? "No payment history yet" : "Pays in ~" + r.median + " day" + (r.median === 1 ? "" : "s") + " (median of " + r.n + ")" + (r.overdue ? " · " + r.overdue + " invoice" + (r.overdue === 1 ? "" : "s") + " overdue now" : "");
+                    const hasTxt = r.hassle ? "Hassle " + r.hassle + "/5 (set by staff)" : "Hassle score not set — pencil to set it";
+                    const tip = payTxt + ". " + hasTxt + ".";
+                    if (r.tier === "gold") return <Chip tone="green" title={tip}>★ Worth the hoops</Chip>;
+                    if (r.tier === "red") return <Chip tone="red" title={tip}>⚠ Hard work</Chip>;
+                    return <Chip title={tip}>{r.median === null ? "No pay history" : "Pays in ~" + r.median + "d"}{r.hassle ? " · hassle " + r.hassle + "/5" : ""}</Chip>;
+                  })()}
                   {Number(sel.discountPct) > 0 && <Chip tone="gold">−{Number(sel.discountPct)}% discount</Chip>}
                   {sel.source && <Chip tone="navy">Source · {sel.source}</Chip>}
                   <button title="Edit account" onClick={() => openCustDraft({ ...sel })} style={{ width: 28, height: 28, borderRadius: 8, border: "1px solid #33466b", background: "transparent", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0, flex: "none" }}>
@@ -1062,6 +1071,26 @@ export default function CustomersScreen({ money = true, crm, updateCrm, askConfi
             <input type="checkbox" checked={!!custDraft.noFollowUps} onChange={(e) => setCustDraft({ ...custDraft, noFollowUps: e.target.checked })} />
             No follow-ups <span style={{ fontWeight: 600, color: "#8593a8" }}>— never ask for reviews / photos</span>
           </label>
+          <div style={{ margin: "0 0 14px" }}>
+            <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 5 }} title="How much work is this account? 1 = no bother, 5 = constant hassle. Pairs with their payment history for the account rating.">
+              Hassle score <span style={{ fontWeight: 600, color: "#8593a8" }}>— 1 no bother … 5 constant hassle</span>
+            </div>
+            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              {[1, 2, 3, 4, 5].map((n) => (
+                <button key={n} type="button" onClick={() => setCustDraft({ ...custDraft, hassle: n })}
+                  style={{ width: 36, height: 32, borderRadius: 8, fontFamily: "inherit", fontWeight: 800, fontSize: 13.5, cursor: "pointer",
+                    border: "1.5px solid " + ((Number(custDraft.hassle) || 0) === n ? (n >= 4 ? RED : n === 3 ? "#E8912D" : "#3FA55C") : "#d5d9e0"),
+                    background: (Number(custDraft.hassle) || 0) === n ? (n >= 4 ? RED : n === 3 ? "#E8912D" : "#3FA55C") : "#fff",
+                    color: (Number(custDraft.hassle) || 0) === n ? "#fff" : "#5a6a85" }}>
+                  {n}
+                </button>
+              ))}
+              {(Number(custDraft.hassle) || 0) > 0 && (
+                <button type="button" onClick={() => setCustDraft({ ...custDraft, hassle: 0 })}
+                  style={{ border: "none", background: "none", fontFamily: "inherit", fontWeight: 700, fontSize: 12.5, color: "#8593a8", cursor: "pointer" }}>Clear</button>
+              )}
+            </div>
+          </div>
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
             <button style={btn} onClick={() => setCustDraft(null)}>Cancel</button>
             <button className="dk-save" style={{ ...goldBtn, opacity: custDraft.name.trim() ? 1 : 0.5 }} onClick={saveCustomer}>{addrGuard.busy ? "Checking address…" : "Save"}</button>

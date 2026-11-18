@@ -154,6 +154,7 @@ export const blankCustomer = () => ({
   source: "",
   trader: false,
   noFollowUps: false, // ticked = never chased after delivery (reviews, photos, social)
+  hassle: 0, // staff-set nuisance score: 1 = no bother … 5 = constant hassle (0 = not set)
   discountPct: "",
   contactMethod: "",
   created: today(),
@@ -494,6 +495,34 @@ export const daysSinceRaised = (inv) => {
 };
 
 export const followUpDone = (inv) => FOLLOWUP_FLAGS.filter(([k]) => inv.flags && inv.flags[k]).length;
+
+// ===== customer rating: payment reliability (from history) + hassle (staff-set) =====
+// payment score 5..1 from the median days invoice → payment, knocked down a
+// point while anything sits unpaid past 30 days; null until there's history
+export const custPayStats = (crm, custId) => {
+  const days = [];
+  let owed = 0, overdue = 0;
+  (crm.invoices || []).forEach((i) => {
+    if (i.customerId !== custId || isVoidInvoice(i)) return;
+    const t = invoiceTotals(i).total;
+    if (!(t > 0)) return;
+    if (i.paymentDate) { const d = daysBetween(i.date, i.paymentDate); if (d !== null) days.push(Math.max(0, d)); }
+    else if (!isHistoric(i)) { owed += t; if ((daysBetween(i.date, today()) || 0) > 30) overdue += 1; }
+  });
+  days.sort((a, b) => a - b);
+  const median = days.length ? days[Math.floor(days.length / 2)] : null;
+  let score = median === null ? null : median <= 3 ? 5 : median <= 7 ? 4 : median <= 14 ? 3 : median <= 30 ? 2 : 1;
+  if (score !== null && overdue > 0) score = Math.max(1, score - 1);
+  return { n: days.length, median, owed, overdue, score };
+};
+// the verdict: gold = jump through hoops, red = think twice, mid = ordinary
+export const custRating = (crm, c) => {
+  const pay = custPayStats(crm, c.id);
+  const hassle = Number(c.hassle) || 0;
+  const tier = hassle >= 4 || (pay.score !== null && pay.score <= 2) ? "red"
+    : pay.score !== null && pay.score >= 4 && pay.n >= 2 && hassle <= 2 ? "gold" : "mid";
+  return { ...pay, hassle, tier };
+};
 
 // ===== field formatting (applied on blur, FileMaker style) =====
 export const titleCase = (s) =>
