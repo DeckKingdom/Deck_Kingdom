@@ -652,7 +652,10 @@ export default function ImportPlanner() {
     n.paymentType = "Follow-up — already paid";
     n.lines = left.map((x) => {
       const l = (o.lines || [])[x.lineIndex] || {};
-      return { ...blankLine(), code: l.code || x.code || "", description: l.description || x.text || "", colour: l.colour || x.colour || "", qty: x.remaining, price: 0 };
+      // remaining can come through 0/blank on odd confirmations — fall back to the
+      // original line's qty so the follow-up always carries a real loading requirement
+      const q = Number(x.remaining) || Number(x.qty) || Number(l.qty) || 1;
+      return { ...blankLine(), code: l.code || x.code || "", description: l.description || x.text || "", colour: l.colour || x.colour || "", qty: q, price: 0 };
     });
     if (!n.lines.length) n.lines = [blankLine()];
     updateCrm((c) => {
