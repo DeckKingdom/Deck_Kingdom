@@ -57,6 +57,27 @@ const stLines = (invoices) =>
 const stTotal = (invoices) => invoices.reduce((s, i) => s + invoiceTotals(i).total, 0);
 const PAY_LINE = "You can pay by bank transfer — Deck Kingdom Limited, sort code 82-61-37, account number 20556647, reference your invoice number — or by card over the phone on 0161 399 1837.";
 
+// short message to ride with the attached invoice PDF
+export function invoiceAttachEmail(inv, cust, site) {
+  const t = invoiceTotals(inv);
+  const name = first((site && site.contact) || (cust && (cust.contact || cust.name)));
+  const ref = inv.invNo ? "#" + inv.invNo : inv.orderRef || "";
+  const to = invoiceEmailTo(cust, site);
+  const payLine = isVoidInvoice(inv) ? "" : isPaid(inv)
+    ? "This one's paid — thank you."
+    : "Balance due: " + money(t.total) + " — bank details for transfers are on the bottom left of the invoice (reference " + ref + ").";
+  const body = (name ? "Hi " + name : "Hi") + ",\n\n" +
+    "Please see your invoice attached.\n\n" +
+    "Could you double-check the quantities, product descriptions and colours, and make sure we have the correct delivery address? If anything needs changing, just reply to this email or call us on 0161 399 1837.\n\n" +
+    (payLine ? payLine + "\n\n" : "") +
+    "Kind regards,\nThe Deck Kingdom Team\nDeck Kingdom Ltd \u00b7 Unit A, 106 Whitelands Road, Ashton-under-Lyne OL6 6UG \u00b7 deckkingdom.co.uk";
+  return { to, subject: "Invoice " + ref + " \u2013 Deck Kingdom", body };
+}
+export const invoiceAttachEmailLink = (inv, cust, site) => {
+  const m = invoiceAttachEmail(inv, cust, site);
+  return "https://mail.google.com/mail/?view=cm&fs=1&to=" + encodeURIComponent(m.to) + "&su=" + encodeURIComponent(m.subject) + "&body=" + encodeURIComponent(m.body);
+};
+
 // short caption for WhatsApp — the PDF carries the detail
 export function invoiceWaCaption(inv, cust, site) {
   const t = invoiceTotals(inv);

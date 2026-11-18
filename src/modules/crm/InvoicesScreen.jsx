@@ -10,7 +10,7 @@ import {
   skuIndex, invoiceCost, buildPicks, pickLandedCost, jobCost, blankPick, invoiceLoadKg, applyInvoiceStockDeduction, releaseInvoiceLinks,
   TRADE_COUNTER, isCollectionJob, TRADE_COUNTER_LABEL, quoteRef, sampleRef, isSaleInvoice, riskOf, staffName, isVoidInvoice, onSchedule, userInitials, isHistoric, SERVED_BY, sourceOptions, mobileOf } from "../../lib/crmCore.js";
 import { ListHero, HeroStat, HeroAdd, SearchBox, RiskChip, WebStatusChip, Soon, DateInput, CalendarPop, usePhone, PrintButton, bandBtn, BandDelete, LockBar } from "./ui.jsx";
-import { invoiceEmailLink, invoiceEmailTo, statementEmailLink, statementEmail, statementCaption, invoiceWaCaption } from "../../lib/invoiceEmail.js";
+import { invoiceEmailLink, invoiceEmailTo, statementEmailLink, statementEmail, statementCaption, invoiceWaCaption, invoiceAttachEmail, invoiceAttachEmailLink } from "../../lib/invoiceEmail.js";
 import { emailReady, sendEmail } from "../../data/email.js";
 import { waNumber } from "./CustomersScreen.jsx";
 import { isLeakFreeDrop, isWarrantyLook, FREE_LEAK_LIMIT } from "../../lib/runCost.js";
@@ -609,9 +609,41 @@ export default function InvoicesScreen({ headerH = 0, openProduct, money = true,
           if (!ok) setNotice("Printing is blocked here — allow pop-ups for ops.deckkingdom.co.uk and try again.");
         }} />
         {invoiceEmailTo(cust, site)
-          ? <a style={{ ...bandBtn, textDecoration: "none" }} href={invoiceEmailLink(inv, cust, site)} target="_blank" rel="noopener noreferrer" title={"Opens Gmail with the invoice set out, to " + invoiceEmailTo(cust, site)}>
+          ? <button style={{ ...bandBtn }} title={"Email the invoice as a PDF to " + invoiceEmailTo(cust, site) + " with a short check-the-details note"}
+              onClick={async () => {
+                try {
+                  setNotice("Making the invoice PDF…");
+                  const file = await htmlToPdfFile(invoicePdfHtml(inv, cust, site), "Deck Kingdom invoice " + (inv.invNo || inv.orderRef || "") + ".pdf");
+                  const m = invoiceAttachEmail(inv, cust, site);
+                  if (emailReady && m.to) {
+                    try {
+                      setNotice("Sending to " + m.to + "…");
+                      const base64 = await new Promise((ok, no) => {
+                        const r = new FileReader();
+                        r.onload = () => ok(String(r.result).split(",")[1] || "");
+                        r.onerror = () => no(r.error);
+                        r.readAsDataURL(file);
+                      });
+                      await sendEmail({ to: m.to, subject: m.subject, body: m.body, customerId: cust && cust.id, attachments: [{ name: file.name, base64 }] });
+                      setNotice("Invoice emailed to " + m.to + " with the PDF attached ✓");
+                      return;
+                    } catch (e2) {
+                      const setup = (e2 && e2.setup) || /isn't deployed|Email settings|026_email/i.test(String((e2 && e2.message) || ""));
+                      if (!setup) { setNotice("Couldn't send — " + ((e2 && e2.message) || "try again")); return; }
+                    }
+                  }
+                  const url = URL.createObjectURL(file);
+                  const a = document.createElement("a");
+                  a.href = url; a.download = file.name; document.body.appendChild(a); a.click(); a.remove();
+                  setTimeout(() => URL.revokeObjectURL(url), 60000);
+                  window.open(invoiceAttachEmailLink(inv, cust, site), "_blank");
+                  setNotice("PDF downloaded (" + file.name + ") — attach it to the Gmail draft that's opened.");
+                } catch (e) {
+                  setNotice(String((e && e.message) || e));
+                }
+              }}>
               <Icon name="mail" stroke="#fff" size={14} />Email invoice
-            </a>
+            </button>
           : <span style={{ ...bandBtn, opacity: 0.45, cursor: "default" }} title="Add an email address to the customer (or site) first"><Icon name="mail" stroke="#fff" size={14} />Email invoice</span>}
         <button style={{ ...bandBtn, background: "#1fa855", borderColor: "#1fa855" }}
           title={"Send the invoice PDF over WhatsApp" + ((cust && cust.mobile) ? " to " + cust.mobile : " — pick the chat yourself (no mobile on the account)")}
