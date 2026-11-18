@@ -113,6 +113,7 @@ export function InvoicePeek({ crm, invId, onClose, onOpenFull, onCustomer }) {
 
 // ----- a customer account at a glance -----
 export function CustomerPeek({ crm, custId, optOut = [], onClose, onOpenFull, onInvoice }) {
+  const hpInv = useHoverPeek(onInvoice || (() => {}));
   const c = crm.customers.find((x) => x.id === custId);
   if (!c) return null;
   const invs = crm.invoices.filter((x) => x.customerId === c.id && isSaleInvoice(x)).sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
@@ -141,7 +142,7 @@ export function CustomerPeek({ crm, custId, optOut = [], onClose, onOpenFull, on
         {invs.slice(0, 6).map((x) => (
           <div key={x.id} style={{ display: "flex", gap: 10, alignItems: "center", fontSize: 13, fontWeight: 600, padding: "3px 0" }}>
             {onInvoice
-              ? <button onClick={() => onInvoice(x.id)} style={{ ...linkBtn, fontWeight: 700, color: "#185FA5", fontSize: 12.5 }}>#{x.invNo || "—"}</button>
+              ? <button {...hpInv.bind(x.id)} title="What they ordered — rests open on hover, click to pin" style={{ ...linkBtn, fontWeight: 700, color: "#185FA5", fontSize: 12.5 }}>#{x.invNo || "—"}</button>
               : <b style={{ color: "#185FA5", fontSize: 12.5 }}>#{x.invNo || "—"}</b>}
             <span style={{ color: "#5a6a85" }}>{x.date ? prettyDate(x.date) : ""}</span>
             <span style={{ marginLeft: "auto" }}>{gbp(invoiceTotals(x).total)}</span>
