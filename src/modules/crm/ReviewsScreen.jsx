@@ -12,7 +12,7 @@ import {
 } from "../../lib/crmCore.js";
 import { Icon, Tg, card, sect, lbl, inp, btn, goldBtn, Modal, ListHero, HeroStat, SearchBox, FilterPills } from "./ui.jsx";
 import { waNumber, getWaMode } from "./CustomersScreen.jsx";
-import { InvoicePeek, CustomerPeek } from "./Peeks.jsx";
+import { InvoicePeek, CustomerPeek, useHoverPeek } from "./Peeks.jsx";
 import { loadAllDrops } from "../../data/drops.js";
 import { issueOf } from "./IssuesScreen.jsx";
 
@@ -55,6 +55,8 @@ export default function ReviewsScreen({ crm, updateCrm, askConfirm, openInvoice,
   const [issueIds, setIssueIds] = useState(null); // invoice ids with a live delivery issue
   const [peek, setPeek] = useState(null); // invoice id shown in the pop-over
   const [peekCust, setPeekCust] = useState(null); // customer id shown in the pop-over
+  const hpInv = useHoverPeek(setPeek);
+  const hpCust = useHoverPeek(setPeekCust);
   const [openGroups, setOpenGroups] = useState(() => new Set()); // expanded same-customer groups
 
   const rs = reviewSettingsOf(crm);
@@ -335,7 +337,7 @@ export default function ReviewsScreen({ crm, updateCrm, askConfirm, openInvoice,
                 return (
                   <tr key={i.id} style={dim}>
                     <td style={tdc}>
-                      <button onClick={() => setPeek(i.id)} title="Peek at the invoice (the arrow at the row end opens it fully)"
+                      <button {...hpInv.bind(i.id)} title="Peek at the invoice — rests open on hover, click to pin (the arrow at the row end opens it fully)"
                         style={{ ...linkBtn, fontSize: 13, fontWeight: 700, color: NAVY, textDecoration: "underline", textDecorationColor: "#c8cfdb" }}>
                         #{i.invNo || "—"}
                       </button>
@@ -345,7 +347,7 @@ export default function ReviewsScreen({ crm, updateCrm, askConfirm, openInvoice,
                         <span style={{ fontSize: 12, fontWeight: 600, color: "#8593a8", paddingLeft: 14 }}>↳ same customer</span>
                       ) : (
                         <>
-                          <button onClick={() => c && setPeekCust(c.id)} title="Peek at the account"
+                          <button {...(c ? hpCust.bind(c.id) : {})} title="Peek at the account — rests open on hover, click to pin"
                             style={{ ...linkBtn, fontSize: 13, fontWeight: 700, color: "#1a2b4a" }}>
                             {(c && c.name) || "—"}
                           </button>
