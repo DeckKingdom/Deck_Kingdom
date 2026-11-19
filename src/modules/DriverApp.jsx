@@ -7,6 +7,7 @@ import { readCrmCache, writeCrmCache } from "../data/crmCache.js";
 import { INSTANT_OPEN } from "./crm/useCrm.js";
 import { getSupabase } from "../data/supabaseClient.js";
 import { signOut } from "../data/auth.js";
+import { FaceIdToggle } from "./AppLock.jsx";
 import { normaliseCrm, isVoidInvoice, isCollectionJob, invoiceTotals, isPaid, gbp, partKey, collNotesText, invoiceLoadKg, skuIndex } from "../lib/crmCore.js";
 import { runLegList, priceRun, collPostcode } from "../lib/runCost.js";
 import { roadLegsAddr, addrKey } from "../data/fleetApi.js";
@@ -283,6 +284,7 @@ export default function DriverApp({ me, warehouse, switcher }) {
       <div style={page}>
         {splash}
         <LoadingMobile key={loads} crm={crm} driver={allVans ? null : driver} who={who} header={header} nav={tabs} />
+        {!switcher && <FaceIdToggle style={{ padding: "0 14px", marginTop: 10 }} />}
         {warehouse && !switcher && <div style={{ padding: "0 14px" }}><button type="button" onClick={() => signOut().then(() => window.location.reload())}
           style={{ marginTop: 10, width: "100%", border: "1px solid #d5d9e0", background: "#fff", borderRadius: 12, padding: 12, fontFamily: "inherit", fontWeight: 700, color: "#5a6a85", cursor: "pointer" }}>Sign out</button></div>}
       </div>
@@ -379,9 +381,10 @@ export default function DriverApp({ me, warehouse, switcher }) {
             {showAllDone ? "Hide finished runs" : "Show " + hiddenDone.n + " finished run" + (hiddenDone.n === 1 ? "" : "s")}
           </button>
         )}
+        <FaceIdToggle style={{ marginTop: 22 }} />
         {switcher ? <button type="button" onClick={() => openPhoneApp(null)}
-          style={{ marginTop: 22, width: "100%", border: "1px solid #d5d9e0", background: "#fff", borderRadius: 12, padding: 12, fontFamily: "inherit", fontWeight: 800, color: NAVY, cursor: "pointer" }}>🏠 Back to the office system</button> : <button type="button" onClick={() => signOut().then(() => window.location.reload())}
-          style={{ marginTop: 22, width: "100%", border: "1px solid #d5d9e0", background: "#fff", borderRadius: 12, padding: 12, fontFamily: "inherit", fontWeight: 700, color: "#5a6a85", cursor: "pointer" }}>Sign out</button>}
+          style={{ marginTop: 10, width: "100%", border: "1px solid #d5d9e0", background: "#fff", borderRadius: 12, padding: 12, fontFamily: "inherit", fontWeight: 800, color: NAVY, cursor: "pointer" }}>🏠 Back to the office system</button> : <button type="button" onClick={() => signOut().then(() => window.location.reload())}
+          style={{ marginTop: 10, width: "100%", border: "1px solid #d5d9e0", background: "#fff", borderRadius: 12, padding: 12, fontFamily: "inherit", fontWeight: 700, color: "#5a6a85", cursor: "pointer" }}>Sign out</button>}
       </div>
     </div>
   );

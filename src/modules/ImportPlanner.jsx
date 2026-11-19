@@ -51,6 +51,7 @@ import { ProductEditor } from "./crm/ProductsScreen.jsx";
 import HomeScreen from "./HomeScreen.jsx";
 import { NewCustomerPeek } from "./crm/Peeks.jsx";
 import { matchCustomer, draftFromOrder, sampleFromOrder } from "../data/aiOrder.js";
+import { FaceIdSidebarBtn } from "./AppLock.jsx";
 import ActivityScreen from "./crm/ActivityScreen.jsx";
 import UsersScreen from "./crm/UsersScreen.jsx";
 import StockScreen from "./crm/StockScreen.jsx";
@@ -1365,6 +1366,7 @@ export default function ImportPlanner() {
           {open && "Email settings"}
         </button>
       )}
+      {storageMode === "supabase" && <FaceIdSidebarBtn open={open} styleOf={footBtnStyle} icon={<Icon name="lock" size={15} stroke="#8fa0c0" />} />}
       {storageMode === "supabase" ? (
         <button onClick={() => signOut()} title="Sign out" style={footBtnStyle(open)}>
           <Icon name="logout" size={15} stroke="#8fa0c0" />

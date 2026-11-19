@@ -6,6 +6,7 @@ import { getSession, onAuthChange, getMyAccess, getSessionEmail } from "./data/a
 import DriverApp from "./modules/DriverApp.jsx";
 import { phoneAppParams, resumePhoneApp } from "./modules/DriverPicker.jsx";
 import InstallHint from "./modules/InstallHint.jsx";
+import AppLock from "./modules/AppLock.jsx";
 
 function AuthGate() {
   const [session, setSession] = useState(undefined);
@@ -26,7 +27,7 @@ function AuthGate() {
   if (session === undefined)
     return <div style={{ fontFamily: "Quicksand, sans-serif", background: "#0B1F3F", minHeight: "100vh" }} />;
   if (!session) return <LoginScreen />;
-  return <Routed key={session.user.id} />;
+  return <AppLock><Routed key={session.user.id} /></AppLock>;
 }
 
 // drivers get the phone screen with their runs and the fuel log; everyone else the office app
