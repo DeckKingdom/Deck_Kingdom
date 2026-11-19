@@ -1,12 +1,11 @@
 // CRM data lifecycle: lazy load on first CRM tab visit, debounced autosave,
 // dirty flag so a failed load can never overwrite good data with seed state.
-// Live refresh: every few seconds a tiny check asks whether anyone else (FileMaker, the website,
-// another member of staff) has changed something; if so, and nobody here is mid-edit, the data
-// is quietly reloaded so the screens show it without a page refresh.
+// Live refresh: every few seconds a tiny check asks whether anything changed in the database
+// (FileMaker, the website, another member of staff — or the same login on another device); if so,
+// and nobody here is mid-edit, the data is quietly reloaded so the screens show it without a page refresh.
 import { useState, useEffect, useRef } from "react";
 import { crmStorage, latestChange, storageMode } from "../../data/crmStorage.js";
 import { getSupabase } from "../../data/supabaseClient.js";
-import { getSessionEmail } from "../../data/auth.js";
 import { readCrmCache, writeCrmCache } from "../../data/crmCache.js";
 import { emptyCrm, normaliseCrm, carryRidingCollections } from "../../lib/crmCore.js";
 
@@ -99,7 +98,7 @@ export function useCrm(enabled) {
     }
     let d = null, partial = false;
     try {
-      seen.current = await latestChange(getSessionEmail()).catch(() => seen.current);
+      seen.current = await latestChange(null).catch(() => seen.current); // any actor: my other devices count as changes too
       // quick first paint: the hot slice of the data in one round trip (supabase
       // only; falls back to the full load if the quick path isn't available)
       if (storageMode === "supabase") {
@@ -142,7 +141,7 @@ export function useCrm(enabled) {
     const check = async () => {
       if (stop || !loaded.current || loading.current || document.hidden) return;
       let id = 0;
-      try { id = await latestChange(getSessionEmail()); } catch (e) { return; }
+      try { id = await latestChange(null); } catch (e) { return; } // any actor — the same login on another device must sync here too
       if (!id || id <= seen.current) return;
       // Something changed elsewhere: reload once nothing here is unsaved or mid-edit.
       // (A cursor merely parked in a field must NOT block this — it used to, which is
@@ -182,7 +181,11 @@ export function useCrm(enabled) {
             .channel("dk-live-changes")
             .on("postgres_changes", { event: "INSERT", schema: "public", table: "audit_log" }, (payload) => {
               const r = (payload && payload.new) || {};
-              if (r.actor && r.actor === (getSessionEmail() || "")) return; // our own save echoing back
+              // NB: no filter on actor/email — Jon runs the same login on desktop and
+              // phone, so "my own email" does NOT mean "this screen already has it".
+              // Echoes of this device's own saves are absorbed by the seen bump after
+              // each save; a redundant reload now and then is harmless, a device that
+              // never hears about its sibling's changes is not (that was the old bug).
               if (r.record_id === "fmBridgeLast" || r.record_id === "wooBridgeLast") return; // bridge heartbeats
               if (burst) clearTimeout(burst);
               burst = setTimeout(check, 250);
@@ -232,6 +235,10 @@ export function useCrm(enabled) {
         applyAccountNos(res && res.accountNos);
         setCrmSave("Saved");
         setSaveError("");
+        // our save just wrote audit rows; mark the log as seen up to now so the
+        // echo doesn't trigger a pointless reload (a concurrent save elsewhere in
+        // this same instant gets picked up on the next change — rare, self-heals)
+        latestChange(null).then((id) => { if (id > seen.current) seen.current = id; }).catch(() => {});
       } catch (e) {
         pending.current = true;
         applyRenumbered(e && e.renumbered);
