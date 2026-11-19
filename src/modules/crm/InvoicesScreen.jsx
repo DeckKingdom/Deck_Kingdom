@@ -1,6 +1,6 @@
 // Invoices tab: searchable list -> invoice entry screen per the approved
 // mockup. Prices are entered inc VAT; VAT is backed out of the total.
-import { useState, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { CustomerPeek, NewCustomerPeek, InvoicePeek, useHoverPeek } from "./Peeks.jsx";
 import { useLock } from "./useLock.js";
 import { NAVY, GOLD, RED, uid, prettyDate, prettyDateTime, addMonths, addDays, daysBetween } from "../../lib/core.js";
@@ -15,7 +15,8 @@ import { emailReady, sendEmail } from "../../data/email.js";
 import { emailInvoiceWithPdf } from "./invoiceEmailPdf.js";
 import { readOrderScreenshot, draftFromOrder, matchCustomer } from "../../data/aiOrder.js";
 import { waNumber } from "./CustomersScreen.jsx";
-import { isLeakFreeDrop, isWarrantyLook, FREE_LEAK_LIMIT } from "../../lib/runCost.js";
+import { isLeakFreeDrop, isWarrantyLook, FREE_LEAK_LIMIT, runLegList, priceRun, UNLOAD_MIN, DRIVER_HR } from "../../lib/runCost.js";
+import { roadLegsAddr, addrKey } from "../../data/fleetApi.js";
 import * as XLSX from "xlsx";
 import { Icon, Chip, Tg, Modal, selectAllProps, SuggestInput, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
 import { printInvoice, printJobSheet, printLoadingBill, printJobDocs, statementPdfHtml, invoicePdfHtml } from "./printDocs.js";
@@ -1237,6 +1238,26 @@ export default function InvoicesScreen({ headerH = 0, openProduct, money = true,
 
 // ===== job totals: what the customer pays, what it cost us, what's left =====
 function JobTotals({ inv, crm, planner }) {
+  // estimated run cost to this job's postcode (Google road miles, same sums as the schedule)
+  const st0 = (crm.sites || []).find((x) => x.id === inv.siteId);
+  const cu0 = (crm.customers || []).find((x) => x.id === inv.customerId);
+  const jobPc = ((st0 && st0.postcode) || (cu0 && cu0.postcode) || "").trim();
+  const [est, setEst] = useState(null); // { mi, min, cost }
+  useEffect(() => {
+    let live = true;
+    setEst(null);
+    if (!jobPc) return undefined;
+    const tm = setTimeout(() => {
+      const legs = runLegList([jobPc]);
+      roadLegsAddr(legs).then((m) => {
+        if (!live) return;
+        let mi = 0, min = 0, ok = true;
+        legs.forEach((l) => { const g = m[addrKey(l.from, l.to)]; if (g) { mi += Number(g.miles) || 0; min += Number(g.minutes) || 0; } else ok = false; });
+        if (ok && mi > 0) { const pr = priceRun(mi, min, 1); setEst({ mi, min: pr.totMin, cost: pr.cost }); }
+      }).catch(() => {});
+    }, 600);
+    return () => { live = false; clearTimeout(tm); };
+  }, [jobPc]);
   const t = invoiceTotals(inv);
   const rate = isFinite(Number(inv.vatRate)) ? Number(inv.vatRate) : 20;
   const exVat = (n) => n / (1 + rate / 100);
@@ -1306,6 +1327,12 @@ function JobTotals({ inv, crm, planner }) {
           <div style={{ fontSize: 12.5, fontWeight: 700, color: "#5a6a85", marginBottom: 8 }}>{pct(margin, t.net)} of net · markup {pct(margin, cost)}</div>
           {row("On the goods", gbp(goodsMargin) + " · " + pct(goodsMargin, goodsNet), { tone: goodsMargin >= 0 ? "#28713e" : RED })}
           {row("Delivery income", delNet ? gbp(delNet) : "—")}
+          {est && (
+            <div title={"Out and back to " + jobPc + " on its own: " + Math.round(est.mi) + " miles, " + Math.floor(est.min / 60) + "h" + String(Math.round(est.min % 60)).padStart(2, "0") + "m incl. " + UNLOAD_MIN + "m unloading.\nDriver £" + DRIVER_HR + "/hr + fuel at 30 mpg, £1.90/litre — same sums as the delivery schedule.\nOn a shared run the real cost per drop is lower."}>
+              {row("Est. delivery cost", "−" + gbp(est.cost) + " · ≈" + Math.round(est.mi) + " mi", { tone: "#a05f10" })}
+              {row("Delivery P/L", (delNet - est.cost >= 0 ? "+" : "−") + gbp(Math.abs(delNet - est.cost)), { tone: delNet - est.cost >= 0 ? "#28713e" : RED })}
+            </div>
+          )}
           {parts.length > 0 && (
             <div style={{ marginTop: 10 }}>
               <div style={{ display: "flex", height: 10, borderRadius: 999, overflow: "hidden", background: "#e6e9ef" }}>
