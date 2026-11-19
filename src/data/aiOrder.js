@@ -2,7 +2,7 @@
 // matchProduct pairs each extracted item with the product book the same way
 // the phone's line picker searches it.
 import { getSupabase } from "./supabaseClient.js";
-import { blankInvoice, blankQuote, blankLine, blankSample, blankSampleItem, nextNumber } from "../lib/crmCore.js";
+import { blankInvoice, blankQuote, blankLine, blankSample, blankSampleItem, blankSite, nextNumber } from "../lib/crmCore.js";
 
 export async function readOrderScreenshot(file, note = "") {
   const base64 = await new Promise((ok, no) => {
@@ -83,13 +83,32 @@ export function sampleFromOrder(crm, me, custId, order) {
 
 // a draft invoice or quote from an extracted order, lines matched to the book
 export function draftFromOrder(crm, me, custId, order, kind) {
-  const siteOf = (crm.sites || []).find((s2) => s2.customerId === custId);
   const quote = kind === "quote";
-  const n = quote ? blankQuote(custId, siteOf ? siteOf.id : "") : blankInvoice(custId, siteOf ? siteOf.id : "");
+  const cust = (crm.customers || []).find((x) => x.id === custId);
+  // which address? match the extracted postcode against the account's sites;
+  // an address we don't know yet becomes a new site on the account
+  const pcN = (v) => String(v || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const addr = order.address || {};
+  const wantPc = pcN(addr.postcode);
+  const mySites = (crm.sites || []).filter((s2) => s2.customerId === custId);
+  let siteId = mySites[0] ? mySites[0].id : "";
+  let newSite = null;
+  if (wantPc) {
+    const hit = mySites.find((s2) => pcN(s2.postcode) === wantPc);
+    if (hit) siteId = hit.id;
+    else if (cust && pcN(cust.postcode) === wantPc) siteId = ""; // delivering to their own address
+    else {
+      newSite = { ...blankSite(custId), siteNo: nextNumber(crm.sites, "siteNo", crm.numbering.site),
+        name: [addr.line, addr.town].filter(Boolean).join(", "),
+        address: addr.line || "", town: addr.town || "", postcode: addr.postcode || "",
+        contact: (order.customer && order.customer.name) || "", mobile: (order.customer && order.customer.mobile) || "" };
+      siteId = newSite.id;
+    }
+  }
+  const n = quote ? blankQuote(custId, siteId) : blankInvoice(custId, siteId);
   if (quote) n.quoteNo = nextNumber(crm.quotes, "quoteNo", crm.numbering.quote);
   else n.invNo = nextNumber(crm.invoices, "invNo", crm.numbering.invoice);
   n.raisedBy = me || "";
-  const cust = (crm.customers || []).find((x) => x.id === custId);
   if (cust && cust.discountPct !== "" && cust.discountPct !== null && cust.discountPct !== undefined) n.discountPct = cust.discountPct;
   const unmatched = [];
   (order.items || []).forEach((it) => {
@@ -111,8 +130,9 @@ export function draftFromOrder(crm, me, custId, order, kind) {
   if (!n.lines.length) n.lines = [blankLine()];
   if (!quote && order.deliveryDate && /^\d{4}-\d{2}-\d{2}$/.test(String(order.deliveryDate))) n.deliveryDate = order.deliveryDate;
   const note = ("Raised from a screenshot — check every line, price and address."
+    + (newSite ? " NEW delivery site added from the message: " + [addr.line, addr.town, addr.postcode].filter(Boolean).join(", ") + " — check it." : "")
     + (unmatched.length ? " Couldn't match: " + unmatched.join("; ") + "." : "")
     + (String(order.notes || "").trim() ? " From the message: " + String(order.notes).trim() : "")).trim();
   if (quote) n.internalNotes = note; else n.jobNotes = note;
-  return { n, unmatched };
+  return { n, unmatched, newSite };
 }

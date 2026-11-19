@@ -186,8 +186,9 @@ export default function InvoicesScreen({ headerH = 0, openProduct, money = true,
   const [aiDraft, setAiDraft] = useState(null);
   const dg = (v) => String(v || "").replace(/\D/g, "");
   const raiseFromAi = (custId, r) => {
-    const { n } = draftFromOrder(crm, me, custId, r, "invoice");
+    const { n, newSite } = draftFromOrder(crm, me, custId, r, "invoice");
     updateCrm((c) => {
+      if (newSite) { c.sites.push(newSite); c.numbering.site = (Number(newSite.siteNo) || 0) + 1; }
       c.invoices.unshift(n);
       c.numbering.invoice = (Number(n.invNo) || 0) + 1;
       return c;

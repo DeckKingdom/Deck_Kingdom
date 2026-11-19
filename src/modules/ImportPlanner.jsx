@@ -646,9 +646,10 @@ export default function ImportPlanner() {
   // via the new-customer pop-over when the account isn't recognised
   const [aiNew, setAiNew] = useState(null); // { order, intent }
   const finishAiOrder = (custId, order, intent) => {
-    const { n } = intent === "sample" ? sampleFromOrder(crm, me, custId, order)
+    const { n, newSite } = intent === "sample" ? sampleFromOrder(crm, me, custId, order)
       : draftFromOrder(crm, me, custId, order, intent === "quote" ? "quote" : "invoice");
     updateCrm((c) => {
+      if (newSite) { c.sites.push(newSite); c.numbering.site = (Number(newSite.siteNo) || 0) + 1; }
       if (intent === "sample") { c.samples.unshift(n); c.numbering.sample = (Number(n.sampleNo) || 0) + 1; }
       else if (intent === "quote") { c.quotes.unshift(n); c.numbering.quote = (Number(n.quoteNo) || 0) + 1; }
       else { c.invoices.unshift(n); c.numbering.invoice = (Number(n.invNo) || 0) + 1; }
