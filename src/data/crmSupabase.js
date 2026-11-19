@@ -835,6 +835,42 @@ async function saveAll(d) {
   await up_("customer_sites", "sites", ds.upserts);
   await up_("invoices", "invoices", di.upserts);
   await up_("invoice_items", "items", dl.upserts);
+  // ===== read-back: invoice lines are too important to trust a silent write =====
+  // Every invoice whose lines this save touched gets its lines read straight back
+  // and compared with what we meant to store. Anything missing is written again on
+  // the spot; if it STILL isn't there, the save reports a hard error (red banner,
+  // auto-retry) instead of pretending all is well. This is the guard the #5787
+  // zero-lines incident earned.
+  try {
+    const touched = new Set();
+    dl.upserts.forEach((r) => touched.add(r.invoice_id));
+    di.upserts.forEach((r) => touched.add(r.id));
+    const wantByInv = new Map(); // invoice_id -> the line rows the book says it has
+    for (const r of next.items.values()) {
+      if (!touched.has(r.invoice_id)) continue;
+      if (!wantByInv.has(r.invoice_id)) wantByInv.set(r.invoice_id, []);
+      wantByInv.get(r.invoice_id).push(r);
+    }
+    if (wantByInv.size) {
+      const { data: got, error: egot } = await sb.from("invoice_items").select("id").in("invoice_id", [...wantByInv.keys()]);
+      if (!egot) {
+        const have = new Set((got || []).map((x) => x.id));
+        const missing = [];
+        wantByInv.forEach((rows) => rows.forEach((r) => { if (!have.has(r.id)) missing.push(r); }));
+        if (missing.length) {
+          try { console.warn("[dk-save] read-back: " + missing.length + " invoice line(s) didn't land — writing again", missing.map((r) => r.id)); } catch (e) { /* */ }
+          const { error: e2 } = await sb.from("invoice_items").upsert(missing);
+          const { data: g2 } = await sb.from("invoice_items").select("id").in("id", missing.map((r) => r.id));
+          const have2 = new Set((g2 || []).map((x) => x.id));
+          const still = missing.filter((r) => !have2.has(r.id));
+          still.forEach((r) => {
+            const inv = next.invoices.get(r.invoice_id);
+            failed.push({ key: "items", id: r.id, op: "save", msg: "the line was sent but the database doesn't have it" + (e2 ? " — " + e2.message : ""), label: "a line on job #" + ((inv && inv.inv_no) || r.invoice_id) });
+          });
+        }
+      }
+    }
+  } catch (e) { try { console.warn("[dk-save] read-back check couldn't run: " + ((e && e.message) || e)); } catch (e2) { /* */ } }
   await up_("invoice_picks", "picks", dp.upserts);
   await del_("collection_items", "collItems", dci.deletes);
   await del_("collections", "colls", dco.deletes);
