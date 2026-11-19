@@ -30,8 +30,9 @@ Deno.serve(async (req) => {
   try {
     const key = (Deno.env.get("ANTHROPIC_KEY") || "").replace(/\s+/g, ""); // stray line breaks from a paste are harmless
     if (!key) return json({ error: "The ANTHROPIC_KEY secret isn't set in Supabase yet." }, 500);
-    const { image, mime } = await req.json();
+    const { image, mime, note } = await req.json();
     if (!image) return json({ error: "No image sent." }, 400);
+    const extra = String(note || "").trim().slice(0, 600);
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
@@ -42,7 +43,7 @@ Deno.serve(async (req) => {
           role: "user",
           content: [
             { type: "image", source: { type: "base64", media_type: mime || "image/png", data: image } },
-            { type: "text", text: PROMPT },
+            { type: "text", text: PROMPT + (extra ? "\n\nNote from the office about this screenshot — follow it, it may narrow or correct what to extract:\n" + extra : "") },
           ],
         }],
       }),

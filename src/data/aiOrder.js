@@ -4,7 +4,7 @@
 import { getSupabase } from "./supabaseClient.js";
 import { blankInvoice, blankQuote, blankLine, blankSample, blankSampleItem, nextNumber } from "../lib/crmCore.js";
 
-export async function readOrderScreenshot(file) {
+export async function readOrderScreenshot(file, note = "") {
   const base64 = await new Promise((ok, no) => {
     const r = new FileReader();
     r.onload = () => ok(String(r.result).split(",")[1] || "");
@@ -12,7 +12,7 @@ export async function readOrderScreenshot(file) {
     r.readAsDataURL(file);
   });
   const sb = await getSupabase();
-  const { data, error } = await sb.functions.invoke("read-order", { body: { image: base64, mime: file.type || "image/png" } });
+  const { data, error } = await sb.functions.invoke("read-order", { body: { image: base64, mime: file.type || "image/png", note: String(note || "").trim() } });
   if (error) {
     let msg = error.message || "the read-order function isn't deployed yet";
     try { const ctx = await error.context.json(); if (ctx && ctx.error) msg = ctx.error; } catch { /* keep msg */ }

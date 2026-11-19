@@ -14,6 +14,14 @@ const change = (now, before) => {
   return { up: d >= 0, text: (d >= 0 ? "▲ " : "▼ ") + Math.abs(Math.round(d * 100)) + "%" };
 };
 const cleanTitle = (t) => String(t || "").replace(/\s*[-|–]\s*Deck Kingdom.*$/i, "") || t;
+const PORTAL_URL = "https://beseen-portal.netlify.app/";
+const portalBtn = (
+  <a href={PORTAL_URL} target="_blank" rel="noopener noreferrer" title="Open the BeSeen portal in a new window"
+    style={{ border: "1px solid #d4d9e2", background: "#f8fafc", color: "#185FA5", borderRadius: 999, padding: "3px 11px",
+      fontSize: 12, fontWeight: 800, textDecoration: "none", whiteSpace: "nowrap" }}>
+    BeSeen portal ↗
+  </a>
+);
 const dayLabel = (d) => {
   const dt = new Date(+d.slice(0, 4), +d.slice(4, 6) - 1, +d.slice(6, 8));
   return dt.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
@@ -91,7 +99,8 @@ export default function WebsiteCard({ money = true, thin = false } = {}) {
       <p style={{ ...sect, margin: 0 }}>Website</p>
       {d && <span style={{ fontSize: 11, color: "#8593a8", fontWeight: 600 }}>updated {new Date(d.updated).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</span>}
       <span style={{ flex: 1 }} />
-      {d && <button onClick={toggleMore} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 700, color: "#185FA5", padding: 0 }}>{more ? "Less ▾" : "More ▸"}</button>}
+      {portalBtn}
+      {d && <button onClick={toggleMore} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 700, color: "#185FA5", padding: 0, marginLeft: 4 }}>{more ? "Less ▾" : "More ▸"}</button>}
     </div>
   );
 
@@ -178,6 +187,7 @@ export default function WebsiteCard({ money = true, thin = false } = {}) {
           {stat("Web orders today", fmt(T.ecommercePurchases), money ? gbp(T.purchaseRevenue || 0) : "")}
           {stat("Visitors · 7 days", fmt(W.activeUsers), cWeek ? cWeek.text + " vs week before" : "", cWeek ? (cWeek.up ? GREEN : RED) : undefined)}
           <span style={{ flex: "1 0 auto" }} />
+          {portalBtn}
           <button onClick={toggleMore} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 700, color: "#185FA5", padding: 0 }}>{more ? "Less ▾" : "More ▸"}</button>
         </div>
         {more && (

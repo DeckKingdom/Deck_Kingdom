@@ -48,6 +48,8 @@ function AiDropCard({ onAiOrder }) {
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState("");
   const [err, setErr] = useState("");
+  const [note, setNote] = useState("");
+  const [noteOpen, setNoteOpen] = useState(false);
   const inputRef = useRef(null);
   const pick = (f) => {
     if (!f || !/^image\//.test(f.type || "")) return;
@@ -71,10 +73,12 @@ function AiDropCard({ onAiOrder }) {
     try {
       setBusy(intent === "quote" ? "Reading the screenshot for a quote…" : intent === "sample" ? "Reading the screenshot for a sample request…" : "Reading the screenshot for a job…");
       setErr("");
-      const order = await readOrderScreenshot(file);
+      const order = await readOrderScreenshot(file, note);
       setBusy("");
       setFile(null);
       setUrl((u) => { if (u) URL.revokeObjectURL(u); return ""; });
+      setNote("");
+      setNoteOpen(false);
       onAiOrder(order, intent);
     } catch (e) {
       setBusy("");
@@ -90,7 +94,15 @@ function AiDropCard({ onAiOrder }) {
   );
   return (
     <div style={{ ...card, marginBottom: 0, height: "100%", boxSizing: "border-box", display: "flex", flexDirection: "column" }}>
-      <p style={sect}>From a screenshot</p>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <p style={{ ...sect, margin: 0, flex: 1 }}>From a screenshot</p>
+        <button onClick={() => setNoteOpen((o) => !o)} title="Add instructions to go with the screenshot"
+          style={{ border: "1px solid " + (note.trim() ? "#D4A017" : "#d4d9e2"), background: note.trim() ? "#fff8e6" : "#f8fafc", color: note.trim() ? "#6b5305" : "#5a6a85",
+            borderRadius: 999, padding: "3px 11px", fontSize: 12, fontWeight: 800, fontFamily: "inherit", cursor: "pointer" }}>
+          ✎ Prompt{note.trim() ? " ✓" : ""}
+        </button>
+      </div>
+      <div style={{ height: 8 }} />
       <div tabIndex={0}
         onDragOver={(e) => e.preventDefault()}
         onDrop={(e) => { e.preventDefault(); pick(e.dataTransfer.files && e.dataTransfer.files[0]); }}
@@ -108,6 +120,12 @@ function AiDropCard({ onAiOrder }) {
           <button style={{ border: "none", background: "none", color: "#C64545", fontFamily: "inherit", fontWeight: 800, cursor: "pointer", flex: "none" }}
             onClick={() => { setFile(null); setUrl((u) => { if (u) URL.revokeObjectURL(u); return ""; }); }}>Clear</button>
         </div>
+      )}
+      {noteOpen && (
+        <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} autoFocus
+          placeholder="Anything to go with it — e.g. “use the second address they give”, “it's a quote for the fencing only”, “book it for Friday”"
+          style={{ marginTop: 8, width: "100%", boxSizing: "border-box", resize: "vertical", border: "1px solid #d4d9e2", borderRadius: 10, padding: "8px 10px",
+            fontFamily: "inherit", fontSize: 12.5, fontWeight: 600, color: "#223", outline: "none", background: "#fff" }} />
       )}
       {busy && <div style={{ marginTop: 8, fontSize: 12.5, fontWeight: 700, color: "#a06d00" }}>{busy} (about 10 seconds)</div>}
       {err && <div style={{ marginTop: 8, fontSize: 12.5, fontWeight: 700, color: "#C64545" }}>{err}</div>}
