@@ -1,7 +1,7 @@
 // Invoices tab: searchable list -> invoice entry screen per the approved
 // mockup. Prices are entered inc VAT; VAT is backed out of the total.
 import { useState, useMemo, useRef } from "react";
-import { CustomerPeek, NewCustomerPeek, InvoicePeek } from "./Peeks.jsx";
+import { CustomerPeek, NewCustomerPeek, InvoicePeek, useHoverPeek } from "./Peeks.jsx";
 import { useLock } from "./useLock.js";
 import { NAVY, GOLD, RED, uid, prettyDate, prettyDateTime, addMonths, addDays, daysBetween } from "../../lib/core.js";
 import {
@@ -142,6 +142,8 @@ export default function InvoicesScreen({ headerH = 0, openProduct, money = true,
   };
 
   const [peekInv, setPeekInv] = useState(null); // job peeked from the list
+  const hpInv = useHoverPeek(setPeekInv); // quick look on hover; click pins it
+  const hoverPeek = (id) => { const b = hpInv.bind(id); return { ...b, onClick: (e) => { e.stopPropagation(); b.onClick(); } }; };
   const [newCust, setNewCust] = useState(false); // create-an-account window over the editor
   const [range, setRangeState] = useState(loadRange); // the sales summary's period (remembered on this computer)
   const setRange = (r) => { setRangeState(r); try { localStorage.setItem("dk-sales-range", JSON.stringify(r)); } catch (e) { /* not kept */ } };
@@ -543,7 +545,7 @@ export default function InvoicesScreen({ headerH = 0, openProduct, money = true,
                           onMouseEnter={(e) => (e.currentTarget.style.background = "#f6f8fb")}
                           onMouseLeave={(e) => (e.currentTarget.style.background = "")}>
                           <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", fontWeight: 700, color: "#185FA5", whiteSpace: "nowrap" }}>
-                            <button className="dk-title-link" title="Quick look" onClick={(e) => { e.stopPropagation(); setPeekInv(i.id); }}
+                            <button className="dk-title-link" title="Quick look" {...hoverPeek(i.id)}
                               style={{ border: "none", background: "none", padding: 0, fontFamily: "inherit", fontWeight: 700, fontSize: "inherit", color: "#185FA5", cursor: "pointer", textDecoration: "underline", textDecorationColor: "#c3d4e8" }}>
                               {i.invNo || (String(i.id).startsWith("web-i-") ? <span title="Website order — FileMaker gives it its invoice number">{i.orderRef}</span> : "—")}
                             </button>
@@ -553,7 +555,7 @@ export default function InvoicesScreen({ headerH = 0, openProduct, money = true,
                           </td>
                           <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", whiteSpace: "nowrap" }}>{prettyDate(i.date)}</td>
                           <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6", fontWeight: 700 }}>
-                            {c ? <button className="dk-title-link" title="Quick look" onClick={(e) => { e.stopPropagation(); setPeekInv(i.id); }}
+                            {c ? <button className="dk-title-link" title="Quick look" {...hoverPeek(i.id)}
                               style={{ border: "none", background: "none", padding: 0, fontFamily: "inherit", fontWeight: 700, fontSize: "inherit", color: "inherit", cursor: "pointer", textAlign: "left" }}>{c.name}</button> : <span style={{ color: RED }}>No customer</span>}
                             <RiskChip inv={i} style={{ marginLeft: 8 }} /><WebStatusChip inv={i} style={{ marginLeft: 8 }} /></td>
                           <td style={{ padding: "9px 8px", borderBottom: "1px solid #f0f2f6" }}>{i.jobType}</td>
