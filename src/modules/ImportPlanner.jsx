@@ -50,7 +50,7 @@ import Sidebar, { TAB_LABELS } from "./Sidebar.jsx";
 import { ProductEditor } from "./crm/ProductsScreen.jsx";
 import HomeScreen from "./HomeScreen.jsx";
 import { NewCustomerPeek } from "./crm/Peeks.jsx";
-import { matchCustomer, draftFromOrder } from "../data/aiOrder.js";
+import { matchCustomer, draftFromOrder, sampleFromOrder } from "../data/aiOrder.js";
 import ActivityScreen from "./crm/ActivityScreen.jsx";
 import UsersScreen from "./crm/UsersScreen.jsx";
 import StockScreen from "./crm/StockScreen.jsx";
@@ -646,13 +646,16 @@ export default function ImportPlanner() {
   // via the new-customer pop-over when the account isn't recognised
   const [aiNew, setAiNew] = useState(null); // { order, intent }
   const finishAiOrder = (custId, order, intent) => {
-    const { n } = draftFromOrder(crm, me, custId, order, intent === "quote" ? "quote" : "invoice");
+    const { n } = intent === "sample" ? sampleFromOrder(crm, me, custId, order)
+      : draftFromOrder(crm, me, custId, order, intent === "quote" ? "quote" : "invoice");
     updateCrm((c) => {
-      if (intent === "quote") { c.quotes.unshift(n); c.numbering.quote = (Number(n.quoteNo) || 0) + 1; }
+      if (intent === "sample") { c.samples.unshift(n); c.numbering.sample = (Number(n.sampleNo) || 0) + 1; }
+      else if (intent === "quote") { c.quotes.unshift(n); c.numbering.quote = (Number(n.quoteNo) || 0) + 1; }
       else { c.invoices.unshift(n); c.numbering.invoice = (Number(n.invNo) || 0) + 1; }
       return c;
     });
-    if (intent === "quote") { setSelQuoteId(n.id); setTab("quotes"); }
+    if (intent === "sample") { setSelSampleId(n.id); setTab("samples"); }
+    else if (intent === "quote") { setSelQuoteId(n.id); setTab("quotes"); }
     else { setSelInvoiceId(n.id); setTab("invoices"); }
   };
   const handleAiOrder = (order, intent) => {

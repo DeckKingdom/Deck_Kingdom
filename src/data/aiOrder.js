@@ -2,7 +2,7 @@
 // matchProduct pairs each extracted item with the product book the same way
 // the phone's line picker searches it.
 import { getSupabase } from "./supabaseClient.js";
-import { blankInvoice, blankQuote, blankLine, nextNumber } from "../lib/crmCore.js";
+import { blankInvoice, blankQuote, blankLine, blankSample, blankSampleItem, nextNumber } from "../lib/crmCore.js";
 
 export async function readOrderScreenshot(file) {
   const base64 = await new Promise((ok, no) => {
@@ -57,6 +57,28 @@ export function matchCustomer(crm, order) {
     if (nm) c = (crm.customers || []).find((x) => String(x.name || "").trim().toLowerCase() === nm);
   }
   return c || null;
+}
+
+// a sample request from an extracted order — items named from the book where they match
+export function sampleFromOrder(crm, me, custId, order) {
+  const n = blankSample(custId);
+  n.sampleNo = nextNumber(crm.samples, "sampleNo", crm.numbering.sample);
+  n.raisedBy = me || "";
+  const unmatched = [];
+  n.items = (order.items || []).map((it) => {
+    const mp = matchProduct(crm.masterProducts || [], it.text, it.colour);
+    const si = blankSampleItem();
+    si.description = mp ? mp.name : (it.text || "");
+    si.colour = (mp && mp.colour) || it.colour || "";
+    si.qty = Number(it.qty) || 1;
+    if (!mp && it.text) unmatched.push(it.text);
+    return si;
+  });
+  if (!n.items.length) n.items = [blankSampleItem()];
+  n.notes = ("Raised from a screenshot — check the items and address."
+    + (unmatched.length ? " Couldn't match: " + unmatched.join("; ") + "." : "")
+    + (String(order.notes || "").trim() ? " From the message: " + String(order.notes).trim() : "")).trim();
+  return { n, unmatched };
 }
 
 // a draft invoice or quote from an extracted order, lines matched to the book

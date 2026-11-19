@@ -69,7 +69,7 @@ function AiDropCard({ onAiOrder }) {
   const act = async (intent) => {
     if (!file || busy) return;
     try {
-      setBusy(intent === "quote" ? "Reading the screenshot for a quote…" : "Reading the screenshot for a job…");
+      setBusy(intent === "quote" ? "Reading the screenshot for a quote…" : intent === "sample" ? "Reading the screenshot for a sample request…" : "Reading the screenshot for a job…");
       setErr("");
       const order = await readOrderScreenshot(file);
       setBusy("");
@@ -113,7 +113,8 @@ function AiDropCard({ onAiOrder }) {
       {err && <div style={{ marginTop: 8, fontSize: 12.5, fontWeight: 700, color: "#C64545" }}>{err}</div>}
       <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
         {actBtn("📄 Raise job", "job", true)}
-        {actBtn("🏷 Prepare quote", "quote", false)}
+        {actBtn("🏷 Quote", "quote", false)}
+        {actBtn("📮 Samples", "sample", false)}
       </div>
     </div>
   );
