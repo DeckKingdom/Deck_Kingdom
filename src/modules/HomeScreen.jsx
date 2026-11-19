@@ -1,6 +1,6 @@
 // Home: the person's own task list (today's to-dos, scheduled rota tasks due,
 // spare-time projects) beside a reports panel of the business at a glance.
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { NAVY, GOLD, RED, addMonths, addDays, prettyDate, STATUS_COLOURS } from "../lib/core.js";
 import {
   invoiceTotals, gbp, isPaid, today, stockValuation, blankTask,
@@ -11,6 +11,7 @@ import {
 } from "../lib/crmCore.js";
 import { tasksAvailable } from "../data/crmStorage.js";
 import { Icon, Chip, card, sect, lbl, inp, btn, goldBtn, RiskChip } from "./crm/ui.jsx";
+import { readOrderScreenshot } from "../data/aiOrder.js";
 import WebsiteCard from "./WebsiteCard.jsx";
 import ReviewsCard from "./ReviewsCard.jsx";
 import { CollectionPeek, InvoicePeek } from "./crm/Peeks.jsx";
@@ -40,7 +41,85 @@ const Report = ({ label, value, sub, tone, onClick }) => (
 
 const rowStyle = { display: "flex", gap: 11, alignItems: "flex-start", padding: "9px 0", borderBottom: "1px solid #f0f2f6" };
 
-export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTab, addShipment, newInvoice, openInvoice, openCollection, openShipment, openReviews, openLeakDrops, money = true, canTab = () => true }) {
+// Paste or drop a screenshot of an order thread; Claude reads it and the
+// chosen action opens a draft job or quote for a human check.
+function AiDropCard({ onAiOrder }) {
+  const [file, setFile] = useState(null);
+  const [url, setUrl] = useState("");
+  const [busy, setBusy] = useState("");
+  const [err, setErr] = useState("");
+  const inputRef = useRef(null);
+  const pick = (f) => {
+    if (!f || !/^image\//.test(f.type || "")) return;
+    setErr("");
+    setFile(f);
+    setUrl((u) => { if (u) URL.revokeObjectURL(u); return URL.createObjectURL(f); });
+  };
+  // Ctrl+V anywhere on Home lands here (unless you're typing in a box)
+  useEffect(() => {
+    const onPaste = (e) => {
+      const tag = (e.target && e.target.tagName) || "";
+      if (/INPUT|TEXTAREA|SELECT/.test(tag)) return;
+      const it = [...((e.clipboardData && e.clipboardData.items) || [])].find((x) => x.type && x.type.startsWith("image/"));
+      if (it) pick(it.getAsFile());
+    };
+    document.addEventListener("paste", onPaste);
+    return () => document.removeEventListener("paste", onPaste);
+  }, []);
+  const act = async (intent) => {
+    if (!file || busy) return;
+    try {
+      setBusy(intent === "quote" ? "Reading the screenshot for a quote…" : "Reading the screenshot for a job…");
+      setErr("");
+      const order = await readOrderScreenshot(file);
+      setBusy("");
+      setFile(null);
+      setUrl((u) => { if (u) URL.revokeObjectURL(u); return ""; });
+      onAiOrder(order, intent);
+    } catch (e) {
+      setBusy("");
+      setErr(String((e && e.message) || e));
+    }
+  };
+  const actBtn = (label, intent, primary) => (
+    <button disabled={!file || !!busy} onClick={() => act(intent)}
+      style={{ ...btn, flex: 1, justifyContent: "center", padding: "10px 0", fontSize: 13.5, opacity: !file || busy ? 0.45 : 1,
+        ...(primary ? { background: "#0B1F3F", borderColor: "#0B1F3F", color: "#fff" } : {}) }}>
+      {label}
+    </button>
+  );
+  return (
+    <div style={{ ...card, marginBottom: 16 }}>
+      <p style={sect}>From a screenshot</p>
+      <div tabIndex={0}
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={(e) => { e.preventDefault(); pick(e.dataTransfer.files && e.dataTransfer.files[0]); }}
+        onClick={() => inputRef.current && inputRef.current.click()}
+        style={{ border: "1.5px dashed " + (file ? "#9fc3a9" : "#c4cbd6"), borderRadius: 12, minHeight: 96, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: file ? "#f4faf6" : "#f8fafc", outline: "none", padding: 8, textAlign: "center", overflow: "hidden" }}>
+        {url
+          ? <img src={url} alt="order screenshot" style={{ maxHeight: 160, maxWidth: "100%", borderRadius: 8 }} />
+          : <span style={{ fontSize: 12.5, fontWeight: 700, color: "#8593a8", lineHeight: 1.6 }}>Ctrl+V a screenshot of the message thread,<br />drop an image here, or click to browse</span>}
+        <input ref={inputRef} type="file" accept="image/*" style={{ display: "none" }}
+          onChange={(e) => { pick(e.target.files && e.target.files[0]); e.target.value = ""; }} />
+      </div>
+      {file && !busy && (
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 6, fontSize: 12, fontWeight: 700, color: "#5a6a85" }}>
+          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{file.name || "pasted image"}</span>
+          <button style={{ border: "none", background: "none", color: "#C64545", fontFamily: "inherit", fontWeight: 800, cursor: "pointer", flex: "none" }}
+            onClick={() => { setFile(null); setUrl((u) => { if (u) URL.revokeObjectURL(u); return ""; }); }}>Clear</button>
+        </div>
+      )}
+      {busy && <div style={{ marginTop: 8, fontSize: 12.5, fontWeight: 700, color: "#a06d00" }}>{busy} (about 10 seconds)</div>}
+      {err && <div style={{ marginTop: 8, fontSize: 12.5, fontWeight: 700, color: "#C64545" }}>{err}</div>}
+      <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+        {actBtn("📄 Raise job", "job", true)}
+        {actBtn("🏷 Prepare quote", "quote", false)}
+      </div>
+    </div>
+  );
+}
+
+export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTab, addShipment, newInvoice, openInvoice, openCollection, openShipment, openReviews, openLeakDrops, onAiOrder, money = true, canTab = () => true }) {
   const tod = today();
   const [viewAs, setViewAs] = useState(me || "");
   const [draft, setDraft] = useState(null);
@@ -138,6 +217,7 @@ export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTa
       {/* row 1: money | website · row 2: deliveries (3/4) | samples (1/4) · row 3: coming in · row 4: reviews & photos · row 5: today | projects */}
       <div className="dk-home-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 16, alignItems: "stretch" }}>
           <div className="dk-home-cell" style={{ gridColumn: "span 2", minWidth: 0 }}>
+            {onAiOrder && <AiDropCard onAiOrder={onAiOrder} />}
             <div style={{ ...card, marginBottom: 0, height: "100%", boxSizing: "border-box" }}>
               <p style={sect}>{money ? "Financial overview" : "Overview"}</p>
               {!crm ? (

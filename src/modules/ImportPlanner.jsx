@@ -49,6 +49,8 @@ import ScheduleScreen from "./crm/ScheduleScreen.jsx";
 import Sidebar, { TAB_LABELS } from "./Sidebar.jsx";
 import { ProductEditor } from "./crm/ProductsScreen.jsx";
 import HomeScreen from "./HomeScreen.jsx";
+import { NewCustomerPeek } from "./crm/Peeks.jsx";
+import { matchCustomer, draftFromOrder } from "../data/aiOrder.js";
 import ActivityScreen from "./crm/ActivityScreen.jsx";
 import UsersScreen from "./crm/UsersScreen.jsx";
 import StockScreen from "./crm/StockScreen.jsx";
@@ -640,6 +642,25 @@ export default function ImportPlanner() {
     setTab("invoices");
   };
   // driver closed a job with items left over: a no-charge follow-up job carrying what's still to deliver
+  // Home's screenshot card: Claude's extracted order → a draft job or quote,
+  // via the new-customer pop-over when the account isn't recognised
+  const [aiNew, setAiNew] = useState(null); // { order, intent }
+  const finishAiOrder = (custId, order, intent) => {
+    const { n } = draftFromOrder(crm, me, custId, order, intent === "quote" ? "quote" : "invoice");
+    updateCrm((c) => {
+      if (intent === "quote") { c.quotes.unshift(n); c.numbering.quote = (Number(n.quoteNo) || 0) + 1; }
+      else { c.invoices.unshift(n); c.numbering.invoice = (Number(n.invNo) || 0) + 1; }
+      return c;
+    });
+    if (intent === "quote") { setSelQuoteId(n.id); setTab("quotes"); }
+    else { setSelInvoiceId(n.id); setTab("invoices"); }
+  };
+  const handleAiOrder = (order, intent) => {
+    const cust = matchCustomer(crm, order);
+    if (cust) finishAiOrder(cust.id, order, intent);
+    else setAiNew({ order, intent });
+  };
+
   const followUpFromDrop = (r, o, left) => {
     const n = blankInvoice(o.customerId, o.siteId);
     n.invNo = nextNumber(crm.invoices, "invNo", crm.numbering.invoice);
@@ -1584,7 +1605,7 @@ export default function ImportPlanner() {
             </div>
           )}
           <HomeScreen money={access.money} canTab={access.canTab} data={data} crm={crm} updateCrm={updateCrm} me={me} askConfirm={setConfirmBox} setTab={setTab} openInvoice={openInvoice} openCollection={openCollection} openShipment={(id) => { setActiveId(id); setTab("shipments"); }} openReviews={openReviews} addShipment={addShipment} newInvoice={() => (crm ? newInvoiceFor("", "") : setTab("invoices"))}
-            openLeakDrops={(from, to, warr) => { setInvFilter({ freeSmall: { from, to, warr: !!warr } }); setSelInvoiceId(null); setTab("invoices"); }} />
+            openLeakDrops={(from, to, warr) => { setInvFilter({ freeSmall: { from, to, warr: !!warr } }); setSelInvoiceId(null); setTab("invoices"); }} onAiOrder={handleAiOrder} />
         </>
       )}
 
@@ -3001,7 +3022,21 @@ export default function ImportPlanner() {
         <ShortLoadAlert alerts={shortLoads.alerts} crm={crm} onDismiss={shortLoads.dismiss} onFollowUp={followUpFromLoad} onOpenJob={(id) => openInvoice(id)}
           onOpenLoading={(rep) => { try { sessionStorage.setItem("dk-load-day", rep.date); } catch (e) { /* */ } shortLoads.dismiss(rep); setTab("loading"); }} />
       )}
+      {aiNew && crm && (
+        <NewCustomerPeek crm={crm} updateCrm={updateCrm} me={me}
+          start={{
+            name: (aiNew.order.customer && aiNew.order.customer.name) || "",
+            mobile: (aiNew.order.customer && aiNew.order.customer.mobile) || "",
+            email: (aiNew.order.customer && aiNew.order.customer.email) || "",
+            address: (aiNew.order.address && aiNew.order.address.line) || "",
+            town: (aiNew.order.address && aiNew.order.address.town) || "",
+            postcode: (aiNew.order.address && aiNew.order.address.postcode) || "",
+          }}
+          onClose={() => setAiNew(null)}
+          onDone={(id) => { const x = aiNew; setAiNew(null); finishAiOrder(id, x.order, x.intent); }} />
+      )}
       {crm && dropSync.alerts.length > 0 && (
+        
         <DropAlert alerts={dropSync.alerts} crm={crm} onDismiss={dropSync.dismiss} onFollowUp={followUpFromDrop}
           onOpenJob={(id) => openInvoice(id)} onOpenCollection={(id) => openCollection(id)} />
       )}

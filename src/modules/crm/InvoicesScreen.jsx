@@ -13,7 +13,7 @@ import { ListHero, HeroStat, HeroAdd, SearchBox, RiskChip, WebStatusChip, Soon, 
 import { invoiceEmailLink, invoiceEmailTo, statementEmailLink, statementEmail, statementCaption, invoiceWaCaption, invoiceAttachEmail, invoiceAttachEmailLink } from "../../lib/invoiceEmail.js";
 import { emailReady, sendEmail } from "../../data/email.js";
 import { emailInvoiceWithPdf } from "./invoiceEmailPdf.js";
-import { readOrderScreenshot, matchProduct } from "../../data/aiOrder.js";
+import { readOrderScreenshot, draftFromOrder, matchCustomer } from "../../data/aiOrder.js";
 import { waNumber } from "./CustomersScreen.jsx";
 import { isLeakFreeDrop, isWarrantyLook, FREE_LEAK_LIMIT } from "../../lib/runCost.js";
 import * as XLSX from "xlsx";
@@ -184,32 +184,7 @@ export default function InvoicesScreen({ headerH = 0, openProduct, money = true,
   const [aiDraft, setAiDraft] = useState(null);
   const dg = (v) => String(v || "").replace(/\D/g, "");
   const raiseFromAi = (custId, r) => {
-    const siteOf = (crm.sites || []).find((s2) => s2.customerId === custId);
-    const unmatched = [];
-    const n = blankInvoice(custId, siteOf ? siteOf.id : "");
-    n.invNo = nextNumber(crm.invoices, "invNo", crm.numbering.invoice);
-    n.raisedBy = me || "";
-    (r.items || []).forEach((it) => {
-      const mp = matchProduct(crm.masterProducts || [], it.text, it.colour);
-      const l = blankLine();
-      if (mp) {
-        l.code = mp.sku;
-        l.description = mp.name;
-        l.colour = mp.colour || it.colour || "";
-        l.price = mp.priceIncVat !== "" && mp.priceIncVat !== null && mp.priceIncVat !== undefined ? Number(mp.priceIncVat) : "";
-      } else {
-        l.description = it.text || "";
-        l.colour = it.colour || "";
-        if (it.text) unmatched.push(it.text);
-      }
-      l.qty = Number(it.qty) || 1;
-      n.lines.push(l);
-    });
-    if (!n.lines.length) n.lines = [blankLine()];
-    if (r.deliveryDate && /^\d{4}-\d{2}-\d{2}$/.test(String(r.deliveryDate))) n.deliveryDate = r.deliveryDate;
-    n.jobNotes = ("Raised from a screenshot — check every line, price and address before it goes anywhere."
-      + (unmatched.length ? " Couldn't match: " + unmatched.join("; ") + "." : "")
-      + (String(r.notes || "").trim() ? " From the message: " + String(r.notes).trim() : "")).trim();
+    const { n } = draftFromOrder(crm, me, custId, r, "invoice");
     updateCrm((c) => {
       c.invoices.unshift(n);
       c.numbering.invoice = (Number(n.invNo) || 0) + 1;
@@ -222,12 +197,7 @@ export default function InvoicesScreen({ headerH = 0, openProduct, money = true,
     try {
       setListNote("Reading the screenshot with Claude…");
       const r = await readOrderScreenshot(file);
-      const mob = dg(r.customer && r.customer.mobile);
-      let cust2 = mob.length >= 10 ? (crm.customers || []).find((c2) => dg(c2.mobile) === mob || dg(c2.landline) === mob) : null;
-      if (!cust2) {
-        const nm = String((r.customer && r.customer.name) || "").trim().toLowerCase();
-        if (nm) cust2 = (crm.customers || []).find((c2) => String(c2.name || "").trim().toLowerCase() === nm);
-      }
+      const cust2 = matchCustomer(crm, r);
       setListNote("");
       if (cust2) raiseFromAi(cust2.id, r);
       else setAiDraft(r);
