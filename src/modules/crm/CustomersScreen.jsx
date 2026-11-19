@@ -335,7 +335,14 @@ export default function CustomersScreen({ money = true, crm, updateCrm, askConfi
     if (lf.orders === "active" && !(f.last >= yearAgoL)) return false;
     if (lf.orders === "lapsed" && !(f.sales && f.last < yearAgoL)) return false;
     if (lf.orders === "new" && !((c.created || "") >= monthAgoL)) return false;
-    if (q && ![c.name, c.town, c.postcode, c.contact, c.mobile, c.landline, c.email, String(c.accountNo || "")].some((v) => String(v || "").toLowerCase().includes(q))) return false;
+    if (q) {
+      // phone numbers match on digits alone, so "07801343936", "343-936" and
+      // "3439" all find 07801-343-936 however it was typed in
+      const qd = q.replace(/\D/g, "");
+      const textHit = [c.name, c.town, c.postcode, c.contact, c.mobile, c.landline, c.email, String(c.accountNo || "")].some((v) => String(v || "").toLowerCase().includes(q));
+      const phoneHit = qd.length >= 3 && [c.mobile, c.landline].some((v) => digits(v).includes(qd));
+      if (!textHit && !phoneHit) return false;
+    }
     return true;
   });
   const newestCmp = (a, b) => {
