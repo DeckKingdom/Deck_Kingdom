@@ -52,6 +52,7 @@ import HomeScreen from "./HomeScreen.jsx";
 import { NewCustomerPeek } from "./crm/Peeks.jsx";
 import { matchCustomer, draftFromOrder, sampleFromOrder } from "../data/aiOrder.js";
 import { FaceIdSidebarBtn } from "./AppLock.jsx";
+import { wpSampleStates, notifyWpSamplesSent } from "../data/wpSampleSent.js";
 import ActivityScreen from "./crm/ActivityScreen.jsx";
 import UsersScreen from "./crm/UsersScreen.jsx";
 import StockScreen from "./crm/StockScreen.jsx";
@@ -126,6 +127,18 @@ export default function ImportPlanner() {
   }, [finOn]);
   // never sit on a screen this login can't open
   useEffect(() => { if (access.known && !access.canTab(tab)) setTab("home"); }, [access, tab]);
+  // website sample requests: when one flips to dispatched here (any button, any
+  // screen), tell the WordPress Sample Requests page so it shows Sent there too
+  const wpSrSeen = useRef(null);
+  useEffect(() => {
+    if (!crm) return;
+    const cur = wpSampleStates(crm.samples);
+    if (wpSrSeen.current) {
+      const newly = [...cur].filter(([id, sent]) => sent && wpSrSeen.current.get(id) === false).map(([id]) => id);
+      if (newly.length) notifyWpSamplesSent(newly);
+    }
+    wpSrSeen.current = cur;
+  }, [crm]);
   const [roNote, setRoNote] = useState(false);
   useEffect(() => { if (!roNote) return; const t = setTimeout(() => setRoNote(false), 3500); return () => clearTimeout(t); }, [roNote]);
   const [sideOpen, setSideOpen] = useState(() => (typeof window === "undefined" ? true : window.innerWidth >= 950));
