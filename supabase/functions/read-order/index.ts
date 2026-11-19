@@ -28,7 +28,7 @@ Rules:
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   try {
-    const key = Deno.env.get("ANTHROPIC_KEY");
+    const key = (Deno.env.get("ANTHROPIC_KEY") || "").replace(/\s+/g, ""); // stray line breaks from a paste are harmless
     if (!key) return json({ error: "The ANTHROPIC_KEY secret isn't set in Supabase yet." }, 500);
     const { image, mime } = await req.json();
     if (!image) return json({ error: "No image sent." }, 400);
