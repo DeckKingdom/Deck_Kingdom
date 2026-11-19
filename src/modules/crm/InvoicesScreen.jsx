@@ -13,6 +13,7 @@ import { ListHero, HeroStat, HeroAdd, SearchBox, RiskChip, WebStatusChip, Soon, 
 import { invoiceEmailLink, invoiceEmailTo, statementEmailLink, statementEmail, statementCaption, invoiceWaCaption, invoiceAttachEmail, invoiceAttachEmailLink } from "../../lib/invoiceEmail.js";
 import { emailReady, sendEmail } from "../../data/email.js";
 import { emailInvoiceWithPdf } from "./invoiceEmailPdf.js";
+import { readOrderScreenshot, matchProduct } from "../../data/aiOrder.js";
 import { waNumber } from "./CustomersScreen.jsx";
 import { isLeakFreeDrop, isWarrantyLook, FREE_LEAK_LIMIT } from "../../lib/runCost.js";
 import * as XLSX from "xlsx";
@@ -177,6 +178,63 @@ export default function InvoicesScreen({ headerH = 0, openProduct, money = true,
       }
       return c;
     });
+
+  // screenshot → draft job: Claude reads the thread, we match the account and
+  // the product book, and the editor opens for a human check before anything goes out
+  const [aiDraft, setAiDraft] = useState(null);
+  const dg = (v) => String(v || "").replace(/\D/g, "");
+  const raiseFromAi = (custId, r) => {
+    const siteOf = (crm.sites || []).find((s2) => s2.customerId === custId);
+    const unmatched = [];
+    const n = blankInvoice(custId, siteOf ? siteOf.id : "");
+    n.invNo = nextNumber(crm.invoices, "invNo", crm.numbering.invoice);
+    n.raisedBy = me || "";
+    (r.items || []).forEach((it) => {
+      const mp = matchProduct(crm.masterProducts || [], it.text, it.colour);
+      const l = blankLine();
+      if (mp) {
+        l.code = mp.sku;
+        l.description = mp.name;
+        l.colour = mp.colour || it.colour || "";
+        l.price = mp.priceIncVat !== "" && mp.priceIncVat !== null && mp.priceIncVat !== undefined ? Number(mp.priceIncVat) : "";
+      } else {
+        l.description = it.text || "";
+        l.colour = it.colour || "";
+        if (it.text) unmatched.push(it.text);
+      }
+      l.qty = Number(it.qty) || 1;
+      n.lines.push(l);
+    });
+    if (!n.lines.length) n.lines = [blankLine()];
+    if (r.deliveryDate && /^\d{4}-\d{2}-\d{2}$/.test(String(r.deliveryDate))) n.deliveryDate = r.deliveryDate;
+    n.jobNotes = ("Raised from a screenshot — check every line, price and address before it goes anywhere."
+      + (unmatched.length ? " Couldn't match: " + unmatched.join("; ") + "." : "")
+      + (String(r.notes || "").trim() ? " From the message: " + String(r.notes).trim() : "")).trim();
+    updateCrm((c) => {
+      c.invoices.unshift(n);
+      c.numbering.invoice = (Number(n.invNo) || 0) + 1;
+      return c;
+    });
+    setSelId(n.id);
+  };
+  const onShot = async (file) => {
+    if (!file) return;
+    try {
+      setListNote("Reading the screenshot with Claude…");
+      const r = await readOrderScreenshot(file);
+      const mob = dg(r.customer && r.customer.mobile);
+      let cust2 = mob.length >= 10 ? (crm.customers || []).find((c2) => dg(c2.mobile) === mob || dg(c2.landline) === mob) : null;
+      if (!cust2) {
+        const nm = String((r.customer && r.customer.name) || "").trim().toLowerCase();
+        if (nm) cust2 = (crm.customers || []).find((c2) => String(c2.name || "").trim().toLowerCase() === nm);
+      }
+      setListNote("");
+      if (cust2) raiseFromAi(cust2.id, r);
+      else setAiDraft(r);
+    } catch (e) {
+      setListNote("Couldn't read the screenshot — " + ((e && e.message) || e));
+    }
+  };
 
   const newInvoice = () => {
     const n = blankInvoice("", "");
@@ -439,7 +497,14 @@ export default function InvoicesScreen({ headerH = 0, openProduct, money = true,
         )}
 
         <div style={{ ...card, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "10px 14px", marginBottom: 10 }}>
-          <SearchBox value={search} onChange={setSearch} placeholder="Search inv #, customer, order ref…" />
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <div style={{ flex: 1 }}><SearchBox value={search} onChange={setSearch} placeholder="Search inv #, customer, order ref…" /></div>
+            <label style={{ ...btn, padding: "9px 14px", cursor: "pointer", whiteSpace: "nowrap" }} title="Drop in a screenshot of a WhatsApp/text/email order — Claude reads it and opens a draft job for you to check">
+              📷 From screenshot
+              <input type="file" accept="image/*" style={{ display: "none" }}
+                onChange={(e) => { const f = e.target.files && e.target.files[0]; e.target.value = ""; onShot(f); }} />
+            </label>
+          </div>
         </div>
 
         {stCust && (
@@ -553,6 +618,19 @@ export default function InvoicesScreen({ headerH = 0, openProduct, money = true,
             </>
           )}
         </div>
+        {aiDraft && (
+          <NewCustomerPeek crm={crm} updateCrm={updateCrm} me={me}
+            start={{
+              name: (aiDraft.customer && aiDraft.customer.name) || "",
+              mobile: (aiDraft.customer && aiDraft.customer.mobile) || "",
+              email: (aiDraft.customer && aiDraft.customer.email) || "",
+              address: (aiDraft.address && aiDraft.address.line) || "",
+              town: (aiDraft.address && aiDraft.address.town) || "",
+              postcode: (aiDraft.address && aiDraft.address.postcode) || "",
+            }}
+            onClose={() => setAiDraft(null)}
+            onDone={(id) => { const r = aiDraft; setAiDraft(null); raiseFromAi(id, r); }} />
+        )}
         {peekInv && (
           <InvoicePeek crm={crm} invId={peekInv} onClose={() => setPeekInv(null)}
             onOpenFull={(id) => { setPeekInv(null); setSelId(id); }}

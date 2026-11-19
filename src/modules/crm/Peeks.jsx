@@ -282,8 +282,8 @@ export function LockGuard({ k, crm, extra, children }) {
 // ===== new customer, without leaving the job =====
 // Typed a name on an invoice or quote and nobody matched? This window makes the
 // account on the spot — and catches a likely duplicate before it gets made.
-export function NewCustomerPeek({ crm, updateCrm, me, startName = "", onDone, onClose }) {
-  const [d, setD] = useState({ name: startName, contact: "", mobile: "", landline: "", email: "", address: "", town: "", postcode: "" });
+export function NewCustomerPeek({ crm, updateCrm, me, startName = "", start = null, onDone, onClose }) {
+  const [d, setD] = useState({ name: startName, contact: "", mobile: "", landline: "", email: "", address: "", town: "", postcode: "", ...(start || {}) });
   const set = (k) => (e) => setD((x) => ({ ...x, [k]: e.target.value }));
   const digits = (s) => String(s || "").replace(/\D/g, "");
   const nm = d.name.trim().toLowerCase(), mo = digits(d.mobile), em = d.email.trim().toLowerCase();
