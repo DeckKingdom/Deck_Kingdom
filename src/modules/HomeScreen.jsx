@@ -89,13 +89,13 @@ function AiDropCard({ onAiOrder }) {
     </button>
   );
   return (
-    <div style={{ ...card, marginBottom: 16 }}>
+    <div style={{ ...card, marginBottom: 0, height: "100%", boxSizing: "border-box", display: "flex", flexDirection: "column" }}>
       <p style={sect}>From a screenshot</p>
       <div tabIndex={0}
         onDragOver={(e) => e.preventDefault()}
         onDrop={(e) => { e.preventDefault(); pick(e.dataTransfer.files && e.dataTransfer.files[0]); }}
         onClick={() => inputRef.current && inputRef.current.click()}
-        style={{ border: "1.5px dashed " + (file ? "#9fc3a9" : "#c4cbd6"), borderRadius: 12, minHeight: 96, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: file ? "#f4faf6" : "#f8fafc", outline: "none", padding: 8, textAlign: "center", overflow: "hidden" }}>
+        style={{ flex: 1, border: "1.5px dashed " + (file ? "#9fc3a9" : "#c4cbd6"), borderRadius: 12, minHeight: 96, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: file ? "#f4faf6" : "#f8fafc", outline: "none", padding: 8, textAlign: "center", overflow: "hidden" }}>
         {url
           ? <img src={url} alt="order screenshot" style={{ maxHeight: 160, maxWidth: "100%", borderRadius: 8 }} />
           : <span style={{ fontSize: 12.5, fontWeight: 700, color: "#8593a8", lineHeight: 1.6 }}>Ctrl+V a screenshot of the message thread,<br />drop an image here, or click to browse</span>}
@@ -215,10 +215,9 @@ export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTa
       </div>
 
       {crm && !ready && <TasksSchemaNotice />}
-      {/* row 1: money | website · row 2: deliveries (3/4) | samples (1/4) · row 3: coming in · row 4: reviews & photos · row 5: today | projects */}
+      {/* row 1: overview | screenshot card · row 2: website (thin, full width) · row 3: deliveries (3/4) | today (1/4) · then samples, reviews, projects */}
       <div className="dk-home-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 16, alignItems: "stretch" }}>
-          <div className="dk-home-cell" style={{ gridColumn: "span 2", minWidth: 0 }}>
-            {onAiOrder && <AiDropCard onAiOrder={onAiOrder} />}
+          <div className="dk-home-cell" style={{ gridColumn: onAiOrder ? "span 2" : "span 4", minWidth: 0 }}>
             <div style={{ ...card, marginBottom: 0, height: "100%", boxSizing: "border-box" }}>
               <p style={sect}>{money ? "Financial overview" : "Overview"}</p>
               {!crm ? (
@@ -255,8 +254,13 @@ export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTa
               )}
             </div>
           </div>
-          <div className="dk-home-cell" style={{ gridColumn: "span 2", minWidth: 0 }}>
-            {analyticsReady ? <WebsiteCard money={money} /> : (
+          {onAiOrder && (
+            <div className="dk-home-cell" style={{ gridColumn: "span 2", minWidth: 0 }}>
+              <AiDropCard onAiOrder={onAiOrder} />
+            </div>
+          )}
+          <div className="dk-home-cell" style={{ gridColumn: "span 4", minWidth: 0 }}>
+            {analyticsReady ? <WebsiteCard money={money} thin /> : (
               <div style={{ ...card, marginBottom: 0 }}><p style={sect}>Website</p><div style={{ color: "#8593a8", fontWeight: 600, fontSize: 13 }}>Website stats show here on the live site.</div></div>
             )}
           </div>

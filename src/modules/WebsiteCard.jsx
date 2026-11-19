@@ -66,7 +66,7 @@ const ListBars = ({ items, valueKey, unit }) => {
   ));
 };
 
-export default function WebsiteCard({ money = true } = {}) {
+export default function WebsiteCard({ money = true, thin = false } = {}) {
   const [d, setD] = useState(null);
   const [err, setErr] = useState(null);
   const [more, setMore] = useState(() => { try { return localStorage.getItem("dk-web-more") === "1"; } catch { return false; } });
@@ -95,12 +95,13 @@ export default function WebsiteCard({ money = true } = {}) {
     </div>
   );
 
+  const baseCard = thin ? { ...card, marginBottom: 0, padding: "12px 16px" } : card;
   if (err && !d) return (
-    <div style={card}>{head}
+    <div style={baseCard}>{head}
       <div style={{ fontSize: 12.5, fontWeight: 600, color: err.setup ? "#6b5305" : "#9b1c2e", background: err.setup ? "#fff8e6" : "#fdecef", border: "1px solid " + (err.setup ? "#f4d78f" : "#f3c2cb"), borderRadius: 8, padding: "8px 11px" }}>{err.msg}</div>
     </div>
   );
-  if (!d) return <div style={card}>{head}<div style={{ fontSize: 13, color: "#8593a8", fontWeight: 600 }}>Loading Google Analytics…</div></div>;
+  if (!d) return <div style={baseCard}>{head}<div style={{ fontSize: 13, color: "#8593a8", fontWeight: 600 }}>Loading Google Analytics…</div></div>;
 
   const s = d.summary || {};
   const T = s.today || {}, Y = s.yesterday || {}, W = s.last7 || {}, P = s.prev7 || {};
@@ -108,6 +109,88 @@ export default function WebsiteCard({ money = true } = {}) {
   const f = d.funnel || {};
   const steps = [["view_item", "Viewed a product"], ["add_to_cart", "Added to basket"], ["begin_checkout", "Started checkout"], ["purchase", "Ordered"]];
   const devices = (d.live.devices || []).map((x) => fmt(x.users) + " " + x.name).join(" · ");
+
+  const dailyBlock = d.daily.length > 0 && (
+    <div>
+      <span style={{ ...lbl, marginBottom: 6 }}>Visitors per day · last 4 weeks</span>
+      <Bars values={d.daily.map((x) => x.users)} labels={d.daily.map((x) => dayLabel(x.date))} unit="visitors" height={60} highlightLast />
+    </div>
+  );
+  const moreBlock = (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16, marginTop: 14, paddingTop: 12, borderTop: "1px solid #f0f2f6" }}>
+      <div>
+        <span style={{ ...lbl, marginBottom: 6 }}>Shop funnel · 7 days</span>
+        {steps.map(([k, l], i) => {
+          const v = f[k] || 0, prev = i ? f[steps[i - 1][0]] || 0 : 0;
+          return (
+            <div key={k} style={{ display: "flex", gap: 8, fontSize: 12.5, fontWeight: 600, padding: "3px 0", color: NAVY }}>
+              <span style={{ flex: 1 }}>{l}</span>
+              {i > 0 && <span style={{ color: "#8593a8" }}>{prev ? Math.round((v / prev) * 100) + "%" : "—"}</span>}
+              <b style={{ width: 46, textAlign: "right" }}>{fmt(v)}</b>
+            </div>
+          );
+        })}
+        <div style={{ fontSize: 11.5, color: "#8593a8", fontWeight: 600, marginTop: 4 }}>{fmt(W.ecommercePurchases)} orders{money ? " · " + gbp(W.purchaseRevenue || 0) : ""} this week</div>
+      </div>
+      <div>
+        <span style={{ ...lbl, marginBottom: 6 }}>Where visits came from · 7 days</span>
+        <ListBars items={d.channels} valueKey="sessions" unit="visits" />
+      </div>
+      <div>
+        <span style={{ ...lbl, marginBottom: 6 }}>Top pages · 7 days</span>
+        <ListBars items={d.pages.map((p) => ({ name: p.title && p.title !== "(not set)" ? cleanTitle(p.title) : p.path, views: p.views }))} valueKey="views" unit="views" />
+      </div>
+      <div>
+        <span style={{ ...lbl, marginBottom: 6 }}>Top towns · 7 days</span>
+        <ListBars items={d.cities} valueKey="users" unit="visitors" />
+        {d.devices.length > 0 && (
+          <div style={{ fontSize: 11.5, color: "#8593a8", fontWeight: 600, marginTop: 6 }}>
+            {(() => { const t = d.devices.reduce((a, x) => a + x.sessions, 0) || 1; return d.devices.map((x) => Math.round((x.sessions / t) * 100) + "% " + x.name).join(" · "); })()}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  if (thin) {
+    const stat = (label, value, sub, subTone) => (
+      <div style={{ minWidth: 0 }}>
+        <span style={{ ...lbl, marginBottom: 0, whiteSpace: "nowrap" }}>{label}</span>
+        <b style={{ fontSize: 17, color: NAVY, display: "block", lineHeight: 1.25 }}>{value}</b>
+        {sub ? <div style={{ fontSize: 11, fontWeight: 700, color: subTone || "#8593a8", whiteSpace: "nowrap" }}>{sub}</div> : null}
+      </div>
+    );
+    return (
+      <div style={baseCard}>
+        <div style={{ display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap", rowGap: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <p style={{ ...sect, margin: 0 }}>Website</p>
+            <span style={{ width: 9, height: 9, borderRadius: 999, background: GREEN, boxShadow: "0 0 0 3px " + GREEN + "33", animation: "dkpulse 2s infinite" }} />
+            <b style={{ fontSize: 24, color: NAVY, lineHeight: 1 }}>{fmt(d.live.active)}</b>
+            <span style={{ fontSize: 11.5, color: "#8593a8", fontWeight: 700 }}>on now</span>
+          </div>
+          <div style={{ flex: "1 1 170px", minWidth: 150, maxWidth: 420 }}>
+            <Bars values={d.live.byMinute} unit="visitors" height={28}
+              labels={d.live.byMinute.map((_, i) => (29 - i === 0 ? "This minute" : 29 - i + " min ago"))} />
+          </div>
+          {stat("Visitors today", fmt(T.activeUsers), "yesterday " + fmt(Y.activeUsers))}
+          {stat("Page views today", fmt(T.screenPageViews), pct(T.engagementRate) + " engaged")}
+          {stat("Web orders today", fmt(T.ecommercePurchases), money ? gbp(T.purchaseRevenue || 0) : "")}
+          {stat("Visitors · 7 days", fmt(W.activeUsers), cWeek ? cWeek.text + " vs week before" : "", cWeek ? (cWeek.up ? GREEN : RED) : undefined)}
+          <span style={{ flex: "1 0 auto" }} />
+          <button onClick={toggleMore} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 700, color: "#185FA5", padding: 0 }}>{more ? "Less ▾" : "More ▸"}</button>
+        </div>
+        {more && (
+          <div style={{ marginTop: 12 }}>
+            {dailyBlock}
+            {moreBlock}
+          </div>
+        )}
+        {err && <div style={{ fontSize: 11.5, color: "#9b1c2e", fontWeight: 600, marginTop: 8 }}>Couldn't refresh: {err.msg}</div>}
+        <style>{"@keyframes dkpulse{0%{box-shadow:0 0 0 0 #2f8f4e66}70%{box-shadow:0 0 0 7px #2f8f4e00}100%{box-shadow:0 0 0 0 #2f8f4e00}}"}</style>
+      </div>
+    );
+  }
 
   return (
     <div style={card}>
@@ -148,48 +231,9 @@ export default function WebsiteCard({ money = true } = {}) {
       </div>
 
       {/* 28 days */}
-      {d.daily.length > 0 && (
-        <div>
-          <span style={{ ...lbl, marginBottom: 6 }}>Visitors per day · last 4 weeks</span>
-          <Bars values={d.daily.map((x) => x.users)} labels={d.daily.map((x) => dayLabel(x.date))} unit="visitors" height={60} highlightLast />
-        </div>
-      )}
+      {dailyBlock}
 
-      {more && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16, marginTop: 14, paddingTop: 12, borderTop: "1px solid #f0f2f6" }}>
-          <div>
-            <span style={{ ...lbl, marginBottom: 6 }}>Shop funnel · 7 days</span>
-            {steps.map(([k, l], i) => {
-              const v = f[k] || 0, prev = i ? f[steps[i - 1][0]] || 0 : 0;
-              return (
-                <div key={k} style={{ display: "flex", gap: 8, fontSize: 12.5, fontWeight: 600, padding: "3px 0", color: NAVY }}>
-                  <span style={{ flex: 1 }}>{l}</span>
-                  {i > 0 && <span style={{ color: "#8593a8" }}>{prev ? Math.round((v / prev) * 100) + "%" : "—"}</span>}
-                  <b style={{ width: 46, textAlign: "right" }}>{fmt(v)}</b>
-                </div>
-              );
-            })}
-            <div style={{ fontSize: 11.5, color: "#8593a8", fontWeight: 600, marginTop: 4 }}>{fmt(W.ecommercePurchases)} orders{money ? " · " + gbp(W.purchaseRevenue || 0) : ""} this week</div>
-          </div>
-          <div>
-            <span style={{ ...lbl, marginBottom: 6 }}>Where visits came from · 7 days</span>
-            <ListBars items={d.channels} valueKey="sessions" unit="visits" />
-          </div>
-          <div>
-            <span style={{ ...lbl, marginBottom: 6 }}>Top pages · 7 days</span>
-            <ListBars items={d.pages.map((p) => ({ name: p.title && p.title !== "(not set)" ? cleanTitle(p.title) : p.path, views: p.views }))} valueKey="views" unit="views" />
-          </div>
-          <div>
-            <span style={{ ...lbl, marginBottom: 6 }}>Top towns · 7 days</span>
-            <ListBars items={d.cities} valueKey="users" unit="visitors" />
-            {d.devices.length > 0 && (
-              <div style={{ fontSize: 11.5, color: "#8593a8", fontWeight: 600, marginTop: 6 }}>
-                {(() => { const t = d.devices.reduce((a, x) => a + x.sessions, 0) || 1; return d.devices.map((x) => Math.round((x.sessions / t) * 100) + "% " + x.name).join(" · "); })()}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      {more && moreBlock}
       {err && <div style={{ fontSize: 11.5, color: "#9b1c2e", fontWeight: 600, marginTop: 8 }}>Couldn't refresh: {err.msg}</div>}
       <style>{"@keyframes dkpulse{0%{box-shadow:0 0 0 0 #2f8f4e66}70%{box-shadow:0 0 0 7px #2f8f4e00}100%{box-shadow:0 0 0 0 #2f8f4e00}}"}</style>
     </div>
