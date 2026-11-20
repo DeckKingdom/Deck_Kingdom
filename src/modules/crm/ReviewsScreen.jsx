@@ -157,8 +157,11 @@ export default function ReviewsScreen({ crm, updateCrm, askConfirm, openInvoice,
     if (filter !== "All" && reviewStage(i) !== filter) return false;
     if (q) {
       const c = custById[i.customerId], s = siteById[i.siteId];
-      const hay = [String(i.invNo || ""), c && c.name, c && c.postcode, s && s.postcode, s && s.name].map((v) => String(v || "").toLowerCase());
-      if (!hay.some((v) => v.includes(q))) return false;
+      const hay = [String(i.invNo || ""), c && c.name, c && c.contact, c && c.email, c && c.town, c && c.postcode, s && s.postcode, s && s.name, s && s.contact].map((v) => String(v || "").toLowerCase());
+      const qd = q.replace(/\D/g, "");
+      const digits = (v) => String(v || "").replace(/\D/g, "");
+      const phoneHit = qd.length >= 3 && [c && c.mobile, c && c.landline, s && s.mobile].some((v) => digits(v).includes(qd));
+      if (!hay.some((v) => v.includes(q)) && !phoneHit) return false;
     }
     return true;
   });
