@@ -700,12 +700,23 @@ async function loadAll(quick = false) {
   return { data, commit: () => { snapshot = snap; settingsSnapshot = sset; }, partial: !!hot };
 }
 
-function diff(oldMap, newMap) {
+// loose: ignore a change to `position` alone. Every creator flow unshifts the
+// new record to the top of its array, which renumbers the position of EVERY
+// other row — so one new invoice used to make the diff rewrite the whole
+// invoices table (4,700 upserts) before its lines ever got their turn. A save
+// that big runs for minutes, trips request limits, and anything interrupting
+// it mid-flight stored the invoice but never its lines (#5787, #5796, #5805).
+// Positions on rows whose real fields change still get written, and child
+// tables (invoice lines etc.) keep strict ordering, where order is the point.
+function diff(oldMap, newMap, loose) {
   const upserts = [];
   const deletes = [];
   for (const [id, row] of newMap) {
     const prev = oldMap.get(id);
-    if (!prev || JSON.stringify(prev) !== JSON.stringify(row)) upserts.push(row);
+    if (!prev) { upserts.push(row); continue; }
+    const a = loose ? JSON.stringify({ ...prev, position: 0 }) : JSON.stringify(prev);
+    const b = loose ? JSON.stringify({ ...row, position: 0 }) : JSON.stringify(row);
+    if (a !== b) upserts.push(row);
   }
   for (const id of oldMap.keys()) if (!newMap.has(id)) deletes.push(id);
   return { upserts, deletes };
@@ -715,26 +726,26 @@ async function saveAll(d) {
   const sb = await getSupabase();
   const next = rowsFromData(d);
   const prev = snapshot || rowsFromData({});
-  const dc = diff(prev.customers, next.customers);
-  const ds = diff(prev.sites, next.sites);
-  const di = diff(prev.invoices, next.invoices);
+  const dc = diff(prev.customers, next.customers, true);
+  const ds = diff(prev.sites, next.sites, true);
+  const di = diff(prev.invoices, next.invoices, true);
   const dl = diff(prev.items, next.items);
   const dp = diff(prev.picks || new Map(), next.picks);
-  const dm = diff(prev.mps, next.mps);
+  const dm = diff(prev.mps, next.mps, true);
   const dk = diff(prev.comps, next.comps);
-  const dco = diff(prev.colls || new Map(), next.colls);
+  const dco = diff(prev.colls || new Map(), next.colls, true);
   const dci = diff(prev.collItems || new Map(), next.collItems);
-  const dmv = diff(prev.moves || new Map(), next.moves);
-  const dv = diff(prev.vans || new Map(), next.vans);
+  const dmv = diff(prev.moves || new Map(), next.moves, true);
+  const dv = diff(prev.vans || new Map(), next.vans, true);
   const dvc = diff(prev.checks || new Map(), next.checks);
-  const dq = diff(prev.quotes || new Map(), next.quotes);
+  const dq = diff(prev.quotes || new Map(), next.quotes, true);
   const dqi = diff(prev.quoteItems || new Map(), next.quoteItems);
-  const dsm = diff(prev.samples || new Map(), next.samples);
+  const dsm = diff(prev.samples || new Map(), next.samples, true);
   const dsi = diff(prev.sampleItems || new Map(), next.sampleItems);
-  const dtk = diff(prev.tasks || new Map(), next.tasks);
+  const dtk = diff(prev.tasks || new Map(), next.tasks, true);
   const dtl = diff(prev.taskLog || new Map(), next.taskLog);
-  const dsp = diff(prev.suppliers || new Map(), next.suppliers);
-  const dpu = diff(prev.purchases || new Map(), next.purchases);
+  const dsp = diff(prev.suppliers || new Map(), next.suppliers, true);
+  const dpu = diff(prev.purchases || new Map(), next.purchases, true);
 
   const run = async (q) => {
     const { error } = await q;
@@ -853,6 +864,7 @@ async function saveAll(d) {
     }
     if (wantByInv.size) {
       const { data: got, error: egot } = await sb.from("invoice_items").select("id").in("invoice_id", [...wantByInv.keys()]);
+      if (egot) { try { console.warn("[dk-save] read-back select failed: " + egot.message); } catch (e3) { /* */ } }
       if (!egot) {
         const have = new Set((got || []).map((x) => x.id));
         const missing = [];
