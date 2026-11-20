@@ -153,8 +153,15 @@ export default function ReviewsScreen({ crm, updateCrm, askConfirm, openInvoice,
   const exclOf = (i) => reviewExclusion(i, custById[i.customerId], rs, issueIds);
 
   const q = search.trim().toLowerCase();
-  const stageRows = pool.filter((i) => {
-    if (filter !== "All" && reviewStage(i) !== filter) return false;
+  // while searching, look across every tab and all time — matching a Google
+  // review back to its job shouldn't depend on which tab or period is open
+  const base = q
+    ? crm.invoices
+        .filter((i) => reviewable(i, crm))
+        .sort((a, b) => String(b.deliveryDate || b.invDate || "").localeCompare(String(a.deliveryDate || a.invDate || "")))
+    : pool;
+  const stageRows = base.filter((i) => {
+    if (!q && filter !== "All" && reviewStage(i) !== filter) return false;
     if (q) {
       const c = custById[i.customerId], s = siteById[i.siteId];
       const hay = [String(i.invNo || ""), c && c.name, c && c.contact, c && c.email, c && c.town, c && c.postcode, s && s.postcode, s && s.name, s && s.contact].map((v) => String(v || "").toLowerCase());
@@ -167,8 +174,8 @@ export default function ReviewsScreen({ crm, updateCrm, askConfirm, openInvoice,
   });
   // on the To-ask view, excluded jobs and anything delivered under a week ago
   // drop out (toggle to see them greyed) — the deck needs building first
-  const excluded = filter === "To ask" ? stageRows.filter((i) => exclOf(i) || askTooSoon(i, tod)) : [];
-  let rows = filter === "To ask" && !showExcl ? stageRows.filter((i) => !exclOf(i) && !askTooSoon(i, tod)) : stageRows;
+  const excluded = filter === "To ask" && !q ? stageRows.filter((i) => exclOf(i) || askTooSoon(i, tod)) : [];
+  let rows = filter === "To ask" && !showExcl && !q ? stageRows.filter((i) => !exclOf(i) && !askTooSoon(i, tod)) : stageRows;
   // awaiting view: jobs due their nudge float to the top
   if (filter === "Awaiting review") rows = [...rows].sort((a, b) => (nudgeDue(b, tod) ? 1 : 0) - (nudgeDue(a, tod) ? 1 : 0));
 
@@ -447,7 +454,7 @@ export default function ReviewsScreen({ crm, updateCrm, askConfirm, openInvoice,
               })()}
               {!rows.length && (
                 <tr><td colSpan={13} style={{ ...tdc, textAlign: "center", color: "#8593a8", padding: 26 }}>
-                  {excluded.length ? "Everything left here is excluded by the rules — use “show” above to see them." : pool.length ? "Nothing in this view — try another filter or a longer period." : "No delivered jobs in this period yet."}
+                  {q ? "No job matches “" + search.trim() + "” anywhere — searched every tab, all time." : excluded.length ? "Everything left here is excluded by the rules — use “show” above to see them." : pool.length ? "Nothing in this view — try another filter or a longer period." : "No delivered jobs in this period yet."}
                 </td></tr>
               )}
             </tbody>
