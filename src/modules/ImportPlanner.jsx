@@ -107,8 +107,11 @@ export default function ImportPlanner() {
   // costs, margins, P/L or management screens — until the unmarked dot in the
   // header is tapped and the PIN entered. A minute without touching the screen
   // (or a reload) drops back to office mode by itself, so a walk-away is safe.
-  const MONEY_PIN = "7654";
-  const [finOn, setFinOn] = useState(false);
+  const MONEY_PIN = "7654"; // normal unlock — drops back to office after a minute idle
+  const HOLD_PIN = "4567"; // held unlock — stays on until the dot's tapped off or you sign out
+  const [finHold, setFinHold] = useState(() => { try { return localStorage.getItem("dk-fin-hold") === "1"; } catch (e) { return false; } });
+  const [finOn, setFinOn] = useState(() => { try { return localStorage.getItem("dk-fin-hold") === "1"; } catch (e) { return false; } });
+  useEffect(() => { try { if (finHold) localStorage.setItem("dk-fin-hold", "1"); else localStorage.removeItem("dk-fin-hold"); } catch (e) { /* */ } }, [finHold]);
   const [pinAsk, setPinAsk] = useState(false);
   const [pinVal, setPinVal] = useState("");
   const [pinBad, setPinBad] = useState(false);
@@ -117,14 +120,14 @@ export default function ImportPlanner() {
     [realAccess, finOn]
   );
   useEffect(() => {
-    if (!finOn) return undefined;
+    if (!finOn || finHold) return undefined; // a held unlock never times out
     let t;
     const arm = () => { clearTimeout(t); t = setTimeout(() => setFinOn(false), 60_000); };
     const evs = ["pointermove", "pointerdown", "keydown", "wheel", "touchstart", "scroll"];
     evs.forEach((e) => window.addEventListener(e, arm, { passive: true }));
     arm();
     return () => { clearTimeout(t); evs.forEach((e) => window.removeEventListener(e, arm)); };
-  }, [finOn]);
+  }, [finOn, finHold]);
   // never sit on a screen this login can't open
   useEffect(() => { if (access.known && !access.canTab(tab)) setTab("home"); }, [access, tab]);
   const [roNote, setRoNote] = useState(false);
@@ -1564,13 +1567,13 @@ export default function ImportPlanner() {
         {realAccess.money && (
           <span style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
             <button type="button" aria-label=" "
-              onClick={() => { if (finOn) setFinOn(false); else { setPinVal(""); setPinBad(false); setPinAsk((v) => !v); } }}
+              onClick={() => { if (finOn) { setFinOn(false); setFinHold(false); } else { setPinVal(""); setPinBad(false); setPinAsk((v) => !v); } }}
               style={{ border: "none", background: "none", cursor: "pointer", padding: "6px 4px", display: "inline-flex", alignItems: "center" }}>
-              <span style={{ width: 6, height: 6, borderRadius: "50%", background: finOn ? "#F4B73E" : "#2c3f63" }} />
+              <span style={{ width: 6, height: 6, borderRadius: "50%", background: finOn ? "#F4B73E" : "#2c3f63", boxShadow: finHold && finOn ? "0 0 0 3px rgba(244,183,62,.35)" : "none" }} />
             </button>
             {pinAsk && !finOn && (
               <form
-                onSubmit={(ev) => { ev.preventDefault(); if (pinVal === MONEY_PIN) { setFinOn(true); setPinAsk(false); } else { setPinBad(true); setPinVal(""); } }}
+                onSubmit={(ev) => { ev.preventDefault(); if (pinVal === HOLD_PIN) { setFinOn(true); setFinHold(true); setPinAsk(false); } else if (pinVal === MONEY_PIN) { setFinOn(true); setFinHold(false); setPinAsk(false); } else { setPinBad(true); setPinVal(""); } }}
                 onKeyDown={(ev) => { if (ev.key === "Escape") setPinAsk(false); }}
                 style={{ position: "absolute", top: 28, right: -6, zIndex: 950, background: "#fff", border: "1px solid #d5d9e0", borderRadius: 10, boxShadow: "0 10px 30px rgba(11,31,63,.25)", padding: 9, display: "flex", gap: 6 }}>
                 <input autoFocus type="password" inputMode="numeric" autoComplete="off" value={pinVal} placeholder={pinBad ? "Try again" : "PIN"}

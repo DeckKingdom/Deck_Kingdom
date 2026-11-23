@@ -25,6 +25,7 @@ export async function signIn(email, password) {
 }
 
 export async function signOut() {
+  try { localStorage.removeItem("dk-fin-hold"); } catch (e) { /* the held financials unlock ends with the login */ }
   const sb = await getSupabase();
   await sb.auth.signOut();
 }
