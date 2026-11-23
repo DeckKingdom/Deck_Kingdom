@@ -73,10 +73,8 @@ export default function ProductsScreen({ planner, update, crm, updateCrm, remove
     .filter((g) => !src || (src === "KIT" ? g.items.some((p) => p.isKit === true) : g.items.some((p) => supKey(p) === src)))
     .filter((g) => !ql || g.items.some((p) => [p.code, p.name, p.supplier, (p.colours || []).join(" "), productSkuBase(p)].some((v) => String(v || "").toLowerCase().includes(ql))))
     .sort((a, b) =>
-      (a.complete ? 1 : 0) - (b.complete ? 1 : 0) ||
-      (a.p0.segCat || "99").localeCompare(b.p0.segCat || "99") || (a.p0.segSub || "99").localeCompare(b.p0.segSub || "99") ||
-      (a.p0.segProd || "99").localeCompare(b.p0.segProd || "99") || (a.p0.segLen || "99").localeCompare(b.p0.segLen || "99") ||
-      a.name.localeCompare(b.name)
+      (a.complete ? 1 : 0) - (b.complete ? 1 : 0) || // anything missing its SKU fields stays on top
+      a.name.localeCompare(b.name, "en-GB", { numeric: true }) // then straight A-Z, lengths in number order
     );
   const incomplete = groups.filter((g) => !g.complete).length;
   // a range sub-category (e.g. Screens) shows its styles as one product: every style is still its own
@@ -393,7 +391,7 @@ export default function ProductsScreen({ planner, update, crm, updateCrm, remove
         <div style={{ ...card, display: "flex", alignItems: "center", gap: 12, background: "#fff8e6", borderColor: "#f2dca2", marginBottom: 10 }}>
           <Icon name="refresh" stroke="#a06d00" />
           <span style={{ flex: 1, fontSize: 13.5, fontWeight: 600, color: NAVY }}>
-            The clean-up you reviewed on 23 Nov is ready — {cleanLog.length} changes: the duplicate Grey finishing-kit row and the "2.5m" test product go, the slatted trim variants get their own identities, and the clip names line up across DK and TG. The old SKU rows and Post Cap rows you called relevant are left alone.
+            Product changes reviewed with Claude are ready — {cleanLog.length} to apply. Latest: names go family → material → part → length ("Fence Post Composite Cap"), so A-Z keeps each family together.
           </span>
           <button style={goldBtn} onClick={() => setCleanOpen(true)}>Review &amp; apply</button>
         </div>
