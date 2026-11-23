@@ -22,6 +22,7 @@ export default function LoadingScreen({ crm, me, canEdit, canManage, openInvoice
   const [err, setErr] = useState("");
   const [n, setN] = useState(0);
   const [openKey, setOpenKey] = useState(null);
+  const [doneOnly, setDoneOnly] = useState(false); // the Loaded & checked tile toggles this
   const [peekInv, setPeekInv] = useState(null);
   useEffect(() => { try { sessionStorage.setItem("dk-load-day", date); } catch (e) { /* */ } }, [date]);
   useEffect(() => {
@@ -42,7 +43,9 @@ export default function LoadingScreen({ crm, me, canEdit, canManage, openInvoice
       <ListHero title="Loading" sub={dayLabel(date) + " · the driver's deliveries open once a van's loading report is closed"}>
         <HeroStat label="Vans going out" value={runs.length} />
         <HeroStat label="Waiting for a double-check" value={data ? states.filter((x) => x.st.submitted).length : "…"} tone={data && states.some((x) => x.st.submitted && canCheck(data.reports[x.r.key], me)) ? "#9cc8f5" : undefined} />
-        <HeroStat label="Loaded & checked" value={data ? closed + " / " + runs.length : "…"} tone={data && runs.length && closed === runs.length ? "#8be3a3" : undefined} />
+        <HeroStat label="Loaded & checked" value={data ? closed + " / " + runs.length : "…"} tone={data && runs.length && closed === runs.length ? "#8be3a3" : undefined}
+          onClick={() => setDoneOnly((v) => !v)} sub={doneOnly ? "showing these — tap for all" : "tap to see the reports"}
+          style={doneOnly ? { outline: "2px solid #8be3a3", outlineOffset: -2 } : undefined} />
         <HeroStat label="Lines still to load" value={data ? states.reduce((t, x) => t + x.st.todo + x.st.part, 0) : "…"} />
         <HeroStat label="Pick-ups not booked" value={data ? states.reduce((t, x) => t + x.st.unscheduled, 0) : "…"} tone={data && states.some((x) => x.st.unscheduled) ? "#ff9aa8" : undefined} />
       </ListHero>
@@ -60,8 +63,9 @@ export default function LoadingScreen({ crm, me, canEdit, canManage, openInvoice
       {err && <div style={{ ...card, borderColor: "#f4d78f", background: "#fff8e6", color: "#6b5305", fontWeight: 700 }}>{err}</div>}
       {runs.length === 0 && <div style={{ ...card, textAlign: "center", color: "#8593a8", fontWeight: 600 }}>No vans on the schedule for {dayLabel(date)}.</div>}
 
+      {doneOnly && <div style={{ ...card, padding: "10px 16px", fontSize: 13, fontWeight: 700, color: GREEN, background: "#f1faf4", borderColor: "#bfe3ca" }}>Showing the {closed} loaded &amp; checked van{closed === 1 ? "" : "s"} — open one for its full report. <button className="dk-title-link" onClick={() => setDoneOnly(false)} style={{ color: BLUE, fontWeight: 800 }}>Show all vans</button></div>}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 12 }}>
-        {states.map(({ r, st }) => {
+        {(doneOnly ? states.filter((x) => x.st.complete) : states).map(({ r, st }) => {
           const rep = data && data.reports[r.key];
           const short = st.complete && rep && (rep.shortLines || []).length;
           const tone = st.submitted ? BLUE : short ? RED : st.complete ? GREEN : st.unscheduled ? RED : st.loaded || st.part ? "#a06d00" : NAVY;
@@ -109,6 +113,10 @@ function RunReport({ run, data, me, canEdit, canManage, onClose, onChanged, setC
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const [photos, setPhotos] = useState({});
+  // jobs disappear from the run as they're delivered, but the submitted report
+  // keeps its snapshot — show those lines too, so a closed report stays readable
+  const seenKeys = new Set(run.lines.map((x) => x.key));
+  const goneRows = ((rep && rep.checked) || []).filter((c) => c && c.key && !seenKeys.has(c.key));
   useEffect(() => { (rep && rep.photoPaths || []).forEach((p) => loadPhotoUrl(p).then((u) => setPhotos((m) => ({ ...m, [p]: u }))).catch(() => {})); }, [rep && rep.completedAt]);
   const act = async (fn) => { setBusy(true); setMsg(""); try { await fn(); onChanged(); } catch (e) { setMsg(String((e && e.message) || e)); } setBusy(false); };
   return (
@@ -135,7 +143,7 @@ function RunReport({ run, data, me, canEdit, canManage, onClose, onChanged, setC
             </tr>
           </thead>
           <tbody>
-            {run.lines.length === 0 && <tr><td colSpan={7} style={{ padding: 18, textAlign: "center", color: "#8593a8", fontWeight: 600 }}>Nothing to load on this run.</td></tr>}
+            {run.lines.length === 0 && goneRows.length === 0 && <tr><td colSpan={7} style={{ padding: 18, textAlign: "center", color: "#8593a8", fontWeight: 600 }}>Nothing to load on this run.</td></tr>}
             {run.lines.map((x) => {
               const c = counts[x.key], got = c ? c.qtyLoaded : 0;
               const full = got >= x.qty;
@@ -163,6 +171,21 @@ function RunReport({ run, data, me, canEdit, canManage, onClose, onChanged, setC
                       : <Chip>Not loaded</Chip>}
                   </td>
                   <td style={{ ...td, color: "#8593a8", fontSize: 12 }}>{c ? String(c.loadedBy || "").split("@")[0] + " " + hm(c.loadedAt) : ""}</td>
+                </tr>
+              );
+            })}
+            {goneRows.map((c) => {
+              const cnt = counts[c.key];
+              const boxes = c.boxes !== undefined;
+              return (
+                <tr key={c.key} style={{ borderTop: "1px solid #f0f2f6", color: "#5a6a85" }}>
+                  <td style={td}>—</td>
+                  <td style={td}><span style={{ fontWeight: 700 }}>#{c.job || "—"}</span> <span style={{ color: "#8ba795", fontSize: 11.5, fontWeight: 700 }}>delivered</span></td>
+                  <td style={td}>{c.text || ""}{c.boxed ? <span style={{ color: "#8a5a00", fontWeight: 700, fontSize: 12 }}> · 📦 in box</span> : null}</td>
+                  <td style={tdR}>{boxes ? "" : c.qty}</td>
+                  <td style={tdR}><b>{boxes ? c.boxes : c.loaded}</b></td>
+                  <td style={td}>{c.pickup ? <span style={{ color: "#185FA5", fontWeight: 700, fontSize: 12.5 }}>On {c.pickup}</span> : boxes || (Number(c.loaded) || 0) >= (Number(c.qty) || 0) ? <Chip tone="green">Loaded</Chip> : <Chip tone="red">{(Number(c.qty) || 0) - (Number(c.loaded) || 0)} short</Chip>}</td>
+                  <td style={{ ...td, color: "#8593a8", fontSize: 12 }}>{cnt ? String(cnt.loadedBy || "").split("@")[0] + " " + hm(cnt.loadedAt) : ""}</td>
                 </tr>
               );
             })}
