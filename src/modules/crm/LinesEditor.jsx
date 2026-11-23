@@ -47,7 +47,8 @@ const groupOption = (grp, crm) => {
   const colours = [...new Set(grp.map((m) => String(m.colour || "").trim()).filter(Boolean))];
   const prices = [...new Set(grp.map((m) => (m.priceIncVat === "" || m.priceIncVat === null || m.priceIncVat === undefined ? null : Number(m.priceIncVat))).filter((x) => x !== null))].sort((a, b) => a - b);
   const price = prices.length ? "£" + prices[0].toFixed(2) + (prices.length > 1 && prices[prices.length - 1] !== prices[0] ? "–" + prices[prices.length - 1].toFixed(2) : "") : "";
-  const readable = rep.family && rep.family.includes("/") ? rep.family.replace(/^[A-Z0-9]{1,3}\//, "") : "";
+  let readable = rep.family && rep.family.includes("/") ? rep.family.replace(/^[A-Z0-9]{1,3}\//, "") : "";
+  if (colours.length > 1) readable = readable.replace(/\/[A-Z]{2,4}$/, ""); // the colour is a choice, not part of the identity
   const stock = grp.reduce((t, m) => t + (Number(m.stock) || 0), 0);
   return {
     value: "grp=" + rep.sku,
@@ -175,8 +176,9 @@ export default function LinesEditor({ doc, edit, crm, readOnly, toolbar, onOpenP
       if (seen.has(k)) return;
       seen.add(k);
       const grp = (pidx.groups.get(k) || [p]).filter((m) => !m.grade);
-      out.push(grp.length > 1 ? groupOption(grp, crm) : skuOption(p, crm));
+      out.push(groupOption(grp, crm)); // one presentation for every row, single-variant products included
     });
+    out.sort((a, b) => String((a.cells && a.cells[0].text) || a.label).localeCompare(String((b.cells && b.cells[0].text) || b.label)));
     return out;
   }, [crm.masterProducts, crm.skuLists, pidx]);
   const sources = useMemo(() => {
