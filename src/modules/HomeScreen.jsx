@@ -288,6 +288,9 @@ export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTa
               const days = [0, 1, 2, 3].map((n) => addDays(tod, n));
               const open = (crm.invoices || []).filter((i) => !i.deliveryCompleted && !isVoidInvoice(i) && onSchedule(i, crm));
               const dropsOn = (d) => open.filter((i) => i.deliveryDate === d);
+              // what today's card can already confirm as done
+              const doneDropsOn = (d) => (crm.invoices || []).filter((i) => i.deliveryCompleted && !isVoidInvoice(i) && i.deliveryDate === d && onSchedule(i, crm));
+              const doneCollsOn = (d) => (crm.collections || []).filter((c) => c.collected && c.collectDate === d);
               const custName = (id) => { const c = (crm.customers || []).find((x) => x.id === id); return c ? c.name || "Unnamed" : "No customer"; };
               const postcodeOf = (i) => { const st = (crm.sites || []).find((x) => x.id === i.siteId); const c = (crm.customers || []).find((x) => x.id === i.customerId); return (st && st.postcode) || (c && c.postcode) || ""; };
               const vansFor = (list) => {
@@ -313,6 +316,9 @@ export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTa
                       const drops = dropsOn(d);
                       const load = vansFor(dropsOn(addDays(d, 1)));
                       const colls = collectionsFor(d);
+                      const doneDrops = n === 0 ? doneDropsOn(d) : [];
+                      const doneColls = n === 0 ? doneCollsOn(d) : [];
+                      const GRN = "#2f8f4e";
                       const dayName = n === 0 ? "Today" : n === 1 ? "Tomorrow" : new Date(d + "T00:00:00").toLocaleDateString("en-GB", { weekday: "long" });
                       return (
                         <div key={d} style={{ border: "1px solid " + (n === 0 ? GOLD : "#e6e9ef"), background: n === 0 ? "#fff8e6" : "#fff", borderRadius: 12, padding: "10px 12px", minWidth: 0 }}>
@@ -320,10 +326,10 @@ export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTa
                             <b style={{ fontSize: 14, color: NAVY }}>{dayName}</b>
                             <span style={{ fontSize: 11.5, color: "#8593a8", fontWeight: 600 }}>{new Date(d + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</span>
                             <span style={{ flex: 1 }} />
-                            <b style={{ fontSize: 18, color: drops.length ? NAVY : "#aab3c2" }}>{drops.length}</b>
+                            <b style={{ fontSize: 18, color: drops.length ? NAVY : doneDrops.length ? "#2f8f4e" : "#aab3c2" }}>{drops.length || (doneDrops.length ? "✓" : 0)}</b>
                           </div>
                           <div style={sub}>Drops</div>
-                          {drops.length === 0 ? <div style={{ fontSize: 12, color: "#aab3c2", fontWeight: 600 }}>None</div> : drops.slice(0, 5).map((i) => (
+                          {drops.length === 0 ? <div style={{ fontSize: 12, color: doneDrops.length ? "#2f8f4e" : "#aab3c2", fontWeight: doneDrops.length ? 800 : 600 }}>{doneDrops.length ? "✓ All " + doneDrops.length + " delivered" : "None"}</div> : drops.slice(0, 5).map((i) => (
                             <button key={i.id} onClick={() => setInvPeek(i.id)} className="dk-title-link" title={"Peek at job #" + (i.invNo || "—")}
                               style={{ display: "flex", gap: 6, alignItems: "center", width: "100%", fontSize: 12.5, fontWeight: 700, color: NAVY, padding: "2px 0" }}>
                               <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>{custName(i.customerId)}</span>
@@ -332,6 +338,15 @@ export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTa
                             </button>
                           ))}
                           {drops.length > 5 && <div style={{ fontSize: 11.5, color: "#8593a8", fontWeight: 600 }}>+ {drops.length - 5} more</div>}
+                          {doneDrops.slice(0, 4).map((i) => (
+                            <button key={i.id} onClick={() => setInvPeek(i.id)} className="dk-title-link" title={"Delivered — peek at job #" + (i.invNo || "—")}
+                              style={{ display: "flex", gap: 6, alignItems: "center", width: "100%", fontSize: 12.5, fontWeight: 700, color: GRN, padding: "2px 0" }}>
+                              <span>✓</span>
+                              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>{custName(i.customerId)}</span>
+                              <span style={{ color: "#8ba795", fontWeight: 600, fontSize: 11.5, whiteSpace: "nowrap" }}>delivered</span>
+                            </button>
+                          ))}
+                          {doneDrops.length > 4 && <div style={{ fontSize: 11.5, color: GRN, fontWeight: 700 }}>+ {doneDrops.length - 4} more delivered</div>}
                           <div style={sub}>Load for {n === 0 ? "tomorrow" : "next day"}</div>
                           {load.length === 0 ? <div style={{ fontSize: 12, color: "#aab3c2", fontWeight: 600 }}>Nothing to load</div> : load.map(([v, k]) => (
                             <div key={v} style={{ display: "flex", gap: 6, fontSize: 12.5, fontWeight: 600, color: v === "No van yet" ? RED : NAVY, padding: "1px 0" }}>
@@ -339,12 +354,21 @@ export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTa
                             </div>
                           ))}
                           <div style={sub}>Collections</div>
-                          {colls.length === 0 ? <div style={{ fontSize: 12, color: "#aab3c2", fontWeight: 600 }}>None due</div> : colls.map((c) => (
+                          {colls.length === 0 && doneColls.length === 0 && <div style={{ fontSize: 12, color: "#aab3c2", fontWeight: 600 }}>None due</div>}
+                          {colls.map((c) => (
                             <button key={c.id} onClick={() => setColPeek(c.id)} className="dk-title-link" title="Peek at the collection"
                               style={{ display: "flex", gap: 6, width: "100%", fontSize: 12.5, fontWeight: 600, color: NAVY, padding: "1px 0" }}>
                               <Icon name="box" size={13} stroke="#5a6a85" />
                               <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>{c.supplier || "Supplier"}</span>
                               <span style={{ color: "#8593a8", fontSize: 11.5 }}>COL-{c.collectionNo || "—"}</span>
+                            </button>
+                          ))}
+                          {doneColls.map((c) => (
+                            <button key={c.id} onClick={() => setColPeek(c.id)} className="dk-title-link" title="Collected — peek at it"
+                              style={{ display: "flex", gap: 6, width: "100%", fontSize: 12.5, fontWeight: 700, color: GRN, padding: "1px 0" }}>
+                              <span>✓</span>
+                              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>{c.supplier || "Supplier"}</span>
+                              <span style={{ color: "#8ba795", fontSize: 11.5 }}>collected</span>
                             </button>
                           ))}
                         </div>
