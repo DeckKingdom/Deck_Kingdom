@@ -12,6 +12,7 @@ import {
 } from "../../lib/crmCore.js";
 import { Icon, Chip, Modal, lbl, card, inp, btn, goldBtn, abtn, selectAllProps } from "./ui.jsx";
 import { tidyPlan, applyTidy } from "../../lib/productTidy.js";
+import { cleanupPlan, applyCleanup } from "../../lib/productCleanup.js";
 
 const sel = { ...inp, padding: "5px 6px", fontSize: 12.5 };
 const numI = { ...inp, textAlign: "right", padding: "5px 7px", fontSize: 13 };
@@ -336,6 +337,17 @@ export default function ProductsScreen({ planner, update, crm, updateCrm, remove
   const tidyLog = useMemo(() => tidyPlan(planner, crm), [planner.products, crm.skuLists]);
   const [tidyOpen, setTidyOpen] = useState(false);
   const [tidyDone, setTidyDone] = useState(0);
+  // the 23 Nov clean-up reviewed with Claude: offered until it's been applied
+  const cleanLog = useMemo(() => cleanupPlan(planner, crm), [planner.products, crm.masterProducts, crm.skuLists]);
+  const [cleanOpen, setCleanOpen] = useState(false);
+  const [cleanDone, setCleanDone] = useState(0);
+  const runCleanup = () => {
+    const r = applyCleanup(planner, crm);
+    updateCrm((c) => { c.masterProducts = r.masterProducts; c.skuLists = r.skuLists; return c; });
+    update((d) => { d.products = r.products; return d; });
+    setCleanOpen(false);
+    setCleanDone(cleanLog.length);
+  };
   const runTidy = () => {
     const r = applyTidy(planner, crm);
     const gone = new Set(r.removedIds);
@@ -376,6 +388,33 @@ export default function ProductsScreen({ planner, update, crm, updateCrm, remove
           </span>
           <button style={goldBtn} onClick={() => setTidyOpen(true)}>Review &amp; apply</button>
         </div>
+      )}
+      {cleanLog.length > 0 && (
+        <div style={{ ...card, display: "flex", alignItems: "center", gap: 12, background: "#fff8e6", borderColor: "#f2dca2", marginBottom: 10 }}>
+          <Icon name="refresh" stroke="#a06d00" />
+          <span style={{ flex: 1, fontSize: 13.5, fontWeight: 600, color: NAVY }}>
+            The clean-up you reviewed on 23 Nov is ready — {cleanLog.length} changes: the duplicate Grey finishing-kit row and the "2.5m" test product go, the slatted trim variants get their own identities, and the clip names line up across DK and TG. The old SKU rows and Post Cap rows you called relevant are left alone.
+          </span>
+          <button style={goldBtn} onClick={() => setCleanOpen(true)}>Review &amp; apply</button>
+        </div>
+      )}
+      {cleanDone > 0 && cleanLog.length === 0 && (
+        <div style={{ ...card, background: "#eef8f1", borderColor: "#bfe3ca", fontSize: 13.5, fontWeight: 700, color: "#28713e", marginBottom: 10 }}>
+          Clean-up applied — {cleanDone} changes.
+        </div>
+      )}
+      {cleanOpen && (
+        <Modal title={"Products clean-up · " + cleanLog.length + " changes"} onClose={() => setCleanOpen(false)} width={720}>
+          <div style={{ maxHeight: "55vh", overflowY: "auto", border: "1px solid #e6e9ef", borderRadius: 10, padding: "6px 12px" }}>
+            {cleanLog.map((l, k) => (
+              <div key={k} style={{ fontSize: 12.5, fontWeight: 600, color: NAVY, padding: "5px 0", borderBottom: "1px solid #f0f2f6" }}>{l}</div>
+            ))}
+          </div>
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 12 }}>
+            <button style={btn} onClick={() => setCleanOpen(false)}>Not now</button>
+            <button style={goldBtn} onClick={runCleanup}>Apply {cleanLog.length} changes</button>
+          </div>
+        </Modal>
       )}
       {tidyDone > 0 && tidyLog.length === 0 && (
         <div style={{ ...card, background: "#eef8f1", borderColor: "#bfe3ca", fontSize: 13.5, fontWeight: 700, color: "#28713e", marginBottom: 10 }}>
