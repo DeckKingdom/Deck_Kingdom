@@ -1418,6 +1418,29 @@ const two = (v) => /^\d{2}$/.test(String(v || "").trim());
 // the 10-digit product part, or "" while any field is missing
 export const productSkuBase = (p) => (SEG_FIELDS.every(([k]) => two(p[k])) ? SEG_FIELDS.map(([k]) => String(p[k]).trim()).join("") : "");
 // master product = same length, category, sub-category and product (any supplier)
+// Cross-supplier grouping of sellable SKUs: the "parent product" a customer
+// buys, independent of which supplier's pallet it ships from. Keyed by the
+// import products' masterKey (the same grouping the Products screen shows);
+// SKUs whose import product isn't segmented yet group per import product.
+export const parentIndex = (crm, planner) => {
+  const byId = {};
+  ((planner && planner.products) || []).forEach((x) => (byId[x.id] = x));
+  const keyOf = (mp) => {
+    if (!mp) return "";
+    const ip = byId[mp.importProductId];
+    const mk = ip ? masterKey(ip) : "";
+    return mk ? "mk:" + mk : mp.importProductId ? "ip:" + mp.importProductId : "sku:" + mp.sku;
+  };
+  const groups = new Map();
+  (crm.masterProducts || []).forEach((mp) => {
+    if (mp.active === false || !mp.sku) return;
+    const k = keyOf(mp);
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(mp);
+  });
+  return { keyOf, groups };
+};
+
 export const masterKey = (p) => (["segLen", "segCat", "segSub", "segProd"].every((k) => two(p[k])) ? ["segLen", "segCat", "segSub", "segProd"].map((k) => String(p[k]).trim()).join("-") : "");
 export const productsInList = (lists, cat, sub) => (lists.product[cat + "-" + sub] || []);
 export const colourSeg = (lists, colour) => {

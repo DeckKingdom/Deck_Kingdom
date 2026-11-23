@@ -1730,7 +1730,7 @@ export default function ImportPlanner() {
             me={me}
           />
         ) : tab === "quotes" ? (
-          <QuotesScreen openProduct={openProduct} money={access.money}
+          <QuotesScreen openProduct={openProduct} money={access.money} planner={planner}
             crm={crm}
             updateCrm={updateCrm}
             askConfirm={setConfirmBox}

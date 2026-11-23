@@ -7,7 +7,7 @@ import { NAVY, GOLD, RED, uid, prettyDate, prettyDateTime, addMonths, addDays, d
 import {
   recordOrigin, blankInvoice, blankLine, nextNumber, blankSite, DRIVERS, invoiceTotals, gbp, isPaid,
   JOB_TYPES, PAYMENT_TYPES, PREP_FLAGS, FOLLOWUP_FLAGS, today, TIME_SLOTS, vanOptions,
-  skuIndex, invoiceCost, buildPicks, pickLandedCost, jobCost, blankPick, invoiceLoadKg, applyInvoiceStockDeduction, releaseInvoiceLinks,
+  skuIndex, invoiceCost, buildPicks, pickLandedCost, jobCost, blankPick, invoiceLoadKg, applyInvoiceStockDeduction, releaseInvoiceLinks, parentIndex, skuSource, skuLists,
   TRADE_COUNTER, isCollectionJob, TRADE_COUNTER_LABEL, quoteRef, sampleRef, isSaleInvoice, riskOf, staffName, isVoidInvoice, onSchedule, userInitials, isHistoric, SERVED_BY, sourceOptions, mobileOf } from "../../lib/crmCore.js";
 import { ListHero, HeroStat, HeroAdd, SearchBox, RiskChip, WebStatusChip, Soon, DateInput, CalendarPop, usePhone, PrintButton, bandBtn, BandDelete, LockBar } from "./ui.jsx";
 import { invoiceEmailLink, invoiceEmailTo, statementEmailLink, statementEmail, statementCaption, invoiceWaCaption, invoiceAttachEmail, invoiceAttachEmailLink } from "../../lib/invoiceEmail.js";
@@ -1035,11 +1035,22 @@ export default function InvoicesScreen({ headerH = 0, openProduct, money = true,
             {inv.stockDeducted && <Chip tone="green" style={{ marginLeft: 4, fontSize: 10, padding: "1px 7px" }}>stock out</Chip>}
           </label>
         </div>
-        <LinesEditor doc={inv} edit={setInv} crm={crm} onOpenProduct={openProduct} />
+        <LinesEditor doc={inv} edit={setInv} crm={crm} onOpenProduct={openProduct} planner={planner} />
 
 
         {(() => {
           const shipments = (planner && planner.shipments) || [];
+          const pidx = parentIndex(crm, planner);
+          const lists = skuLists(crm);
+          // same parent product + same colour from another supplier = a swap the warehouse can make here
+          const altsFor = (pk) => {
+            const mp0 = bySkuAll[String(pk.sku || "").trim().toLowerCase()];
+            if (!mp0) return [];
+            const col = String(pk.colour || mp0.colour || "").trim().toLowerCase();
+            return (pidx.groups.get(pidx.keyOf(mp0)) || [])
+              .filter((m) => !m.grade && String(m.colour || "").trim().toLowerCase() === col)
+              .sort((a, b) => (a.sku === mp0.sku ? -1 : b.sku === mp0.sku ? 1 : 0));
+          };
           const jc = jobCost(inv, crm, planner);
           const setPick = (pid, k, v) =>
             setInv((x) => {
@@ -1093,7 +1104,22 @@ export default function InvoicesScreen({ headerH = 0, openProduct, money = true,
                           const lc = pickLandedCost(p, crm, planner);
                           return (
                             <tr key={p.id}>
-                              <td style={{ padding: "6px 6px", borderBottom: "1px solid #eef0f4", fontWeight: 700, whiteSpace: "nowrap" }}>{p.sku || "—"}{readableFor(bySkuAll, p.sku) && <div style={{ fontSize: 11, color: "#5a6a85" }}>{readableFor(bySkuAll, p.sku)}</div>}</td>
+                              <td style={{ padding: "6px 6px", borderBottom: "1px solid #eef0f4", fontWeight: 700, whiteSpace: "nowrap" }}>
+                                {(() => {
+                                  const alts = altsFor(p);
+                                  if (alts.length < 2) return <>{p.sku || "—"}{readableFor(bySkuAll, p.sku) && <div style={{ fontSize: 11, color: "#5a6a85" }}>{readableFor(bySkuAll, p.sku)}</div>}</>;
+                                  return (
+                                    <>
+                                      <select title="Which supplier's stock this comes off — same product, same colour" value={p.sku}
+                                        onChange={(e) => setPick(p.id, "sku", e.target.value)}
+                                        style={{ ...inp, padding: "4px 7px", fontSize: 12, fontWeight: 700, maxWidth: 190 }}>
+                                        {alts.map((m) => <option key={m.sku} value={m.sku}>{(skuSource(m, lists) || "?") + " · " + m.sku + ((Number(m.stock) || 0) > 0 ? " · " + Number(m.stock) + " in stock" : "")}</option>)}
+                                      </select>
+                                      {readableFor(bySkuAll, p.sku) && <div style={{ fontSize: 11, color: "#5a6a85" }}>{readableFor(bySkuAll, p.sku)}</div>}
+                                    </>
+                                  );
+                                })()}
+                              </td>
                               <td style={{ padding: "6px 6px", borderBottom: "1px solid #eef0f4" }}>{p.description}{p.colour ? " · " + p.colour : ""}</td>
                               <td style={{ padding: "6px 6px", borderBottom: "1px solid #eef0f4", width: 64 }}>
                                 <input {...selectAllProps} style={{ ...numInp, padding: "4px 7px" }} inputMode="decimal" value={p.qty} onChange={(e) => setPick(p.id, "qty", e.target.value)} />

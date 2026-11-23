@@ -4,7 +4,7 @@
 import { useState, useMemo, useRef, useEffect, Fragment } from "react";
 import { RED, NAVY } from "../../lib/core.js";
 import { blankLine, skuIndex, PRODUCT_SOURCES, skuSource, skuLists, skuOptionLabel, colourSeg, gradeOf, isGrassRoll, sqmOf, sizeLabel,
-  stockCheck, explodeInvoiceLines, partKey, isColPick, batchBreakdown, batchKeyForPick, buildPicks } from "../../lib/crmCore.js";
+  stockCheck, explodeInvoiceLines, partKey, isColPick, batchBreakdown, batchKeyForPick, buildPicks, parentIndex } from "../../lib/crmCore.js";
 import { Icon, SuggestInput, selectAllProps, inp, btn, abtn, Chip } from "./ui.jsx";
 
 const numInp = { ...inp, textAlign: "right" };
@@ -34,6 +34,36 @@ export const skuOption = (p, crm) => {
     ],
   };
 };
+// One row for the PARENT product (all suppliers, all colours): picking it
+// stores a representative SKU; the colour choice then settles the exact SKU,
+// and the supplier is only decided on the pick list when the van's loaded.
+const groupOption = (grp, crm) => {
+  const lists = skuLists(crm);
+  const rep = grp.slice().sort((a, b) => (Number(b.stock) || 0) - (Number(a.stock) || 0))[0];
+  const names = {};
+  grp.forEach((m) => (names[m.name] = (names[m.name] || 0) + 1));
+  const name = Object.entries(names).sort((a, b) => b[1] - a[1])[0][0] || rep.name;
+  const srcs = [...new Set(grp.map((m) => skuSource(m, lists)).filter(Boolean))];
+  const colours = [...new Set(grp.map((m) => String(m.colour || "").trim()).filter(Boolean))];
+  const prices = [...new Set(grp.map((m) => (m.priceIncVat === "" || m.priceIncVat === null || m.priceIncVat === undefined ? null : Number(m.priceIncVat))).filter((x) => x !== null))].sort((a, b) => a - b);
+  const price = prices.length ? "£" + prices[0].toFixed(2) + (prices.length > 1 && prices[prices.length - 1] !== prices[0] ? "–" + prices[prices.length - 1].toFixed(2) : "") : "";
+  const readable = rep.family && rep.family.includes("/") ? rep.family.replace(/^[A-Z0-9]{1,3}\//, "") : "";
+  const stock = grp.reduce((t, m) => t + (Number(m.stock) || 0), 0);
+  return {
+    value: "grp=" + rep.sku,
+    label: [name, readable, grp.map((m) => m.sku).join(" "), grp.map((m) => m.family || "").join(" "), colours.join(" "), srcs.join(" ")].join(" · "),
+    src: srcs[0] || "",
+    srcs,
+    cells: [
+      { text: name, style: { fontWeight: 800 } },
+      { text: readable, style: { fontSize: 11.5, color: "#8593a8", fontWeight: 600, letterSpacing: 0.3 } },
+      { text: (stock > 0 ? stock + " in stock · " : "") + (colours.length ? colours.length + " colour" + (colours.length === 1 ? "" : "s") : "one finish"), style: { fontWeight: 600 } },
+      { text: colours.slice(0, 3).join(", ") + (colours.length > 3 ? "…" : ""), style: { color: "#5a6a85", fontWeight: 600 } },
+      { text: price, style: { textAlign: "right" } },
+      { text: srcs.join("·"), style: { fontSize: 10.5, fontWeight: 800, color: "#a86b12", textAlign: "center" } },
+    ],
+  };
+};
 const td = { padding: "6px 6px", borderBottom: "1px solid #f0f2f6" };
 
 // grass rolls: length x width (m) under the description; filling both sets the qty to the m2
@@ -56,6 +86,7 @@ export function CodeCell({ code, bySku, options, onCode, onOpenProduct, readOnly
             inputStyle={{ fontWeight: 700, fontSize: 12.5, ...(!known ? { borderColor: "#E8912D", background: "#fff8e6" } : {}) }}
             onChange={(v) => {
               // a pick from the list (or a typed readable code) stores the SKU; anything else is kept as typed
+              if (String(v || "").startsWith("grp=")) { setDraft(undefined); onCode(String(v).slice(4), true); return; } // a parent-product pick: colour still to choose
               const t = String(v || "").trim().toLowerCase();
               const hit = bySku[t] ? bySku[t] : t ? Object.values(bySku).find((p) => p && p.family && p.family.toLowerCase() === t) : null;
               if (hit) { setDraft(undefined); onCode(hit.sku); } else { setDraft(v); onCode(v); }
@@ -125,30 +156,41 @@ export const applySize = (line, k, v) => {
 // onOpenProduct(productId, rect): optional — a button by each code opens that product's record to edit
 // fulfilment: optional { planner } — adds a second row under each line showing how it's being
 // fulfilled: stock / short / coming on a collection, and the batch + picked tick for each pick
-export default function LinesEditor({ doc, edit, crm, readOnly, toolbar, onOpenProduct, fulfilment }) {
+export default function LinesEditor({ doc, edit, crm, readOnly, toolbar, onOpenProduct, fulfilment, planner }) {
+  const plan = planner || (fulfilment && fulfilment.planner) || null;
+  const pidx = useMemo(() => parentIndex(crm, plan), [crm.masterProducts, plan]);
   const [codeDraft, setCodeDraft] = useState({}); // what's being typed in a code box (shown instead of the readable code)
   const [freeQty, setFreeQty] = useState(new Set()); // lines typing a qty directly (double-clicked)
   const [src, setSrc] = useState(""); // offer only one source's codes (DK, TG …)
 
-  const allSkuOpts = useMemo(
-    () =>
-      (crm.masterProducts || [])
-        .filter((p) => p.active !== false && p.sku && !(p.grade && !(Number(p.stock) > 0))) // graded stock only while there's some
-        .map((p) => skuOption(p, crm)),
-    [crm.masterProducts, crm.skuLists]
-  );
+  const allSkuOpts = useMemo(() => {
+    // one row per PARENT product — the supplier duplicates collapse; graded
+    // stock (clearance/damaged) keeps its own rows while there's some left
+    const sell = (crm.masterProducts || []).filter((p) => p.active !== false && p.sku && !(p.grade && !(Number(p.stock) > 0)));
+    const seen = new Set();
+    const out = [];
+    sell.forEach((p) => {
+      if (p.grade) { out.push(skuOption(p, crm)); return; }
+      const k = pidx.keyOf(p);
+      if (seen.has(k)) return;
+      seen.add(k);
+      const grp = (pidx.groups.get(k) || [p]).filter((m) => !m.grade);
+      out.push(grp.length > 1 ? groupOption(grp, crm) : skuOption(p, crm));
+    });
+    return out;
+  }, [crm.masterProducts, crm.skuLists, pidx]);
   const sources = useMemo(() => {
     const n = {};
     allSkuOpts.forEach((o) => { if (o.src) n[o.src] = (n[o.src] || 0) + 1; });
     return skuLists(crm).supplier.map((x) => x.key).filter((k) => n[k]);
   }, [allSkuOpts]);
-  const skuOpts = src ? allSkuOpts.filter((o) => o.src === src) : allSkuOpts;
+  const skuOpts = src ? allSkuOpts.filter((o) => (o.srcs ? o.srcs.includes(src) : o.src === src)) : allSkuOpts;
   const bySku = skuIndex(crm);
   // grass rolls get length x width (m) before the qty; the column only shows when a line needs it
   const needsSize = (l) => isGrassRoll(bySku[String(l.code || "").trim().toLowerCase()]) || !!sizeLabel(l);
   const sized = (doc.lines || []).some(needsSize);
 
-  const setLine = (lid, k, v) =>
+  const setLine = (lid, k, v, fromGroup) =>
     edit((x) => {
       const l = x.lines.find((y) => y.id === lid);
       if (!l) return;
@@ -158,7 +200,11 @@ export default function LinesEditor({ doc, edit, crm, readOnly, toolbar, onOpenP
         const mp = bySku[String(v || "").trim().toLowerCase()];
         if (mp) {
           l.description = mp.name;
-          if (mp.colour) l.colour = mp.colour;
+          if (fromGroup) {
+            // a parent-product pick: the colour is the next explicit choice
+            const cols = [...new Set((pidx.groups.get(pidx.keyOf(mp)) || [mp]).filter((m) => !m.grade).map((m) => String(m.colour || "").trim()).filter(Boolean))];
+            l.colour = cols.length === 1 ? cols[0] : "";
+          } else if (mp.colour) l.colour = mp.colour;
           if (mp.priceIncVat !== "" && mp.priceIncVat !== null) l.price = Number(mp.priceIncVat);
         }
       }
@@ -277,7 +323,7 @@ export default function LinesEditor({ doc, edit, crm, readOnly, toolbar, onOpenP
             {needsSize(l) && <SizeRow line={l} onSize={(k, v) => edit((x) => { const y = x.lines.find((z) => z.id === l.id); if (y) applySize(y, k, v); })} />}
             <div style={{ display: "flex", gap: 8, marginTop: 9, alignItems: "center" }}>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <ColourSelect line={l} crm={crm} bySku={bySku} onPick={(colour, sku) => edit((x) => {
+                <ColourSelect line={l} crm={crm} bySku={bySku} pidx={pidx} onPick={(colour, sku) => edit((x) => {
                   const y = x.lines.find((z) => z.id === l.id);
                   if (!y) return;
                   y.colour = colour;
@@ -300,14 +346,15 @@ export default function LinesEditor({ doc, edit, crm, readOnly, toolbar, onOpenP
           <Icon name="plus" stroke="#fff" />Add line
         </button>
         {picker && (
-          <PhoneSkuPicker crm={crm} onClose={() => setPicker(false)}
+          <PhoneSkuPicker crm={crm} pidx={pidx} onClose={() => setPicker(false)}
             onBlank={() => { edit((x) => x.lines.push(blankLine())); setPicker(false); }}
-            onPick={(mp2) => {
+            onPick={(mp2, pickColour) => {
               edit((x) => {
                 const l = blankLine();
                 l.code = mp2.sku;
                 l.description = mp2.name;
-                if (mp2.colour) l.colour = mp2.colour;
+                if (pickColour) l.colour = ""; // several colours — choose on the line
+                else if (mp2.colour) l.colour = mp2.colour;
                 if (mp2.priceIncVat !== "" && mp2.priceIncVat !== null && mp2.priceIncVat !== undefined) l.price = Number(mp2.priceIncVat);
                 l.qty = 1;
                 x.lines.push(l);
@@ -355,7 +402,7 @@ export default function LinesEditor({ doc, edit, crm, readOnly, toolbar, onOpenP
                   <Fragment key={l.id}>
                   <tr style={fulfilment ? { boxShadow: "inset 0 -1px 0 transparent" } : undefined}>
                     <td style={{ ...td, width: onOpenProduct ? 218 : 190 }}>
-                      <CodeCell code={l.code} bySku={bySku} options={skuOpts} onOpenProduct={onOpenProduct} onCode={(v) => setLine(l.id, "code", v)} />
+                      <CodeCell code={l.code} bySku={bySku} options={skuOpts} onOpenProduct={onOpenProduct} onCode={(v, g) => setLine(l.id, "code", v, g)} />
                     </td>
                     {sized && (
                       <td style={{ ...td, width: 150, whiteSpace: "nowrap" }}>
@@ -367,7 +414,7 @@ export default function LinesEditor({ doc, edit, crm, readOnly, toolbar, onOpenP
                       <input style={inp} value={l.description} {...selectAllProps} onChange={(e) => setLine(l.id, "description", e.target.value)} />
                     </td>
                     <td style={{ ...td, width: 130 }}>
-                      <ColourSelect line={l} crm={crm} bySku={bySku} onPick={(colour, sku) => edit((x) => {
+                      <ColourSelect line={l} crm={crm} bySku={bySku} pidx={pidx} onPick={(colour, sku) => edit((x) => {
                         const y = x.lines.find((z) => z.id === l.id);
                         if (!y) return;
                         y.colour = colour;
@@ -406,25 +453,36 @@ export default function LinesEditor({ doc, edit, crm, readOnly, toolbar, onOpenP
 }
 
 // Full-screen product search for phones: type, tap, the line is filled in.
-function PhoneSkuPicker({ crm, onPick, onBlank, onClose }) {
+function PhoneSkuPicker({ crm, pidx, onPick, onBlank, onClose }) {
   const [q, setQ] = useState("");
-  const prods = useMemo(
-    () => (crm.masterProducts || []).filter((p) => p.active !== false && p.sku && !(p.grade && !(Number(p.stock) > 0))),
-    [crm.masterProducts]
-  );
+  const prods = useMemo(() => {
+    // one row per parent product; graded stock stays its own row
+    const sell = (crm.masterProducts || []).filter((p) => p.active !== false && p.sku && !(p.grade && !(Number(p.stock) > 0)));
+    const seen = new Set();
+    const out = [];
+    sell.forEach((p) => {
+      if (p.grade || !pidx) { out.push({ p, grp: [p] }); return; }
+      const k = pidx.keyOf(p);
+      if (seen.has(k)) return;
+      seen.add(k);
+      const grp = (pidx.groups.get(k) || [p]).filter((m) => !m.grade);
+      out.push({ p: grp.slice().sort((a, b) => (Number(b.stock) || 0) - (Number(a.stock) || 0))[0], grp });
+    });
+    return out;
+  }, [crm.masterProducts, pidx]);
   const t = q.trim().toLowerCase();
   const hits = useMemo(() => {
     if (!t) return [];
     const words = t.split(/\s+/);
     return prods
-      .map((p) => {
-        const hay = [p.name, p.sku, p.family, p.colour].join(" ").toLowerCase();
+      .map((e) => {
+        const hay = e.grp.map((m) => [m.name, m.sku, m.family, m.colour].join(" ")).join(" ").toLowerCase();
         if (!words.every((w) => hay.includes(w))) return null;
-        return { p, rank: String(p.name || "").toLowerCase().startsWith(t) ? 0 : String(p.name || "").toLowerCase().includes(t) ? 1 : 2 };
+        return { e, rank: String(e.p.name || "").toLowerCase().startsWith(t) ? 0 : String(e.p.name || "").toLowerCase().includes(t) ? 1 : 2 };
       })
       .filter(Boolean)
-      .sort((a, b) => a.rank - b.rank || String(a.p.name).localeCompare(String(b.p.name)))
-      .map((x) => x.p)
+      .sort((a, b) => a.rank - b.rank || String(a.e.p.name).localeCompare(String(b.e.p.name)))
+      .map((x) => x.e)
       .slice(0, 60);
   }, [t, prods]);
   const price = (p) => (p.priceIncVat !== "" && p.priceIncVat !== null && p.priceIncVat !== undefined ? "£" + Number(p.priceIncVat).toFixed(2) : "");
@@ -438,18 +496,27 @@ function PhoneSkuPicker({ crm, onPick, onBlank, onClose }) {
       <div style={{ flex: 1, overflowY: "auto", padding: "10px 12px 30px" }}>
         {!t && <div style={{ textAlign: "center", color: "#8593a8", fontWeight: 700, fontSize: 13.5, marginTop: 26 }}>Start typing to search {prods.length.toLocaleString("en-GB")} products…</div>}
         {t && hits.length === 0 && <div style={{ textAlign: "center", color: "#8593a8", fontWeight: 700, fontSize: 13.5, marginTop: 26 }}>Nothing matches "{q}".</div>}
-        {hits.map((p) => (
-          <button key={p.sku} type="button" onClick={() => onPick(p)}
-            style={{ display: "flex", gap: 10, alignItems: "center", width: "100%", textAlign: "left", background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, padding: "11px 12px", marginBottom: 7, fontFamily: "inherit", cursor: "pointer" }}>
-            <span style={{ flex: 1, minWidth: 0 }}>
-              <span style={{ display: "block", fontWeight: 700, fontSize: 14.5, color: NAVY }}>{p.name}{gradeOf(p) ? <span style={{ color: "#a05f10" }}> · {gradeOf(p).label}</span> : null}</span>
-              <span style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: "#8593a8", marginTop: 2 }}>
-                {(p.family && p.family.includes("/") ? p.family : p.sku)}{p.colour ? " · " + p.colour : ""}{Number(p.stock) > 0 ? " · " + Number(p.stock) + " in stock" : ""}
+        {hits.map(({ p, grp }) => {
+          const colours = [...new Set(grp.map((m) => String(m.colour || "").trim()).filter(Boolean))];
+          const stock = grp.reduce((v, m) => v + (Number(m.stock) || 0), 0);
+          // typing a colour in the search picks that colour's SKU straight away
+          const colHit = colours.find((cc) => t.split(/\s+/).some((w) => cc.toLowerCase().includes(w) && w.length >= 3));
+          const chosen = colHit ? grp.find((m) => String(m.colour || "").trim() === colHit) || p : p;
+          return (
+            <button key={p.sku} type="button" onClick={() => onPick(chosen, !colHit && colours.length > 1)}
+              style={{ display: "flex", gap: 10, alignItems: "center", width: "100%", textAlign: "left", background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, padding: "11px 12px", marginBottom: 7, fontFamily: "inherit", cursor: "pointer" }}>
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ display: "block", fontWeight: 700, fontSize: 14.5, color: NAVY }}>{p.name}{gradeOf(p) ? <span style={{ color: "#a05f10" }}> · {gradeOf(p).label}</span> : null}</span>
+                <span style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: "#8593a8", marginTop: 2 }}>
+                  {(p.family && p.family.includes("/") ? p.family.replace(/^[A-Z0-9]{1,3}\//, "") : p.sku)}
+                  {colHit ? " · " + colHit : colours.length > 1 ? " · " + colours.length + " colours" : colours[0] ? " · " + colours[0] : ""}
+                  {stock > 0 ? " · " + stock + " in stock" : ""}
+                </span>
               </span>
-            </span>
-            <b style={{ flex: "none", fontSize: 14.5 }}>{price(p)}</b>
-          </button>
-        ))}
+              <b style={{ flex: "none", fontSize: 14.5 }}>{price(p)}</b>
+            </button>
+          );
+        })}
         <button type="button" onClick={onBlank}
           style={{ display: "block", width: "100%", border: "1px dashed #c4cbd6", background: "none", borderRadius: 12, padding: 12, fontFamily: "inherit", fontWeight: 700, fontSize: 13.5, color: "#5a6a85", cursor: "pointer", marginTop: 8 }}>
           + Add a blank line instead
@@ -463,7 +530,7 @@ function PhoneSkuPicker({ crm, onPick, onBlank, onClose }) {
 // product it offers just that product's colours (and swaps the SKU to match);
 // otherwise every colour on the colour list.
 // onPickMany (samples): tick several colours; the first stays on this line, the caller adds a line per extra one
-export function ColourSelect({ line, crm, bySku, onPick, onPickMany }) {
+export function ColourSelect({ line, crm, bySku, onPick, onPickMany, pidx }) {
   const [box, setBox] = useState(null);
   const [ticked, setTicked] = useState([]);
   const tickRef = useRef({ list: [], dirty: false }); // where to draw the pop-out (it sits outside the scrolling table)
@@ -482,9 +549,22 @@ export function ColourSelect({ line, crm, bySku, onPick, onPickMany }) {
     return () => { document.removeEventListener("mousedown", off); window.removeEventListener("scroll", shut, true); };
   }, [box]);
   const mp = bySku[String(line.code || "").trim().toLowerCase()];
-  const siblings = mp && mp.importProductId
-    ? (crm.masterProducts || []).filter((m) => m.importProductId === mp.importProductId && m.active !== false && (m.colour || "").trim() && (m.grade || "") === (mp.grade || ""))
+  // colours come from the WHOLE parent product (every supplier's version), one
+  // entry per colour; picking one swaps the line to a SKU of that colour —
+  // same supplier where it does the colour, the sibling supplier otherwise
+  const pool = mp
+    ? (pidx && (pidx.groups.get(pidx.keyOf(mp)) || []).length > 1
+        ? pidx.groups.get(pidx.keyOf(mp))
+        : mp.importProductId ? (crm.masterProducts || []).filter((m) => m.importProductId === mp.importProductId) : [])
     : [];
+  const byColour = new Map();
+  pool.filter((m) => m.active !== false && (m.colour || "").trim() && (m.grade || "") === (mp.grade || "")).forEach((m) => {
+    const k = m.colour.trim().toLowerCase();
+    const cur = byColour.get(k);
+    const mine = m.importProductId === mp.importProductId, curMine = cur && cur.importProductId === mp.importProductId;
+    if (!cur || (mine && !curMine) || (!curMine && !mine && (Number(m.stock) || 0) > (Number(cur.stock) || 0))) byColour.set(k, m);
+  });
+  const siblings = [...byColour.values()];
   const lists = skuLists(crm);
   const opts = siblings.length
     ? siblings.map((m) => ({ label: m.colour, sku: m.sku }))
