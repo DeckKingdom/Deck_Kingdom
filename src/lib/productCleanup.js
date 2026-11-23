@@ -20,6 +20,7 @@ const NEW_LIST = [["03-02", "03", "Slatted cladding F trim"], ["03-02", "04", "S
 const NAME = {
   // fencing reads noun-first everywhere else, so the two aluminium ones follow
   "7kbhdqvy": "Fence Post Aluminium 2.4m",
+  "prd-tg-2-4-post-alu": "Fence Post Aluminium 2.4m", // TG's version of the same post
   "7d3djo6u": "Fence Post Cap Aluminium",
   "prd-dk-clips-metal": "Decking Clips Metal 3mm & Screws (100 pack)",
   "prd-tg-clips-metal": "Decking Clips Metal 3mm & Screws (100 pack)",
