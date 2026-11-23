@@ -20,8 +20,8 @@ const DK_SCREEN = "4w425blc";
 const VJ_STYLES = ["Style 1", "Style 2", "Style 3", "Style 4"];
 // field changes by product id
 const SET = {
-  "7kbhdqvy": { name: "Aluminium Fence Post 2.4m", salePrice: 45 },
-  "7d3djo6u": { segProd: "14", name: "Aluminium Post Cap" },
+  "7kbhdqvy": { name: "Fence Post Aluminium 2.4m", salePrice: 45 }, // noun-first, per Jon 23 Nov
+  "7d3djo6u": { segProd: "14", name: "Fence Post Cap Aluminium" }, // noun-first, per Jon 23 Nov
   "4w425blc": { segLen: "01", segSub: "07", segProd: "01", salePrice: 35, name: SCREEN_NAME, code: "DK/1.83/SCREEN" },
   "prd-tg-300mm-screen": { segLen: "01", segSub: "07", segProd: "01", name: SCREEN_NAME, code: "TG/1.83/SCREEN" },
   "prd-fn-300mm-screen": { segLen: "01", segSub: "07", segProd: "01", name: SCREEN_NAME, code: "FN/1.83/SCREEN" },

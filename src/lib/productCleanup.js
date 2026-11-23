@@ -18,6 +18,9 @@ const DROP_PRODUCT = ["yg8mr80t"]; // the nameless "2.5m" planner product
 const SEG = { wpze6cj5: "03", lmppod7h: "04" }; // F trim · external corner get their own identities
 const NEW_LIST = [["03-02", "03", "Slatted cladding F trim"], ["03-02", "04", "Slatted cladding corner"]];
 const NAME = {
+  // fencing reads noun-first everywhere else, so the two aluminium ones follow
+  "7kbhdqvy": "Fence Post Aluminium 2.4m",
+  "7d3djo6u": "Fence Post Cap Aluminium",
   "prd-dk-clips-metal": "Decking Clips Metal 3mm & Screws (100 pack)",
   "prd-tg-clips-metal": "Decking Clips Metal 3mm & Screws (100 pack)",
   "prd-dk-clips-plastic": "Decking Clips Plastic & Screws (100 pack)",
