@@ -62,7 +62,7 @@ export default function DriverApp({ me, warehouse, switcher }) {
   // A warehouse login that also drives (a driver name set in Users & access, e.g. Ian) gets both:
   // Loading for every van, Deliveries for their own runs.
   const driver = warehouse ? me.driverName || "" : me.driverName || (me.fullName || "").split(" ")[0] || "";
-  const allVans = warehouse || !!switcher; // who loads every van, not just their own
+  const allVans = true; // everyone sees every van to load, so whoever's free can count or confirm it
   const who = me.email || me.fullName || driver || "warehouse";
   const [mode, setMode] = useState(warehouse ? "loading" : "deliveries");
   const [crm, setCrm] = useState(null);

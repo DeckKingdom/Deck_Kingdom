@@ -8,7 +8,7 @@ export const isBackOrder = (inv) => !!inv && inv.jobType === "Back Order";
 export const RUN_NOS = ["1", "2", "3", "4", "5", "6"];
 // "collection" anywhere in the job type means the customer picks up — no van run
 export const isCollectionJob = (inv) => /collection/i.test(inv && inv.jobType ? inv.jobType : "");
-export const PAYMENT_TYPES = ["COD", "Cash", "Stripe", "World Pay", "Teya", "Virgin Transfer", "Follow-up — already paid"];
+export const PAYMENT_TYPES = ["COD", "Cash", "Stripe", "World Pay", "Teya", "Virgin Transfer", "Warranty", "Follow-up — already paid"];
 export const SOURCES = ["Manual entry", "Website", "Market Place", "Repeat", "Transfer", "Word of Mouth", "Walk-in"];
 // where a customer found us - the account's Source dropdown (and the job's)
 export const CUSTOMER_SOURCES = ["Website Order", "Website Enquiry", "Website", "Market Place", "Ebay", "Google Maps", "Direct Marketing",

@@ -78,6 +78,15 @@ export function loadState(run, counts, report) {
   return { loaded, part, todo, allocated, unscheduled, total, ready, submitted, complete, stale };
 }
 // can this person do the double-check? (anyone but whoever loaded and submitted it)
+// who's on this van right now (someone else, within the last few minutes)
+export const LOCK_STALE_MS = 3 * 60 * 1000;
+export const lockHolder = (rep, who) => {
+  if (!rep || !rep.loadingBy) return "";
+  if (String(rep.loadingBy).toLowerCase() === String(who || "").replace(/[,()"']/g, "").trim().toLowerCase()) return "";
+  const at = Date.parse(rep.loadingAt || "") || 0;
+  return Date.now() - at < LOCK_STALE_MS ? rep.loadingBy : "";
+};
+
 export const canCheck = (report, who) => !!report && report.status === "submitted" && lc(report.completedBy) !== lc(who);
 export const shortName = (e) => {
   const s = String(e || "").split("@")[0];

@@ -6,8 +6,8 @@
 // Drivers see only their own runs; the warehouse sees every van.
 import { useEffect, useState } from "react";
 import { NAVY, GOLD, RED } from "../lib/core.js";
-import { runsOn, loadState, shortLinesOf, canCheck, shortName } from "../lib/loading.js";
-import { loadLoading, setLoaded, setBoxes, boxKey, setLoadOn, completeReport, checkReport, reopenReport, loadPhotoUrl } from "../data/loading.js";
+import { runsOn, loadState, shortLinesOf, canCheck, shortName, lockHolder, LOCK_STALE_MS } from "../lib/loading.js";
+import { loadLoading, setLoaded, setBoxes, boxKey, setLoadOn, completeReport, checkReport, reopenReport, loadPhotoUrl, claimLoading, releaseLoading } from "../data/loading.js";
 import { shrinkPhoto } from "../data/drops.js";
 
 const GREEN = "#28713e", BLUE = "#185FA5", AMBER = "#a06d00";
@@ -99,6 +99,7 @@ export default function LoadingMobile({ crm, driver, who, header, onBack, nav })
               {list.map(({ r, st, rep, del, ld, late }) => {
                 const short = st.complete && rep && (rep.shortLines || []).length;
                 const chk = st.submitted && canCheck(rep, who);
+                const lk = lockHolder(rep, who);
                 const tone = st.stale ? RED : late ? RED : short ? RED : st.complete ? GREEN : st.submitted ? BLUE : st.loaded || st.part ? AMBER : NAVY;
                 const choices = loadChoices(del);
                 return (
@@ -109,6 +110,7 @@ export default function LoadingMobile({ crm, driver, who, header, onBack, nav })
                       <span style={{ fontSize: 12, fontWeight: 800, color: tone }}>{st.stale ? "⚠ NEW ITEMS TO LOAD" : late ? "⚠ SHOULD BE ON — out " + wkShort(del) : st.submitted ? (chk ? "👀 CHECK NEEDED" : "WAITING FOR A CHECK") : short ? "⚠ WENT OUT SHORT" : st.complete ? "✓ LOADED & CHECKED" : st.loaded || st.part ? "PART LOADED" : "NOT STARTED"}</span>
                     </div>
                     <div style={{ fontSize: 13, fontWeight: 700, color: "#5a6a85", marginTop: 2 }}>{r.driver}{r.runNo ? " · Run " + r.runNo : ""} · {r.jobs.length} drop{r.jobs.length === 1 ? "" : "s"}{r.pickups.length ? " · " + r.pickups.length + " pick-up" + (r.pickups.length === 1 ? "" : "s") : ""} · out {dmShort(del)}</div>
+                    {lk && <div style={{ display: "inline-block", marginTop: 5, fontSize: 11.5, fontWeight: 800, borderRadius: 999, padding: "2px 9px", background: "#fff3d6", color: "#8a5a00", border: "1px solid #f2c879" }}>🔒 {shortName(lk)} is on this van now</div>}
                     <div style={{ fontSize: 12.5, fontWeight: 600, color: "#8593a8", marginTop: 4 }}>
                       {st.submitted ? "Loaded by " + shortName(rep.completedBy) + " at " + hm(rep.completedAt) + (chk ? " — tap to double-check it" : " — someone else needs to double-check it") : st.complete && rep && rep.completedAt ? "Loaded by " + shortName(rep.completedBy) + (rep.checkedBy ? " · checked by " + shortName(rep.checkedBy) : "") + (short ? " · " + short + " line" + (short === 1 ? "" : "s") + " missing" : "")
                         : st.loaded + " of " + st.total + " lines on" + (st.part ? " · " + st.part + " part" : "") + (st.allocated ? " · " + st.allocated + " on pick-ups" : "") + (st.unscheduled ? " · " + st.unscheduled + " pick-up not booked" : "")}
@@ -151,8 +153,39 @@ function LoadRun({ run, data, who, header, err, onBack, onChanged, onCount, onBo
   const [closing, setClosing] = useState(false);
   const [checking, setChecking] = useState(false);
   const [msg, setMsg] = useState("");
+  // one person on a van at a time: claim it on the way in, nudge the claim
+  // every minute while the screen's open, let go on the way out
+  const [lockBy, setLockBy] = useState(null); // null = checking · "" = ours · name = theirs
+  useEffect(() => {
+    let live = true;
+    const stale = (at) => !at || Date.now() - (Date.parse(at) || 0) > LOCK_STALE_MS;
+    const tick = () => claimLoading(run, who).then((r) => {
+      if (!live) return;
+      if (r.ok) setLockBy("");
+      else if (stale(r.at)) claimLoading(run, who, true).then(() => { if (live) setLockBy(""); });
+      else setLockBy(r.by || "someone");
+    }).catch(() => { if (live) setLockBy(""); });
+    tick();
+    const t = setInterval(tick, 60000);
+    return () => { live = false; clearInterval(t); releaseLoading(run, who); };
+  }, [run.key]);
   const locked = (st.complete || st.submitted) && run.lines.length > 0;
   const mayCheck = canCheck(rep, who);
+
+  if (lockBy) return (
+    <div>
+      {header(run.van || run.driver, onBack)}
+      <div style={{ padding: 14 }}>
+        <div style={{ ...cardS, borderColor: "#f2c879", background: "#fff8e6" }}>
+          <b style={{ fontSize: 16 }}>🔒 {shortName(lockBy)} is on this van right now</b>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "#5a6a85", marginTop: 6 }}>One person loads or checks a van at a time, so counts don't trip over each other. It frees up as soon as they come out of it — or after 3 minutes if their phone's gone quiet.</div>
+          <button type="button" onClick={() => { setLockBy(null); claimLoading(run, who).then((r) => setLockBy(r.ok ? "" : r.by || "someone")); }}
+            style={{ marginTop: 12, width: "100%", border: "1px solid #d5d9e0", background: "#fff", borderRadius: 12, padding: 12, fontFamily: "inherit", fontWeight: 800, color: NAVY, cursor: "pointer" }}>Try again</button>
+        </div>
+      </div>
+    </div>
+  );
+  if (lockBy === null) return <div>{header(run.van || run.driver, onBack)}<div style={{ padding: 14 }}><div style={{ ...cardS, textAlign: "center", color: "#8593a8", fontWeight: 700 }}>Checking nobody else is on this van…</div></div></div>;
 
   if (closing) return <SubmitReport run={run} counts={counts} who={who} header={header} onBack={() => setClosing(false)} onClosed={(r) => { onClosed(r); setClosing(false); }} />;
   if (checking && rep) return <CheckReport run={run} counts={counts} rep={{ ...rep, id: run.key }} who={who} header={header} onBack={() => setChecking(false)} onDone={() => { setChecking(false); onChanged(); }} />;

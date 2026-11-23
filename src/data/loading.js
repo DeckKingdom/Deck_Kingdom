@@ -6,7 +6,7 @@ const LR = "dk-load-reports", LL = "dk-load-lines";
 const lget = (k) => { try { return JSON.parse(localStorage.getItem(k) || "[]"); } catch (e) { return []; } };
 const lset = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* */ } };
 const repFromRow = (r) => ({ id: r.id, date: r.run_date, driver: r.driver, runNo: r.run_no, van: r.van, status: r.status, completedAt: r.completed_at, completedBy: r.completed_by, checked: r.checked || [], photoPaths: r.photo_paths || [], notes: r.notes || "", updatedAt: r.updated_at, loadOn: r.load_on || "",
-  shortLines: r.short_lines || [], alertState: r.alert_state || "", resolvedAt: r.resolved_at || "", resolvedBy: r.resolved_by || "", resolution: r.resolution || "", followups: r.followups || {}, checkedBy: r.checked_by || "", checkedAt: r.checked_at || "", sentBack: r.sent_back || "" });
+  shortLines: r.short_lines || [], alertState: r.alert_state || "", resolvedAt: r.resolved_at || "", resolvedBy: r.resolved_by || "", resolution: r.resolution || "", followups: r.followups || {}, checkedBy: r.checked_by || "", checkedAt: r.checked_at || "", sentBack: r.sent_back || "", loadingBy: r.loading_by || "", loadingAt: r.loading_at || "" });
 const lineFromRow = (r) => ({ reportId: r.report_id, itemKey: r.item_key, qtyNeeded: Number(r.qty_needed) || 0, qtyLoaded: Number(r.qty_loaded) || 0, loadedBy: r.loaded_by, loadedAt: r.loaded_at, boxed: !!r.boxed });
 
 export const loadingReady = () => true;
@@ -39,6 +39,35 @@ const ensureReport = async (sb, run) => {
   const { error } = await sb.from("load_reports").upsert({ id: run.key, run_date: run.date, driver: run.driver, run_no: run.runNo, van: run.van || "" }, { onConflict: "id", ignoreDuplicates: true });
   if (error) throw error;
 };
+
+// ===== one loader at a time =====
+// Opening a van's loading claims it (loading_by/loading_at on the report).
+// The claim only succeeds when the van is free or already ours, so two phones
+// can't both be counting and closing the same van. A claim goes stale after a
+// few minutes of silence (phone died, walked off), and can then be taken over.
+const lockName = (w) => String(w || "").replace(/[,()"']/g, "").trim();
+export async function claimLoading(run, who, force = false) {
+  if (storageMode !== "supabase") return { ok: true };
+  try {
+    const sb = await getSupabase();
+    const w = lockName(who);
+    await ensureReport(sb, run);
+    let q = sb.from("load_reports").update({ loading_by: w, loading_at: new Date().toISOString() }).eq("id", run.key);
+    if (!force) q = q.or("loading_by.eq." + w + ",loading_by.eq.");
+    const { data, error } = await q.select("loading_by");
+    if (error) return { ok: true }; // the lock is a courtesy — never let it block loading over a hiccup
+    if (data && data.length) return { ok: true };
+    const { data: cur } = await sb.from("load_reports").select("loading_by, loading_at").eq("id", run.key).maybeSingle();
+    return { ok: false, by: (cur && cur.loading_by) || "", at: (cur && cur.loading_at) || "" };
+  } catch (e) { return { ok: true }; }
+}
+export async function releaseLoading(run, who) {
+  if (storageMode !== "supabase") return;
+  try {
+    const sb = await getSupabase();
+    await sb.from("load_reports").update({ loading_by: "", loading_at: "" }).eq("id", run.key).eq("loading_by", lockName(who));
+  } catch (e) { /* best effort */ }
+}
 
 // record how many of a line are on the van (typed by the loader)
 export async function setLoaded(run, item, qty, who, opts = {}) {
