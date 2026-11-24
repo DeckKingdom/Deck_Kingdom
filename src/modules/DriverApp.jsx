@@ -144,13 +144,17 @@ export default function DriverApp({ me, warehouse, switcher }) {
       // collections — so take the one-round-trip quick path first. The full book
       // (years of history, thousands of lines) is only fetched if quick isn't there.
       let r = null;
-      if (storageMode === "supabase") r = await crmStorage.get("dk-crm-quick").catch(() => null);
+      let quickErr = null;
+      if (storageMode === "supabase") r = await crmStorage.get("dk-crm-quick").catch((e) => { quickErr = e; return null; });
+      if (quickErr) { try { console.warn("[dk-phone] quick slice failed, falling back to the full book:", (quickErr && quickErr.message) || quickErr); } catch (e2) { /* */ } }
       if (!r || !r.value) r = await crmStorage.get("dk-crm");
       gotLive.current = true;
       setCrm(normaliseCrm(r && r.value ? JSON.parse(r.value) : {}));
       if (INSTANT_OPEN && storageMode === "supabase" && r && r.value) writeCrmCache(r.value); // next open paints instantly
     } catch (e) {
-      setErr("Couldn't load — check your signal, then tap Try again.");
+      // say WHAT failed, so a phone screenshot is enough to diagnose it
+      const why = String((e && e.message) || e || "").slice(0, 120);
+      setErr("Couldn't load — check your signal, then tap Try again." + (why ? " (" + why + ")" : ""));
     }
   };
   loadRef.current = load;
