@@ -1322,11 +1322,18 @@ export default function ImportPlanner() {
     });
 
   const removeProduct = (pid) => {
-    const doRemove = () =>
+    const doRemove = () => {
       update((d) => {
         d.products = d.products.filter((x) => x.id !== pid);
         return d;
       });
+      // its stock rows go with it — except any still holding stock, which stay
+      // so the count isn't lost (they show up in the orphan check if forgotten)
+      updateCrm((c) => {
+        c.masterProducts = (c.masterProducts || []).filter((m) => m.importProductId !== pid || Number(m.stock) > 0);
+        return c;
+      });
+    };
     const used = data.shipments.some((s) => s.lines.some((l) => l.productId === pid));
     if (used) {
       setConfirmBox({
