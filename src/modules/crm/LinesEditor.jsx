@@ -43,7 +43,8 @@ const groupOption = (grp, crm) => {
   const names = {};
   grp.forEach((m) => (names[m.name] = (names[m.name] || 0) + 1));
   const name = Object.entries(names).sort((a, b) => b[1] - a[1])[0][0] || rep.name;
-  const srcs = [...new Set(grp.map((m) => skuSource(m, lists)).filter(Boolean))];
+  const order = Object.keys(PRODUCT_SOURCES);
+  const srcs = [...new Set(grp.map((m) => skuSource(m, lists)).filter(Boolean))].sort((a, b) => (order.indexOf(a) + 99 * (order.indexOf(a) < 0)) - (order.indexOf(b) + 99 * (order.indexOf(b) < 0)));
   const colours = [...new Set(grp.map((m) => String(m.colour || "").trim()).filter(Boolean))];
   const prices = [...new Set(grp.map((m) => (m.priceIncVat === "" || m.priceIncVat === null || m.priceIncVat === undefined ? null : Number(m.priceIncVat))).filter((x) => x !== null))].sort((a, b) => a - b);
   const price = prices.length ? "£" + prices[0].toFixed(2) + (prices.length > 1 && prices[prices.length - 1] !== prices[0] ? "–" + prices[prices.length - 1].toFixed(2) : "") : "";

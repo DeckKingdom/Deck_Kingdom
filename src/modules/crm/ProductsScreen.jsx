@@ -61,14 +61,24 @@ export default function ProductsScreen({ planner, update, crm, updateCrm, remove
       if (!g.has(k)) g.set(k, []);
       g.get(k).push(p);
     });
+    // versions always sit in supplier-code order (01 DK, 02 TG, ...) however
+    // they were added, so every row reads the same way
+    const supOrd = (p) => {
+      const seg = String(p.segSup || "").trim();
+      if (seg) return seg;
+      const k = codeSource(p.code) || "";
+      const hit = lists.supplier.find((x) => x.key === k);
+      return hit ? hit.code : "99";
+    };
     return [...g.entries()].map(([key, items]) => {
+      items.sort((a, b) => supOrd(a).localeCompare(supOrd(b)));
       const names = {};
       items.forEach((p) => (names[p.name] = (names[p.name] || 0) + 1));
       const name = Object.entries(names).sort((a, b) => b[1] - a[1])[0][0];
       const p0 = items[0];
       return { key, items, name, complete: !key.startsWith("p:"), p0 };
     });
-  }, [products]);
+  }, [products, lists]);
   const shown = groups
     .filter((g) => !src || (src === "KIT" ? g.items.some((p) => p.isKit === true) : g.items.some((p) => supKey(p) === src)))
     .filter((g) => !ql || g.items.some((p) => [p.code, p.name, p.supplier, (p.colours || []).join(" "), productSkuBase(p)].some((v) => String(v || "").toLowerCase().includes(ql))))
