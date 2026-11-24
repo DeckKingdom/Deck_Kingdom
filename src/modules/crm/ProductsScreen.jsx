@@ -24,6 +24,8 @@ export default function ProductsScreen({ planner, update, crm, updateCrm, remove
   const lists = skuLists(crm);
   const [q, setQ] = useState("");
   const [src, setSrc] = useState("");
+  const [cat, setCat] = useState(""); // category / sub-category filter chips
+  const [sub, setSub] = useState("");
   const [open, setOpen] = useState(new Set());
   const [listsOpen, setListsOpen] = useState(false);
   const products = planner.products || [];
@@ -80,6 +82,8 @@ export default function ProductsScreen({ planner, update, crm, updateCrm, remove
     });
   }, [products, lists]);
   const shown = groups
+    .filter((g) => !cat || g.p0.segCat === cat)
+    .filter((g) => !sub || g.p0.segSub === sub)
     .filter((g) => !src || (src === "KIT" ? g.items.some((p) => p.isKit === true) : g.items.some((p) => supKey(p) === src)))
     .filter((g) => !ql || g.items.some((p) => [p.code, p.name, p.supplier, (p.colours || []).join(" "), productSkuBase(p)].some((v) => String(v || "").toLowerCase().includes(ql))))
     .sort((a, b) =>
@@ -457,6 +461,33 @@ export default function ProductsScreen({ planner, update, crm, updateCrm, remove
             style={{ fontFamily: "inherit", fontSize: 12.5, fontWeight: 700, padding: "6px 11px", borderRadius: 999, cursor: "pointer", marginLeft: 6, border: "1px solid " + (src === "KIT" ? "#a86b12" : "#e9c46a"), background: src === "KIT" ? GOLD : "#fdf3dc", color: src === "KIT" ? NAVY : "#8a5a00" }}>
             {"Kits · " + groups.filter((g) => g.items.some((p) => p.isKit === true)).length}
           </button>
+        </div>
+        <div style={{ display: "flex", gap: 4, flexWrap: "wrap", alignItems: "center", width: "100%" }}>
+          {(() => {
+            const catCounts = {};
+            groups.forEach((g) => { const c = g.p0.segCat || ""; if (c) catCounts[c] = (catCounts[c] || 0) + 1; });
+            const subCounts = {};
+            if (cat) groups.filter((g) => g.p0.segCat === cat).forEach((g) => { const s2 = g.p0.segSub || ""; if (s2) subCounts[s2] = (subCounts[s2] || 0) + 1; });
+            const subs = (lists.sub || []).filter((x) => subCounts[x.code]);
+            const pill = (on) => ({ fontFamily: "inherit", fontSize: 12, fontWeight: 700, padding: "5px 10px", borderRadius: 999, cursor: "pointer", border: "1px solid " + (on ? NAVY : "#d5d9e0"), background: on ? NAVY : "#fff", color: on ? "#fff" : "#5a6a85" });
+            return (
+              <>
+                <button onClick={() => { setCat(""); setSub(""); }} style={pill(!cat)}>All types</button>
+                {(lists.category || []).filter((c) => catCounts[c.code]).map((c) => (
+                  <button key={c.code} onClick={() => { setCat(cat === c.code ? "" : c.code); setSub(""); }} style={pill(cat === c.code)}>
+                    {c.label} · {catCounts[c.code]}
+                  </button>
+                ))}
+                {cat && subs.length > 1 && <span style={{ color: "#aab3c2", fontWeight: 800, padding: "0 2px" }}>›</span>}
+                {cat && subs.length > 1 && subs.map((x) => (
+                  <button key={x.code} onClick={() => setSub(sub === x.code ? "" : x.code)}
+                    style={{ fontFamily: "inherit", fontSize: 12, fontWeight: 700, padding: "5px 10px", borderRadius: 999, cursor: "pointer", border: "1px solid " + (sub === x.code ? "#a86b12" : "#e9c46a"), background: sub === x.code ? GOLD : "#fdf3dc", color: sub === x.code ? NAVY : "#8a5a00" }}>
+                    {x.label} · {subCounts[x.code]}
+                  </button>
+                ))}
+              </>
+            );
+          })()}
         </div>
         <span style={{ flex: 1 }} />
         <button style={btn} onClick={() => setListsOpen(true)} title="The two-digit lists the SKUs are built from"><Icon name="gear" />SKU lists</button>
