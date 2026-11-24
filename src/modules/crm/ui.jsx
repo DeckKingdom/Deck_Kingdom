@@ -168,11 +168,16 @@ export function SuggestInput({ value, onChange, options = [], format, inputStyle
     if (!q) return options.slice(0, 300);
     const starts = [];
     const contains = [];
+    // every typed word has to appear somewhere, in any order — "4.8m dec"
+    // finds "Decking Trim 4.8m" just as well as "dec 4.8m" does
+    const words = q.split(/\s+/).filter(Boolean);
     for (const o of options) {
       const lv = optVal(o).toLowerCase();
       const ll = optLabel(o).toLowerCase();
-      if (lv.startsWith(q) || ll.startsWith(q)) starts.push(o);
-      else if (lv.includes(q) || ll.includes(q)) contains.push(o);
+      const hay = lv + " " + ll;
+      if (!words.every((w) => hay.includes(w))) continue;
+      if (lv.startsWith(q) || ll.startsWith(q) || words.some((w) => ll.startsWith(w))) starts.push(o);
+      else contains.push(o);
       if (starts.length + contains.length >= 300) break;
     }
     return [...starts, ...contains];

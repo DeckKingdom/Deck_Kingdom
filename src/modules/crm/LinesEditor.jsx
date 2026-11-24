@@ -10,7 +10,7 @@ import { Icon, SuggestInput, selectAllProps, inp, btn, abtn, Chip, prodName } fr
 const numInp = { ...inp, textAlign: "right" };
 
 // SKU picker: a wide list with the familiar readable code first (DK/4.8/DECK/AWH)
-export const SKU_COLS = "215px 100px minmax(220px,1fr) 120px 70px 30px";
+export const SKU_COLS = "minmax(260px,1fr) 95px 170px 110px 70px 30px"; // the name gets the room — it's what gets read
 export const SKU_LIST_W = 920;
 export const readableFor = (bySku, code) => {
   const p = bySku[String(code || "").trim().toLowerCase()];
