@@ -133,6 +133,20 @@ export const selectAllProps = {
 // or selecting the field shows nothing (ArrowDown opens it on demand).
 // Arrow keys highlight, Enter picks (then the modal's Enter-to-next advances),
 // clicking picks, blur applies the field's formatter.
+// product names: the bracketed "what's included" note renders smaller and
+// muted wherever a name is shown, so the name leads and the detail follows
+export const prodName = (name, dim = "#8593a8") => {
+  const str = String(name || "");
+  const i = str.indexOf("(");
+  if (i < 1) return str;
+  return (
+    <>
+      {str.slice(0, i).trim()}{" "}
+      <span style={{ fontSize: "0.85em", fontWeight: 600, color: dim }}>{str.slice(i).trim()}</span>
+    </>
+  );
+};
+
 export function SuggestInput({ value, onChange, options = [], format, inputStyle, listWidth, cols, ...props }) {
   const [open, setOpen] = useState(false);
   const [hi, setHi] = useState(-1);

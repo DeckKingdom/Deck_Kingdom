@@ -10,7 +10,7 @@ import {
   DEFAULT_SKU_LISTS, gbp, kitPartsFor, supplierKey,
   tidyDescription, suggestDescription, codeFollowsName, suggestCode, usesStyles,
 } from "../../lib/crmCore.js";
-import { Icon, Chip, Modal, lbl, card, inp, btn, goldBtn, abtn, selectAllProps } from "./ui.jsx";
+import { Icon, Chip, Modal, lbl, card, inp, btn, goldBtn, abtn, selectAllProps, prodName } from "./ui.jsx";
 import { tidyPlan, applyTidy } from "../../lib/productTidy.js";
 import { cleanupPlan, applyCleanup } from "../../lib/productCleanup.js";
 
@@ -257,7 +257,7 @@ export default function ProductsScreen({ planner, update, crm, updateCrm, remove
                   <tr id={"pm-" + g.key} onClick={() => toggle(g.key)} style={{ cursor: "pointer", background: g.complete ? (isOpen ? "#f3f6fb" : undefined) : "#fff3d6" }}>
                     <td style={{ ...td, fontWeight: 700, paddingLeft: nested ? 34 : td.padding.split(" ")[1], ...(g.complete ? {} : { boxShadow: "inset 4px 0 0 " + GOLD }) }}>
                       <span style={{ fontSize: 10, color: "#5a6a85", marginRight: 8 }}>{isOpen ? "▼" : "▶"}</span>
-                      {g.name || <span style={{ color: "#aab3c2" }}>New product</span>}
+                      {g.name ? prodName(g.name) : <span style={{ color: "#aab3c2" }}>New product</span>}
 
                       {!g.complete && <Chip tone="amber" style={{ marginLeft: 8, fontSize: 10, padding: "1px 7px" }}>SKU fields needed</Chip>}
                     </td>

@@ -5,7 +5,7 @@ import { useState, useMemo, useRef, useEffect, Fragment } from "react";
 import { RED, NAVY } from "../../lib/core.js";
 import { blankLine, skuIndex, PRODUCT_SOURCES, skuSource, skuLists, skuOptionLabel, colourSeg, gradeOf, isGrassRoll, sqmOf, sizeLabel,
   stockCheck, explodeInvoiceLines, partKey, isColPick, batchBreakdown, batchKeyForPick, buildPicks, parentIndex } from "../../lib/crmCore.js";
-import { Icon, SuggestInput, selectAllProps, inp, btn, abtn, Chip } from "./ui.jsx";
+import { Icon, SuggestInput, selectAllProps, inp, btn, abtn, Chip, prodName } from "./ui.jsx";
 
 const numInp = { ...inp, textAlign: "right" };
 
@@ -56,7 +56,7 @@ const groupOption = (grp, crm) => {
     src: srcs[0] || "",
     srcs,
     cells: [
-      { text: name, style: { fontWeight: 800 } },
+      { text: prodName(name), style: { fontWeight: 800 } },
       { text: readable, style: { fontSize: 11.5, color: "#8593a8", fontWeight: 600, letterSpacing: 0.3 } },
       { text: (stock > 0 ? stock + " in stock · " : "") + (colours.length ? colours.length + " colour" + (colours.length === 1 ? "" : "s") : "one finish"), style: { fontWeight: 600 } },
       { text: colours.slice(0, 3).join(", ") + (colours.length > 3 ? "…" : ""), style: { color: "#5a6a85", fontWeight: 600 } },
@@ -508,7 +508,7 @@ function PhoneSkuPicker({ crm, pidx, onPick, onBlank, onClose }) {
             <button key={p.sku} type="button" onClick={() => onPick(chosen, !colHit && colours.length > 1)}
               style={{ display: "flex", gap: 10, alignItems: "center", width: "100%", textAlign: "left", background: "#fff", border: "1px solid #e6e9ef", borderRadius: 12, padding: "11px 12px", marginBottom: 7, fontFamily: "inherit", cursor: "pointer" }}>
               <span style={{ flex: 1, minWidth: 0 }}>
-                <span style={{ display: "block", fontWeight: 700, fontSize: 14.5, color: NAVY }}>{p.name}{gradeOf(p) ? <span style={{ color: "#a05f10" }}> · {gradeOf(p).label}</span> : null}</span>
+                <span style={{ display: "block", fontWeight: 700, fontSize: 14.5, color: NAVY }}>{prodName(p.name)}{gradeOf(p) ? <span style={{ color: "#a05f10" }}> · {gradeOf(p).label}</span> : null}</span>
                 <span style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: "#8593a8", marginTop: 2 }}>
                   {(p.family && p.family.includes("/") ? p.family.replace(/^[A-Z0-9]{1,3}\//, "") : p.sku)}
                   {colHit ? " · " + colHit : colours.length > 1 ? " · " + colours.length + " colours" : colours[0] ? " · " + colours[0] : ""}
