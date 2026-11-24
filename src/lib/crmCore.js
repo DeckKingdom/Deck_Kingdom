@@ -590,6 +590,21 @@ export const genSku = (name, colour, taken) => {
 // Products carry a code: SOURCE / SIZE / TYPE (e.g. DK/3.6/DECK, TG/CLIPS-METAL).
 // The source is the first part: DK = our own imports, TG = Tuda Grass, etc.
 // Each product + colour is a stock row whose SKU is the code + a 3-letter colour.
+// natural name order: decimals compare as numbers, so 3.6m < 4m < 4.8m
+// (plain "numeric" collation reads 4.8 vs 4m as ".8" vs "m" and gets it wrong)
+export const natCmp = (a, b) => {
+  const xa = String(a || "").toLowerCase().split(/(\d+(?:\.\d+)?)/);
+  const xb = String(b || "").toLowerCase().split(/(\d+(?:\.\d+)?)/);
+  for (let i = 0; i < Math.max(xa.length, xb.length); i++) {
+    const u = xa[i] || "", v = xb[i] || "";
+    if (u === v) continue;
+    const nu = parseFloat(u), nv = parseFloat(v);
+    if (!Number.isNaN(nu) && !Number.isNaN(nv)) return nu - nv;
+    return u < v ? -1 : 1;
+  }
+  return 0;
+};
+
 export const PRODUCT_SOURCES = {
   DK: "Deck Kingdom (own import)", TG: "Tuda Grass", SY: "South Yorkshire Composites",
   TS: "Tradescape", CL: "Easy Composite", FN: "Finch Decking",

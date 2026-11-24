@@ -4,7 +4,7 @@
 import { useState, useMemo, useRef, useEffect, Fragment } from "react";
 import { RED, NAVY } from "../../lib/core.js";
 import { blankLine, skuIndex, PRODUCT_SOURCES, skuSource, skuLists, skuOptionLabel, colourSeg, gradeOf, isGrassRoll, sqmOf, sizeLabel,
-  stockCheck, explodeInvoiceLines, partKey, isColPick, batchBreakdown, batchKeyForPick, buildPicks, parentIndex } from "../../lib/crmCore.js";
+  stockCheck, explodeInvoiceLines, partKey, isColPick, batchBreakdown, batchKeyForPick, buildPicks, parentIndex, natCmp } from "../../lib/crmCore.js";
 import { Icon, SuggestInput, selectAllProps, inp, btn, abtn, Chip, prodName } from "./ui.jsx";
 
 const numInp = { ...inp, textAlign: "right" };
@@ -52,6 +52,7 @@ const groupOption = (grp, crm) => {
   if (colours.length > 1) readable = readable.replace(/\/[A-Z]{2,4}$/, ""); // the colour is a choice, not part of the identity
   const stock = grp.reduce((t, m) => t + (Number(m.stock) || 0), 0);
   return {
+    sortName: name,
     value: "grp=" + rep.sku,
     label: [name, readable, grp.map((m) => m.sku).join(" "), grp.map((m) => m.family || "").join(" "), colours.join(" "), srcs.join(" ")].join(" · "),
     src: srcs[0] || "",
@@ -179,7 +180,7 @@ export default function LinesEditor({ doc, edit, crm, readOnly, toolbar, onOpenP
       const grp = (pidx.groups.get(k) || [p]).filter((m) => !m.grade);
       out.push(groupOption(grp, crm)); // one presentation for every row, single-variant products included
     });
-    out.sort((a, b) => String((a.cells && a.cells[0].text) || a.label).localeCompare(String((b.cells && b.cells[0].text) || b.label)));
+    out.sort((a, b) => natCmp(a.sortName || a.label, b.sortName || b.label));
     return out;
   }, [crm.masterProducts, crm.skuLists, pidx]);
   const sources = useMemo(() => {
@@ -484,7 +485,7 @@ function PhoneSkuPicker({ crm, pidx, onPick, onBlank, onClose }) {
         return { e, rank: String(e.p.name || "").toLowerCase().startsWith(t) ? 0 : String(e.p.name || "").toLowerCase().includes(t) ? 1 : 2 };
       })
       .filter(Boolean)
-      .sort((a, b) => a.rank - b.rank || String(a.e.p.name).localeCompare(String(b.e.p.name)))
+      .sort((a, b) => a.rank - b.rank || natCmp(a.e.p.name, b.e.p.name))
       .map((x) => x.e)
       .slice(0, 60);
   }, [t, prods]);

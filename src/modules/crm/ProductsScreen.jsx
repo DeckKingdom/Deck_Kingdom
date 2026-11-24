@@ -6,7 +6,7 @@ import React, { useState, useMemo } from "react";
 import { NAVY, GOLD, RED, uid, shipmentLandedBasis } from "../../lib/core.js";
 import {
   kitWeight,
-  skuLists, productSkuBase, masterKey, productsInList, colourSeg, numericSku, segLabel, cleanCode, codeSource,
+  skuLists, productSkuBase, masterKey, productsInList, colourSeg, numericSku, segLabel, cleanCode, codeSource, natCmp,
   DEFAULT_SKU_LISTS, gbp, kitPartsFor, supplierKey,
   tidyDescription, suggestDescription, codeFollowsName, suggestCode, usesStyles,
 } from "../../lib/crmCore.js";
@@ -96,7 +96,7 @@ export default function ProductsScreen({ planner, update, crm, updateCrm, remove
     })
     .sort((a, b) =>
       (a.complete ? 1 : 0) - (b.complete ? 1 : 0) || // anything missing its SKU fields stays on top
-      a.name.localeCompare(b.name, "en-GB", { numeric: true }) // then straight A-Z, lengths in number order
+      natCmp(a.name, b.name) // then straight A-Z, lengths in true number order (3.6m < 4m < 4.8m)
     );
   const incomplete = groups.filter((g) => !g.complete).length;
   // a range sub-category (e.g. Screens) shows its styles as one product: every style is still its own
