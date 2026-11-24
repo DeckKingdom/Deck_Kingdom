@@ -139,10 +139,12 @@ export const prodName = (name, dim = "#8593a8") => {
   const str = String(name || "");
   const i = str.indexOf("(");
   if (i < 1) return str;
+  // several bracket groups read as one: "(boxed) (1.2m)" shows as "(boxed · 1.2m)"
+  const note = str.slice(i).trim().replace(/\)\s*[-–·]?\s*\(/g, " · ");
   return (
     <>
       {str.slice(0, i).trim()}{" "}
-      <span style={{ fontSize: "0.85em", fontWeight: 600, color: dim }}>{str.slice(i).trim()}</span>
+      <span style={{ fontSize: "0.85em", fontWeight: 600, color: dim }}>{note}</span>
     </>
   );
 };
