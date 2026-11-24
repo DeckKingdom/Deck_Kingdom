@@ -85,7 +85,15 @@ export default function ProductsScreen({ planner, update, crm, updateCrm, remove
     .filter((g) => !cat || g.p0.segCat === cat)
     .filter((g) => !sub || g.p0.segSub === sub)
     .filter((g) => !src || (src === "KIT" ? g.items.some((p) => p.isKit === true) : g.items.some((p) => supKey(p) === src)))
-    .filter((g) => !ql || g.items.some((p) => [p.code, p.name, p.supplier, (p.colours || []).join(" "), productSkuBase(p)].some((v) => String(v || "").toLowerCase().includes(ql))))
+    .filter((g) => {
+      if (!ql) return true;
+      // loose search: every typed word matches somewhere, any order ("4.8 dec")
+      const words = ql.split(/\s+/).filter(Boolean);
+      return g.items.some((p) => {
+        const hay = [p.code, p.name, p.supplier, (p.colours || []).join(" "), productSkuBase(p)].map((v) => String(v || "")).join(" ").toLowerCase();
+        return words.every((w) => hay.includes(w));
+      });
+    })
     .sort((a, b) =>
       (a.complete ? 1 : 0) - (b.complete ? 1 : 0) || // anything missing its SKU fields stays on top
       a.name.localeCompare(b.name, "en-GB", { numeric: true }) // then straight A-Z, lengths in number order
