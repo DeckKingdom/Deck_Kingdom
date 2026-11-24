@@ -12,7 +12,7 @@ import {
 } from "../../lib/crmCore.js";
 import { Icon, Chip, Modal, lbl, card, inp, btn, goldBtn, abtn, selectAllProps, prodName } from "./ui.jsx";
 import { tidyPlan, applyTidy } from "../../lib/productTidy.js";
-import { cleanupPlan, applyCleanup } from "../../lib/productCleanup.js";
+import { renamePlan, applyRenames } from "../../lib/productRenames.js";
 
 const sel = { ...inp, padding: "5px 6px", fontSize: 12.5 };
 const numI = { ...inp, textAlign: "right", padding: "5px 7px", fontSize: 13 };
@@ -357,13 +357,13 @@ export default function ProductsScreen({ planner, update, crm, updateCrm, remove
   const tidyLog = useMemo(() => tidyPlan(planner, crm), [planner.products, crm.skuLists]);
   const [tidyOpen, setTidyOpen] = useState(false);
   const [tidyDone, setTidyDone] = useState(0);
-  // the 23 Nov clean-up reviewed with Claude: offered until it's been applied
-  const cleanLog = useMemo(() => cleanupPlan(planner, crm), [planner.products, crm.masterProducts, crm.skuLists]);
+  // agreed rename passes: spent once applied, can never fight later hand edits
+  const cleanLog = useMemo(() => renamePlan(planner), [planner.products]);
   const [cleanOpen, setCleanOpen] = useState(false);
   const [cleanDone, setCleanDone] = useState(0);
   const runCleanup = () => {
-    const r = applyCleanup(planner, crm);
-    updateCrm((c) => { c.masterProducts = r.masterProducts; c.skuLists = r.skuLists; return c; });
+    const r = applyRenames(planner, crm);
+    updateCrm((c) => { c.masterProducts = r.masterProducts; return c; });
     update((d) => { d.products = r.products; return d; });
     setCleanOpen(false);
     setCleanDone(cleanLog.length);
@@ -413,18 +413,18 @@ export default function ProductsScreen({ planner, update, crm, updateCrm, remove
         <div style={{ ...card, display: "flex", alignItems: "center", gap: 12, background: "#fff8e6", borderColor: "#f2dca2", marginBottom: 10 }}>
           <Icon name="refresh" stroke="#a06d00" />
           <span style={{ flex: 1, fontSize: 13.5, fontWeight: 600, color: NAVY }}>
-            Product changes reviewed with Claude are ready — {cleanLog.length} to apply. Latest: names go family → material → part → length ("Fence Post Composite Cap"), so A-Z keeps each family together.
+            Renames you approved are ready — {cleanLog.length} to apply: the Decking boards that led with the part (Bullnose, Fascia, Step Edge) go family-first, so they sit with their siblings in the A-Z.
           </span>
           <button style={goldBtn} onClick={() => setCleanOpen(true)}>Review &amp; apply</button>
         </div>
       )}
       {cleanDone > 0 && cleanLog.length === 0 && (
         <div style={{ ...card, background: "#eef8f1", borderColor: "#bfe3ca", fontSize: 13.5, fontWeight: 700, color: "#28713e", marginBottom: 10 }}>
-          Clean-up applied — {cleanDone} changes.
+          Renames applied — {cleanDone}.
         </div>
       )}
       {cleanOpen && (
-        <Modal title={"Products clean-up · " + cleanLog.length + " changes"} onClose={() => setCleanOpen(false)} width={720}>
+        <Modal title={"Renames · " + cleanLog.length} onClose={() => setCleanOpen(false)} width={720}>
           <div style={{ maxHeight: "55vh", overflowY: "auto", border: "1px solid #e6e9ef", borderRadius: 10, padding: "6px 12px" }}>
             {cleanLog.map((l, k) => (
               <div key={k} style={{ fontSize: 12.5, fontWeight: 600, color: NAVY, padding: "5px 0", borderBottom: "1px solid #f0f2f6" }}>{l}</div>
