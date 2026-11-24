@@ -138,7 +138,9 @@ const plan = (planner, crm) => {
   return { products, log, addList, removed, mergeInto, styleFlag, newStyles, screenListOk };
 };
 
-export const tidyPlan = (planner, crm) => plan(planner, crm).log;
+// RETIRED 24 Nov 2026: applied on 23 Nov; Jon's later hand renames (bracket
+// notes, price changes) must not be fought back. Kept for the record only.
+export const tidyPlan = () => [];
 
 // apply: returns { products, skuLists, removedIds } — the caller saves them
 export const applyTidy = (planner, crm) => {

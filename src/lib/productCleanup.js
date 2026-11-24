@@ -39,6 +39,7 @@ const NAME = {
 };
 
 export function cleanupPlan(planner, crm) {
+  return []; // RETIRED 24 Nov 2026: applied on 23-24 Nov; Jon has since renamed products by hand (bracket notes) and the diff would strip them. Kept for the record only.
   const out = [];
   const mps = (crm && crm.masterProducts) || [];
   const prods = (planner && planner.products) || [];
