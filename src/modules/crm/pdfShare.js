@@ -54,12 +54,19 @@ export async function htmlToPdfFile(html, fileName) {
   }
 }
 
-// Send a file over WhatsApp. Where the device can share files (phones, tablets, Windows with the
-// WhatsApp app), the share sheet opens with the PDF attached. Otherwise the PDF is downloaded and
-// the driver's chat opens with the message, ready to attach it.
+// Send a file over WhatsApp.
+// Phones and tablets: the native share sheet carries the PDF straight into the chat you pick,
+// so that stays the route there.
+// Desktop: Windows' share sheet can't pre-pick the chat and WhatsApp drops the caption with a
+// file attached, so the better flow (Jon, 25 Nov 2026) is the direct one the review follow-ups
+// use — download the PDF and open the customer's chat with the message already typed, ready to
+// attach from Downloads.
 // Returns "shared" | "cancelled" | "downloaded".
+const onPhone = () => /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+  || (window.matchMedia && window.matchMedia("(pointer: coarse)").matches);
+
 export async function shareToWhatsApp(file, text, phone) {
-  if (navigator.canShare && navigator.share) {
+  if (onPhone() && navigator.canShare && navigator.share) {
     try {
       if (navigator.canShare({ files: [file] })) {
         await navigator.share({ files: [file], text });

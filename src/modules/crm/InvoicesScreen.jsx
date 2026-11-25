@@ -303,9 +303,10 @@ export default function InvoicesScreen({ headerH = 0, openProduct, money = true,
     const name = "Statement - " + String(stCust.name || "customer").replace(/[^\w\- ]+/g, "").trim() + " - " + today() + ".pdf";
     return htmlToPdfFile(statementPdfHtml(stCust, stOwed), name);
   };
-  // WhatsApp: on phones / the WhatsApp app the share sheet opens with the PDF
-  // attached; elsewhere the PDF downloads and the chat opens ready to attach it.
-  // No mobile on the account? WhatsApp opens on its own chat picker.
+  // WhatsApp: on phones the share sheet opens with the PDF attached; on the
+  // desktop the PDF downloads and the customer's chat opens with the message
+  // typed, ready to attach it (same route as the review follow-ups).
+  // No mobile on the account? WhatsApp opens without a chat picked.
   const sendStatementWa = async () => {
     setStNote("Making the statement PDF…");
     try {
@@ -314,7 +315,7 @@ export default function InvoicesScreen({ headerH = 0, openProduct, money = true,
       try { await navigator.clipboard.writeText(caption); } catch (e) { /* no clipboard here */ }
       const how = await shareToWhatsApp(file, caption, stMobile ? waNumber(stMobile) : "");
       setStNote(how === "shared" ? "PDF handed to sharing — the covering message is on your clipboard, paste it in the chat."
-        : how === "downloaded" ? "Statement downloaded (" + file.name + ") — attach it in the WhatsApp chat (message is on your clipboard)." : "");
+        : how === "downloaded" ? "Statement downloaded (" + file.name + ") — the chat's open with the message typed; drag the PDF in from Downloads (or 📎) and send." : "");
       if (how !== "cancelled") setTimeout(() => setStNote(""), 12000);
     } catch (e) {
       setStNote("Couldn't make the PDF — " + ((e && e.message) || "try again"));
@@ -773,7 +774,7 @@ export default function InvoicesScreen({ headerH = 0, openProduct, money = true,
               try { await navigator.clipboard.writeText(caption); } catch { /* fine */ }
               const how = await shareToWhatsApp(file, caption, cust && cust.mobile ? waNumber(cust.mobile) : "");
               setNotice(how === "shared" ? "Sent to the share sheet. WhatsApp drops the caption when a file is attached — the message is on your clipboard, long-press the chat box and paste."
-                : how === "downloaded" ? "PDF downloaded — attach it in the WhatsApp chat that's opened (the message is on your clipboard)." : "");
+                : how === "downloaded" ? "PDF downloaded — the customer's chat is open with the message typed. Drag the PDF in from Downloads (or 📎) and send." : "");
             } catch (e) {
               setNotice(String((e && e.message) || e));
             }

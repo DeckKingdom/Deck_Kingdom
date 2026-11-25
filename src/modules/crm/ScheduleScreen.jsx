@@ -622,7 +622,7 @@ export default function ScheduleScreen({ headerH = 0, panels = { pending: true, 
       const html = runDocsHtml(list, ["delivery"], { custOf: (x) => custById[x.customerId], siteOf: (x) => siteById[x.siteId], crm, planner, title: name });
       const file = await htmlToPdfFile(html, name);
       const how = await shareToWhatsApp(file, runCaption(list, driver, date), UK_PHONE(phone));
-      setSendNote(how === "shared" ? "" : how === "cancelled" ? "" : "Run sheet downloaded (" + name + ") — attach it in the WhatsApp chat that's opened.");
+      setSendNote(how === "shared" ? "" : how === "cancelled" ? "" : "Run sheet downloaded (" + name + ") — the chat's open with the message typed; drag the PDF in and send.");
       if (how === "downloaded") setTimeout(() => setSendNote(""), 9000);
     } catch (e) {
       setSendNote("Couldn't make the PDF — " + (e && e.message ? e.message : "try again"));
