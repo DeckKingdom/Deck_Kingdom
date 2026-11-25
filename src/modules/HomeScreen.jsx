@@ -11,7 +11,7 @@ import {
 } from "../lib/crmCore.js";
 import { tasksAvailable } from "../data/crmStorage.js";
 import { Icon, Chip, card, sect, lbl, inp, btn, goldBtn, RiskChip } from "./crm/ui.jsx";
-import { readOrderScreenshot } from "../data/aiOrder.js";
+import { readOrderSmart } from "../data/aiOrder.js";
 import WebsiteCard from "./WebsiteCard.jsx";
 import ReviewsCard from "./ReviewsCard.jsx";
 import { CollectionPeek, InvoicePeek } from "./crm/Peeks.jsx";
@@ -43,7 +43,7 @@ const rowStyle = { display: "flex", gap: 11, alignItems: "flex-start", padding: 
 
 // Paste or drop a screenshot of an order thread; Claude reads it and the
 // chosen action opens a draft job or quote for a human check.
-function AiDropCard({ onAiOrder }) {
+function AiDropCard({ onAiOrder, crm }) {
   const [file, setFile] = useState(null);
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState("");
@@ -69,11 +69,13 @@ function AiDropCard({ onAiOrder }) {
     return () => document.removeEventListener("paste", onPaste);
   }, []);
   const act = async (intent) => {
-    if (!file || busy) return;
+    if ((!file && !note.trim()) || busy) return;
     try {
-      setBusy(intent === "quote" ? "Reading the screenshot for a quote…" : intent === "sample" ? "Reading the screenshot for a sample request…" : "Reading the screenshot for a job…");
+      setBusy(file
+        ? (intent === "quote" ? "Reading the screenshot for a quote…" : intent === "sample" ? "Reading the screenshot for a sample request…" : "Reading the screenshot for a job…")
+        : "Reading your message — looking the customer and their recent orders up…");
       setErr("");
-      const order = await readOrderScreenshot(file, note);
+      const { order } = await readOrderSmart({ crm, file, note });
       setBusy("");
       setFile(null);
       setUrl((u) => { if (u) URL.revokeObjectURL(u); return ""; });
@@ -86,8 +88,8 @@ function AiDropCard({ onAiOrder }) {
     }
   };
   const actBtn = (label, intent, primary) => (
-    <button disabled={!file || !!busy} onClick={() => act(intent)}
-      style={{ ...btn, flex: 1, justifyContent: "center", padding: "10px 0", fontSize: 13.5, opacity: !file || busy ? 0.45 : 1,
+    <button disabled={(!file && !note.trim()) || !!busy} onClick={() => act(intent)}
+      style={{ ...btn, flex: 1, justifyContent: "center", padding: "10px 0", fontSize: 13.5, opacity: (!file && !note.trim()) || busy ? 0.45 : 1,
         ...(primary ? { background: "#0B1F3F", borderColor: "#0B1F3F", color: "#fff" } : {}) }}>
       {label}
     </button>
@@ -123,7 +125,7 @@ function AiDropCard({ onAiOrder }) {
       )}
       {noteOpen && (
         <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} autoFocus
-          placeholder="Anything to go with it — e.g. “use the second address they give”, “it's a quote for the fencing only”, “book it for Friday”"
+          placeholder={"With a screenshot: extra steer. On its own, the whole request — \u201cLee Reyner wants one more board, same as last time\u201d"}
           style={{ marginTop: 8, width: "100%", boxSizing: "border-box", resize: "vertical", border: "1px solid #d4d9e2", borderRadius: 10, padding: "8px 10px",
             fontFamily: "inherit", fontSize: 12.5, fontWeight: 600, color: "#223", outline: "none", background: "#fff" }} />
       )}
@@ -274,7 +276,7 @@ export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTa
           </div>
           {onAiOrder && (
             <div className="dk-home-cell" style={{ gridColumn: "span 2", minWidth: 0 }}>
-              <AiDropCard onAiOrder={onAiOrder} />
+              <AiDropCard onAiOrder={onAiOrder} crm={crm} />
             </div>
           )}
           <div className="dk-home-cell" style={{ gridColumn: "span 4", minWidth: 0 }}>
