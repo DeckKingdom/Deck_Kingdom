@@ -4,6 +4,64 @@
 import { getSupabase } from "./supabaseClient.js";
 import { blankInvoice, blankQuote, blankLine, blankSample, blankSampleItem, blankSite, nextNumber } from "../lib/crmCore.js";
 
+// text-only or screenshot+text read, with optional customer history for
+// resolving "one more board" style requests against what they actually had
+export async function readOrderRequest({ file = null, note = "", history = null }) {
+  const sb = await getSupabase();
+  const body = { note: String(note || "").trim() };
+  if (file) {
+    const base64 = await new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res(String(r.result).split(",")[1]);
+      r.onerror = rej;
+      r.readAsDataURL(file);
+    });
+    body.image = base64;
+    body.mime = file.type || "image/png";
+  }
+  if (history) body.history = history;
+  const { data, error } = await sb.functions.invoke("read-order", { body });
+  if (error) throw error;
+  if (data && data.error) throw new Error(data.error);
+  return data.order;
+}
+
+// a customer's recent orders, condensed for the assistant to resolve against
+export function recentOrdersFor(crm, cust, n = 3) {
+  if (!cust) return null;
+  const invs = (crm.invoices || [])
+    .filter((i) => i.customerId === cust.id && !/void/i.test(String(i.jobType || "")))
+    .sort((a, b) => String(b.invDate || "").localeCompare(String(a.invDate || "")))
+    .slice(0, n);
+  if (!invs.length) return null;
+  return invs.map((i) => ({
+    inv: i.invNo || "",
+    date: i.invDate || "",
+    items: (i.lines || []).filter((l) => String(l.description || "").trim()).map((l) => ({
+      item: l.description, colour: l.colour || "", qty: Number(l.qty) || 0,
+    })).slice(0, 15),
+  }));
+}
+
+// one call that does the whole job: parse the request (text alone is fine),
+// find the account, and when the request leans on "what they had", make a
+// second pass with their recent orders so "one more board" becomes the exact
+// board, colour and all
+export async function readOrderSmart({ crm, file = null, note = "" }) {
+  const order = await readOrderRequest({ file, note });
+  const cust = matchCustomer(crm, order);
+  if (!cust) return { order, cust: null };
+  const history = recentOrdersFor(crm, cust);
+  const vague = (order.items || []).some((x) => !String(x.text || "").match(/\d\.?\d?m|woodgrain|embossed|premium|enhanced|fascia|kit|balustrade|cladding|grass/i));
+  if (history && (vague || order.needsHistory)) {
+    try {
+      const order2 = await readOrderRequest({ file, note, history });
+      if (order2 && (order2.items || []).length) return { order: { ...order2, customer: order.customer }, cust };
+    } catch (e) { /* the first-pass order still stands */ }
+  }
+  return { order, cust };
+}
+
 export async function readOrderScreenshot(file, note = "") {
   const base64 = await new Promise((ok, no) => {
     const r = new FileReader();
@@ -51,10 +109,29 @@ export function matchProduct(prods, text, colour) {
 export function matchCustomer(crm, order) {
   const dg = (v) => String(v || "").replace(/\D/g, "");
   const mob = dg(order && order.customer && order.customer.mobile);
-  let c = mob.length >= 10 ? (crm.customers || []).find((x) => dg(x.mobile) === mob || dg(x.landline) === mob) : null;
+  // phones match on their last 9 digits, so 07... and +447... are the same number
+  const tail = (v) => dg(v).slice(-9);
+  let c = mob.length >= 9 ? (crm.customers || []).find((x) => (dg(x.mobile) && tail(x.mobile) === tail(mob)) || (dg(x.landline) && tail(x.landline) === tail(mob))) : null;
+  const email = String((order && order.customer && order.customer.email) || "").trim().toLowerCase();
+  if (!c && email) c = (crm.customers || []).find((x) => String(x.email || "").trim().toLowerCase() === email);
   if (!c) {
     const nm = String((order && order.customer && order.customer.name) || "").trim().toLowerCase();
-    if (nm) c = (crm.customers || []).find((x) => String(x.name || "").trim().toLowerCase() === nm);
+    if (nm) {
+      const exact = (crm.customers || []).filter((x) => String(x.name || "").trim().toLowerCase() === nm);
+      if (exact.length === 1) c = exact[0];
+      else if (!exact.length) {
+        // loose: every word of the extracted name appears in the account name
+        // OR the contact person — but only when exactly ONE account fits
+        const words = nm.split(/\s+/).filter((w) => w.length > 1);
+        if (words.length) {
+          const hits = (crm.customers || []).filter((x) => {
+            const hay = (String(x.name || "") + " " + String(x.contact || "")).toLowerCase();
+            return words.every((w) => hay.includes(w));
+          });
+          if (hits.length === 1) c = hits[0];
+        }
+      }
+    }
   }
   return c || null;
 }
