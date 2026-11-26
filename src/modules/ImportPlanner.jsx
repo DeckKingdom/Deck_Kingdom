@@ -164,7 +164,7 @@ export default function ImportPlanner() {
     if (!fromId || fromId === toId) return;
     update((d) => {
       const from = d.shipments.findIndex((x) => x.id === fromId);
-      if (from < 0) return;
+      if (from < 0) return d;
       const isNum = (s) => /^shipment\s+\d+$/i.test(String(s.name || "").trim());
       const ladder = d.shipments.filter(isNum).map((s) => Number(/(\d+)\s*$/.exec(s.name)[1]));
       const [s] = d.shipments.splice(from, 1);
@@ -172,6 +172,7 @@ export default function ImportPlanner() {
       d.shipments.splice(to < 0 ? d.shipments.length : to, 0, s);
       let k = 0;
       d.shipments.forEach((x) => { if (isNum(x) && k < ladder.length) x.name = "Shipment " + ladder[k++]; });
+      return d; // update() takes the return as the new state — missing this blanked the app (26 Nov)
     });
   };
   const [prodPop, setProdPop] = useState(null);
