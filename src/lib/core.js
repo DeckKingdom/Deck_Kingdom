@@ -131,10 +131,17 @@ export const stepPallets = (v, dir) => {
   return 0.25;
 };
 
+// total pieces on a shipment line — a hand-entered total (uneven pallets)
+// overrides pallets × qty per pallet
+export const linePieces = (l) => {
+  const ov = l.pieces === "" || l.pieces === null || l.pieces === undefined ? null : Number(l.pieces);
+  return ov === null || !isFinite(ov) ? (Number(l.pallets) || 0) * (Number(l.qty) || 0) : ov;
+};
+
 // ===== landed cost per piece (same maths as the Landed Costs tab) =====
 export const shipmentLandedBasis = (s) => {
   let pieces = 0;
-  (s.lines || []).forEach((l) => (pieces += (Number(l.pallets) || 0) * (Number(l.qty) || 0)));
+  (s.lines || []).forEach((l) => (pieces += linePieces(l)));
   const depUsd = Number(s.depositUsd) || 0;
   const depFx = Number(s.depositFx) || 0;
   const balUsd = Number(s.balanceUsd) || 0;

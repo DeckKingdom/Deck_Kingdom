@@ -38,6 +38,7 @@ const productToRow = (p, i) => ({
 });
 
 let etaReady = false; // shipments.eta_date (migration 031)
+let linePiecesReady = false; // shipment_lines.pieces (migration 071)
 let stagesReady = false; // shipments.confirmed_date / production_date / shipped_date / balance_due (migration 040)
 const shipToRow = (s, i) => {
   const row = { id: s.id, position: i };
@@ -53,6 +54,8 @@ const lineToRow = (l, shipmentId, i) => ({
   id: l.id, shipment_id: shipmentId, product_id: str(l.productId), colour: str(l.colour),
   pallets: Number(l.pallets) || 0, qty: Number(l.qty) || 0,
   cost: Number(l.cost) || 0, weight: Number(l.weight) || 0, position: i,
+  // hand-entered total pieces for uneven pallets; null = pallets × qty (migration 071)
+  ...(linePiecesReady ? { pieces: num(l.pieces) } : {}),
 });
 
 function rowsFromData(d) {
@@ -96,8 +99,10 @@ async function loadAll() {
     (linesByShip[r.shipment_id] = linesByShip[r.shipment_id] || []).push({
       id: r.id, productId: r.product_id, colour: r.colour, pallets: Number(r.pallets),
       qty: Number(r.qty), cost: Number(r.cost), weight: Number(r.weight),
+      pieces: r.pieces == null ? "" : Number(r.pieces),
     });
   });
+  if (l.data.length) linePiecesReady = Object.prototype.hasOwnProperty.call(l.data[0], "pieces");
   etaReady = s.data.length ? Object.prototype.hasOwnProperty.call(s.data[0], "eta_date") : etaReady;
   stagesReady = s.data.length ? Object.prototype.hasOwnProperty.call(s.data[0], "shipped_date") : stagesReady;
   const shipments = s.data.map((r) => ({

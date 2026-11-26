@@ -1001,8 +1001,10 @@ export default function ImportPlanner() {
     const qty = Number(l.qty) || 0;
     const cost = Number(l.cost) || 0;
     const weight = Number(l.weight) || 0;
-    const pieces = pallets * qty;
-    return { pallets, pieces, total: pieces * cost, kg: pieces * weight };
+    // uneven pallet sizes: a hand-entered total overrides pallets × qty
+    const ov = l.pieces === "" || l.pieces === null || l.pieces === undefined ? null : Number(l.pieces);
+    const pieces = ov === null || !isFinite(ov) ? pallets * qty : ov;
+    return { pallets, pieces, ovr: ov !== null && isFinite(ov), total: pieces * cost, kg: pieces * weight };
   };
 
   const shipTotals = (s) =>
@@ -2375,7 +2377,16 @@ export default function ImportPlanner() {
                           <td style={td}>
                             <input {...selectAllProps} type="number" min="0" step="1" value={l.qty} onChange={(e) => setLine(l.id, "qty", e.target.value)} style={num} />
                           </td>
-                          <td style={{ ...td, textAlign: "right", color: "#5a6a85" }}>{int(c.pieces)}</td>
+                          <td style={td}>
+                            <input {...selectAllProps}
+                              type="number" min="0" step="1"
+                              value={l.pieces === null || l.pieces === undefined ? "" : l.pieces}
+                              placeholder={String(int((Number(l.pallets) || 0) * (Number(l.qty) || 0)))}
+                              onChange={(e) => setLine(l.id, "pieces", e.target.value)}
+                              title={c.ovr ? "Hand-entered total — clear the box to go back to pallets × qty (" + int((Number(l.pallets) || 0) * (Number(l.qty) || 0)) + ")" : "Pallets × qty — type a number when the pallets aren't even sizes"}
+                              style={{ ...num, ...(c.ovr ? { fontWeight: 700, borderColor: GOLD, background: "#fdf8ec" } : { color: "#5a6a85" }) }}
+                            />
+                          </td>
                           <td style={td}>
                             <input {...selectAllProps} type="number" min="0" step="0.1" value={l.weight} onChange={(e) => setLine(l.id, "weight", e.target.value)} style={num} />
                           </td>

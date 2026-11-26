@@ -1,5 +1,5 @@
 // CRM domain helpers: customers, sites, invoices, delivery schedule.
-import { uid, daysBetween, landedPerPiece, addDays } from "./core.js";
+import { uid, daysBetween, landedPerPiece, addDays, linePieces } from "./core.js";
 
 export const JOB_TYPES = ["Pending", "Back Order", "Delivery", "Customer Collection", "Evri", "Post Office", "Courier TG", "Returns"];
 // run number on the delivery schedule (was part of the job type: "Delivery Run 2")
@@ -2033,7 +2033,7 @@ export const matchShipmentToStock = (s, crm) => {
   const matched = [];
   const unmatched = [];
   (s.lines || []).forEach((l) => {
-    const pieces = (Number(l.pallets) || 0) * (Number(l.qty) || 0);
+    const pieces = linePieces(l);
     if (pieces <= 0) return;
     const candidates = (crm.masterProducts || []).filter((p) => p.importProductId === l.productId);
     const mp =
