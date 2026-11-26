@@ -155,6 +155,25 @@ export default function ImportPlanner() {
       s.lines.splice(to < 0 ? s.lines.length : to, 0, l);
     });
   };
+  // drag a shipment row on the overview to a new slot; the "Shipment N" numbers
+  // stay laddered to their positions (top stays the highest number) while the
+  // rows' contents, dates and invoices travel with the drag
+  const [dragShip, setDragShip] = useState(null);
+  const [overShip, setOverShip] = useState(null);
+  const moveShipment = (fromId, toId) => {
+    if (!fromId || fromId === toId) return;
+    update((d) => {
+      const from = d.shipments.findIndex((x) => x.id === fromId);
+      if (from < 0) return;
+      const isNum = (s) => /^shipment\s+\d+$/i.test(String(s.name || "").trim());
+      const ladder = d.shipments.filter(isNum).map((s) => Number(/(\d+)\s*$/.exec(s.name)[1]));
+      const [s] = d.shipments.splice(from, 1);
+      const to = toId ? d.shipments.findIndex((x) => x.id === toId) : -1;
+      d.shipments.splice(to < 0 ? d.shipments.length : to, 0, s);
+      let k = 0;
+      d.shipments.forEach((x) => { if (isNum(x) && k < ladder.length) x.name = "Shipment " + ladder[k++]; });
+    });
+  };
   const [prodPop, setProdPop] = useState(null);
   // jobs, quotes and the schedule can open a product's record from its line (managers and admin, who can change products)
   const openProduct = access && access.canManage ? (productId, rect) => setProdPop({ productId, rect, fromCrm: true }) : null;
@@ -1796,6 +1815,7 @@ export default function ImportPlanner() {
             <table className="dk-sticky-table" style={{ width: "100%", borderCollapse: "collapse", minWidth: 1460, tableLayout: "fixed" }}>
               <thead>
                 <tr>
+                  <th style={{ ...th, width: 24 }}></th>
                   <th style={{ ...th, width: 108 }}>Shipment</th>
                   <th style={{ ...th }}>Products</th>
                   <th style={{ ...th, width: 78, textAlign: "right" }}>Weight</th>
@@ -1828,7 +1848,17 @@ export default function ImportPlanner() {
                         .join(" / ")
                     : "No lines yet";
                   return (
-                    <tr key={s.id} style={{ background: stageTint(s.status) }}>
+                    <tr key={s.id}
+                      onDragOver={(e) => { if (dragShip && dragShip !== s.id) { e.preventDefault(); if (overShip !== s.id) setOverShip(s.id); } }}
+                      onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setOverShip((x) => (x === s.id ? null : x)); }}
+                      onDrop={(e) => { e.preventDefault(); moveShipment(dragShip, s.id); setDragShip(null); setOverShip(null); }}
+                      style={{ background: stageTint(s.status), opacity: dragShip === s.id ? 0.4 : 1, boxShadow: overShip === s.id ? "inset 0 3px 0 " + GOLD : "none" }}>
+                      <td style={{ ...td, padding: "0 2px" }}>
+                        <span draggable title="Drag to swap this shipment's place in the order — the numbers stay put, the contents move"
+                          onDragStart={(e) => { e.dataTransfer.setData("text/plain", s.id); e.dataTransfer.effectAllowed = "move"; setDragShip(s.id); }}
+                          onDragEnd={() => { setDragShip(null); setOverShip(null); }}
+                          style={{ cursor: "grab", color: "#aab3c2", fontSize: 14, lineHeight: 1, padding: "6px 2px", userSelect: "none", display: "inline-block" }}>⋮⋮</span>
+                      </td>
                       <td style={td}>
                         <button
                           onClick={() => {
@@ -1936,6 +1966,14 @@ export default function ImportPlanner() {
                     </tr>
                   );
                 })}
+                {dragShip && (
+                  <tr onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => { e.preventDefault(); moveShipment(dragShip, null); setDragShip(null); setOverShip(null); }}>
+                    <td colSpan={14} style={{ ...td, textAlign: "center", color: "#8593a8", fontSize: 12.5, padding: 10, border: "1px dashed #b9c2d0", borderRadius: 8 }}>
+                      Drop here to move it to the bottom
+                    </td>
+                  </tr>
+                )}
                 {!data.shipments.length && (
                   <tr>
                     <td colSpan={14} style={{ ...td, textAlign: "center", color: "#5a6a85", padding: 24 }}>
