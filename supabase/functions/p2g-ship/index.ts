@@ -111,7 +111,7 @@ Deno.serve(async (req) => {
       Value: Number(p.value) || 25, Weight: Number(p.weight) || 1,
       Length: Number(p.length) || 30, Width: Number(p.width) || 20, Height: Number(p.height) || 10,
     }));
-    if (!parcels.length) return json({ error: "No parcel sizes given." }, 400);
+    if (!parcels.length && b.action !== "labels") return json({ error: "No parcel sizes given." }, 400);
 
     if (b.action === "quote") {
       const q = await api("/api/quotes", {
