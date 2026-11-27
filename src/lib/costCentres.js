@@ -23,6 +23,7 @@ export const isOverhead = (centre) => !!centre && centre !== "Stock";
 const SUPPLIER_RULES = [
   [/seneca|revolve/i, /facilit|ratchet|interest|bank fee|vat part/i, "Finance & Professional", "Trade finance interest"],
   [/seneca|revolve/i, null, "Stock", "Veejoy repayments"],
+  [/close brothers/i, /insurance/i, "Fleet", "Insurance & breakdown"], // they finance the insurance premiums too
   [/close brothers/i, null, "Plant", "Forklift finance"],
   [/joanne kirk|j ?e ?kirk/i, null, "Premises", "Rent"],
   [/tameside met/i, null, "Premises", "Rates"],
