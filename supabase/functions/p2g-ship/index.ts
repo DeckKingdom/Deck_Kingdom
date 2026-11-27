@@ -40,8 +40,18 @@ const api = async (path: string, body?: unknown, method = "POST") => {
   const text = await r.text();
   let j: any = null;
   try { j = JSON.parse(text); } catch { /* keep text */ }
-  if (!r.ok) throw new Error("Parcel2Go " + path + " failed (" + r.status + "): " + (j && (j.Message || j.message) || text.slice(0, 300)));
+  if (!r.ok) {
+    // P2G validation errors arrive as { Errors: [{ Type, Error }] } — show the readable parts
+    const list = j && Array.isArray(j.Errors) ? [...new Set(j.Errors.map((e: any) => e && (e.Error || e.Message)).filter(Boolean))].join(" · ") : "";
+    throw new Error("Parcel2Go " + path + " failed (" + r.status + "): " + (list || (j && (j.Message || j.message)) || text.slice(0, 300)));
+  }
   return j;
+};
+
+// "WA4-4BX" / "wa44bx" -> "WA4 4BX" (P2G rejects anything but the spaced form)
+const pcFix = (s: unknown) => {
+  const t = String(s || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  return t.length > 3 ? t.slice(0, -3) + " " + t.slice(-3) : t;
 };
 
 // Deck Kingdom's collection address
@@ -64,7 +74,7 @@ Deno.serve(async (req) => {
     if (b.action === "quote") {
       const q = await api("/api/quotes", {
         CollectionAddress: { Country: "GBR" },
-        DeliveryAddress: { Country: "GBR", Postcode: String(b.delivery && b.delivery.postcode || "").trim() },
+        DeliveryAddress: { Country: "GBR", Postcode: pcFix(b.delivery && b.delivery.postcode) },
         Parcels: parcels,
       });
       if ((q.Quotes || []).length) {
@@ -91,6 +101,19 @@ Deno.serve(async (req) => {
 
     if (b.action === "order") {
       const d = b.delivery || {};
+      // P2G insists on a property name/number of its own: peel the first part off
+      // the address line when none was given ("Suite 6, Oaktree Barn, Hatton Lane"
+      // -> property "Suite 6", street "Oaktree Barn, Hatton Lane")
+      let prop = String(d.property || "").trim();
+      let street = String(d.street || "").trim();
+      if (!prop && street) {
+        const parts = street.split(",").map((s: string) => s.trim()).filter(Boolean);
+        if (parts.length > 1) { prop = parts[0]; street = parts.slice(1).join(", "); }
+        else {
+          const m = street.match(/^(\d+[A-Za-z]?)\s+(.+)$/); // "12 High St"
+          if (m) { prop = m[1]; street = m[2]; } else prop = street; // last resort: repeat it
+        }
+      }
       const item = {
         Id: crypto.randomUUID(),
         CollectionDate: b.collectionDate || new Date(Date.now() + 86_400_000).toISOString().slice(0, 10),
@@ -102,8 +125,8 @@ Deno.serve(async (req) => {
           EstimatedValue: p.Value, ContentsSummary: String(b.contents || "Composite decking parts").slice(0, 80),
           DeliveryAddress: {
             ContactName: String(d.contact || "").slice(0, 60), Email: String(d.email || ""), Phone: String(d.phone || ""),
-            Property: String(d.property || ""), Street: String(d.street || ""), Town: String(d.town || ""),
-            County: String(d.county || ""), Postcode: String(d.postcode || ""), CountryIsoCode: "GBR",
+            Property: prop, Street: street, Town: String(d.town || ""),
+            County: String(d.county || ""), Postcode: pcFix(d.postcode), CountryIsoCode: "GBR",
           },
         })),
       };
