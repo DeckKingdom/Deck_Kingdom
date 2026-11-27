@@ -54,6 +54,14 @@ const pcFix = (s: unknown) => {
   return t.length > 3 ? t.slice(0, -3) + " " + t.slice(-3) : t;
 };
 
+// "07922-551-388" / "+44 7922 551388" -> "07922551388" (drop-shop services want 11 bare digits)
+const phoneFix = (s: unknown) => {
+  let t = String(s || "").replace(/[^\d+]/g, "");
+  if (t.startsWith("+44")) t = "0" + t.slice(3);
+  else if (t.startsWith("44") && t.length >= 12) t = "0" + t.slice(2);
+  return t.replace(/\D/g, "");
+};
+
 // Deck Kingdom's collection address
 const COLLECT = {
   ContactName: "Deck Kingdom", Organisation: "Deck Kingdom Ltd", Email: "info@deckkingdom.co.uk",
@@ -124,7 +132,7 @@ Deno.serve(async (req) => {
           Id: crypto.randomUUID(), Height: p.Height, Length: p.Length, Width: p.Width, Weight: p.Weight,
           EstimatedValue: p.Value, ContentsSummary: String(b.contents || "Composite decking parts").slice(0, 80),
           DeliveryAddress: {
-            ContactName: String(d.contact || "").slice(0, 60), Email: String(d.email || ""), Phone: String(d.phone || ""),
+            ContactName: String(d.contact || "").slice(0, 60), Email: String(d.email || ""), Phone: phoneFix(d.phone),
             Property: prop, Street: street, Town: String(d.town || ""),
             County: String(d.county || ""), Postcode: pcFix(d.postcode), CountryIsoCode: "GBR",
           },
