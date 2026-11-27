@@ -142,8 +142,9 @@ function CourierModal({ to = {}, reference = "", contents = "", onBooked, onClos
                 {quotes.map((q, i) => (
                   <label key={i} style={{ display: "flex", gap: 10, alignItems: "center", border: "1px solid " + (pick === q ? GOLD : "#e6e9ef"), background: pick === q ? "#fdf8ec" : "#fff", borderRadius: 10, padding: "8px 12px", cursor: "pointer" }}>
                     <input type="radio" name="p2g-q" checked={pick === q} onChange={() => setPick(q)} />
-                    <span style={{ fontWeight: 700, flex: 1 }}>{q.courier || ""} <span style={{ fontWeight: 600, color: "#5a6a85" }}>{q.name}</span></span>
-                    <b>£{Number(q.price || 0).toFixed(2)}</b>
+                    <span style={{ fontWeight: 700, flex: 1 }}>{q.courier || ""} <span style={{ fontWeight: 600, color: "#5a6a85" }}>{q.name}</span>
+                      {q.eta ? <span style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: "#8593a8" }}>{String(q.eta).slice(0, 10)}</span> : null}</span>
+                    <b>{q.price === null || q.price === undefined ? "—" : "£" + Number(q.price).toFixed(2)}</b>
                   </label>
                 ))}
                 <button style={{ ...goldBtn, justifyContent: "center" }} disabled={!pick || !!busy} onClick={book}>

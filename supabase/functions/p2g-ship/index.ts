@@ -67,14 +67,21 @@ Deno.serve(async (req) => {
         DeliveryAddress: { Country: "GBR", Postcode: String(b.delivery && b.delivery.postcode || "").trim() },
         Parcels: parcels,
       });
-      const quotes = (q.Quotes || []).map((x: any) => ({
-        service: x.Service && (x.Service.Slug || x.Service.Id),
-        name: x.Service && x.Service.Name,
-        courier: x.Service && (x.Service.CourierName || x.Service.Classification),
-        price: x.TotalPrice, exVat: x.TotalPriceExVat,
-        collection: x.Service && x.Service.CollectionType,
-        dates: (x.AvailableCollectionDates || []).slice(0, 3).map((d: any) => d.Date || d),
-      })).sort((a: any, z: any) => (a.price || 99) - (z.price || 99)).slice(0, 8);
+      if ((q.Quotes || []).length) console.log("p2g first quote: " + JSON.stringify(q.Quotes[0]).slice(0, 900));
+      const money = (x: any) => { const n = Number(x); return isFinite(n) && n > 0 ? n : null; };
+      const quotes = (q.Quotes || []).map((x: any) => {
+        const sv = x.Service || {};
+        return {
+          service: sv.Slug || sv.Id || x.Slug || x.Id,
+          name: sv.Name || x.Name || "",
+          courier: sv.CourierName || sv.Courier || sv.Classification || x.CourierName || "",
+          price: money(x.TotalPrice) ?? money(x.TotalPriceIncVat) ?? money(x.Total) ?? money(x.Price)
+            ?? (money(x.TotalPriceExVat) !== null ? Math.round(money(x.TotalPriceExVat)! * 1.2 * 100) / 100 : null),
+          exVat: money(x.TotalPriceExVat),
+          eta: x.EstimatedDeliveryDate || (sv.EstimatedDeliveryDays ? sv.EstimatedDeliveryDays + " days" : ""),
+          dates: (x.AvailableCollectionDates || []).slice(0, 3).map((d: any) => (d && (d.Date || d.date)) || d),
+        };
+      }).sort((a: any, z: any) => (a.price ?? 999) - (z.price ?? 999)).slice(0, 8);
       return json({ quotes });
     }
 
