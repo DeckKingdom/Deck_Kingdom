@@ -28,6 +28,17 @@ async function callShip(body) {
   return data;
 }
 
+// paid but no label in the booking reply? ask again by order id (quietly)
+async function withLabel(res) {
+  if (res && res.paid && !res.labelPdf && res.orderId) {
+    try {
+      const l = await callShip({ action: "labels", orderId: res.orderId });
+      if (l && l.labelPdf) { res.labelPdf = l.labelPdf; res.labelUrl = l.labelUrl; }
+    } catch (e) { /* the P2G links still work */ }
+  }
+  return res;
+}
+
 export function CourierButton({ to, reference, contents, onBooked, style }) {
   const [open, setOpen] = useState(false);
   return (
@@ -112,7 +123,7 @@ function BatchModal({ crm, updateCrm, onClose }) {
           action: "order", service: q.service, reference: "Sample " + (r.no || ""), contents: "Composite decking samples",
           collectionDate: (q.dates && q.dates[0]) || "", parcels: SAMPLE_PARCEL, delivery: { ...r.to, property: "" },
         });
-        return { ok: true, q, res };
+        return { ok: true, q, res: await withLabel(res) };
       } catch (e) {
         lastErr = String(e.message || e);
         if (!/mobile|phone|address|drop shop/i.test(lastErr)) break;
@@ -240,7 +251,7 @@ function CourierModal({ to = {}, reference = "", contents = "", onBooked, onClos
         collectionDate: (pick.dates && pick.dates[0]) || "", parcels,
         delivery: { ...addr, property: "" },
       });
-      setDone(r);
+      setDone(await withLabel(r));
       if (onBooked) onBooked({ orderId: r.orderId, courier: pick.courier || pick.name, price: pick.price, paid: r.paid, links: r.links || {} });
     } catch (e) { setErr(String(e.message || e)); }
     setBusy("");

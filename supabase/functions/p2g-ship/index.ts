@@ -68,6 +68,26 @@ const findLabelLinks = (obj: unknown): string[] => {
   return [...new Set(out)];
 };
 
+// try each candidate URL until one serves a PDF (content-type or %PDF magic)
+async function fetchLabelPdf(cand: string[]): Promise<{ labelPdf: string; labelUrl: string } | null> {
+  for (const u of cand) {
+    try {
+      const url = u.startsWith("http") ? u : BASE + u;
+      let r = await fetch(url, { headers: { authorization: "Bearer " + (await token()) } });
+      if (!r.ok) r = await fetch(url); // some label links are public
+      if (!r.ok) continue;
+      const buf = new Uint8Array(await r.arrayBuffer());
+      const isPdf = (r.headers.get("content-type") || "").includes("pdf") ||
+        (buf.length > 4 && buf[0] === 0x25 && buf[1] === 0x50 && buf[2] === 0x44 && buf[3] === 0x46); // %PDF
+      if (!isPdf) continue;
+      let s = "";
+      for (let i = 0; i < buf.length; i += 0x8000) s += String.fromCharCode(...buf.subarray(i, i + 0x8000));
+      return { labelPdf: btoa(s), labelUrl: url };
+    } catch { /* next candidate */ }
+  }
+  return null;
+}
+
 // "07922-551-388" / "+44 7922 551388" -> "07922551388" (drop-shop services want 11 bare digits)
 const phoneFix = (s: unknown) => {
   let t = String(s || "").replace(/[^\d+]/g, "");
@@ -164,23 +184,31 @@ Deno.serve(async (req) => {
         out.paid = true;
         out.payment = pay;
         out.labels = (pay && (pay.Links || pay.links)) || null;
-        // fetch the label PDF itself so the app can print it without a trip to P2G
+        // the pay reply rarely links the label — the paid order does, so look there
         try {
-          for (const u of findLabelLinks({ pay, links })) {
-            const url = u.startsWith("http") ? u : BASE + u;
-            let r = await fetch(url, { headers: { authorization: "Bearer " + (await token()) } });
-            if (!r.ok) r = await fetch(url); // some label links are public
-            if (r.ok && (r.headers.get("content-type") || "").includes("pdf")) {
-              const buf = new Uint8Array(await r.arrayBuffer());
-              let s = "";
-              for (let i = 0; i < buf.length; i += 0x8000) s += String.fromCharCode(...buf.subarray(i, i + 0x8000));
-              out.labelPdf = btoa(s); out.labelUrl = url;
-              break;
-            }
-          }
+          let cand = findLabelLinks({ pay, links });
+          try {
+            const ord = await api("/api/orders/" + o.OrderId, undefined, "GET");
+            cand = [...findLabelLinks(ord), ...cand];
+          } catch { /* keep what we have */ }
+          console.log("p2g label links for " + o.OrderId + ": " + JSON.stringify(cand).slice(0, 600));
+          const got = await fetchLabelPdf(cand);
+          if (got) { out.labelPdf = got.labelPdf; out.labelUrl = got.labelUrl; }
         } catch { /* the links in the reply still work */ }
       }
       return json(out);
+    }
+
+    // fetch the label for an order that's already paid (also the diagnostic for the above)
+    if (b.action === "labels") {
+      const id = String(b.orderId || "").trim();
+      if (!id) return json({ error: "No orderId given." }, 400);
+      const ord = await api("/api/orders/" + id, undefined, "GET");
+      const cand = findLabelLinks(ord);
+      console.log("p2g order " + id + " keys: " + JSON.stringify(Object.keys(ord || {})) + " | label links: " + JSON.stringify(cand).slice(0, 600));
+      const got = await fetchLabelPdf(cand);
+      if (got) return json({ orderId: id, labelPdf: got.labelPdf, labelUrl: got.labelUrl });
+      return json({ error: "No label PDF found on order " + id + " — links seen: " + (cand.join(", ") || "none") + " (keys: " + Object.keys(ord || {}).join(", ") + ")" }, 404);
     }
 
     return json({ error: "Unknown action — send action: 'quote' or 'order'." }, 400);
