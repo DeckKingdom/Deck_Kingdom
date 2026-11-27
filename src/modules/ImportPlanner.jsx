@@ -2308,6 +2308,7 @@ export default function ImportPlanner() {
                       <th style={{ ...th, width: "8%", textAlign: "right" }}>Pallets / Cartons</th>
                       <th style={{ ...th, width: "8%", textAlign: "right" }}>Qty / Pallet / Carton</th>
                       <th style={{ ...th, width: "6%", textAlign: "right" }}>Pieces</th>
+                      <th style={{ ...th, width: "6%", textAlign: "right" }} title="The plan's quantity for this line — green when the pieces match, amber when off">Target</th>
                       <th style={{ ...th, width: "7%", textAlign: "right" }}>kg / pc</th>
                       <th style={{ ...th, width: "8%", textAlign: "right" }}>Total kg</th>
                       <th style={{ ...th, width: "7%", textAlign: "right" }}>$ / pc</th>
@@ -2427,6 +2428,22 @@ export default function ImportPlanner() {
                             />
                           </td>
                           <td style={td}>
+                            {(() => {
+                              // the plan's quantity for this line; editable, clears to blank
+                              const tv = l.target === "" || l.target === null || l.target === undefined ? null : Number(l.target);
+                              const diff = tv === null ? 0 : Math.round(c.pieces - tv);
+                              const on = tv !== null && diff === 0;
+                              return (
+                                <input {...selectAllProps} type="number" min="0" step="1"
+                                  value={tv === null ? "" : l.target}
+                                  onChange={(e) => setLine(l.id, "target", e.target.value)}
+                                  title={tv === null ? "No plan target set for this line" : on ? "On plan" : (diff > 0 ? diff + " over the plan" : (-diff) + " under the plan")}
+                                  style={{ ...num, color: "#5a6a85", ...(tv === null ? {} : on ? { borderColor: "#28713e", background: "#eef7f0", color: "#28713e", fontWeight: 700 } : { borderColor: "#d99a2b", background: "#fdf4e3", color: "#9a6a10", fontWeight: 700 }) }}
+                                />
+                              );
+                            })()}
+                          </td>
+                          <td style={td}>
                             <input {...selectAllProps} type="number" min="0" step="0.1" value={l.weight} onChange={(e) => setLine(l.id, "weight", e.target.value)} style={num} />
                           </td>
                           <td style={{ ...td, textAlign: "right", color: "#5a6a85", whiteSpace: "nowrap" }}>{int(Math.round(c.kg))} kg</td>
@@ -2446,7 +2463,7 @@ export default function ImportPlanner() {
                       );
                     })}
                     <tr onDragOver={(e) => { if (dragLine) e.preventDefault(); }} onDrop={(e) => { e.preventDefault(); moveLine(dragLine, null); setDragLine(null); setOverLine(null); }}>
-                      <td colSpan={11} style={{ padding: "10px 8px" }}>
+                      <td colSpan={12} style={{ padding: "10px 8px" }}>
                         <button onClick={addLine} style={{ ...btn, border: "1px dashed #b9c2d0", width: "100%" }}>
                           + Add line
                         </button>
