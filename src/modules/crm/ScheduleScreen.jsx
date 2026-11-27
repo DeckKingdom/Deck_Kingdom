@@ -16,7 +16,7 @@ import { JOB_TYPES, isBackOrder, skuIndex, PAYMENT_TYPES, stockCheck, partKey, i
 import StockCheck from "./StockCheck.jsx";
 import { loadDrops, dropPhotoUrl } from "../../data/drops.js";
 import { roadLegsAddr, addrKey } from "../../data/fleetApi.js";
-import { DRIVER_HR, MILE_COST, UNLOAD_MIN, collPostcode } from "../../lib/runCost.js";
+import { DRIVER_HR, MILE_COST, UNLOAD_MIN, DRIVE_BUFFER, collPostcode } from "../../lib/runCost.js";
 import { emailInvoiceWithPdf } from "./invoiceEmailPdf.js";
 import { Modal } from "./ui.jsx";
 import { reopenConfirmations } from "./DropSync.jsx";
@@ -439,7 +439,7 @@ function RunCost({ pcs, drops = 0, picks = 0, fees = 0, feesNet = 0 }) {
       if (!live) return;
       let mi = 0, min = 0, all = true;
       legs.forEach((l) => { const r = got[addrKey(l.from, l.to)]; if (r) { mi += Number(r.miles) || 0; min += Number(r.minutes) || 0; } else all = false; });
-      if (all && mi > 0) setEst({ mi, min });
+      if (all && mi > 0) setEst({ mi, min: min * DRIVE_BUFFER }); // Google's time + 10% for real-world traffic
     }, 800);
     return () => { live = false; clearTimeout(t); };
   }, [key]);
@@ -450,7 +450,7 @@ function RunCost({ pcs, drops = 0, picks = 0, fees = 0, feesNet = 0 }) {
   const h = Math.floor(totMin / 60), m = Math.round(totMin % 60);
   const dh = Math.floor(est.min / 60), dm = Math.round(est.min % 60);
   return (
-    <span title={"Estimated run cost, out and back: " + Math.round(est.mi) + " miles\n" + (dh ? dh + "h " : "") + dm + "m driving" + (unload ? " + " + (unload >= 60 ? Math.floor(unload / 60) + "h " : "") + (unload % 60 || "") + (unload % 60 ? "m" : "") + " loading/unloading (" + [drops ? drops + " drop" + (drops === 1 ? "" : "s") : "", picks ? picks + " pick-up" + (picks === 1 ? "" : "s") : ""].filter(Boolean).join(" + ") + " × " + UNLOAD_MIN + "m)" : "") + "\nDriver £" + DRIVER_HR + "/hr = £" + ((totMin / 60) * DRIVER_HR).toFixed(2) + "\nFuel at 30 mpg, £1.90/litre = £" + (est.mi * MILE_COST).toFixed(2) + (fees > 0 ? "\n\nDelivery fees charged: £" + fees.toFixed(2) + " (£" + feesNet.toFixed(2) + " ex VAT)\nRun P/L: " + (feesNet - cost >= 0 ? "+" : "\u2212") + "£" + Math.abs(feesNet - cost).toFixed(2) + " (fees ex VAT \u2212 run cost)" : "\n\nNo delivery fees charged on this run\nRun P/L: \u2212£" + cost.toFixed(2))}
+    <span title={"Estimated run cost, out and back: " + Math.round(est.mi) + " miles\n" + (dh ? dh + "h " : "") + dm + "m driving (Google + 10% traffic buffer)" + (unload ? " + " + (unload >= 60 ? Math.floor(unload / 60) + "h " : "") + (unload % 60 || "") + (unload % 60 ? "m" : "") + " loading/unloading (" + [drops ? drops + " drop" + (drops === 1 ? "" : "s") : "", picks ? picks + " pick-up" + (picks === 1 ? "" : "s") : ""].filter(Boolean).join(" + ") + " × " + UNLOAD_MIN + "m)" : "") + "\nDriver £" + DRIVER_HR + "/hr = £" + ((totMin / 60) * DRIVER_HR).toFixed(2) + "\nFuel at 30 mpg, £1.90/litre = £" + (est.mi * MILE_COST).toFixed(2) + (fees > 0 ? "\n\nDelivery fees charged: £" + fees.toFixed(2) + " (£" + feesNet.toFixed(2) + " ex VAT)\nRun P/L: " + (feesNet - cost >= 0 ? "+" : "\u2212") + "£" + Math.abs(feesNet - cost).toFixed(2) + " (fees ex VAT \u2212 run cost)" : "\n\nNo delivery fees charged on this run\nRun P/L: \u2212£" + cost.toFixed(2))}
       style={{ fontSize: 11.5, fontWeight: 800, color: "#185FA5", background: "#185FA511", border: "1px solid #c6d8ea", borderRadius: 999, padding: "2px 8px", whiteSpace: "nowrap" }}>
       {"\u2248"} £{Math.round(cost)} · {Math.round(est.mi)} mi · {h ? h + "h" : ""}{m}m
       {" · "}

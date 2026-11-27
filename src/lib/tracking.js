@@ -2,9 +2,10 @@
 // every drop confirmation (time + where the phone was) and the postcodes; plus the checks.
 import { milesBetween, tidyPc } from "./geo.js";
 import { isVoidInvoice, isCollectionJob } from "./crmCore.js";
+import { DRIVE_BUFFER } from "./runCost.js";
 
 export const FLEET_DEFAULTS = {
-  dieselPerLitre: 1.45, // £ a litre
+  dieselPerLitre: 1.9, // £ a litre — Jon's working rate until Fuel Finder publishes live prices
   mpg: 30, // every van…
   sprinterMpg: 24, // …except the Sprinter
   hourly: 15, // driver £ an hour, set-off to back at the yard
@@ -105,7 +106,7 @@ export function buildRuns({ crm, confs, events, geo, s, from, to, driver, roads 
     let prevPos = dep && dep.lat != null ? { lat: dep.lat, lng: dep.lng } : yard;
     let prevAt = dep ? ms(dep.at) : null;
     const first = confirmed.length ? legMiles(prevPos, where(confirmed[0])) : { miles: 0, minutes: 0 };
-    const estDepart = !dep && confirmed.length ? ms(confirmed[0].conf.at) - (first.minutes != null ? first.minutes / 60 : first.miles / (Number(s.avgMph) || 35)) * 3600000 : null;
+    const estDepart = !dep && confirmed.length ? ms(confirmed[0].conf.at) - (first.minutes != null ? (first.minutes * DRIVE_BUFFER) / 60 : first.miles / (Number(s.avgMph) || 35)) * 3600000 : null;
     if (prevAt === null) prevAt = estDepart;
     confirmed.forEach((x) => {
       const pos = where(x);
@@ -119,7 +120,7 @@ export function buildRuns({ crm, confs, events, geo, s, from, to, driver, roads 
     const lastPos = prevPos;
     const backLeg = confirmed.length ? legMiles(lastPos, yard) : { miles: 0, minutes: 0 };
     const backMi = backLeg.miles;
-    const backMin = backLeg.minutes != null ? backLeg.minutes : (backMi / (Number(s.avgMph) || 35)) * 60;
+    const backMin = backLeg.minutes != null ? backLeg.minutes * DRIVE_BUFFER : (backMi / (Number(s.avgMph) || 35)) * 60;
     const back = { miles: backMi, minutes: backMin, fuel: backMi * cpm, time: (backMin / 60) * (Number(s.hourly) || 0) };
     back.cost = back.fuel + back.time;
     const departAt = dep ? ms(dep.at) : estDepart;

@@ -7,6 +7,7 @@ import { isVoidInvoice, isCollectionJob, invoiceTotals } from "./crmCore.js";
 export const DRIVER_HR = 15;
 export const MILE_COST = (4.54609 * 1.9) / 30; // £ per mile at 30 mpg, £1.90/litre
 export const UNLOAD_MIN = 20; // allowed per drop for unloading (Jon's average)
+export const DRIVE_BUFFER = 1.1; // Google's drive time + 10% — real runs come in longer (traffic, loaded vans)
 export const BASE_PC = "OL6 6UG";
 export const FREE_LEAK_LIMIT = 1200; // a free drop under this order value is leakage
 
@@ -17,7 +18,7 @@ export const runLegList = (pcs) => {
 };
 
 export const priceRun = (miles, driveMin, drops) => {
-  const totMin = driveMin + drops * UNLOAD_MIN;
+  const totMin = driveMin * DRIVE_BUFFER + drops * UNLOAD_MIN;
   return { totMin, cost: (totMin / 60) * DRIVER_HR + miles * MILE_COST };
 };
 

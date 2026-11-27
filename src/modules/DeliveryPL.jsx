@@ -214,7 +214,7 @@ export default function DeliveryPLCard({ crm, card, sect, onLeak }) {
             })()}
           </div>
           <div style={{ fontSize: 11, fontWeight: 600, color: "#aab3c2", marginTop: 8 }}>
-            £{DRIVER_HR}/hr driver · 30 mpg @ £1.90/l · {UNLOAD_MIN}m per drop or pick-up · out and back from OL6
+            £{DRIVER_HR}/hr driver · 30 mpg @ £1.90/l · drive time +10% buffer · {UNLOAD_MIN}m per drop or pick-up · out and back from OL6
             {missing ? " · " + missing + " run" + (missing === 1 ? "" : "s") + " unpriceable" : ""}
           </div>
         </>
