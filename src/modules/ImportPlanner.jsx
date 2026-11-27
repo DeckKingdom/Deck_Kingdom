@@ -299,7 +299,7 @@ export default function ImportPlanner() {
 
   // ===== CRM module (customers / invoices / schedule) =====
   const [crmOn, setCrmOn] = useState(false);
-  const { crm, updateCrm: updateCrmRaw, replaceCrm, crmError, loadCrm, crmSave, saveError, saveNotice, lastLive, crmStale } = useCrm(crmOn);
+  const { crm, updateCrm: updateCrmRaw, replaceCrm, crmError, crmErrorMsg, loadCrm, crmSave, saveError, saveNotice, lastLive, crmStale } = useCrm(crmOn);
   // website sample requests: when one flips to dispatched here (any button, any
   // screen), tell the WordPress Sample Requests page so it shows Sent there too
   const wpSrSeen = useRef(null);
@@ -1649,7 +1649,8 @@ export default function ImportPlanner() {
             <div style={{ maxWidth: 1140, margin: "14px auto 0", padding: "0 22px" }}>
               <div style={{ background: "#C8102E10", border: "1px solid #ecc4cb", borderRadius: 12, padding: "10px 14px", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", fontSize: 13, fontWeight: 600, color: "#8a0b20" }}>
                 <span style={{ flex: 1 }}>
-                  Couldn't load the customer/stock data — usually a migration hasn't been run in Supabase yet (latest: 012_vans.sql). Nothing is lost.
+                  Couldn't load the customer/stock data — nothing is lost.
+                  {crmErrorMsg ? <span style={{ display: "block", marginTop: 3 }}>Why: {crmErrorMsg}</span> : null}
                 </span>
                 <button onClick={loadCrm} style={{ ...btn, padding: "6px 12px", fontSize: 12.5, background: GOLD, borderColor: GOLD }}>Retry</button>
               </div>
