@@ -39,6 +39,13 @@ export function CourierButton({ to, reference, contents, onBooked, style }) {
   );
 }
 
+// Evri first — we know their drop-off shops. Shop-to-shop services (Relay
+// Pudo To Pudo etc) need both drop shops choosing on P2G, so auto-booking
+// skips them; they stay visible in the single modal for price reference.
+const isEvri = (q) => /evri/i.test((q.courier || "") + " " + (q.name || ""));
+const shopToShop = (q) => /pudo to pudo|shop to shop|to pudo\b/i.test((q.name || "") + " " + (q.service || ""));
+export const bookingOrder = (qs) => [...(qs || []).filter(isEvri), ...(qs || []).filter((q) => !isEvri(q) && !shopToShop(q))];
+
 // ===== one click for the whole "to send" pile (Home's samples card) =====
 const SAMPLE_PARCEL = [{ weight: 1, length: 35, width: 25, height: 6, value: 10 }];
 
@@ -84,8 +91,9 @@ function BatchModal({ crm, updateCrm, onClose }) {
           const res = await callShip({ action: "quote", delivery: { postcode: r.pc }, parcels: SAMPLE_PARCEL });
           const qs = (res && res.quotes) || [];
           if (!live) return;
-          if (!qs.length) patch(r.id, { state: "err", msg: "no services quoted for " + r.pc });
-          else patch(r.id, { state: "ready", quotes: qs, pick: qs[0] });
+          const ord = bookingOrder(qs);
+          if (!ord.length) patch(r.id, { state: "err", msg: qs.length ? "only shop-to-shop services quoted for " + r.pc : "no services quoted for " + r.pc });
+          else patch(r.id, { state: "ready", quotes: ord, pick: ord[0] });
         } catch (e) { if (live) patch(r.id, { state: "err", msg: String(e.message || e) }); }
       }
       if (live) setBusy("");
@@ -106,7 +114,7 @@ function BatchModal({ crm, updateCrm, onClose }) {
         return { ok: true, q, res };
       } catch (e) {
         lastErr = String(e.message || e);
-        if (!/mobile|phone|address/i.test(lastErr)) break;
+        if (!/mobile|phone|address|drop shop/i.test(lastErr)) break;
       }
     }
     return { ok: false, msg: lastErr };
@@ -201,8 +209,9 @@ function CourierModal({ to = {}, reference = "", contents = "", onBooked, onClos
     setBusy("Getting live prices…"); setErr(""); setQuotes(null); setPick(null);
     try {
       const r = await callShip({ action: "quote", delivery: { postcode: addr.postcode }, parcels });
-      console.log("[dk-courier] first quote:", r.quotes && r.quotes[0]);
       setQuotes(r.quotes || []);
+      const ord = bookingOrder(r.quotes || []);
+      if (ord.length) setPick(ord[0]); // default to the cheapest Evri — we know their drop-off shops
       if (!(r.quotes || []).length) setErr("No services quoted for that postcode/size.");
     } catch (e) { setErr(String(e.message || e)); }
     setBusy("");
