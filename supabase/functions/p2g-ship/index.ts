@@ -67,7 +67,11 @@ Deno.serve(async (req) => {
         DeliveryAddress: { Country: "GBR", Postcode: String(b.delivery && b.delivery.postcode || "").trim() },
         Parcels: parcels,
       });
-      if ((q.Quotes || []).length) console.log("p2g first quote: " + JSON.stringify(q.Quotes[0]).slice(0, 900));
+      if ((q.Quotes || []).length) {
+        const f = { ...q.Quotes[0] } as any;
+        delete f.Service; delete f.AvailableExtras; delete f.Extras;
+        console.log("p2g quote keys: " + JSON.stringify(Object.keys(q.Quotes[0])) + " | values: " + JSON.stringify(f).slice(0, 800));
+      }
       const money = (x: any) => { const n = Number(x); return isFinite(n) && n > 0 ? n : null; };
       const quotes = (q.Quotes || []).map((x: any) => {
         const sv = x.Service || {};
