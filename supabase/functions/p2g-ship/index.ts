@@ -54,51 +54,40 @@ const pcFix = (s: unknown) => {
   return t.length > 3 ? t.slice(0, -3) + " " + t.slice(-3) : t;
 };
 
-// every label-ish URL anywhere in a P2G response (Links objects vary by service)
-const findLabelLinks = (obj: unknown): string[] => {
-  const out: string[] = [];
-  const walk = (o: any) => {
-    if (!o || typeof o !== "object") return;
-    for (const [k, v] of Object.entries(o)) {
-      if (typeof v === "string" && /label/i.test(k) && (/^https?:/.test(v) || v.startsWith("/"))) out.push(v);
-      else if (v && typeof v === "object") walk(v);
-    }
-  };
-  walk(obj);
-  return [...new Set(out)];
+// The labels endpoint: GET /api/labels/{orderId}?hash=…&referenceType=OrderId
+// — bearer-authenticated, and the PDF is generated ASYNCHRONOUSLY after
+// payment, so it's retried. Replies are either the raw PDF or a JSON wrapper
+// with the PDF base64-encoded in Base64EncodedLabels[] (empty = not ready yet).
+const isPdfBytes = (b: Uint8Array) => b.length > 4 && b[0] === 0x25 && b[1] === 0x50 && b[2] === 0x44 && b[3] === 0x46; // %PDF
+const b64of = (buf: Uint8Array) => {
+  let s = "";
+  for (let i = 0; i < buf.length; i += 0x8000) s += String.fromCharCode(...buf.subarray(i, i + 0x8000));
+  return btoa(s);
 };
-
-// the routes that might serve an order's label: the website's own download
-// route (authorised by the order hash — it redirects to a signed S3 PDF),
-// then the plausible API paths
-const labelCandidates = (orderId: string, hash: string): string[] => {
-  const out: string[] = [];
-  if (hash) {
-    out.push("/order-process/labels?id=" + orderId + "&hash=" + hash + "&format=fourbysix");
-    out.push("/order-process/labels?id=" + orderId + "&hash=" + hash);
-    out.push("/order-process/label?id=" + orderId + "&hash=" + hash);
-  }
-  out.push("/api/orders/" + orderId + "/labels", "/api/orders/" + orderId + "/label", "/api/labels?orderId=" + orderId);
-  return out;
-};
-
-// try each candidate URL until one serves a PDF (content-type or %PDF magic)
-async function fetchLabelPdf(cand: string[]): Promise<{ labelPdf: string; labelUrl: string } | null> {
-  for (const u of cand) {
+async function fetchLabelPdf(orderId: string, hash: string, attempts = 5): Promise<{ labelPdf: string; labelUrl: string } | null> {
+  if (!orderId || !hash) return null;
+  const url = BASE + "/api/labels/" + orderId + "?hash=" + encodeURIComponent(hash) + "&referenceType=OrderId&detailLevel=All&labelFormat=PDF";
+  for (let a = 0; a < attempts; a++) {
     try {
-      const url = u.startsWith("http") ? u : BASE + u;
-      let r = await fetch(url, { headers: { authorization: "Bearer " + (await token()) } });
-      if (!r.ok) r = await fetch(url); // some label links are public
-      console.log("p2g label try " + u.slice(0, 120) + " -> " + r.status + " " + (r.headers.get("content-type") || ""));
-      if (!r.ok) continue;
+      const r = await fetch(url, { headers: { authorization: "Bearer " + (await token()), accept: "application/pdf" } });
       const buf = new Uint8Array(await r.arrayBuffer());
-      const isPdf = (r.headers.get("content-type") || "").includes("pdf") ||
-        (buf.length > 4 && buf[0] === 0x25 && buf[1] === 0x50 && buf[2] === 0x44 && buf[3] === 0x46); // %PDF
-      if (!isPdf) continue;
-      let s = "";
-      for (let i = 0; i < buf.length; i += 0x8000) s += String.fromCharCode(...buf.subarray(i, i + 0x8000));
-      return { labelPdf: btoa(s), labelUrl: url };
-    } catch { /* next candidate */ }
+      let pdf: Uint8Array | null = isPdfBytes(buf) ? buf : null;
+      let note = "";
+      if (!pdf && r.ok) {
+        try {
+          const j = JSON.parse(new TextDecoder().decode(buf));
+          const arr = (j && (j.Base64EncodedLabels || j.base64EncodedLabels)) || [];
+          note = "wrapper, labels: " + arr.length;
+          for (const b64 of arr) {
+            const dec = Uint8Array.from(atob(String(b64)), (c) => c.charCodeAt(0));
+            if (isPdfBytes(dec)) { pdf = dec; break; }
+          }
+        } catch { note = "non-JSON body"; }
+      }
+      console.log("p2g label " + orderId + " try " + (a + 1) + " -> " + r.status + (pdf ? " PDF " + pdf.length + "b" : " " + (note || new TextDecoder().decode(buf.slice(0, 120)).replace(/\s+/g, " "))));
+      if (pdf) return { labelPdf: b64of(pdf), labelUrl: url };
+    } catch (e) { console.log("p2g label " + orderId + " try " + (a + 1) + " threw: " + String(e).slice(0, 120)); }
+    if (a < attempts - 1) await new Promise((res) => setTimeout(res, 2000)); // label not generated yet
   }
   return null;
 }
@@ -199,11 +188,9 @@ Deno.serve(async (req) => {
         out.paid = true;
         out.payment = pay;
         out.labels = (pay && (pay.Links || pay.links)) || null;
-        // the pay reply rarely links the label — the website's hash-authorised
-        // download route does, so try that (plus any links the replies carry)
+        // the label generates asynchronously after payment — fetch it (retries inside)
         try {
-          const cand = [...labelCandidates(String(o.OrderId || ""), String(o.Hash || "")), ...findLabelLinks({ pay, links })];
-          const got = await fetchLabelPdf(cand);
+          const got = await fetchLabelPdf(String(o.OrderId || ""), String(o.Hash || ""));
           if (got) { out.labelPdf = got.labelPdf; out.labelUrl = got.labelUrl; }
         } catch { /* the links in the reply still work */ }
       }
@@ -214,11 +201,12 @@ Deno.serve(async (req) => {
     // hash comes from the booking reply, or the order-complete page URL on parcel2go.com
     if (b.action === "labels") {
       const id = String(b.orderId || "").trim();
+      const hash = String(b.hash || "").trim();
       if (!id) return json({ error: "No orderId given." }, 400);
-      const cand = labelCandidates(id, String(b.hash || "").trim());
-      const got = await fetchLabelPdf(cand);
+      if (!hash) return json({ error: "No hash given — it's in the booking reply, or the order-complete page URL on parcel2go.com." }, 400);
+      const got = await fetchLabelPdf(id, hash);
       if (got) return json({ orderId: id, labelPdf: got.labelPdf, labelUrl: got.labelUrl });
-      return json({ error: "No label PDF found on order " + id + " — tried: " + cand.map((c) => c.split("?")[0]).join(", ") + ". The logs show each status." }, 404);
+      return json({ error: "No label PDF yet for order " + id + " — the logs show each attempt's status." }, 404);
     }
 
     return json({ error: "Unknown action — send action: 'quote' or 'order'." }, 400);
