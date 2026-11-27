@@ -66,7 +66,9 @@ const b64of = (buf: Uint8Array) => {
 };
 async function fetchLabelPdf(orderId: string, hash: string, attempts = 5): Promise<{ labelPdf: string; labelUrl: string } | null> {
   if (!orderId || !hash) return null;
-  const url = BASE + "/api/labels/" + orderId + "?hash=" + encodeURIComponent(hash) + "&referenceType=OrderId&detailLevel=All&labelFormat=PDF";
+  // labelMedia is REQUIRED (the route 404s without it): Label4X6 = one 4x6 label
+  // per page, which the app's A4 sticker-sheet builder expects; A4 is the other value
+  const url = BASE + "/api/labels/" + orderId + "?hash=" + encodeURIComponent(hash) + "&referenceType=OrderId&detailLevel=All&labelMedia=Label4X6&labelFormat=PDF";
   for (let a = 0; a < attempts; a++) {
     try {
       const r = await fetch(url, { headers: { authorization: "Bearer " + (await token()), accept: "application/pdf" } });
