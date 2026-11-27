@@ -1,7 +1,7 @@
 // Purchases: the FileMaker "Purchases" layout. List with filters, totals and an
 // Excel export (for the accountant / VAT return) -> entry screen per PO.
 // Sub total is entered ex VAT; VAT is worked out from the rate unless typed over.
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import * as XLSX from "xlsx";
 import { NAVY, GOLD, RED, prettyDate, prettyDateTime, addMonths } from "../../lib/core.js";
 import {
@@ -9,6 +9,7 @@ import {
   PURCHASE_CATEGORIES, PAYMENT_METHODS, VAT_RATES, vanOptions, staffList, staffName,
 } from "../../lib/crmCore.js";
 import { purchasesAvailable } from "../../data/crmStorage.js";
+import { COST_CENTRES, COST_CENTRE_LIST, assignCostCentre } from "../../lib/costCentres.js";
 import { Icon, Chip, SuggestInput, selectAllProps, sect, lbl, card, abtn, inp, btn, goldBtn, DateInput, CalendarPop, RecordNav, BandDelete, HoverStamp, ListHero, HeroStat, HeroAdd, SearchBox, FilterPills } from "./ui.jsx";
 import { LockGuard } from "./Peeks.jsx";
 import { SupplierModal, PurchasesSchemaNotice } from "./SuppliersScreen.jsx";
@@ -41,6 +42,15 @@ export default function PurchasesScreen({ crm, updateCrm, askConfirm, selId, set
       if (t) fn(t, c);
       return c;
     });
+
+  // entries pick their own cost centre from the supplier rules; a hand-set one is left alone
+  useEffect(() => {
+    if (!p || p.costCentre || !p.supplierId) return;
+    const s = (crm.suppliers || []).find((x) => x.id === p.supplierId);
+    if (!s) return;
+    const a = assignCostCentre(s.name, p.invDetail, p.category);
+    setP((x) => { if (!x.costCentre) { x.costCentre = a.costCentre; x.costSub = a.costSub; } });
+  }, [p && p.id, p && p.supplierId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const create = () => {
     if (!ready) return;
@@ -153,7 +163,7 @@ export default function PurchasesScreen({ crm, updateCrm, askConfirm, selId, set
             <>
               <div className="dk-bleed" style={{ overflowX: "auto" }}>
                 <table className="dk-t" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 900 }}>
-                  <thead><tr>{["PO#", "Inv date", "Supplier", "Inv #", "Detail", "Category", "Sub £", "VAT £", "Total £", "Paid", ""].map((h, i) => <th key={i} style={{ ...th, textAlign: i >= 6 && i <= 8 ? "right" : "left" }}>{h}</th>)}</tr></thead>
+                  <thead><tr>{["PO#", "Inv date", "Supplier", "Inv #", "Detail", "Cost centre", "Sub £", "VAT £", "Total £", "Paid", ""].map((h, i) => <th key={i} style={{ ...th, textAlign: i >= 6 && i <= 8 ? "right" : "left" }}>{h}</th>)}</tr></thead>
                   <tbody>
                     {shown.map((x) => {
                       const s = supById[x.supplierId];
@@ -166,7 +176,9 @@ export default function PurchasesScreen({ crm, updateCrm, askConfirm, selId, set
                           <td style={{ ...tdc, fontWeight: 700 }}>{s ? (goSupplier ? <button type="button" className="dk-title-link" title="Open the supplier" onClick={(e) => { e.stopPropagation(); goSupplier(s.id); }} style={{ fontSize: 13, fontWeight: 700, color: NAVY }}>{s.name}</button> : s.name) : <span style={{ color: RED }}>No supplier</span>}</td>
                           <td style={tdc}>{x.invNo || "—"}</td>
                           <td style={{ ...tdc, color: "#5a6a85", fontWeight: 600, maxWidth: 230, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{(x.invDetail || "").split("\n").filter(Boolean).join(" · ") || "—"}</td>
-                          <td style={tdc}>{x.category || "—"}</td>
+                          <td style={tdc} title={x.costCentre ? x.costCentre + (x.costSub ? " · " + x.costSub : "") : x.category || ""}>
+                            {x.costCentre ? <>{x.costCentre}{x.costSub ? <span style={{ color: "#8593a8", fontWeight: 600 }}> · {x.costSub}</span> : null}</> : x.category || "—"}
+                          </td>
                           <td style={{ ...tdc, textAlign: "right" }}>{money(t.sub)}</td>
                           <td style={{ ...tdc, textAlign: "right", color: "#5a6a85" }}>{money(t.vat)}</td>
                           <td style={{ ...tdc, textAlign: "right", fontWeight: 700 }}>{money(t.total)}</td>
@@ -208,6 +220,7 @@ export default function PurchasesScreen({ crm, updateCrm, askConfirm, selId, set
         x.supplierId = s.id;
         if (!x.category && s.category) x.category = s.category;
         if (!x.paymentMethod && s.paymentMethod) x.paymentMethod = s.paymentMethod;
+        if (!x.costCentre) { const a = assignCostCentre(s.name, x.invDetail, x.category); x.costCentre = a.costCentre; x.costSub = a.costSub; }
       });
   };
 
@@ -317,6 +330,23 @@ export default function PurchasesScreen({ crm, updateCrm, askConfirm, selId, set
           <div style={{ display: "grid", gap: 12 }}>
             <div><L>Purchased by</L>{text("purchasedBy", { list: "dk-people" })}</div>
             <div><L>Assign to category</L>{text("category", { list: "dk-pcats2" })}</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <div>
+                <L>Cost centre</L>
+                <select style={inp} value={p.costCentre || ""} onChange={(e) => setP((x) => { x.costCentre = e.target.value; x.costSub = (COST_CENTRES[e.target.value] || [""])[0] || ""; })}>
+                  <option value="">— auto —</option>
+                  {COST_CENTRE_LIST.map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <div>
+                <L>Sub</L>
+                <select style={inp} value={p.costSub || ""} onChange={(e) => setP((x) => (x.costSub = e.target.value))} disabled={!p.costCentre}>
+                  <option value="">—</option>
+                  {(COST_CENTRES[p.costCentre] || []).map((s2) => <option key={s2} value={s2}>{s2}</option>)}
+                  {p.costSub && !(COST_CENTRES[p.costCentre] || []).includes(p.costSub) && <option value={p.costSub}>{p.costSub}</option>}
+                </select>
+              </div>
+            </div>
             <div>
               <L>Vehicle</L>
               <select style={inp} value={p.vehicle} onChange={(e) => setP((x) => (x.vehicle = e.target.value))}>

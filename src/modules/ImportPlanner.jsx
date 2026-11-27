@@ -43,6 +43,8 @@ import ReviewsScreen from "./crm/ReviewsScreen.jsx";
 import TasksScreen from "./crm/TasksScreen.jsx";
 import ProductsScreen from "./crm/ProductsScreen.jsx";
 import PurchasesScreen from "./crm/PurchasesScreen.jsx";
+import WagesScreen from "./crm/WagesScreen.jsx";
+import BusinessScreen from "./BusinessScreen.jsx";
 import SuppliersScreen from "./crm/SuppliersScreen.jsx";
 import { quotesAvailable, samplesAvailable, tasksAvailable, purchasesAvailable } from "../data/crmStorage.js";
 import ScheduleScreen from "./crm/ScheduleScreen.jsx";
@@ -1679,6 +1681,11 @@ export default function ImportPlanner() {
         ) : (
           <TasksScreen crm={crm} updateCrm={updateCrm} askConfirm={setConfirmBox} me={me} goHome={() => setTab("home")} />
         ))}
+
+      {tab === "business" && access.money &&
+        (!crm ? <div style={{ padding: 40, textAlign: "center", color: "#5a6a85", fontWeight: 600 }}>Loading…</div>
+          : <BusinessScreen crm={crm} data={data} setTab={setTab} />)}
+      {tab === "wages" && access.money && <WagesScreen />}
 
       {emailSettings && <EmailSettings me={me} onClose={() => setEmailSettings(false)} />}
       {tab === "activity" && <ActivityScreen crm={crm} data={data} storageMode={storageMode} />}
