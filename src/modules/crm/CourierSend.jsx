@@ -32,7 +32,7 @@ async function callShip(body) {
 async function withLabel(res) {
   if (res && res.paid && !res.labelPdf && res.orderId) {
     try {
-      const l = await callShip({ action: "labels", orderId: res.orderId });
+      const l = await callShip({ action: "labels", orderId: res.orderId, hash: res.hash || "" });
       if (l && l.labelPdf) { res.labelPdf = l.labelPdf; res.labelUrl = l.labelUrl; }
     } catch (e) { /* the P2G links still work */ }
   }

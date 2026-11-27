@@ -68,6 +68,20 @@ const findLabelLinks = (obj: unknown): string[] => {
   return [...new Set(out)];
 };
 
+// the routes that might serve an order's label: the website's own download
+// route (authorised by the order hash — it redirects to a signed S3 PDF),
+// then the plausible API paths
+const labelCandidates = (orderId: string, hash: string): string[] => {
+  const out: string[] = [];
+  if (hash) {
+    out.push("/order-process/labels?id=" + orderId + "&hash=" + hash + "&format=fourbysix");
+    out.push("/order-process/labels?id=" + orderId + "&hash=" + hash);
+    out.push("/order-process/label?id=" + orderId + "&hash=" + hash);
+  }
+  out.push("/api/orders/" + orderId + "/labels", "/api/orders/" + orderId + "/label", "/api/labels?orderId=" + orderId);
+  return out;
+};
+
 // try each candidate URL until one serves a PDF (content-type or %PDF magic)
 async function fetchLabelPdf(cand: string[]): Promise<{ labelPdf: string; labelUrl: string } | null> {
   for (const u of cand) {
@@ -75,6 +89,7 @@ async function fetchLabelPdf(cand: string[]): Promise<{ labelPdf: string; labelU
       const url = u.startsWith("http") ? u : BASE + u;
       let r = await fetch(url, { headers: { authorization: "Bearer " + (await token()) } });
       if (!r.ok) r = await fetch(url); // some label links are public
+      console.log("p2g label try " + u.slice(0, 120) + " -> " + r.status + " " + (r.headers.get("content-type") || ""));
       if (!r.ok) continue;
       const buf = new Uint8Array(await r.arrayBuffer());
       const isPdf = (r.headers.get("content-type") || "").includes("pdf") ||
@@ -184,14 +199,10 @@ Deno.serve(async (req) => {
         out.paid = true;
         out.payment = pay;
         out.labels = (pay && (pay.Links || pay.links)) || null;
-        // the pay reply rarely links the label — the paid order does, so look there
+        // the pay reply rarely links the label — the website's hash-authorised
+        // download route does, so try that (plus any links the replies carry)
         try {
-          let cand = findLabelLinks({ pay, links });
-          try {
-            const ord = await api("/api/orders/" + o.OrderId, undefined, "GET");
-            cand = [...findLabelLinks(ord), ...cand];
-          } catch { /* keep what we have */ }
-          console.log("p2g label links for " + o.OrderId + ": " + JSON.stringify(cand).slice(0, 600));
+          const cand = [...labelCandidates(String(o.OrderId || ""), String(o.Hash || "")), ...findLabelLinks({ pay, links })];
           const got = await fetchLabelPdf(cand);
           if (got) { out.labelPdf = got.labelPdf; out.labelUrl = got.labelUrl; }
         } catch { /* the links in the reply still work */ }
@@ -199,16 +210,15 @@ Deno.serve(async (req) => {
       return json(out);
     }
 
-    // fetch the label for an order that's already paid (also the diagnostic for the above)
+    // fetch the label for an order that's already paid (also the diagnostic for the above);
+    // hash comes from the booking reply, or the order-complete page URL on parcel2go.com
     if (b.action === "labels") {
       const id = String(b.orderId || "").trim();
       if (!id) return json({ error: "No orderId given." }, 400);
-      const ord = await api("/api/orders/" + id, undefined, "GET");
-      const cand = findLabelLinks(ord);
-      console.log("p2g order " + id + " keys: " + JSON.stringify(Object.keys(ord || {})) + " | label links: " + JSON.stringify(cand).slice(0, 600));
+      const cand = labelCandidates(id, String(b.hash || "").trim());
       const got = await fetchLabelPdf(cand);
       if (got) return json({ orderId: id, labelPdf: got.labelPdf, labelUrl: got.labelUrl });
-      return json({ error: "No label PDF found on order " + id + " — links seen: " + (cand.join(", ") || "none") + " (keys: " + Object.keys(ord || {}).join(", ") + ")" }, 404);
+      return json({ error: "No label PDF found on order " + id + " — tried: " + cand.map((c) => c.split("?")[0]).join(", ") + ". The logs show each status." }, 404);
     }
 
     return json({ error: "Unknown action — send action: 'quote' or 'order'." }, 400);
