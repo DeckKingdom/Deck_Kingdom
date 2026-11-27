@@ -2,10 +2,11 @@
 // across Evri & co, book, pay (PrePay when P2G_AUTOPAY=1, else a payment link)
 // and hand back the order/tracking reference. One modal shared by invoices and
 // samples; the address arrives prefilled and stays editable.
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { NAVY, GOLD } from "../../lib/core.js";
 import { getSupabase } from "../../data/supabaseClient.js";
 import { Icon, inp, btn, goldBtn, lbl, selectAllProps } from "./ui.jsx";
+import { samplesIn, SAMPLE_GROUPS } from "./sampleActions.js";
 
 const PRESETS = [
   { k: "Sample pack", weight: 1, length: 35, width: 25, height: 6, value: 10 },
@@ -35,6 +36,151 @@ export function CourierButton({ to, reference, contents, onBooked, style }) {
       </button>
       {open && <CourierModal to={to} reference={reference} contents={contents} onBooked={onBooked} onClose={() => setOpen(false)} />}
     </>
+  );
+}
+
+// ===== one click for the whole "to send" pile (Home's samples card) =====
+const SAMPLE_PARCEL = [{ weight: 1, length: 35, width: 25, height: 6, value: 10 }];
+
+export function CourierBatchButton({ crm, updateCrm, style }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button style={style || btn} title="Price every sample still to send (as a 1kg sample pack) and book them all with Parcel2Go in one go" onClick={() => setOpen(true)}>
+        <Icon name="truck" size={13} />Book couriers
+      </button>
+      {open && <BatchModal crm={crm} updateCrm={updateCrm} onClose={() => setOpen(false)} />}
+    </>
+  );
+}
+
+function BatchModal({ crm, updateCrm, onClose }) {
+  const [rows, setRows] = useState(() => {
+    const by = {}; (crm.customers || []).forEach((c) => (by[c.id] = c));
+    return samplesIn(crm, SAMPLE_GROUPS.send).map((s) => {
+      const c = by[s.customerId] || {};
+      const pc = String(c.postcode || "").trim();
+      return {
+        id: s.id, no: s.sampleNo, name: c.name || "Customer", pc,
+        to: { contact: c.contact || c.name || "", phone: c.mobile || "", email: c.email || "", street: c.address || "", town: c.town || "", postcode: pc },
+        state: pc ? "wait" : "err", msg: pc ? "" : "no postcode on the customer record", quotes: null, pick: null, payLink: "", orderId: "",
+      };
+    });
+  });
+  const [busy, setBusy] = useState("");
+  const rowsRef = useRef(rows); rowsRef.current = rows;
+  const patch = (id, up) => setRows((rs) => rs.map((r) => (r.id === id ? { ...r, ...up } : r)));
+
+  // price everything as soon as the modal opens, cheapest first
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      setBusy("Getting prices…");
+      for (const r of rowsRef.current) {
+        if (!live) return;
+        if (r.state !== "wait") continue;
+        patch(r.id, { state: "quoting" });
+        try {
+          const res = await callShip({ action: "quote", delivery: { postcode: r.pc }, parcels: SAMPLE_PARCEL });
+          const qs = (res && res.quotes) || [];
+          if (!live) return;
+          if (!qs.length) patch(r.id, { state: "err", msg: "no services quoted for " + r.pc });
+          else patch(r.id, { state: "ready", quotes: qs, pick: qs[0] });
+        } catch (e) { if (live) patch(r.id, { state: "err", msg: String(e.message || e) }); }
+      }
+      if (live) setBusy("");
+    })();
+    return () => { live = false; };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // book one sample: cheapest service first; a refusal about the phone or the
+  // address tries the next service (home-delivery services are less fussy)
+  const bookOne = async (r) => {
+    let lastErr = "";
+    for (const q of (r.quotes || []).slice(0, 4)) {
+      try {
+        const res = await callShip({
+          action: "order", service: q.service, reference: "Sample " + (r.no || ""), contents: "Composite decking samples",
+          collectionDate: (q.dates && q.dates[0]) || "", parcels: SAMPLE_PARCEL, delivery: { ...r.to, property: "" },
+        });
+        return { ok: true, q, res };
+      } catch (e) {
+        lastErr = String(e.message || e);
+        if (!/mobile|phone|address/i.test(lastErr)) break;
+      }
+    }
+    return { ok: false, msg: lastErr };
+  };
+
+  const bookAll = async () => {
+    setBusy("Booking…");
+    for (const r of rowsRef.current) {
+      if (r.state !== "ready") continue;
+      patch(r.id, { state: "booking" });
+      const out = await bookOne(r);
+      if (!out.ok) { patch(r.id, { state: "err", msg: out.msg }); continue; }
+      const { q, res } = out;
+      const link = !res.paid && res.links ? String(res.links.payment || res.links.PayWithPrePay || "") : "";
+      patch(r.id, { state: "booked", pick: q, payLink: link, orderId: res.orderId, msg: res.paid ? "paid" : "pay it to release the label" });
+      updateCrm((c) => {
+        const s = (c.samples || []).find((x) => x.id === r.id);
+        if (s) {
+          if (!s.dispatchMethod) s.dispatchMethod = "Evri";
+          s.notes = ((s.notes || "") + "\nP2G order " + res.orderId + " · " + (q.courier || q.name) + " £" + Number(q.price || 0).toFixed(2) + (res.paid ? " (paid)" : " (PAY IT on Parcel2Go)")).trim();
+        }
+        return c;
+      });
+    }
+    setBusy("");
+  };
+
+  const ready = rows.filter((r) => r.state === "ready");
+  const booked = rows.filter((r) => r.state === "booked");
+  const unpaid = booked.filter((r) => r.payLink);
+  const total = ready.reduce((t, r) => t + (Number(r.pick && r.pick.price) || 0), 0);
+  const tone = { wait: "#8593a8", quoting: "#8593a8", ready: NAVY, booking: "#a05f10", booked: "#28713e", err: "#8a0b20" };
+
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "#0b1f3f80", zIndex: 90, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", color: NAVY, borderRadius: 14, width: "min(640px, 96vw)", maxHeight: "92vh", overflowY: "auto", padding: "18px 20px", boxShadow: "0 18px 50px #0b1f3f55" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+          <b style={{ fontSize: 16 }}>Book couriers — samples to send</b>
+          <span style={{ fontSize: 12, color: "#8593a8", fontWeight: 700 }}>via Parcel2Go · 1kg sample pack each</span>
+          <span style={{ flex: 1 }} />
+          <button style={btn} onClick={onClose}><Icon name="x" size={13} /></button>
+        </div>
+        {rows.length === 0 && <div style={{ color: "#8593a8", fontWeight: 600, fontSize: 13 }}>Nothing waiting to send.</div>}
+        <div style={{ display: "grid", gap: 6, marginBottom: 12 }}>
+          {rows.map((r) => (
+            <div key={r.id} style={{ display: "flex", gap: 10, alignItems: "center", border: "1px solid #e6e9ef", borderRadius: 10, padding: "8px 12px", fontSize: 13 }}>
+              <span style={{ fontWeight: 700, flex: 1, minWidth: 0 }}>
+                {r.name} <span style={{ fontWeight: 600, color: "#5a6a85" }}>S-{r.no} · {r.pc || "—"}</span>
+                <span style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: tone[r.state] }}>
+                  {r.state === "wait" ? "waiting…" : r.state === "quoting" ? "pricing…" : r.state === "booking" ? "booking…"
+                    : r.state === "ready" ? (r.pick.courier || "") + " " + r.pick.name
+                    : r.state === "booked" ? "Booked — order " + r.orderId + " · " + r.msg : r.msg}
+                </span>
+              </span>
+              {r.state === "booked" && r.payLink
+                ? <a href={r.payLink} target="_blank" rel="noopener noreferrer" style={{ ...goldBtn, textDecoration: "none", padding: "5px 10px", fontSize: 12 }}>Pay ↗</a>
+                : <b style={{ color: tone[r.state] }}>{r.pick ? "£" + Number(r.pick.price || 0).toFixed(2) : ""}</b>}
+            </div>
+          ))}
+        </div>
+        {busy && <div style={{ fontSize: 13, fontWeight: 700, color: "#5a6a85", marginBottom: 8 }}>{busy}</div>}
+        {ready.length > 0 && !busy && (
+          <button style={{ ...goldBtn, justifyContent: "center", width: "100%" }} onClick={bookAll}>
+            <Icon name="truck" stroke={NAVY} size={15} />Book all {ready.length} · £{total.toFixed(2)}
+          </button>
+        )}
+        {booked.length > 0 && !busy && (
+          <div style={{ marginTop: 10, fontSize: 12.5, fontWeight: 600, color: "#5a6a85" }}>
+            {booked.length} booked{unpaid.length ? " — pay each one above to release its label" : " and paid — labels are on Parcel2Go"}.
+            The order reference is saved on each sample; use Print all / All sent as usual.
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
