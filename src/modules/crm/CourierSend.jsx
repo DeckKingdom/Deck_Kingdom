@@ -7,6 +7,7 @@ import { NAVY, GOLD } from "../../lib/core.js";
 import { getSupabase } from "../../data/supabaseClient.js";
 import { Icon, inp, btn, goldBtn, lbl, selectAllProps } from "./ui.jsx";
 import { samplesIn, SAMPLE_GROUPS } from "./sampleActions.js";
+import { printLabelPdfs } from "./LabelSheet.jsx";
 
 const PRESETS = [
   { k: "Sample pack", weight: 1, length: 35, width: 25, height: 6, value: 10 },
@@ -129,7 +130,7 @@ function BatchModal({ crm, updateCrm, onClose }) {
       if (!out.ok) { patch(r.id, { state: "err", msg: out.msg }); continue; }
       const { q, res } = out;
       const link = !res.paid && res.links ? String(res.links.payment || res.links.PayWithPrePay || "") : "";
-      patch(r.id, { state: "booked", pick: q, payLink: link, orderId: res.orderId, msg: res.paid ? "paid" : "pay it to release the label" });
+      patch(r.id, { state: "booked", pick: q, payLink: link, orderId: res.orderId, labelPdf: res.labelPdf || "", msg: res.paid ? (res.labelPdf ? "paid · label ready" : "paid") : "pay it to release the label" });
       updateCrm((c) => {
         const s = (c.samples || []).find((x) => x.id === r.id);
         if (s) {
@@ -138,6 +139,12 @@ function BatchModal({ crm, updateCrm, onClose }) {
         }
         return c;
       });
+    }
+    // auto-pay returned the label PDFs: build the 4-up A4 sheet and open the print dialog
+    const pdfs = rowsRef.current.filter((r) => r.state === "booked" && r.labelPdf).map((r) => r.labelPdf);
+    if (pdfs.length) {
+      setBusy("Building the label sheet…");
+      try { await printLabelPdfs(pdfs); } catch (e) { /* rows keep their links */ }
     }
     setBusy("");
   };
@@ -182,9 +189,16 @@ function BatchModal({ crm, updateCrm, onClose }) {
           </button>
         )}
         {booked.length > 0 && !busy && (
-          <div style={{ marginTop: 10, fontSize: 12.5, fontWeight: 600, color: "#5a6a85" }}>
-            {booked.length} booked{unpaid.length ? " — pay each one above to release its label" : " and paid — labels are on Parcel2Go"}.
-            The order reference is saved on each sample; download the 4×6 label PDFs from Parcel2Go and the Label sheet button on Home puts 4 to an A4 sticker sheet. Print all / All sent as usual.
+          <div style={{ marginTop: 10, display: "grid", gap: 8 }}>
+            {booked.some((r) => r.labelPdf) && (
+              <button style={{ ...goldBtn, justifyContent: "center" }} onClick={() => printLabelPdfs(booked.filter((r) => r.labelPdf).map((r) => r.labelPdf))}>
+                <Icon name="doc" stroke={NAVY} size={14} />Print the label sheet{booked.filter((r) => r.labelPdf).length > 1 ? " (" + booked.filter((r) => r.labelPdf).length + " labels)" : ""}
+              </button>
+            )}
+            <div style={{ fontSize: 12.5, fontWeight: 600, color: "#5a6a85" }}>
+              {booked.length} booked{unpaid.length ? " — pay each one above to release its label, or top up PrePay + set the P2G_AUTOPAY secret to 1 and the labels print themselves" : " and paid"}.
+              The order reference is saved on each sample; Print all / All sent as usual.
+            </div>
           </div>
         )}
       </div>
@@ -264,7 +278,12 @@ function CourierModal({ to = {}, reference = "", contents = "", onBooked, onClos
             {!done.paid && done.links && (done.links.payment || done.links.PayWithPrePay) && (
               <a href={done.links.payment || done.links.PayWithPrePay} target="_blank" rel="noopener noreferrer" style={{ ...goldBtn, textDecoration: "none", justifyContent: "center" }}>Open payment ↗</a>
             )}
-            {done.paid && done.labels && (done.labels["labels-a4"] || done.labels.Labels) && (
+            {done.paid && done.labelPdf && (
+              <button style={{ ...goldBtn, justifyContent: "center" }} onClick={() => printLabelPdfs([done.labelPdf])}>
+                <Icon name="doc" stroke={NAVY} size={14} />Print label (A4 sticker sheet)
+              </button>
+            )}
+            {done.paid && !done.labelPdf && done.labels && (done.labels["labels-a4"] || done.labels.Labels) && (
               <a href={done.labels["labels-a4"] || done.labels.Labels} target="_blank" rel="noopener noreferrer" style={{ ...goldBtn, textDecoration: "none", justifyContent: "center" }}>Open labels ↗</a>
             )}
             <button style={btn} onClick={onClose}>Done</button>

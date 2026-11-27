@@ -15,12 +15,12 @@ const SLOTS = [ // top-left, top-right, bottom-left, bottom-right (pdf y runs up
   { x: MX, y: MY }, { x: MX + LAB.w, y: MY },
 ];
 
-async function buildSheet(files) {
+export async function buildSheetFromBuffers(buffers) {
   const { PDFDocument } = await import("pdf-lib");
   const out = await PDFDocument.create();
   const pages = [];
-  for (const f of files) {
-    const src = await PDFDocument.load(await f.arrayBuffer(), { ignoreEncryption: true });
+  for (const b of buffers) {
+    const src = await PDFDocument.load(b, { ignoreEncryption: true });
     const embedded = await out.embedPdf(src, src.getPageIndices());
     pages.push(...embedded);
   }
@@ -33,6 +33,30 @@ async function buildSheet(files) {
     });
   }
   return out.save();
+}
+
+async function buildSheet(files) {
+  const bufs = [];
+  for (const f of files) bufs.push(await f.arrayBuffer());
+  return buildSheetFromBuffers(bufs);
+}
+
+const b64buf = (b64) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)).buffer;
+
+// base64 label PDFs (from p2g-ship with auto-pay on) -> one A4 sheet,
+// straight into the print dialog via a hidden frame; a tab is the fallback
+export async function printLabelPdfs(b64s) {
+  const bytes = await buildSheetFromBuffers(b64s.map(b64buf));
+  const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+  await new Promise((done) => {
+    let printed = false;
+    const fr = document.createElement("iframe");
+    fr.style.cssText = "position:fixed;right:0;bottom:0;width:2px;height:2px;border:0;visibility:hidden";
+    fr.src = url;
+    fr.onload = () => { try { fr.contentWindow.focus(); fr.contentWindow.print(); printed = true; } catch (e) { /* tab below */ } };
+    document.body.appendChild(fr); // stays attached — removing it closes the print dialog
+    setTimeout(() => { if (!printed) window.open(url, "_blank", "noopener"); done(); }, 2500);
+  });
 }
 
 export function LabelSheetButton({ style }) {

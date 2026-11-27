@@ -54,6 +54,20 @@ const pcFix = (s: unknown) => {
   return t.length > 3 ? t.slice(0, -3) + " " + t.slice(-3) : t;
 };
 
+// every label-ish URL anywhere in a P2G response (Links objects vary by service)
+const findLabelLinks = (obj: unknown): string[] => {
+  const out: string[] = [];
+  const walk = (o: any) => {
+    if (!o || typeof o !== "object") return;
+    for (const [k, v] of Object.entries(o)) {
+      if (typeof v === "string" && /label/i.test(k) && (/^https?:/.test(v) || v.startsWith("/"))) out.push(v);
+      else if (v && typeof v === "object") walk(v);
+    }
+  };
+  walk(obj);
+  return [...new Set(out)];
+};
+
 // "07922-551-388" / "+44 7922 551388" -> "07922551388" (drop-shop services want 11 bare digits)
 const phoneFix = (s: unknown) => {
   let t = String(s || "").replace(/[^\d+]/g, "");
@@ -150,6 +164,21 @@ Deno.serve(async (req) => {
         out.paid = true;
         out.payment = pay;
         out.labels = (pay && (pay.Links || pay.links)) || null;
+        // fetch the label PDF itself so the app can print it without a trip to P2G
+        try {
+          for (const u of findLabelLinks({ pay, links })) {
+            const url = u.startsWith("http") ? u : BASE + u;
+            let r = await fetch(url, { headers: { authorization: "Bearer " + (await token()) } });
+            if (!r.ok) r = await fetch(url); // some label links are public
+            if (r.ok && (r.headers.get("content-type") || "").includes("pdf")) {
+              const buf = new Uint8Array(await r.arrayBuffer());
+              let s = "";
+              for (let i = 0; i < buf.length; i += 0x8000) s += String.fromCharCode(...buf.subarray(i, i + 0x8000));
+              out.labelPdf = btoa(s); out.labelUrl = url;
+              break;
+            }
+          }
+        } catch { /* the links in the reply still work */ }
       }
       return json(out);
     }
