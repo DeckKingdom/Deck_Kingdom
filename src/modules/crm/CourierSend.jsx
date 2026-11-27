@@ -184,7 +184,7 @@ function BatchModal({ crm, updateCrm, onClose }) {
         {booked.length > 0 && !busy && (
           <div style={{ marginTop: 10, fontSize: 12.5, fontWeight: 600, color: "#5a6a85" }}>
             {booked.length} booked{unpaid.length ? " — pay each one above to release its label" : " and paid — labels are on Parcel2Go"}.
-            The order reference is saved on each sample; use Print all / All sent as usual.
+            The order reference is saved on each sample; download the 4×6 label PDFs from Parcel2Go and the Label sheet button on Home puts 4 to an A4 sticker sheet. Print all / All sent as usual.
           </div>
         )}
       </div>

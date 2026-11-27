@@ -18,6 +18,7 @@ import { CollectionPeek, InvoicePeek } from "./crm/Peeks.jsx";
 import DeliveryPLCard from "./DeliveryPL.jsx";
 import { samplesIn, SAMPLE_GROUPS, printAllToSend, emailFollowUpGroup, markAllSent } from "./crm/sampleActions.js";
 import { CourierBatchButton } from "./crm/CourierSend.jsx";
+import { LabelSheetButton } from "./crm/LabelSheet.jsx";
 import { analyticsReady } from "../data/analytics.js";
 import { TaskModal, TasksSchemaNotice, PRIORITY_TONES, STATUS_TONES } from "./crm/TasksScreen.jsx";
 
@@ -479,6 +480,9 @@ export default function HomeScreen({ data, crm, updateCrm, me, askConfirm, setTa
                     <div key={label} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", borderBottom: "1px solid #f0f2f6", fontSize: 13, fontWeight: 600 }}>
                       <b style={{ minWidth: 26, textAlign: "center", fontSize: 15, color: n ? (label === "To send" ? RED : "#a05f10") : "#aab3c2" }}>{n}</b>
                       <span style={{ flex: 1, color: n ? NAVY : "#8593a8" }}>{label}</span>
+                      {label === "To send" && (
+                        <LabelSheetButton style={{ ...btn, padding: "5px 10px", fontSize: 12, fontWeight: 800 }} />
+                      )}
                       {n > 0 && label === "To send" && (
                         <CourierBatchButton crm={crm} updateCrm={updateCrm} style={{ ...btn, padding: "5px 10px", fontSize: 12, fontWeight: 800 }} />
                       )}
