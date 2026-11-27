@@ -90,10 +90,12 @@ function CourierModal({ to = {}, reference = "", contents = "", onBooked, onClos
 
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "#0b1f3f80", zIndex: 90, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", borderRadius: 14, width: "min(620px, 96vw)", maxHeight: "92vh", overflowY: "auto", padding: "18px 20px", boxShadow: "0 18px 50px #0b1f3f55" }}>
+      {/* color is set explicitly: the invoice screen mounts this inside the navy
+          band (color #fff), and position:fixed doesn't stop that inheriting */}
+      <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", color: NAVY, borderRadius: 14, width: "min(620px, 96vw)", maxHeight: "92vh", overflowY: "auto", padding: "18px 20px", boxShadow: "0 18px 50px #0b1f3f55" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
           <b style={{ fontSize: 16 }}>Send by courier</b>
-          <span style={{ fontSize: 12, color: "#8593a8", fontWeight: 700 }}>via Parcel2Go{reference ? " · " + reference : ""} · v2</span>
+          <span style={{ fontSize: 12, color: "#8593a8", fontWeight: 700 }}>via Parcel2Go{reference ? " · " + reference : ""}</span>
           <span style={{ flex: 1 }} />
           <button style={btn} onClick={onClose}><Icon name="x" size={13} /></button>
         </div>
