@@ -8,6 +8,7 @@ import { invoiceTotals, isVoidInvoice, purchaseTotals, purchaseIsPaid, gbp, supp
 import { COST_CENTRE_LIST, isOverhead, assignCostCentre } from "../lib/costCentres.js";
 import { sect, card, ListHero, HeroStat } from "./crm/ui.jsx";
 import { fetchWageMonths } from "./crm/WagesScreen.jsx";
+import CommitmentsCard, { monthlyEq } from "./crm/CommitmentsCard.jsx";
 
 const th = { fontSize: 11, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", padding: "8px 8px", borderBottom: "2px solid #e6e9ef", whiteSpace: "nowrap", textAlign: "right" };
 const tdc = { padding: "8px 8px", borderBottom: "1px solid #f0f2f6", textAlign: "right", whiteSpace: "nowrap" };
@@ -16,6 +17,7 @@ const USD_GBP = 1.27; // planning rate for container balances still to pay
 
 export default function BusinessScreen({ crm, data, setTab }) {
   const [wages, setWages] = useState(null); // { 'YYYY-MM': employer cost } | null while loading
+  const [commits, setCommits] = useState([]); // the DD/SO register, loaded by its card
   useEffect(() => { fetchWageMonths().then((m) => setWages(m || {})); }, []);
 
   const tod = today();
@@ -84,6 +86,10 @@ export default function BusinessScreen({ crm, data, setTab }) {
         <HeroStat label={"Sales " + mLabel(monthKey)} value={gbp(salesMonth)} sub="inc VAT" />
         <HeroStat label={"Overheads " + mLabel(monthKey)} value={gbp(overheadMonth)} sub="everything but stock, wages in" />
         <HeroStat label="Fixed costs · 12-mo avg" value={gbp(fixedAvg) + "/mo"} sub="overheads + wages, the break-even line" />
+        {commits.some((c) => c.active !== false) && (
+          <HeroStat label="Committed · DD/SO" value={gbp(commits.filter((c) => c.active !== false).reduce((t, c) => t + monthlyEq(c), 0)) + "/mo"}
+            sub={commits.filter((c) => c.active !== false).length + " agreements in the register below"} />
+        )}
         <HeroStat label="Ledger unpaid" value={gbp(unpaidTotal)} sub={unpaid.length + " invoices"} tone={unpaidTotal > 0 ? "#ffd27a" : GOLD} />
         <HeroStat label="Container balances" value={gbp(containerTotal)} sub={containers.length + " shipments, est at $" + USD_GBP + "/£"} />
       </ListHero>
@@ -180,6 +186,8 @@ export default function BusinessScreen({ crm, data, setTab }) {
           <p style={{ fontSize: 11.5, color: "#8593a8", fontWeight: 600, margin: "8px 2px 0" }}>Balances assume the $15k deposit pattern — exact once deposits are logged per shipment. Estimated in £ at ${USD_GBP}/£.</p>
         </div>
       </div>
+
+      <CommitmentsCard onLoaded={setCommits} />
     </div>
   );
 }

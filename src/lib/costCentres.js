@@ -35,6 +35,7 @@ const SUPPLIER_RULES = [
   [/ahrefs|krystal|swift hosting|checkatrade/i, null, "Marketing & Web", "Tools & hosting"],
   [/urban haze|rainworks/i, null, "Marketing & Web", "Design & print"],
   [/business matters|fairfield gold/i, null, "Marketing & Web", "Sponsorship"],
+  [/gatefield/i, null, "Fleet", "Repairs & maintenance"],
   [/dvla|dart charge|mersey flow|tyne tunnel|clean air|m6 toll|car park/i, null, "Fleet", "Road, tolls & fines"],
   [/rac breakdown|tempcover/i, null, "Fleet", "Insurance & breakdown"],
   [/^fuel$|allstar/i, null, "Fleet", "Fuel"],
