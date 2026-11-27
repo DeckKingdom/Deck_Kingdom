@@ -26,6 +26,7 @@ import LinesEditor from "./LinesEditor.jsx";
 import StockCheck from "./StockCheck.jsx";
 import { DeliverAddrCheck, useAddressGuard } from "./AddressGuard.jsx";
 import { tidyPostcode } from "../../lib/addressCheck.js";
+import { CourierButton } from "./CourierSend.jsx";
 
 const docBtn = { ...btn, padding: "6px 11px", fontSize: 12.5 };
 const navyBtn = { ...btn, background: "transparent", border: "1px solid #3a4f78", color: "#fff" };
@@ -758,6 +759,10 @@ export default function InvoicesScreen({ headerH = 0, openProduct, money = true,
           const ok = printJobDocs([inv], ["loading", "delivery", "invoice"], { custOf: (x) => custById[x.customerId], siteOf: (x) => siteById[x.siteId], crm, planner, title: "Job " + (inv.invNo || "") });
           if (!ok) setNotice("Printing is blocked here — allow pop-ups for ops.deckkingdom.co.uk and try again.");
         }} />
+        <CourierButton style={{ ...bandBtn }} reference={"INV " + (inv.invNo || "")} contents="Composite decking parts"
+          to={site ? { contact: site.contact || (cust && cust.name) || "", phone: site.mobile || (cust && cust.mobile) || "", email: (cust && cust.email) || "", street: site.address || "", town: site.town || "", postcode: site.postcode || "" }
+            : cust ? { contact: cust.contact || cust.name || "", phone: cust.mobile || "", email: cust.email || "", street: cust.address || "", town: cust.town || "", postcode: cust.postcode || "" } : {}}
+          onBooked={(r) => setInv((x) => { x.jobNotes = ((x.jobNotes || "") + "\nCourier: " + r.courier + " £" + Number(r.price || 0).toFixed(2) + " — P2G order " + r.orderId + (r.paid ? " (paid)" : " (PAY IT on Parcel2Go)")).trim(); })} />
         {invoiceEmailTo(cust, site)
           ? <button style={{ ...bandBtn }} title={"Email the invoice as a PDF to " + invoiceEmailTo(cust, site) + " with a short check-the-details note"}
               onClick={() => emailInvoiceWithPdf(inv, cust, site, setNotice)}>

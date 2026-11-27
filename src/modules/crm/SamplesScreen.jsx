@@ -12,6 +12,7 @@ import {
 import { samplesAvailable } from "../../data/crmStorage.js";
 import { ListHero, HeroStat, HeroAdd, SearchBox, FilterPills, DateInput, CalendarPop } from "./ui.jsx";
 import { Icon, Chip, Modal, SuggestInput, selectAllProps, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
+import { CourierButton } from "./CourierSend.jsx";
 import { ColourSelect } from "./LinesEditor.jsx";
 import { printSampleSlip } from "./printDocs.js";
 import { printAllToSend, emailFollowUpGroup } from "./sampleActions.js";
@@ -743,6 +744,14 @@ export default function SamplesScreen({ money = true, crm, updateCrm, askConfirm
                 )}
               </div>
             ) : null],
+            ["Book courier", (
+              <CourierButton style={{ ...btn, padding: "6px 10px", fontSize: 12.5 }} reference={"Sample " + (smp.sampleNo || "")} contents="Composite decking samples"
+                to={cust ? { contact: cust.contact || cust.name || "", phone: cust.mobile || "", email: cust.email || "", street: cust.address || "", town: cust.town || "", postcode: cust.postcode || "" } : {}}
+                onBooked={(r) => setSample((x) => {
+                  if (!x.dispatchMethod) x.dispatchMethod = "Evri";
+                  x.notes = ((x.notes || "") + "\nP2G order " + r.orderId + " · " + r.courier + " £" + Number(r.price || 0).toFixed(2) + (r.paid ? " (paid)" : " (PAY IT on Parcel2Go)")).trim();
+                })} />
+            )],
             ["Sent", (
               <StepDate value={smp.dispatchedDate} icon="truck" todo="Mark as sent" done="Sent"
                 onDate={(d) => setSample((x) => {
