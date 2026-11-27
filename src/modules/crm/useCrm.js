@@ -20,6 +20,7 @@ const QUIET_MS = 5_000; // wait this long after the last edit here before reload
 export function useCrm(enabled) {
   const [crm, setCrm] = useState(null);
   const [crmError, setCrmError] = useState(false);
+  const [crmErrorMsg, setCrmErrorMsg] = useState(""); // the real failure, for the banner
   const [crmSave, setCrmSave] = useState("");
   const [saveError, setSaveError] = useState(""); // why the last save failed (shown as a red banner)
   const retry = useRef(null);
@@ -115,6 +116,8 @@ export function useCrm(enabled) {
       const msg = String(e && e.message ? e.message : e).toLowerCase();
       const isEmpty = msg.includes("not found") || msg.includes("no such") || msg.includes("404");
       if (!isEmpty) {
+        console.warn("[dk-load] crm load failed:", e);
+        setCrmErrorMsg(String(e && e.message ? e.message : e).slice(0, 300));
         setCrmError(true);
         loading.current = false;
         return;
@@ -311,5 +314,5 @@ export function useCrm(enabled) {
     setCrm(normaliseCrm(d));
   };
 
-  return { crm, updateCrm, replaceCrm, crmError, loadCrm, crmSave, saveError, saveNotice, lastLive, crmStale };
+  return { crm, updateCrm, replaceCrm, crmError, crmErrorMsg, loadCrm, crmSave, saveError, saveNotice, lastLive, crmStale };
 }
