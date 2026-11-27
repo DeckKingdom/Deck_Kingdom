@@ -10,6 +10,7 @@ import { sect, card, ListHero, HeroStat } from "./crm/ui.jsx";
 import { fetchWageMonths } from "./crm/WagesScreen.jsx";
 import CommitmentsCard, { monthlyEq } from "./crm/CommitmentsCard.jsx";
 
+const GREEN = "#2e7d4f";
 const th = { fontSize: 11, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", padding: "8px 8px", borderBottom: "2px solid #e6e9ef", whiteSpace: "nowrap", textAlign: "right" };
 const tdc = { padding: "8px 8px", borderBottom: "1px solid #f0f2f6", textAlign: "right", whiteSpace: "nowrap" };
 const left = { textAlign: "left" };
@@ -93,6 +94,57 @@ export default function BusinessScreen({ crm, data, setTab }) {
         <HeroStat label="Ledger unpaid" value={gbp(unpaidTotal)} sub={unpaid.length + " invoices"} tone={unpaidTotal > 0 ? "#ffd27a" : GOLD} />
         <HeroStat label="Container balances" value={gbp(containerTotal)} sub={containers.length + " shipments, est at $" + USD_GBP + "/£"} />
       </ListHero>
+
+      {/* ===== the year in two pictures ===== */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(380px, 1fr))", gap: 14, marginBottom: 14 }}>
+        <div style={{ ...card, marginBottom: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <p style={{ ...sect, margin: 0 }}>Money in vs out — 12 months</p>
+            <span style={{ flex: 1 }} />
+            <span style={{ fontSize: 11, fontWeight: 700, color: GREEN }}>■ sales</span>
+            <span style={{ fontSize: 11, fontWeight: 700, color: NAVY }}>■ spend + wages</span>
+          </div>
+          {(() => {
+            const seq = [...months].reverse(); // oldest first, this month at the right
+            const vals = seq.map((k) => ({ k, i: salesBy[k] || 0, o: spendIn(k) }));
+            const max = Math.max(1, ...vals.flatMap((v) => [v.i, v.o]));
+            const W = 960, H = 170, bw = W / vals.length;
+            return (
+              <svg viewBox={"0 0 " + W + " " + (H + 24)} style={{ width: "100%", height: "auto", marginTop: 6 }}>
+                {vals.map((v, i) => {
+                  const x = i * bw, hi = (v.i / max) * H, ho = (v.o / max) * H;
+                  return (
+                    <g key={v.k}>
+                      <rect x={x + 5} y={H - hi} width={bw / 2 - 7} height={Math.max(1.5, hi)} fill={GREEN} rx="2"><title>{mLabel(v.k) + " sales " + gbp(v.i)}</title></rect>
+                      <rect x={x + bw / 2} y={H - ho} width={bw / 2 - 7} height={Math.max(1.5, ho)} fill={NAVY} rx="2"><title>{mLabel(v.k) + " out " + gbp(v.o)}</title></rect>
+                      <text x={x + bw / 2} y={H + 15} fontSize="10.5" textAnchor="middle" fill="#8593a8" fontWeight="700">{mLabel(v.k).split(" ")[0]}</text>
+                    </g>
+                  );
+                })}
+              </svg>
+            );
+          })()}
+        </div>
+        <div style={{ ...card, marginBottom: 0 }}>
+          <p style={sect}>Where it goes — monthly average</p>
+          {(() => {
+            const rows2 = centres.map((c) => ({ c, v: avg12((k) => (spend[c] || {})[k] || 0) }));
+            if (wages && avg12(wageIn) > 0) rows2.push({ c: "Wages (payroll)", v: avg12(wageIn) });
+            rows2.sort((a, z) => z.v - a.v);
+            const max = Math.max(1, ...rows2.map((r) => r.v));
+            return rows2.map((r) => (
+              <div key={r.c} style={{ display: "grid", gridTemplateColumns: "150px 1fr 76px", gap: 8, alignItems: "center", margin: "6px 0" }}>
+                <span style={{ fontSize: 12, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.c}</span>
+                <div style={{ background: "#eef1f6", borderRadius: 6, height: 14 }}>
+                  <div style={{ width: Math.max(1.5, (r.v / max) * 100) + "%", height: "100%", borderRadius: 6, background: r.c === "Stock" ? GOLD : r.c === "Wages (payroll)" ? GREEN : NAVY }} />
+                </div>
+                <b style={{ fontSize: 12, textAlign: "right" }}>{gbp(r.v)}</b>
+              </div>
+            ));
+          })()}
+          <p style={{ fontSize: 11.5, color: "#8593a8", fontWeight: 600, margin: "8px 2px 0" }}>Average of the last 12 months. Gold = stock, green = payroll, navy = overheads.</p>
+        </div>
+      </div>
 
       {/* ===== by cost centre, month by month ===== */}
       <div style={card}>

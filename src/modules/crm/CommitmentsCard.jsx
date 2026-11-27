@@ -16,6 +16,56 @@ const FREQS = { "Weekly": 52 / 12, "4-weekly": 13 / 12, "Monthly": 1, "Quarterly
 const METHODS = ["DD", "SO", "Card", "Bank"];
 export const monthlyEq = (c) => (Number(c.amount) || 0) * (FREQS[c.freq] || 1);
 
+// On the purchase entry: one button marks this supplier as a recurring
+// DD/SO — it drops a prefilled row into the register (admins only; everyone
+// else never sees the button, and the table's RLS backs that up).
+export function RecurringMark({ supplierName, purchase, amount }) {
+  const [state, setState] = useState("hidden"); // hidden | idle | in | busy
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      try {
+        if (!supplierName) return;
+        const { getMyAccess } = await import("../../data/auth.js");
+        const acc = await getMyAccess();
+        if (!acc || acc.role !== "admin") return;
+        const sb = await getSupabase();
+        const { data, error } = await sb.from("commitments").select("id,supplier").limit(1000);
+        if (error || !live) return; // table not migrated yet -> stay hidden
+        const hit = (data || []).some((c) => (c.supplier || "").trim().toLowerCase() === supplierName.trim().toLowerCase());
+        setState(hit ? "in" : "idle");
+      } catch (e) { /* stay hidden */ }
+    })();
+    return () => { live = false; };
+  }, [supplierName]);
+
+  const add = async () => {
+    setState("busy");
+    try {
+      const sb = await getSupabase();
+      const m = String(purchase.paymentMethod || "");
+      const method = /standing|^so$/i.test(m) ? "SO" : /card/i.test(m) ? "Card" : /bank|transfer|bacs/i.test(m) ? "Bank" : "DD";
+      const { error } = await sb.from("commitments").insert({
+        id: uid(), name: (String(purchase.invDetail || "").split("\n")[0] || supplierName).slice(0, 48), supplier: supplierName,
+        cost_centre: purchase.costCentre || "", cost_sub: purchase.costSub || "",
+        amount: Number(amount) || 0, freq: "Monthly", method, start_date: purchase.invDate || "",
+        term_months: 0, renewal_date: "", notes: "from PO " + (purchase.poNo || ""), active: true,
+      });
+      if (error) throw error;
+      setState("in");
+    } catch (e) { setState("idle"); window.alert("Couldn't add it to the register: " + ((e && e.message) || e)); }
+  };
+
+  if (state === "hidden") return null;
+  if (state === "in") return <Chip tone="green">↻ In the fixed-cost register — edit it on the Business screen</Chip>;
+  return (
+    <button style={{ ...btn, justifyContent: "center" }} disabled={state === "busy"} onClick={add}
+      title="A direct debit / standing order / subscription? One click puts it in the fixed-cost register on the Business screen, prefilled from this purchase — set the frequency and renewal date there.">
+      <Icon name="refresh" size={14} />{state === "busy" ? "Adding…" : "Mark recurring (DD/SO)"}
+    </button>
+  );
+}
+
 export default function CommitmentsCard({ onLoaded }) {
   const [rows, setRows] = useState(null);
   const [err, setErr] = useState("");

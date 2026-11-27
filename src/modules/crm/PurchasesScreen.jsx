@@ -10,6 +10,7 @@ import {
 } from "../../lib/crmCore.js";
 import { purchasesAvailable } from "../../data/crmStorage.js";
 import { COST_CENTRES, COST_CENTRE_LIST, assignCostCentre } from "../../lib/costCentres.js";
+import { RecurringMark } from "./CommitmentsCard.jsx";
 import { Icon, Chip, SuggestInput, selectAllProps, sect, lbl, card, abtn, inp, btn, goldBtn, DateInput, CalendarPop, RecordNav, BandDelete, HoverStamp, ListHero, HeroStat, HeroAdd, SearchBox, FilterPills } from "./ui.jsx";
 import { LockGuard } from "./Peeks.jsx";
 import { SupplierModal, PurchasesSchemaNotice } from "./SuppliersScreen.jsx";
@@ -406,6 +407,7 @@ export default function PurchasesScreen({ crm, updateCrm, askConfirm, selId, set
           {!p.datePaid && (
             <button style={{ ...goldBtn, justifyContent: "center" }} onClick={() => setP((x) => (x.datePaid = today()))}><Icon name="pound" stroke={NAVY} />Paid today</button>
           )}
+          <RecurringMark supplierName={sup ? sup.name : ""} purchase={p} amount={t.total} />
         </div>
       </div>
 
