@@ -10,13 +10,16 @@ import { getSupabase } from "../../data/supabaseClient.js";
 import { readStatementFile, txId, txKey } from "../../lib/bankParse.js";
 import { buildContext, suggest, applyMatch, payeeOf } from "../../lib/bankMatch.js";
 import { Icon, Chip, sect, card, inp, btn, goldBtn, ListHero, HeroStat } from "./ui.jsx";
+import { COST_CENTRES } from "../../lib/costCentres.js";
+
+const CC_OPTS = Object.entries(COST_CENTRES).flatMap(([c, subs]) => subs.map((x) => c + "|" + x));
 
 const th = { fontSize: 11, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", padding: "8px 8px", borderBottom: "2px solid #e6e9ef", whiteSpace: "nowrap", textAlign: "left" };
 const tdc = { padding: "7px 8px", borderBottom: "1px solid #f0f2f6", verticalAlign: "middle" };
 const r2 = (n) => Math.round(n * 100) / 100;
 const NOOP = ["takings", "transfer", "covered", "purchase-paid", "invoice-paid"];
 const GOLD_D = "#d99a2b";
-const ACTIONS = [["accept", "✓ Suggestion"], ["wages", "Wages…"], ["new-purchase", "New purchase…"], ["takings", "Takings"], ["transfer", "Own money / transfer"], ["covered", "Already on the ledger"], ["ignore", "Ignore"]];
+const ACTIONS = [["accept", "✓ Suggestion"], ["wages", "Wages…"], ["spend", "Cost, bank only…"], ["new-purchase", "New purchase…"], ["takings", "Takings"], ["transfer", "Own money / transfer"], ["covered", "Already on the ledger"], ["ignore", "Ignore"]];
 
 async function loadAll(sb) {
   const out = [];
@@ -168,8 +171,9 @@ export default function BankScreen({ crm, updateCrm, me, crmFull }) {
     if (action === "accept") m = { kind: row.match_kind, ref: row.match_ref, supplierId: row.match_ref, person: row.match_ref, label: row.match_label };
     else if (action === "wages") m = { kind: "wages", ref: (ch.person || "").trim(), label: "Wages · " + (ch.person || "").trim() };
     else if (action === "new-purchase") m = { kind: "new-purchase", supplierName: (ch.supplier || "").trim(), label: "New purchase · " + (ch.supplier || "").trim() };
+    else if (action === "spend") m = { kind: "spend", ref: ch.cc || "", label: "Cost → " + String(ch.cc || "").replace("|", " · ") };
     else m = { kind: action, ref: "", label: ACTIONS.find((a) => a[0] === action)[1] };
-    if (m.kind === "review" || (m.kind === "wages" && !m.ref) || (m.kind === "new-purchase" && action === "new-purchase" && !m.supplierName)) return null;
+    if (m.kind === "review" || (m.kind === "wages" && !m.ref) || (m.kind === "spend" && !m.ref) || (m.kind === "new-purchase" && action === "new-purchase" && !m.supplierName)) return null;
     return { tx, m };
   };
 
@@ -294,6 +298,12 @@ export default function BankScreen({ crm, updateCrm, me, crmFull }) {
                             </select>
                             {act === "wages" && <input style={{ ...inp, width: 140, padding: "5px 6px" }} list="dk-bank-people" placeholder="Person" value={ch.person || ""} onChange={(e) => setCh({ person: e.target.value })} />}
                             {act === "new-purchase" && <input style={{ ...inp, width: 160, padding: "5px 6px" }} list="dk-bank-sups" placeholder="Supplier" value={ch.supplier || ""} onChange={(e) => setCh({ supplier: e.target.value })} />}
+                            {act === "spend" && (
+                              <select style={{ ...inp, width: 190, padding: "5px 6px" }} value={ch.cc || ""} onChange={(e) => setCh({ cc: e.target.value })}>
+                                <option value="">— cost centre —</option>
+                                {CC_OPTS.map((o) => <option key={o} value={o}>{o.replace("|", " · ")}</option>)}
+                              </select>
+                            )}
                           </div>
                         </td>
                         <td style={{ ...tdc, textAlign: "right" }}>
@@ -339,6 +349,12 @@ export default function BankScreen({ crm, updateCrm, me, crmFull }) {
                             </select>
                             {act === "wages" && <input style={{ ...inp, width: 140, padding: "5px 6px" }} list="dk-bank-people" placeholder="Person" value={ch.person || ""} onChange={(e) => setCh({ person: e.target.value })} />}
                             {act === "new-purchase" && <input style={{ ...inp, width: 160, padding: "5px 6px" }} list="dk-bank-sups" placeholder="Supplier" value={ch.supplier || ""} onChange={(e) => setCh({ supplier: e.target.value })} />}
+                            {act === "spend" && (
+                              <select style={{ ...inp, width: 190, padding: "5px 6px" }} value={ch.cc || ""} onChange={(e) => setCh({ cc: e.target.value })}>
+                                <option value="">— cost centre —</option>
+                                {CC_OPTS.map((o) => <option key={o} value={o}>{o.replace("|", " · ")}</option>)}
+                              </select>
+                            )}
                           </div>
                         </td>
                       ) : <td style={tdc}>{r.status === "ignored" ? <Chip>ignored</Chip> : r.status === "matched" ? <Chip tone="green">✓</Chip> : null}</td>}
@@ -357,12 +373,30 @@ export default function BankScreen({ crm, updateCrm, me, crmFull }) {
         )}
       </div>
       <p style={{ fontSize: 11.5, color: "#8593a8", fontWeight: 600, margin: "0 2px 18px" }}>
-        Importing never changes the ledger, invoices or wages on its own — only takings, own transfers and entries already marked paid are ticked off.
+        "Cost, bank only" is for money out that never has an invoice — VAT to HMRC, Revolve repayments and interest — it counts on the Business screen under its
+        cost centre without adding anything to the ledger. Importing never changes the ledger, invoices or wages on its own — only takings, own transfers and entries already marked paid are ticked off.
         Everything that would change a record waits here until you apply it. Importing the same statement twice is harmless — every transaction keeps one row. "New purchase" adds a ledger entry at the bank amount
         with VAT at 0% — open it and add the invoice and VAT. Wages rows are worked out from the payments assigned to each person; payroll figures you've keyed in by hand are never overwritten.
       </p>
     </div>
   );
+}
+
+// costs kept on the bank only (match_kind "spend"), for the Business screen: { centre: { "YYYY-MM": £ } }
+export async function fetchBankSpend() {
+  try {
+    const sb = await getSupabase();
+    const out = {};
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await sb.from("bank_transactions").select("tx_date,amount,match_ref").eq("status", "matched").eq("match_kind", "spend").range(from, from + 999);
+      if (error) return null;
+      (data || []).forEach((r) => {
+        const c = String(r.match_ref || "").split("|")[0] || "Office & Misc", k = String(r.tx_date).slice(0, 7);
+        (out[c] = out[c] || {})[k] = ((out[c] || {})[k] || 0) - Number(r.amount); // money out is negative on the bank
+      });
+      if (!data || data.length < 1000) return out;
+    }
+  } catch (e) { return null; }
 }
 
 // latest balance for the Business screen (admin RLS: other logins get null)

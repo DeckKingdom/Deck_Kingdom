@@ -9,7 +9,7 @@ import { COST_CENTRE_LIST, isOverhead, assignCostCentre } from "../lib/costCentr
 import { sect, card, ListHero, HeroStat } from "./crm/ui.jsx";
 import { fetchWageMonths } from "./crm/WagesScreen.jsx";
 import CommitmentsCard, { monthlyEq } from "./crm/CommitmentsCard.jsx";
-import { fetchBankBalance } from "./crm/BankScreen.jsx";
+import { fetchBankBalance, fetchBankSpend } from "./crm/BankScreen.jsx";
 
 const GREEN = "#2e7d4f";
 const th = { fontSize: 11, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", padding: "8px 8px", borderBottom: "2px solid #e6e9ef", whiteSpace: "nowrap", textAlign: "right" };
@@ -21,7 +21,12 @@ export default function BusinessScreen({ crm, data, setTab }) {
   const [wages, setWages] = useState(null); // { 'YYYY-MM': employer cost } | null while loading
   const [commits, setCommits] = useState([]); // the DD/SO register, loaded by its card
   const [bank, setBank] = useState(null); // { date, balance } from the latest imported statement
-  useEffect(() => { fetchWageMonths().then((m) => setWages(m || {})); fetchBankBalance().then(setBank); }, []);
+  const [bankSpend, setBankSpend] = useState({}); // bank-only costs (VAT, Revolve …) by centre and month
+  useEffect(() => {
+    fetchWageMonths().then((m) => setWages(m || {}));
+    fetchBankBalance().then(setBank);
+    fetchBankSpend().then((m) => setBankSpend(m || {}));
+  }, []);
 
   const [range, setRange] = useState("12m"); // 12m | ytd | ly | all
   const [focus, setFocus] = useState("all");  // all | overheads | a centre | wages
@@ -50,8 +55,10 @@ export default function BusinessScreen({ crm, data, setTab }) {
       const cc = ccOf(p);
       (by[cc] = by[cc] || {})[k] = (by[cc][k] || 0) + purchaseTotals(p).total;
     });
+    // plus what only ever shows on the bank (VAT to HMRC, trade-finance repayments) — assigned on the Bank screen
+    Object.entries(bankSpend || {}).forEach(([cc, months]) => Object.entries(months).forEach(([k, v]) => { (by[cc] = by[cc] || {})[k] = (by[cc][k] || 0) + v; }));
     return by;
-  }, [crm]);
+  }, [crm, bankSpend]);
   // the earliest month anything was invoiced or bought — "all time" starts here
   const firstKey = useMemo(() => {
     const ks = [...Object.keys(salesBy), ...Object.values(spend).flatMap((m) => Object.keys(m))].filter((k) => /^\d{4}-\d{2}$/.test(k) && k >= "2022-01");

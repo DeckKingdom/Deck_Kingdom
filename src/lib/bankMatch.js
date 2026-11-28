@@ -38,6 +38,43 @@ export function buildContext(crm, wagePeople) {
   return { crm, sups, byInvNo, custById, purchBySup, allInvs, openInvs, people };
 }
 
+// bank payee -> the ledger supplier(s) it really is, where the names differ (Jon, Nov 26)
+const ALIASES = [
+  [/t ?& ?a upholstery/i, /tuda/i],              // Tuda Grass (all products) bank as T&A Upholstery Supplies
+  [/je kirk|j e kirk|joanne kirk/i, /kirk/i],     // the landlord: rent, the annual buildings insurance, 2024 set-up
+  [/seneca|revolve/i, /seneca|revolve/i],         // trade finance for Veejoy stock (Seneca, now Revolve)
+  [/\bhmrc\b/i, /^hmrc$/i],
+];
+export function supplierGroup(desc, ctx) {
+  for (const [pay, sup] of ALIASES) {
+    if (!pay.test(desc)) continue;
+    const g = ctx.sups.filter(({ s }) => sup.test(s.name || "")).map(({ s }) => s)
+      .sort((a, z) => (ctx.purchBySup.get(z.id) || []).length - (ctx.purchBySup.get(a.id) || []).length);
+    if (g.length) return g;
+  }
+  const one = supplierFor(desc, ctx);
+  return one ? [one] : [];
+}
+
+// costs that only ever show on the bank (no invoice to put on the ledger): VAT to HMRC,
+// trade-finance repayments and interest, the landlord's extras. Kept on the bank row with a
+// cost centre — the Business screen counts them — and nothing is added to the ledger.
+function bankOnlyCost(desc, tx, group) {
+  const names = group.map((s) => s.name).join(" ") + " " + desc;
+  if (/\bhmrc\b/i.test(names)) return /vat/i.test(desc)
+    ? { c: "Finance & Professional", s: "HMRC", label: "VAT to HMRC (all or part of a quarter)", sure: true }
+    : { c: "Finance & Professional", s: "HMRC", label: "HMRC payment — check what it's for", sure: false };
+  if (/seneca|revolve/i.test(names)) return /\binv|interest/i.test(desc)
+    ? { c: "Finance & Professional", s: "Trade finance interest", label: "Revolve/Seneca interest", sure: true }
+    : { c: "Stock", s: "Veejoy repayments", label: "Revolve/Seneca repayment for Veejoy stock", sure: true };
+  if (/kirk/i.test(names)) {
+    if (/insur/i.test(desc)) return { c: "Premises", s: "Other", label: "Buildings insurance via the landlord", sure: true };
+    if (tx.date < "2024-09-01") return { c: "Premises", s: "Other", label: "Unit set-up (deposit / legal fees) — check", sure: false };
+    return { c: "Premises", s: "Rent", label: "Rent", sure: true };
+  }
+  return null;
+}
+
 // supplier named in a bank description — banks truncate ("British Gas Busine", "Tameside Mbc")
 export function supplierFor(desc, ctx) {
   const dk = norm(desc), pk = norm(payeeOf(desc));
@@ -71,6 +108,7 @@ export function suggest(tx, ctx) {
   if (tx.amount > 0) {
     if (TAKINGS.test(desc)) return { kind: "takings", auto: true, label: "Card / online takings settlement" };
     if (OWN.test(payeeOf(desc))) return { kind: "transfer", auto: true, label: "Transfer between our own accounts" };
+    if (/^(j|jon|jonathan|mr j) cheetham$/i.test(payeeOf(desc).trim())) return { kind: "transfer", auto: true, label: "Jon putting money back in" };
     const ref = desc.match(/\binv(?:oice)?[\s.#:\-]*(?:no\.?)?[\s.#:\-]*(\d{3,6})\b/i);
     // a bare number in the reference ("Somerset Loft Conversions Ltd, 5177") that is one of our invoice numbers
     const bare = !ref && [...desc.matchAll(/\b(\d{4,5})\b/g)].map((m) => m[1]).find((n) => ctx.byInvNo.has(n));
@@ -107,7 +145,7 @@ export function suggest(tx, ctx) {
     if (amt.length === 1) return { kind: "invoice", ref: amt[0].id, auto: false, label: "Same amount as invoice #" + amt[0].invNo + " — check the payer" };
     const amtPaid = window.filter((i) => isPaid(i) && near(invoiceTotals(i).total, A, 0.01) && days(i.paymentDate || i.date, tx.date) <= 10);
     if (amtPaid.length === 1) return { kind: "invoice-paid", ref: amtPaid[0].id, auto: false, label: "Same amount as invoice #" + amtPaid[0].invNo + " (already paid) — check the payer" };
-    const sup = supplierFor(payeeOf(desc), ctx);
+    const sup = supplierGroup(payeeOf(desc), ctx)[0];
     if (sup) return { kind: "refund", auto: false, supplierId: sup.id, label: "Money back from " + sup.name + "?" };
     return { kind: "review", auto: false, label: "Money in — not matched" };
   }
@@ -119,9 +157,10 @@ export function suggest(tx, ctx) {
   const who = ctx.people.find((p) => dk.includes(p.k));
   if (who) return { kind: "wages", auto: true, person: who.n, ref: who.n, label: "Wages · " + who.n };
 
-  const sup = supplierFor(desc, ctx);
+  const group = supplierGroup(desc, ctx);
+  const sup = group[0];
   if (sup) {
-    const list = ctx.purchBySup.get(sup.id) || [];
+    const list = group.flatMap((g) => ctx.purchBySup.get(g.id) || []);
     // already recorded: a payment row with this bank id, or a paid entry of this amount near this date
     const done = list.find((p) => purchasePayments(p).some((x) => String(x.ref || "").includes(tx.id)));
     if (done) return { kind: "purchase-paid", ref: done.id, auto: true, label: "Already recorded on PO " + done.poNo };
@@ -132,6 +171,15 @@ export function suggest(tx, ctx) {
     const open = list.filter((p) => !purchaseIsPaid(p) && (p.invDate || "") <= tx.date && days(p.invDate, tx.date) <= 200);
     // their invoice number in our payment reference ("MOB, Far Logistics, 130142") picks the purchase outright
     const byNo = list.find((p) => String(p.invNo || "").replace(/\D/g, "").length >= 4 && dk.includes(String(p.invNo).toLowerCase().replace(/[^a-z0-9]/g, "")));
+    if (byNo && purchaseIsPaid(byNo)) return { kind: "purchase-paid", ref: byNo.id, auto: true, label: sup.name + " inv " + byNo.invNo + " — already marked paid" };
+    // one transfer settling a batch of invoices that were all ticked paid together (Tuda, weekly)
+    const batch = list.filter((p) => purchaseIsPaid(p) && !purchasePayments(p).length && p.datePaid && days(p.datePaid, tx.date) <= 3);
+    const byDay = {};
+    batch.forEach((p) => { (byDay[p.datePaid] = byDay[p.datePaid] || []).push(p); });
+    for (const ps of Object.values(byDay)) {
+      const sum = ps.reduce((t, p) => t + purchaseTotals(p).total, 0);
+      if (ps.length > 1 && near(sum, A, 1)) return { kind: "covered", ref: ps.map((p) => p.id).join(","), auto: true, label: "Pays " + ps.length + " " + sup.name + " invoices already marked paid (" + gbp(sum) + ")" };
+    }
     if (byNo && !purchaseIsPaid(byNo)) {
       const bal = purchaseBalance(byNo);
       if (near(bal, A)) return { kind: "purchase", ref: byNo.id, auto: true, supplierId: sup.id, label: "Pays " + sup.name + " inv " + byNo.invNo + " (PO " + byNo.poNo + ")" };
@@ -155,6 +203,11 @@ export function suggest(tx, ctx) {
     // paid entry of the same amount but the dates are far apart — probably it, but ask
     const loose = list.find((p) => purchaseIsPaid(p) && near(purchaseTotals(p).total, A) && days(p.invDate, tx.date) <= 45);
     if (loose) return { kind: "purchase-paid", ref: loose.id, auto: false, label: sup.name + " · PO " + loose.poNo + " looks like this one (dates differ)" };
+    const bo = bankOnlyCost(desc, tx, group);
+    if (bo) return { kind: "spend", ref: bo.c + "|" + bo.s, auto: bo.sure, label: bo.label + " → " + bo.c + " · " + bo.s };
+    // a supplier whose invoices are kept on the ledger (Tuda): a lump sum is paying those, not something new
+    const busy = list.filter((p) => days(p.invDate, tx.date) <= 60).length;
+    if (busy >= 8) return { kind: "covered", auto: false, label: "Lump sum to " + sup.name + " — " + busy + " of their invoices are on the ledger around then; probably paying those" };
     return { kind: "new-purchase", auto: false, supplierId: sup.id, label: "Not on the ledger — add a " + sup.name + " purchase" };
   }
   // no supplier by name — card spends are often on the ledger under another name (fuel stations, Amazon …)
@@ -163,6 +216,8 @@ export function suggest(tx, ctx) {
   if (paidSame.length === 1) return { kind: "purchase-paid", ref: paidSame[0].id, auto: true, label: "Same amount as PO " + paidSame[0].poNo + " — already marked paid" };
   const openSame = near7.filter((p) => !purchaseIsPaid(p) && near(purchaseBalance(p), A));
   if (openSame.length === 1) return { kind: "purchase", ref: openSame[0].id, auto: false, label: "Same amount as unpaid PO " + openSame[0].poNo + " — check the supplier" };
+  const bo = bankOnlyCost(desc, tx, []);
+  if (bo) return { kind: "spend", ref: bo.c + "|" + bo.s, auto: bo.sure, label: bo.label + " → " + bo.c + " · " + bo.s };
   return { kind: "review", auto: false, label: "Money out — no supplier found for “" + payeeOf(desc).slice(0, 40) + "”" };
 }
 
