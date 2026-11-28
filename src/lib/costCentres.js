@@ -10,7 +10,7 @@ export const COST_CENTRES = {
   "Fleet": ["Fuel", "Repairs & maintenance", "Insurance & breakdown", "Road, tolls & fines", "Hire"],
   "Carriage": ["Couriers", "Postage"],
   "Staff & Subcontract": ["Subcontract drivers", "Wages", "Pension", "Other"],
-  "Finance & Professional": ["Trade finance interest", "Accountancy & software", "Bank charges", "Legal", "HMRC"],
+  "Finance & Professional": ["Trade finance interest", "Accountancy & software", "Business insurance", "Bank charges", "Legal", "HMRC"],
   "Marketing & Web": ["SEO consulting", "Tools & hosting", "Design & print", "Sponsorship"],
   "Office & Misc": ["Stationery & supplies", "Tools", "Food & meetings", "General"],
 };
@@ -23,7 +23,9 @@ export const isOverhead = (centre) => !!centre && centre !== "Stock";
 const SUPPLIER_RULES = [
   [/seneca|revolve/i, /facilit|ratchet|interest|bank fee|vat part|\binv/i, "Finance & Professional", "Trade finance interest"], // interest carries an invoice no.
   [/seneca|revolve/i, null, "Stock", "Veejoy repayments"],
-  [/close brothers/i, /insurance/i, "Fleet", "Insurance & breakdown"], // they finance the insurance premiums too
+  [/sandham|davies (&|and) jones/i, null, "Finance & Professional", "Business insurance"], // stock + PL/EL, not vehicles
+  [/close brothers/i, /sandham/i, "Finance & Professional", "Business insurance"],
+  [/close brothers/i, /insurance/i, "Fleet", "Insurance & breakdown"], // they finance the fleet insurance premiums too
   [/close brothers/i, null, "Plant", "Forklift finance"],
   [/joanne kirk|j ?e ?kirk/i, null, "Premises", "Rent"],
   [/tameside met/i, null, "Premises", "Rates"],

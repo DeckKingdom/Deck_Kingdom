@@ -44,6 +44,7 @@ const ALIASES = [
   [/je kirk|j e kirk|joanne kirk/i, /kirk/i],     // the landlord: rent, the annual buildings insurance, 2024 set-up
   [/seneca|revolve/i, /seneca|revolve/i],         // trade finance for Veejoy stock (Seneca, now Revolve)
   [/\bhmrc\b/i, /^hmrc$/i],
+  [/sandham/i, /sandham/i],                       // business insurance, paid via Close Brothers premium finance
 ];
 export function supplierGroup(desc, ctx) {
   for (const [pay, sup] of ALIASES) {
@@ -62,6 +63,8 @@ export function supplierGroup(desc, ctx) {
 // regular payees whose cost is only ever seen on the bank (Jon, Nov 26)
 const BANK_ONLY = [
   [/courthill/i, "Finance & Professional", "Accountancy & software", "Accountant — Simon Cornforth (Courthill)"],
+  [/sandham|davies (&|and) jones/i, "Finance & Professional", "Business insurance", "Business insurance — stock, PL/EL (Sandham Davies & Jones)"],
+  [/close-stephenson|stephenson (&|and) thread/i, "Fleet", "Insurance & breakdown", "Fleet insurance (Stephenson & Threadgold)"],
   [/skool\.com|p\.skool|beseen/i, "Marketing & Web", "SEO consulting", "beSeen SEO — Darren"],
   [/intuit|qbooks|quickbooks/i, "Finance & Professional", "Accountancy & software", "QuickBooks"],
   [/^nest\b|\bnest,/i, "Staff & Subcontract", "Pension", "NEST pension"],
