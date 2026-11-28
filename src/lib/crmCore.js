@@ -2611,7 +2611,33 @@ export const purchaseTotals = (p) => {
   const vat = manual ? Number(p.vatAmount) : round2(sub * rate / 100);
   return { sub, rate, vat, total: round2(sub + vat), manualVat: manual };
 };
-export const purchaseIsPaid = (p) => Boolean(p.datePaid);
+// Payments against a purchase: a list of { id, date, amount, method, ref } (080).
+// A purchase is paid once the payments cover the total — or when it carries a
+// date paid with no payment rows (every entry from before part payments).
+export const purchasePayments = (p) => (p && Array.isArray(p.payments) ? p.payments : []);
+export const purchasePaidAmount = (p) => {
+  const pays = purchasePayments(p);
+  if (!pays.length) return p && p.datePaid ? purchaseTotals(p).total : 0;
+  return round2(pays.reduce((t, x) => t + (Number(x.amount) || 0), 0));
+};
+export const purchaseBalance = (p) => Math.max(0, round2(purchaseTotals(p).total - purchasePaidAmount(p)));
+export const purchaseIsPaid = (p) => {
+  if (!p) return false;
+  if (!purchasePayments(p).length) return Boolean(p.datePaid);
+  return purchaseBalance(p) <= 0.01;
+};
+export const purchasePartPaid = (p) => !purchaseIsPaid(p) && purchasePaidAmount(p) > 0;
+// after editing the payment rows: settle datePaid / method from them
+export const settlePurchasePayments = (p) => {
+  const pays = purchasePayments(p).filter((x) => Number(x.amount));
+  if (!pays.length) return p;
+  if (purchaseBalance(p) <= 0.01) {
+    const last = [...pays].sort((a, z) => String(a.date || "").localeCompare(String(z.date || ""))).pop();
+    p.datePaid = last.date || p.datePaid || "";
+    if (last.method) p.paymentMethod = last.method;
+  } else p.datePaid = "";
+  return p;
+};
 export const poRef = (p) => "PO " + (p && p.poNo ? p.poNo : "—");
 
 // Start a purchase for a supplier with their usual category / payment method

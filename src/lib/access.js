@@ -21,7 +21,7 @@ export const accessFor = (role, readOnly) => {
     readOnly: !!readOnly,
     known: true,
     staff,
-    canTab: (t) => (!staff ? false : ["users", "tracking", "business", "wages"].includes(t) ? r === "admin" : full || DAY_TO_DAY.includes(t)),
+    canTab: (t) => (!staff ? false : ["users", "tracking", "business", "wages", "bank"].includes(t) ? r === "admin" : full || DAY_TO_DAY.includes(t)),
     money: full, // costs, margins, landed costs, sales and profit totals
     system: r === "admin", // users & access, restore, email setup, SKU lists, product tidy
     canEdit: staff && !readOnly,

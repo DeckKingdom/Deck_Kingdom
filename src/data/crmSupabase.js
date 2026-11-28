@@ -107,6 +107,7 @@ export const purchasesSchemaReady = () => purchasesReady;
 const SUPPLIER_TEXT = ["name", "accountNo", "contact", "phone", "email", "address", "town", "postcode", "website", "category", "paymentMethod", "notes", "created", "createdBy"];
 const PURCHASE_TEXT = ["supplierId", "invNo", "invDate", "invDetail", "purchasedBy", "category", "vehicle", "datePaid", "paymentMethod", "createdBy"];
 let purchaseCCReady = false; // set on load when the 075 columns are present
+let purchasePayReady = false; // 080 adds purchases.payments (part payments)
 
 const supplierToRow = (x, i) => {
   const row = { id: x.id, active: x.active !== false, position: i };
@@ -121,6 +122,7 @@ const purchaseToRow = (p, i) => {
   };
   PURCHASE_TEXT.forEach((k) => (row[snake(k)] = str(p[k])));
   if (purchaseCCReady) { row.cost_centre = str(p.costCentre); row.cost_sub = str(p.costSub); }
+  if (purchasePayReady) row.payments = Array.isArray(p.payments) ? p.payments : [];
   return row;
 };
 
@@ -478,6 +480,7 @@ async function loadAll(quick = false) {
   purchasesReady = purchData !== null;
   // 075_cost_centres_wages.sql adds cost_centre/cost_sub; write them only once the columns exist
   purchaseCCReady = !!(purchData && purchData.pu && purchData.pu[0] && Object.prototype.hasOwnProperty.call(purchData.pu[0], "cost_centre"));
+  purchasePayReady = !!(purchData && purchData.pu && purchData.pu[0] && Object.prototype.hasOwnProperty.call(purchData.pu[0], "payments"));
   tasksReady = taskData !== null;
   samplesReady = sampleData !== null;
   quotesReady = quoteData !== null;
@@ -673,6 +676,7 @@ async function loadAll(quick = false) {
     };
     PURCHASE_TEXT.forEach((k) => (p[k] = nv(r[snake(k)])));
     p.costCentre = nv(r.cost_centre); p.costSub = nv(r.cost_sub);
+    p.payments = Array.isArray(r.payments) ? r.payments : [];
     return p;
   });
 

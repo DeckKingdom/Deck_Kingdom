@@ -6,6 +6,7 @@ import * as XLSX from "xlsx";
 import { NAVY, GOLD, RED, prettyDate, prettyDateTime, addMonths } from "../../lib/core.js";
 import {
   blankSupplier, newPurchaseFor, purchaseTotals, purchaseIsPaid, poRef, gbp, today, supplierById,
+  purchasePayments, purchasePaidAmount, purchaseBalance, purchasePartPaid, settlePurchasePayments,
   PURCHASE_CATEGORIES, PAYMENT_METHODS, VAT_RATES, vanOptions, staffList, staffName,
 } from "../../lib/crmCore.js";
 import { purchasesAvailable } from "../../data/crmStorage.js";
@@ -89,7 +90,7 @@ export default function PurchasesScreen({ crm, updateCrm, askConfirm, selId, set
       });
     const tot = rows.reduce((a, x) => { const t = purchaseTotals(x); a.sub += t.sub; a.vat += t.vat; a.total += t.total; return a; }, { sub: 0, vat: 0, total: 0 });
     const unpaid = purchases.filter((x) => !purchaseIsPaid(x));
-    const unpaidTotal = unpaid.reduce((a, x) => a + purchaseTotals(x).total, 0);
+    const unpaidTotal = unpaid.reduce((a, x) => a + purchaseBalance(x), 0);
     const monthRows = purchases.filter((x) => pDate(x).slice(0, 7) === month);
     const monthTot = monthRows.reduce((a, x) => { const t = purchaseTotals(x); a.total += t.total; a.vat += t.vat; return a; }, { total: 0, vat: 0 });
     const shown = rows.slice(0, 80);
@@ -183,7 +184,7 @@ export default function PurchasesScreen({ crm, updateCrm, askConfirm, selId, set
                           <td style={{ ...tdc, textAlign: "right" }}>{money(t.sub)}</td>
                           <td style={{ ...tdc, textAlign: "right", color: "#5a6a85" }}>{money(t.vat)}</td>
                           <td style={{ ...tdc, textAlign: "right", fontWeight: 700 }}>{money(t.total)}</td>
-                          <td style={tdc}><Chip tone={purchaseIsPaid(x) ? "green" : "amber"}>{purchaseIsPaid(x) ? "Paid" : "Unpaid"}</Chip></td>
+                          <td style={tdc}><Chip tone={purchaseIsPaid(x) ? "green" : "amber"} title={purchasePartPaid(x) ? gbp(purchasePaidAmount(x)) + " paid, " + gbp(purchaseBalance(x)) + " left" : undefined}>{purchaseIsPaid(x) ? "Paid" : purchasePartPaid(x) ? "Part paid" : "Unpaid"}</Chip></td>
                           <td style={{ ...tdc, textAlign: "right" }}><button style={abtn} title="Open" onClick={(e) => { e.stopPropagation(); setSelId(x.id); }}><Icon name="pen" /></button></td>
                         </tr>
                       );
@@ -263,7 +264,7 @@ export default function PurchasesScreen({ crm, updateCrm, askConfirm, selId, set
               <h2 style={{ margin: 0, fontSize: 19, cursor: "default" }}>{"PO# " + (p.poNo || "—")}</h2>
             </HoverStamp>
             <Chip tone={purchaseIsPaid(p) ? "green" : "amber"} style={purchaseIsPaid(p) ? { background: "#3FA55C", color: "#fff", border: "none" } : undefined}>
-              {purchaseIsPaid(p) ? "Paid " + prettyDate(p.datePaid) : "Unpaid"}
+              {purchaseIsPaid(p) ? "Paid " + prettyDate(p.datePaid) : purchasePartPaid(p) ? "Part paid · " + gbp(purchaseBalance(p)) + " left" : "Unpaid"}
             </Chip>
           </div>
         </div>
@@ -400,15 +401,65 @@ export default function PurchasesScreen({ crm, updateCrm, askConfirm, selId, set
 
       {/* payment */}
       <div style={card}>
-        <p style={sect}>Payment</p>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12, alignItems: "end" }}>
-          <div><L>Date paid</L>{text("datePaid", { type: "date" })}</div>
-          <div><L>Method of payment</L>{text("paymentMethod", { list: "dk-pmethods2" })}</div>
-          {!p.datePaid && (
-            <button style={{ ...goldBtn, justifyContent: "center" }} onClick={() => setP((x) => (x.datePaid = today()))}><Icon name="pound" stroke={NAVY} />Paid today</button>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <p style={{ ...sect, margin: 0 }}>Payment</p>
+          {purchasePayments(p).length > 0 && (
+            <Chip tone={purchaseIsPaid(p) ? "green" : "amber"}>
+              {gbp(purchasePaidAmount(p))} paid of {gbp(t.total)}{purchaseIsPaid(p) ? "" : " · " + gbp(purchaseBalance(p)) + " to pay"}
+            </Chip>
           )}
-          <RecurringMark supplierName={sup ? sup.name : ""} purchase={p} amount={t.total} />
         </div>
+        {purchasePayments(p).length === 0 ? (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12, alignItems: "end", marginTop: 10 }}>
+            <div><L>Date paid</L>{text("datePaid", { type: "date" })}</div>
+            <div><L>Method of payment</L>{text("paymentMethod", { list: "dk-pmethods2" })}</div>
+            {!p.datePaid && (
+              <button style={{ ...goldBtn, justifyContent: "center" }} onClick={() => setP((x) => (x.datePaid = today()))}><Icon name="pound" stroke={NAVY} />Paid today</button>
+            )}
+            {!p.datePaid && (
+              <button style={{ ...btn, justifyContent: "center" }} title="Paying this in instalments? Record each payment and the balance tracks itself."
+                onClick={() => setP((x) => { x.payments = [{ id: "pp-" + Date.now().toString(36), date: today(), amount: "", method: x.paymentMethod || "", ref: "" }]; })}>
+                <Icon name="plus" size={14} />Part payment
+              </button>
+            )}
+            <RecurringMark supplierName={sup ? sup.name : ""} purchase={p} amount={t.total} />
+          </div>
+        ) : (
+          <div style={{ marginTop: 10 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+              <thead><tr>{["Date", "Amount £", "Method", "Reference", ""].map((h, i) => <th key={i} style={{ ...th, textAlign: i === 1 ? "right" : "left" }}>{h}</th>)}</tr></thead>
+              <tbody>
+                {purchasePayments(p).map((pay, i) => {
+                  const setPay = (k, v) => setP((x) => { x.payments = purchasePayments(x).map((y, j) => (j === i ? { ...y, [k]: v } : y)); settlePurchasePayments(x); });
+                  return (
+                    <tr key={pay.id || i}>
+                      <td style={tdc}><DateInput style={{ ...inp, width: 150 }} value={pay.date || ""} onChange={(e) => setPay("date", e.target.value)} /></td>
+                      <td style={{ ...tdc, textAlign: "right" }}><input style={{ ...inp, width: 110, textAlign: "right" }} type="number" step="0.01" value={pay.amount} {...selectAllProps} onChange={(e) => setPay("amount", e.target.value === "" ? "" : Number(e.target.value))} /></td>
+                      <td style={tdc}><input style={{ ...inp, width: 150 }} list="dk-pmethods2" value={pay.method || ""} {...selectAllProps} onChange={(e) => setPay("method", e.target.value)} /></td>
+                      <td style={tdc}><input style={{ ...inp, width: "100%" }} placeholder="bank ref / note" value={pay.ref || ""} {...selectAllProps} onChange={(e) => setPay("ref", e.target.value)} /></td>
+                      <td style={{ ...tdc, textAlign: "right" }}><button style={abtn} title="Remove this payment"
+                        onClick={() => setP((x) => { x.payments = purchasePayments(x).filter((_, j) => j !== i); if (!x.payments.length) x.datePaid = ""; else settlePurchasePayments(x); })}><Icon name="x" stroke={RED} size={13} /></button></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+              {!purchaseIsPaid(p) && (
+                <button style={btn} onClick={() => setP((x) => { x.payments = [...purchasePayments(x), { id: "pp-" + Date.now().toString(36), date: today(), amount: "", method: x.paymentMethod || "", ref: "" }]; })}>
+                  <Icon name="plus" size={14} />Add payment
+                </button>
+              )}
+              {!purchaseIsPaid(p) && (
+                <button style={goldBtn} title="Record the rest as paid today"
+                  onClick={() => setP((x) => { x.payments = [...purchasePayments(x), { id: "pp-" + Date.now().toString(36), date: today(), amount: purchaseBalance(x), method: x.paymentMethod || "", ref: "" }]; settlePurchasePayments(x); })}>
+                  <Icon name="pound" stroke={NAVY} />Pay the balance {gbp(purchaseBalance(p))}
+                </button>
+              )}
+              <RecurringMark supplierName={sup ? sup.name : ""} purchase={p} amount={t.total} />
+            </div>
+          </div>
+        )}
       </div>
 
       {supDraft && (

@@ -42,7 +42,7 @@ export const NAV_SECTIONS = [
     ],
   },
   { title: "Fleet", items: [["vans", "Vans", "truck", true], ["tracking", "Driver tracking", "pin"], ["completions", "Completions", "flag"]] },
-  { title: "Finance", items: [["business", "Business", "pound"], ["wages", "Wages", "note"]] },
+  { title: "Finance", items: [["business", "Business", "pound"], ["wages", "Wages", "note"], ["bank", "Bank", "layers"]] },
   { title: "System", items: [["activity", "Activity", "clock"], ["users", "Users & access", "lock"]] },
 ];
 

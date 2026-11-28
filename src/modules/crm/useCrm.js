@@ -21,6 +21,7 @@ export function useCrm(enabled) {
   const [crm, setCrm] = useState(null);
   const [crmError, setCrmError] = useState(false);
   const [crmErrorMsg, setCrmErrorMsg] = useState(""); // the real failure, for the banner
+  const [crmFull, setCrmFull] = useState(false); // the whole book is loaded (not just the quick-open slice)
   const [crmSave, setCrmSave] = useState("");
   const [saveError, setSaveError] = useState(""); // why the last save failed (shown as a red banner)
   const retry = useRef(null);
@@ -67,6 +68,7 @@ export function useCrm(enabled) {
         if (d && !pending.current && !saving.current && lastEdit.current === editsAtStart) {
           adopt();
           setCrm(normaliseCrm(d));
+          setCrmFull(true);
           if (INSTANT_OPEN && storageMode === "supabase") writeCrmCache(rawRef.current); // the device cache gets the full book too
         } else {
           scheduleFill(2_000); // they started editing mid-fetch — this copy may be stale
@@ -131,6 +133,7 @@ export function useCrm(enabled) {
     loading.current = false;
     if (INSTANT_OPEN && storageMode === "supabase") writeCrmCache(rawRef.current); // next open paints instantly
     if (partial) scheduleFill(); // pull the rest of the history in behind the paint
+    else setCrmFull(true);
   };
 
   useEffect(() => {
@@ -314,5 +317,5 @@ export function useCrm(enabled) {
     setCrm(normaliseCrm(d));
   };
 
-  return { crm, updateCrm, replaceCrm, crmError, crmErrorMsg, loadCrm, crmSave, saveError, saveNotice, lastLive, crmStale };
+  return { crm, updateCrm, replaceCrm, crmError, crmErrorMsg, loadCrm, crmSave, saveError, saveNotice, lastLive, crmStale, crmFull };
 }

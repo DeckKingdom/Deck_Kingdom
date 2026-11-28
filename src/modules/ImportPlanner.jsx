@@ -44,6 +44,7 @@ import TasksScreen from "./crm/TasksScreen.jsx";
 import ProductsScreen from "./crm/ProductsScreen.jsx";
 import PurchasesScreen from "./crm/PurchasesScreen.jsx";
 import WagesScreen from "./crm/WagesScreen.jsx";
+import BankScreen from "./crm/BankScreen.jsx";
 import BusinessScreen from "./BusinessScreen.jsx";
 import SuppliersScreen from "./crm/SuppliersScreen.jsx";
 import { quotesAvailable, samplesAvailable, tasksAvailable, purchasesAvailable } from "../data/crmStorage.js";
@@ -301,7 +302,7 @@ export default function ImportPlanner() {
 
   // ===== CRM module (customers / invoices / schedule) =====
   const [crmOn, setCrmOn] = useState(false);
-  const { crm, updateCrm: updateCrmRaw, replaceCrm, crmError, crmErrorMsg, loadCrm, crmSave, saveError, saveNotice, lastLive, crmStale } = useCrm(crmOn);
+  const { crm, updateCrm: updateCrmRaw, replaceCrm, crmError, crmErrorMsg, loadCrm, crmSave, saveError, saveNotice, lastLive, crmStale, crmFull } = useCrm(crmOn);
   // website sample requests: when one flips to dispatched here (any button, any
   // screen), tell the WordPress Sample Requests page so it shows Sent there too
   const wpSrSeen = useRef(null);
@@ -1686,6 +1687,8 @@ export default function ImportPlanner() {
         (!crm ? <div style={{ padding: 40, textAlign: "center", color: "#5a6a85", fontWeight: 600 }}>Loading…</div>
           : <BusinessScreen crm={crm} data={data} setTab={setTab} />)}
       {tab === "wages" && access.money && <WagesScreen />}
+      {tab === "bank" && access.money && (!crm ? <div style={{ padding: 40, textAlign: "center", color: "#5a6a85", fontWeight: 600 }}>Loading…</div>
+        : <BankScreen crm={crm} updateCrm={updateCrm} me={me} crmFull={crmFull} />)}
 
       {emailSettings && <EmailSettings me={me} onClose={() => setEmailSettings(false)} />}
       {tab === "activity" && <ActivityScreen crm={crm} data={data} storageMode={storageMode} />}

@@ -4,11 +4,12 @@
 // wages table, due & upcoming from unpaid purchases + container balances.
 import { useEffect, useMemo, useState } from "react";
 import { NAVY, GOLD, addMonths, addDays, prettyDate, linePieces } from "../lib/core.js";
-import { invoiceTotals, isVoidInvoice, purchaseTotals, purchaseIsPaid, gbp, supplierById, today } from "../lib/crmCore.js";
+import { invoiceTotals, isVoidInvoice, purchaseTotals, purchaseIsPaid, purchaseBalance, gbp, supplierById, today } from "../lib/crmCore.js";
 import { COST_CENTRE_LIST, isOverhead, assignCostCentre } from "../lib/costCentres.js";
 import { sect, card, ListHero, HeroStat } from "./crm/ui.jsx";
 import { fetchWageMonths } from "./crm/WagesScreen.jsx";
 import CommitmentsCard, { monthlyEq } from "./crm/CommitmentsCard.jsx";
+import { fetchBankBalance } from "./crm/BankScreen.jsx";
 
 const GREEN = "#2e7d4f";
 const th = { fontSize: 11, fontWeight: 700, color: "#8593a8", letterSpacing: 0.4, textTransform: "uppercase", padding: "8px 8px", borderBottom: "2px solid #e6e9ef", whiteSpace: "nowrap", textAlign: "right" };
@@ -19,7 +20,8 @@ const USD_GBP = 1.27; // planning rate for container balances still to pay
 export default function BusinessScreen({ crm, data, setTab }) {
   const [wages, setWages] = useState(null); // { 'YYYY-MM': employer cost } | null while loading
   const [commits, setCommits] = useState([]); // the DD/SO register, loaded by its card
-  useEffect(() => { fetchWageMonths().then((m) => setWages(m || {})); }, []);
+  const [bank, setBank] = useState(null); // { date, balance } from the latest imported statement
+  useEffect(() => { fetchWageMonths().then((m) => setWages(m || {})); fetchBankBalance().then(setBank); }, []);
 
   const [range, setRange] = useState("12m"); // 12m | ytd | ly | all
   const [focus, setFocus] = useState("all");  // all | overheads | a centre | wages
@@ -77,8 +79,8 @@ export default function BusinessScreen({ crm, data, setTab }) {
 
   // ===== due & upcoming =====
   const unpaid = (crm.purchases || []).filter((p) => !purchaseIsPaid(p));
-  const unpaidTotal = unpaid.reduce((t, p) => t + purchaseTotals(p).total, 0);
-  const bigUnpaid = [...unpaid].sort((a, z) => purchaseTotals(z).total - purchaseTotals(a).total).slice(0, 8);
+  const unpaidTotal = unpaid.reduce((t, p) => t + purchaseBalance(p), 0);
+  const bigUnpaid = [...unpaid].sort((a, z) => purchaseBalance(z) - purchaseBalance(a)).slice(0, 8);
   const containers = useMemo(() => {
     const out = [];
     ((data && data.shipments) || []).forEach((s) => {
@@ -104,6 +106,7 @@ export default function BusinessScreen({ crm, data, setTab }) {
     <div style={{ maxWidth: 1160, margin: "0 auto", padding: "0 4px" }}>
       <ListHero title="Business snapshot" sub={"Where the money goes — ledger grouped by cost centre, wages folded in, commitments ahead. Admin only."}
         action={wages === null ? <span style={{ fontSize: 12, color: "#aeb9cf", fontWeight: 700 }}>loading wages…</span> : null}>
+        {bank && <HeroStat label="Bank balance" value={gbp(bank.balance)} sub={"as at " + prettyDate(bank.date) + " — Finance › Bank"} />}
         <HeroStat label={"Sales " + mLabel(monthKey)} value={gbp(salesMonth)} sub="inc VAT" />
         <HeroStat label={"Overheads " + mLabel(monthKey)} value={gbp(overheadMonth)} sub="everything but stock, wages in" />
         <HeroStat label="Fixed costs · 12-mo avg" value={gbp(fixedAvg) + "/mo"} sub="overheads + wages, the break-even line" />
@@ -272,13 +275,13 @@ export default function BusinessScreen({ crm, data, setTab }) {
                   return (
                     <tr key={p.id} style={{ cursor: setTab ? "pointer" : "default" }} onClick={() => setTab && setTab("purchases")}>
                       <td style={{ ...tdc, ...left, fontWeight: 700 }}>{(s && s.name) || "—"}<span style={{ display: "block", fontSize: 11.5, color: "#8593a8", fontWeight: 600 }}>{ccOf(p)}{p.invDate ? " · " + prettyDate(p.invDate) : ""}</span></td>
-                      <td style={{ ...tdc, fontWeight: 700 }}>{gbp(purchaseTotals(p).total)}</td>
+                      <td style={{ ...tdc, fontWeight: 700 }}>{gbp(purchaseBalance(p))}</td>
                     </tr>
                   );
                 })}
                 {unpaid.length > bigUnpaid.length && (
                   <tr><td style={{ ...tdc, ...left, color: "#8593a8", fontWeight: 600 }}>+ {unpaid.length - bigUnpaid.length} more</td>
-                    <td style={{ ...tdc, fontWeight: 700 }}>{gbp(unpaidTotal - bigUnpaid.reduce((t, p) => t + purchaseTotals(p).total, 0))}</td></tr>
+                    <td style={{ ...tdc, fontWeight: 700 }}>{gbp(unpaidTotal - bigUnpaid.reduce((t, p) => t + purchaseBalance(p), 0))}</td></tr>
                 )}
               </tbody>
             </table>
