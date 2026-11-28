@@ -58,7 +58,7 @@ export default function BankScreen({ crm, updateCrm, me, crmFull }) {
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState("");
   const [note, setNote] = useState("");
-  const [view, setView] = useState("review"); // review | matched | all
+  const [view, setView] = useState("review"); // review | sure | matched | all
   const [q, setQ] = useState("");
   const [choice, setChoice] = useState({}); // row id -> { action, person, supplier }
   const fileRef = useRef(null);
@@ -86,27 +86,26 @@ export default function BankScreen({ crm, updateCrm, me, crmFull }) {
     }
   };
 
-  // match every "new" row: sure ones applied, the rest parked for review
+  // match every "new" row. Import NEVER changes existing records: only matches that write
+  // nothing (takings, own transfers, already-paid entries, fuel-card DDs) are ticked off here.
+  // Anything that would mark an invoice paid, record a payment, add a purchase or fill a wages
+  // month waits in "To check" — sure ones flagged, so they can be accepted in bulk once checked.
   const runMatching = async (all) => {
     const fresh = all.filter((r) => r.status === "new");
-    if (!fresh.length) return { applied: 0, review: 0 };
+    if (!fresh.length) return { applied: 0, review: 0, sure: 0 };
     const ctx = buildContext(crm, people.length ? people : []);
     const decided = fresh.map((r) => {
       const tx = { id: r.id, date: r.tx_date, description: r.description, type: r.tx_type, amount: Number(r.amount) };
-      return { r, tx, m: suggest(tx, ctx) };
+      return { r, m: suggest(tx, ctx) };
     });
-    const autos = decided.filter((d) => d.m.auto);
-    if (autos.some((d) => !NOOP.includes(d.m.kind) && d.m.kind !== "wages")) {
-      updateCrm((c) => { autos.forEach((d) => applyMatch(c, d.tx, d.m, me)); return c; });
-    }
-    const upd = decided.map(({ r, m }) => ({
-      ...r, status: m.auto ? "matched" : "review", match_kind: m.kind, match_ref: m.ref || m.person || m.supplierId || "", match_label: m.label,
-    }));
+    const upd = decided.map(({ r, m }) => {
+      const quiet = m.auto && NOOP.includes(m.kind);
+      return { ...r, status: quiet ? "matched" : "review", note: m.auto && !quiet ? "sure" : "", match_kind: m.kind, match_ref: m.ref || m.person || m.supplierId || "", match_label: m.label };
+    });
     await save(upd);
-    const merged = all.map((r) => upd.find((u) => u.id === r.id) || r);
-    setRows(merged);
-    await syncWages(await getSupabase(), merged);
-    return { applied: autos.length, review: decided.length - autos.length };
+    setRows(all.map((r) => upd.find((u) => u.id === r.id) || r));
+    const applied = upd.filter((u) => u.status === "matched").length;
+    return { applied, review: upd.length - applied, sure: upd.filter((u) => u.note === "sure").length };
   };
 
   const importFiles = async (files) => {
@@ -132,7 +131,7 @@ export default function BankScreen({ crm, updateCrm, me, crmFull }) {
       const all = [...add, ...(rows || [])].sort((a, z) => (z.tx_date + String(z.seq).padStart(5, "0")).localeCompare(a.tx_date + String(a.seq).padStart(5, "0")));
       setBusy("Matching…");
       const res = await runMatching(all);
-      setNote(add.length ? add.length + " new transactions · " + res.applied + " assigned automatically · " + res.review + " to check below" : "Nothing new — those statements are already in.");
+      setNote(add.length ? add.length + " new transactions · " + res.applied + " needed nothing changing (takings, transfers, already paid) · " + res.review + " to check below, " + res.sure + " of them sure matches. Nothing on the ledger, invoices or wages has been changed." : "Nothing new — those statements are already in.");
     } catch (e) { setErr(String((e && e.message) || e)); }
     setBusy("");
   };
@@ -184,7 +183,8 @@ export default function BankScreen({ crm, updateCrm, me, crmFull }) {
     (rows || []).forEach((r) => { const k = r.tx_date.slice(0, 7); m[k] = (m[k] || 0) + 1; });
     return Object.keys(m).sort();
   }, [rows]);
-  const shown = (rows || []).filter((r) => (view === "review" ? r.status === "review" || r.status === "new" : view === "matched" ? r.status === "matched" || r.status === "ignored" : true))
+  const isOpen = (r) => r.status === "review" || r.status === "new";
+  const shown = (rows || []).filter((r) => (view === "review" ? isOpen(r) : view === "sure" ? isOpen(r) && r.note === "sure" : view === "matched" ? r.status === "matched" || r.status === "ignored" : true))
     .filter((r) => !q || (r.description + " " + r.match_label + " " + r.amount).toLowerCase().includes(q.toLowerCase()));
   const supNames = useMemo(() => (crm.suppliers || []).map((s) => s.name).filter(Boolean).sort(), [crm]);
 
@@ -208,15 +208,15 @@ export default function BankScreen({ crm, updateCrm, me, crmFull }) {
 
       <div style={card}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
-          {[["review", "To check (" + review.length + ")"], ["matched", "Assigned"], ["all", "All"]].map(([k, l]) => (
+          {[["review", "To check (" + review.length + ")"], ["sure", "Sure matches (" + review.filter((r) => r.note === "sure").length + ")"], ["matched", "Assigned"], ["all", "All"]].map(([k, l]) => (
             <button key={k} onClick={() => setView(k)} style={{ border: "1px solid " + (view === k ? NAVY : "#dfe4ec"), background: view === k ? NAVY : "#fff", color: view === k ? "#fff" : NAVY, borderRadius: 999, padding: "6px 14px", fontFamily: "inherit", fontWeight: 700, fontSize: 12.5, cursor: "pointer" }}>{l}</button>
           ))}
           <input style={{ ...inp, width: 220 }} placeholder="Search payee, amount…" value={q} onChange={(e) => setQ(e.target.value)} />
           <span style={{ flex: 1 }} />
-          {view === "review" && review.some((r) => r.match_kind && r.match_kind !== "review") && (
-            <button style={goldBtn} disabled={!!busy} title="Accept every suggestion on the list (rows with no suggestion are left)"
+          {(view === "review" || view === "sure") && shown.some((r) => r.match_kind && r.match_kind !== "review") && (
+            <button style={goldBtn} disabled={!!busy} title="Accept every suggestion in the list as it's filtered now (rows with no suggestion are left) — check them first"
               onClick={() => applyRows(shown.filter((r) => r.match_kind && r.match_kind !== "review").map((row) => ({ row, ch: choice[row.id] })))}>
-              <Icon name="ready" stroke={NAVY} size={14} />Accept all suggestions
+              <Icon name="ready" stroke={NAVY} size={14} />Accept all {shown.filter((r) => r.match_kind && r.match_kind !== "review").length} shown
             </button>
           )}
         </div>
@@ -227,7 +227,7 @@ export default function BankScreen({ crm, updateCrm, me, crmFull }) {
         ) : (
           <div className="dk-bleed" style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, minWidth: 980 }}>
-              <thead><tr>{["Date", "Payee / reference", "In / out", "Assigned to", view === "review" ? "Your call" : "", ""].map((h, i) => <th key={i} style={{ ...th, textAlign: i === 2 ? "right" : "left" }}>{h}</th>)}</tr></thead>
+              <thead><tr>{["Date", "Payee / reference", "In / out", "Assigned to", (view === "review" || view === "sure") ? "Your call" : "", ""].map((h, i) => <th key={i} style={{ ...th, textAlign: i === 2 ? "right" : "left" }}>{h}</th>)}</tr></thead>
               <tbody>
                 {shown.slice(0, 300).map((r) => {
                   const ch = choice[r.id] || {};
@@ -242,8 +242,8 @@ export default function BankScreen({ crm, updateCrm, me, crmFull }) {
                         <span style={{ display: "block", fontSize: 11.5, color: "#8593a8", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.description}{r.tx_type ? " · " + r.tx_type : ""}</span>
                       </td>
                       <td style={{ ...tdc, textAlign: "right", fontWeight: 800, color: amt >= 0 ? "#1e5e33" : NAVY, whiteSpace: "nowrap" }}>{amt >= 0 ? "+" : "−"}{gbp(Math.abs(amt))}</td>
-                      <td style={{ ...tdc, fontSize: 12, fontWeight: 600, color: r.status === "matched" ? "#1e5e33" : r.match_kind === "review" ? "#8a0b20" : "#a05f10" }}>{r.match_label || "—"}</td>
-                      {view === "review" && r.status !== "matched" ? (
+                      <td style={{ ...tdc, fontSize: 12, fontWeight: 600, color: r.status === "matched" ? "#1e5e33" : r.match_kind === "review" ? "#8a0b20" : "#a05f10" }}>{r.note === "sure" && isOpen(r) ? <Chip tone="green" style={{ marginRight: 6 }}>sure</Chip> : null}{r.match_label || "—"}</td>
+                      {(view === "review" || view === "sure") && r.status !== "matched" ? (
                         <td style={tdc}>
                           <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                             <select style={{ ...inp, width: 150, padding: "5px 6px" }} value={act} onChange={(e) => setCh({ action: e.target.value })}>
@@ -256,7 +256,7 @@ export default function BankScreen({ crm, updateCrm, me, crmFull }) {
                         </td>
                       ) : <td style={tdc}>{r.status === "ignored" ? <Chip>ignored</Chip> : r.status === "matched" ? <Chip tone="green">✓</Chip> : null}</td>}
                       <td style={{ ...tdc, textAlign: "right" }}>
-                        {view === "review" && r.status !== "matched" && (
+                        {(view === "review" || view === "sure") && r.status !== "matched" && (
                           <button style={{ ...btn, padding: "5px 10px", fontSize: 12 }} disabled={!!busy || !act} onClick={() => applyRows([{ row: r, ch: { ...ch, action: act } }])}>Apply</button>
                         )}
                       </td>
@@ -270,7 +270,8 @@ export default function BankScreen({ crm, updateCrm, me, crmFull }) {
         )}
       </div>
       <p style={{ fontSize: 11.5, color: "#8593a8", fontWeight: 600, margin: "0 2px 18px" }}>
-        Importing the same statement twice is harmless — every transaction keeps one row. "New purchase" adds a ledger entry at the bank amount
+        Importing never changes the ledger, invoices or wages on its own — only takings, own transfers and entries already marked paid are ticked off.
+        Everything that would change a record waits here until you apply it. Importing the same statement twice is harmless — every transaction keeps one row. "New purchase" adds a ledger entry at the bank amount
         with VAT at 0% — open it and add the invoice and VAT. Wages rows are worked out from the payments assigned to each person; payroll figures you've keyed in by hand are never overwritten.
       </p>
     </div>
