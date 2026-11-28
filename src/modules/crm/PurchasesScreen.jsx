@@ -26,7 +26,8 @@ export default function PurchasesScreen({ crm, updateCrm, askConfirm, selId, set
   const [search, setSearch] = useState("");
   const [when, setWhen] = useState("This month");
   const [cat, setCat] = useState("");
-  const [cc, setCc] = useState(""); // cost centre, or "Centre|Sub"
+  const [ccSel, setCcSel] = useState([]); // ticked "Centre|Sub" boxes (none ticked = everything)
+  const [ccOpen, setCcOpen] = useState(false);
   const [notice, setNotice] = useState("");
   const [supQuery, setSupQuery] = useState("");
   const [supDraft, setSupDraft] = useState(null);
@@ -75,12 +76,11 @@ export default function PurchasesScreen({ crm, updateCrm, askConfirm, selId, set
     const lastMonth = addMonths(month + "-01", -1).slice(0, 7);
     const filterSup = filter && filter.supplierId ? supById[filter.supplierId] : null;
     const q = search.trim().toLowerCase();
-    const rows = [...purchases]
+    const baseRows = [...purchases]
       .sort((a, b) => pDate(b).localeCompare(pDate(a)) || (Number(b.poNo) || 0) - (Number(a.poNo) || 0))
       .filter((x) => {
         if (filterSup && x.supplierId !== filterSup.id) return false;
         if (cat && x.category !== cat) return false;
-        if (cc && (cc.includes("|") ? (x.costCentre || "") + "|" + (x.costSub || "") !== cc : (x.costCentre || "") !== cc)) return false;
         const d = pDate(x);
         if (when === "Unpaid" && purchaseIsPaid(x)) return false;
         if (when === "This month" && d.slice(0, 7) !== month) return false;
@@ -90,11 +90,19 @@ export default function PurchasesScreen({ crm, updateCrm, askConfirm, selId, set
         const s = supById[x.supplierId];
         return [String(x.poNo || ""), x.invNo, x.invDetail, s && s.name, x.category, x.purchasedBy].some((v) => String(v || "").toLowerCase().includes(q));
       });
+    // cost-centre ticks: a whole centre ticked also takes its rows with a blank or odd sub
+    const sel = new Set(ccSel);
+    const fullCentre = (c) => (COST_CENTRES[c] || []).length > 0 && (COST_CENTRES[c] || []).every((x) => sel.has(c + "|" + x));
+    const rows = !sel.size ? baseRows : baseRows.filter((x) => sel.has((x.costCentre || "") + "|" + (x.costSub || "")) || (x.costCentre && fullCentre(x.costCentre)));
+    const ccCount = {};
+    baseRows.forEach((x) => { const k = (x.costCentre || "") + "|" + (x.costSub || ""); const t = purchaseTotals(x).total; [k, x.costCentre || ""].forEach((kk) => { ccCount[kk] = ccCount[kk] || { n: 0, t: 0 }; ccCount[kk].n++; ccCount[kk].t += t; }); });
+    const tick = (keys, on) => setCcSel((cur) => { const s2 = new Set(cur); keys.forEach((k) => (on ? s2.add(k) : s2.delete(k))); return [...s2]; });
+
     // the summary bar follows the filters: period, search, category, cost centre, supplier
     const tot = rows.reduce((a, x) => { const t = purchaseTotals(x); a.sub += t.sub; a.vat += t.vat; a.total += t.total; return a; }, { sub: 0, vat: 0, total: 0 });
     const unpaid = rows.filter((x) => !purchaseIsPaid(x));
     const unpaidTotal = unpaid.reduce((a, x) => a + purchaseBalance(x), 0);
-    const filtered = !!(q || cat || cc || filterSup);
+    const filtered = !!(q || cat || ccSel.length || filterSup);
     const scope = (when === "All" ? "All time" : when) + (filtered ? " · filtered" : "");
     const shown = rows.slice(0, 80);
 
@@ -146,15 +154,50 @@ export default function PurchasesScreen({ crm, updateCrm, askConfirm, selId, set
             <option value="">All categories</option>
             {categories.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
-          <select style={{ ...inp, width: "auto", fontSize: 13, fontWeight: 700 }} value={cc} onChange={(e) => setCc(e.target.value)}>
-            <option value="">All cost centres</option>
-            {COST_CENTRE_LIST.map((c) => [
-              <option key={c} value={c}>{c}</option>,
-              ...(COST_CENTRES[c] || []).map((sub) => <option key={c + "|" + sub} value={c + "|" + sub}>{"\u00a0\u00a0\u00a0" + sub}</option>),
-            ])}
-          </select>
+          <button style={{ ...btn, ...(ccSel.length ? { borderColor: GOLD, background: "#fff8e6" } : {}) }} onClick={() => setCcOpen((v) => !v)}>
+            Cost centres{ccSel.length ? " · " + ccSel.length + " ticked" : ""} {ccOpen ? "▴" : "▾"}
+          </button>
           <span style={{ flex: 1 }} />
           <button style={btn} onClick={exportXlsx} disabled={!rows.length} title="Download the rows shown as an Excel file"><Icon name="doc" />Export</button>
+          {ccOpen && (
+            <div style={{ flexBasis: "100%", borderTop: "1px solid #eef1f6", paddingTop: 10, marginTop: 2 }}>
+              <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 8 }}>
+                <span style={{ fontSize: 11.5, fontWeight: 700, color: "#8593a8" }}>Tick what to show — nothing ticked shows everything. Counts are for the period and filters above.</span>
+                <span style={{ flex: 1 }} />
+                {ccSel.length > 0 && <button style={{ ...btn, padding: "4px 10px", fontSize: 12 }} onClick={() => setCcSel([])}>Clear ticks</button>}
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))", gap: 10 }}>
+                {COST_CENTRE_LIST.map((c) => {
+                  const subs = COST_CENTRES[c] || [];
+                  const keys = subs.map((x) => c + "|" + x);
+                  const n = keys.filter((k) => sel.has(k)).length;
+                  const cn = ccCount[c];
+                  return (
+                    <div key={c} style={{ border: "1px solid " + (n ? GOLD : "#e6e9ef"), background: n ? "#fffbf0" : "#fff", borderRadius: 10, padding: "8px 10px" }}>
+                      <label style={{ display: "flex", gap: 8, alignItems: "center", fontWeight: 800, fontSize: 13, cursor: "pointer" }}>
+                        <input type="checkbox" checked={n === keys.length && n > 0} ref={(el) => { if (el) el.indeterminate = n > 0 && n < keys.length; }}
+                          onChange={(e) => tick(keys, e.target.checked)} />
+                        <span style={{ flex: 1 }}>{c}</span>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: "#8593a8" }}>{cn ? cn.n + " · " + gbp(cn.t) : "—"}</span>
+                      </label>
+                      <div style={{ display: "grid", gap: 3, marginTop: 5, paddingLeft: 22 }}>
+                        {subs.map((x) => {
+                          const k = c + "|" + x, sc = ccCount[k];
+                          return (
+                            <label key={k} style={{ display: "flex", gap: 7, alignItems: "center", fontSize: 12.5, fontWeight: 600, cursor: "pointer", color: sc ? NAVY : "#a9b3c4" }}>
+                              <input type="checkbox" checked={sel.has(k)} onChange={(e) => tick([k], e.target.checked)} />
+                              <span style={{ flex: 1 }}>{x}</span>
+                              <span style={{ fontSize: 11, fontWeight: 700, color: "#8593a8" }}>{sc ? sc.n : ""}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
         {filterSup && (
