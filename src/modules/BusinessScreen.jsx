@@ -250,7 +250,7 @@ export default function BusinessScreen({ crm, data, setTab }) {
 // recharged monthly. This card answers two questions: are the recharges
 // covering the Water Plus bill (or are we subsidising their water), and is
 // the rent genuine profit on top — month by month and over the whole deal.
-function SpotlessCard({ crm }) {
+export function SpotlessCard({ crm }) {
   const cust = (crm.customers || []).find((c) => /spotless/i.test(c.name || ""));
   if (!cust) return null;
   const by = {}; // month -> { rent, water, elec, other, bill }

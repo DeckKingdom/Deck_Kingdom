@@ -16,6 +16,7 @@ import { useAddressGuard } from "./AddressGuard.jsx";
 import { tidyPostcode } from "../../lib/addressCheck.js";
 import { ListHero, heroTile, heroLab, heroSub, RiskChip, WebStatusChip } from "./ui.jsx";
 import { Icon, Chip, Modal, SuggestInput, selectAllProps, sect, lbl, card, abtn, inp, btn, goldBtn } from "./ui.jsx";
+import { SpotlessCard } from "../BusinessScreen.jsx";
 
 const navyBtn = { ...btn, background: "transparent", border: "1px solid #3a4f78", color: "#fff" };
 
@@ -927,6 +928,8 @@ export default function CustomersScreen({ money = true, crm, updateCrm, askConfi
                 </div>
               );
             })()}
+
+            {money && /spotless/i.test(sel.name || "") && <SpotlessCard crm={crm} />}
 
             <div style={{ ...card, marginTop: 14 }}>
               <p style={sect}>Invoice history ({invs.length})</p>
