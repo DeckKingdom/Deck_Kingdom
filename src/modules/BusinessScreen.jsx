@@ -38,7 +38,8 @@ export default function BusinessScreen({ crm, data, setTab }) {
   }, [crm]);
 
   // ===== spend by cost centre and month (backfilled rows carry their centre; stragglers get the rules) =====
-  const supOf = (p) => { const s = supplierById(crm, p.supplierId); return s ? s.name : ""; };
+  const supMap = useMemo(() => supplierById(crm), [crm]); // id -> supplier
+  const supOf = (p) => { const s = supMap[p.supplierId]; return s ? s.name : ""; };
   const ccOf = (p) => p.costCentre || assignCostCentre(supOf(p), p.invDetail, p.category).costCentre;
   const spend = useMemo(() => {
     const by = {}; // centre -> month -> £
@@ -203,7 +204,7 @@ export default function BusinessScreen({ crm, data, setTab }) {
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
               <tbody>
                 {bigUnpaid.map((p) => {
-                  const s = supplierById(crm, p.supplierId);
+                  const s = supMap[p.supplierId];
                   return (
                     <tr key={p.id} style={{ cursor: setTab ? "pointer" : "default" }} onClick={() => setTab && setTab("purchases")}>
                       <td style={{ ...tdc, ...left, fontWeight: 700 }}>{(s && s.name) || "—"}<span style={{ display: "block", fontSize: 11.5, color: "#8593a8", fontWeight: 600 }}>{ccOf(p)}{p.invDate ? " · " + prettyDate(p.invDate) : ""}</span></td>
@@ -254,8 +255,8 @@ export default function BusinessScreen({ crm, data, setTab }) {
 export function SpotlessCard({ crm }) {
   const cust = (crm.customers || []).find((c) => /spotless/i.test(c.name || ""));
   if (!cust) return null;
-  const by = {}; // month -> { rent, water, elec, other, bill }
-  const bump = (k, f, v) => { (by[k] = by[k] || { rent: 0, water: 0, elec: 0, other: 0, bill: 0 })[f] += v; };
+  const by = {}; // month -> { rent, water, elec, other, bill (Water Plus), ebill (gas/electric) }
+  const bump = (k, f, v) => { (by[k] = by[k] || { rent: 0, water: 0, elec: 0, other: 0, bill: 0, ebill: 0 })[f] += v; };
   (crm.invoices || []).forEach((i) => {
     if (i.customerId !== cust.id || isVoidInvoice(i)) return;
     const k = (i.date || "").slice(0, 7); if (!k) return;
@@ -264,14 +265,17 @@ export function SpotlessCard({ crm }) {
       bump(k, /rent/i.test(d) ? "rent" : /water/i.test(d) ? "water" : /elec/i.test(d) ? "elec" : "other", v);
     });
   });
+  const supMap2 = supplierById(crm);
   (crm.purchases || []).forEach((p) => {
-    const s = supplierById(crm, p.supplierId);
-    if (!s || !/water ?plus/i.test(s.name || "")) return;
-    const k = (p.invDate || "").slice(0, 7); if (k) bump(k, "bill", purchaseTotals(p).total);
+    const s = supMap2[p.supplierId];
+    const n = (s && s.name) || "";
+    const k = (p.invDate || "").slice(0, 7); if (!k) return;
+    if (/water ?plus/i.test(n)) bump(k, "bill", purchaseTotals(p).total);
+    else if (/british gas|yu energy/i.test(n)) bump(k, "ebill", purchaseTotals(p).total);
   });
   const keys = Object.keys(by).sort().reverse();
   if (!keys.length) return null;
-  const tot = { rent: 0, water: 0, elec: 0, other: 0, bill: 0 };
+  const tot = { rent: 0, water: 0, elec: 0, other: 0, bill: 0, ebill: 0 };
   keys.forEach((k) => Object.keys(tot).forEach((f) => (tot[f] += by[k][f])));
   const net = (r) => r.rent + r.water + r.elec + r.other - r.bill;
   const gap = tot.bill - tot.water; // what we absorbed of the water bill: our own use + any subsidy
@@ -283,7 +287,7 @@ export function SpotlessCard({ crm }) {
       </div>
       <div className="dk-bleed" style={{ overflowX: "auto", marginTop: 8 }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, minWidth: 760 }}>
-          <thead><tr>{["Month", "Rent in", "Water recharged", "Electric recharged", "Water Plus bill", "Water gap (ours)", "Net for us"].map((h, i) => <th key={i} style={{ ...th, textAlign: i === 0 ? "left" : "right" }}>{h}</th>)}</tr></thead>
+          <thead><tr>{["Month", "Rent in", "Water recharged", "Electric recharged", "Water Plus bill", "Water gap (ours)", "Gas/electric bill", "Net for us"].map((h, i) => <th key={i} style={{ ...th, textAlign: i === 0 ? "left" : "right" }}>{h}</th>)}</tr></thead>
           <tbody>
             {keys.slice(0, 13).map((k) => {
               const r = by[k], g = r.bill - r.water, n = net(r);
@@ -295,6 +299,7 @@ export function SpotlessCard({ crm }) {
                   <td style={tdc}>{r.elec ? gbp(r.elec) : "—"}</td>
                   <td style={tdc}>{r.bill ? gbp(r.bill) : "—"}</td>
                   <td style={{ ...tdc, color: r.bill ? (g > 150 ? "#a05f10" : NAVY) : "#c4ccd8", fontWeight: 700 }}>{r.bill ? gbp(g) : "—"}</td>
+                  <td style={{ ...tdc, color: r.ebill ? NAVY : "#c4ccd8" }}>{r.ebill ? gbp(r.ebill) : "—"}</td>
                   <td style={{ ...tdc, fontWeight: 800, color: n >= 0 ? "#1e5e33" : "#8a0b20" }}>{gbp(n)}</td>
                 </tr>
               );
@@ -307,6 +312,7 @@ export function SpotlessCard({ crm }) {
             <td style={{ ...tdc, fontWeight: 700 }}>{gbp(tot.elec)}</td>
             <td style={{ ...tdc, fontWeight: 700 }}>{gbp(tot.bill)}</td>
             <td style={{ ...tdc, fontWeight: 700 }}>{gbp(gap)}</td>
+            <td style={{ ...tdc, fontWeight: 700 }}>{gbp(tot.ebill)}</td>
             <td style={{ ...tdc, fontWeight: 800, color: net(tot) >= 0 ? "#1e5e33" : "#8a0b20" }}>{gbp(net(tot))}</td>
           </tr></tfoot>
         </table>
