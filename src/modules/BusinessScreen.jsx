@@ -240,6 +240,82 @@ export default function BusinessScreen({ crm, data, setTab }) {
       </div>
 
       <CommitmentsCard onLoaded={setCommits} />
+      <SpotlessCard crm={crm} />
+    </div>
+  );
+}
+
+// ===== the Spotless Water deal: they rent car-park space (£300+VAT/mo) and
+// their dispenser feeds off our water and electric; sub-meters are read and
+// recharged monthly. This card answers two questions: are the recharges
+// covering the Water Plus bill (or are we subsidising their water), and is
+// the rent genuine profit on top — month by month and over the whole deal.
+function SpotlessCard({ crm }) {
+  const cust = (crm.customers || []).find((c) => /spotless/i.test(c.name || ""));
+  if (!cust) return null;
+  const by = {}; // month -> { rent, water, elec, other, bill }
+  const bump = (k, f, v) => { (by[k] = by[k] || { rent: 0, water: 0, elec: 0, other: 0, bill: 0 })[f] += v; };
+  (crm.invoices || []).forEach((i) => {
+    if (i.customerId !== cust.id || isVoidInvoice(i)) return;
+    const k = (i.date || "").slice(0, 7); if (!k) return;
+    (i.lines || []).forEach((l) => {
+      const d = String(l.description || ""), v = (Number(l.qty) || 0) * (Number(l.price) || 0);
+      bump(k, /rent/i.test(d) ? "rent" : /water/i.test(d) ? "water" : /elec/i.test(d) ? "elec" : "other", v);
+    });
+  });
+  (crm.purchases || []).forEach((p) => {
+    const s = supplierById(crm, p.supplierId);
+    if (!s || !/water ?plus/i.test(s.name || "")) return;
+    const k = (p.invDate || "").slice(0, 7); if (k) bump(k, "bill", purchaseTotals(p).total);
+  });
+  const keys = Object.keys(by).sort().reverse();
+  if (!keys.length) return null;
+  const tot = { rent: 0, water: 0, elec: 0, other: 0, bill: 0 };
+  keys.forEach((k) => Object.keys(tot).forEach((f) => (tot[f] += by[k][f])));
+  const net = (r) => r.rent + r.water + r.elec + r.other - r.bill;
+  const gap = tot.bill - tot.water; // what we absorbed of the water bill: our own use + any subsidy
+  return (
+    <div style={{ ...card, marginTop: 14 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <p style={{ ...sect, margin: 0 }}>Spotless Water — the car-park deal</p>
+        <span style={{ fontSize: 12, fontWeight: 700, color: net(tot) >= 0 ? "#1e5e33" : "#8a0b20" }}>{net(tot) >= 0 ? "+" : ""}{gbp(net(tot))} over {keys.length} months</span>
+      </div>
+      <div className="dk-bleed" style={{ overflowX: "auto", marginTop: 8 }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, minWidth: 760 }}>
+          <thead><tr>{["Month", "Rent in", "Water recharged", "Electric recharged", "Water Plus bill", "Water gap (ours)", "Net for us"].map((h, i) => <th key={i} style={{ ...th, textAlign: i === 0 ? "left" : "right" }}>{h}</th>)}</tr></thead>
+          <tbody>
+            {keys.slice(0, 13).map((k) => {
+              const r = by[k], g = r.bill - r.water, n = net(r);
+              return (
+                <tr key={k}>
+                  <td style={{ ...tdc, textAlign: "left", fontWeight: 700 }}>{new Date(k + "-01T00:00:00").toLocaleDateString("en-GB", { month: "short", year: "2-digit" })}</td>
+                  <td style={tdc}>{r.rent ? gbp(r.rent) : "—"}</td>
+                  <td style={tdc}>{r.water ? gbp(r.water) : "—"}</td>
+                  <td style={tdc}>{r.elec ? gbp(r.elec) : "—"}</td>
+                  <td style={tdc}>{r.bill ? gbp(r.bill) : "—"}</td>
+                  <td style={{ ...tdc, color: r.bill ? (g > 150 ? "#a05f10" : NAVY) : "#c4ccd8", fontWeight: 700 }}>{r.bill ? gbp(g) : "—"}</td>
+                  <td style={{ ...tdc, fontWeight: 800, color: n >= 0 ? "#1e5e33" : "#8a0b20" }}>{gbp(n)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+          <tfoot><tr style={{ background: "#f6f8fb" }}>
+            <td style={{ ...tdc, textAlign: "left", fontWeight: 800 }}>All time</td>
+            <td style={{ ...tdc, fontWeight: 700 }}>{gbp(tot.rent)}</td>
+            <td style={{ ...tdc, fontWeight: 700 }}>{gbp(tot.water)}</td>
+            <td style={{ ...tdc, fontWeight: 700 }}>{gbp(tot.elec)}</td>
+            <td style={{ ...tdc, fontWeight: 700 }}>{gbp(tot.bill)}</td>
+            <td style={{ ...tdc, fontWeight: 700 }}>{gbp(gap)}</td>
+            <td style={{ ...tdc, fontWeight: 800, color: net(tot) >= 0 ? "#1e5e33" : "#8a0b20" }}>{gbp(net(tot))}</td>
+          </tr></tfoot>
+        </table>
+      </div>
+      <p style={{ fontSize: 11.5, color: "#8593a8", fontWeight: 600, margin: "8px 2px 0" }}>
+        Water gap = Water Plus bill minus what Spotless was recharged — that's our own usage plus anything we're subsidising
+        (recharges lag the bill by about a month, so judge the gap over a few months, not one). Net = everything they pay us minus the
+        whole water bill; their electric recharge is pure contribution since the supply cost sits in our own bill anyway.
+        The £1,064/mo Water Plus line in the register above is the gross bill — this card is the real cost of water to us.
+      </p>
     </div>
   );
 }
