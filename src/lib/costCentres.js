@@ -8,7 +8,7 @@ export const COST_CENTRES = {
   "Premises": ["Rent", "Rates", "Utilities", "Other"],
   "Plant": ["Forklift", "Forklift finance", "Warehouse equipment"],
   "Fleet": ["Fuel", "Repairs & maintenance", "Insurance & breakdown", "Road, tolls & fines", "Hire"],
-  "Carriage": ["Couriers", "Postage"],
+  "Carriage": ["Import freight", "Couriers", "Postage"],
   "Staff & Subcontract": ["Subcontract drivers", "Wages", "Pension", "Other"],
   "Finance & Professional": ["Trade finance interest", "Accountancy & software", "Business insurance", "Bank charges", "Legal", "HMRC"],
   "Marketing & Web": ["SEO consulting", "Tools & hosting", "Design & print", "Sponsorship"],
@@ -42,7 +42,8 @@ const SUPPLIER_RULES = [
   [/dvla|dart charge|mersey flow|tyne tunnel|clean air|m6 toll|car park/i, null, "Fleet", "Road, tolls & fines"],
   [/rac breakdown|tempcover/i, null, "Fleet", "Insurance & breakdown"],
   [/^fuel$|allstar/i, null, "Fleet", "Fuel"],
-  [/evri|hermes|post office|parcel2go|far logistics|s\.?j courier|red funnel/i, null, "Carriage", "Couriers"],
+  [/far logistics/i, null, "Carriage", "Import freight"], // the freight forwarder: container shipping
+  [/evri|hermes|post office|parcel2go|s\.?j courier|red funnel/i, null, "Carriage", "Couriers"],
   [/quickbooks/i, null, "Finance & Professional", "Accountancy & software"],
   [/courthill|accountant/i, null, "Finance & Professional", "Accountancy & software"],
   [/bromleys|solicitor/i, null, "Finance & Professional", "Legal"],
