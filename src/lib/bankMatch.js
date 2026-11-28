@@ -59,7 +59,18 @@ export function supplierGroup(desc, ctx) {
 // costs that only ever show on the bank (no invoice to put on the ledger): VAT to HMRC,
 // trade-finance repayments and interest, the landlord's extras. Kept on the bank row with a
 // cost centre — the Business screen counts them — and nothing is added to the ledger.
+// regular payees whose cost is only ever seen on the bank (Jon, Nov 26)
+const BANK_ONLY = [
+  [/courthill/i, "Finance & Professional", "Accountancy & software", "Accountant — Simon Cornforth (Courthill)"],
+  [/skool\.com|p\.skool|beseen/i, "Marketing & Web", "SEO consulting", "beSeen SEO — Darren"],
+  [/intuit|qbooks|quickbooks/i, "Finance & Professional", "Accountancy & software", "QuickBooks"],
+  [/^nest\b|\bnest,/i, "Staff & Subcontract", "Pension", "NEST pension"],
+  [/fgn purchase fee|non-sterling|foreign (txn|transaction) fee/i, "Finance & Professional", "Bank charges", "Foreign card fee"],
+  [/^(charges|service charge|account fee)/i, "Finance & Professional", "Bank charges", "Bank charges"],
+];
+
 function bankOnlyCost(desc, tx, group) {
+  for (const [re, c, s, label] of BANK_ONLY) if (re.test(desc)) return { c, s, label, sure: true };
   const names = group.map((s) => s.name).join(" ") + " " + desc;
   if (/\bhmrc\b/i.test(names)) return /vat/i.test(desc)
     ? { c: "Finance & Professional", s: "HMRC", label: "VAT to HMRC (all or part of a quarter)", sure: true }

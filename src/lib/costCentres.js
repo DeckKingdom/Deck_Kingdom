@@ -9,8 +9,8 @@ export const COST_CENTRES = {
   "Plant": ["Forklift", "Forklift finance", "Warehouse equipment"],
   "Fleet": ["Fuel", "Repairs & maintenance", "Insurance & breakdown", "Road, tolls & fines", "Hire"],
   "Carriage": ["Couriers", "Postage"],
-  "Staff & Subcontract": ["Subcontract drivers", "Wages", "Other"],
-  "Finance & Professional": ["Trade finance interest", "Accountancy & software", "Legal", "HMRC"],
+  "Staff & Subcontract": ["Subcontract drivers", "Wages", "Pension", "Other"],
+  "Finance & Professional": ["Trade finance interest", "Accountancy & software", "Bank charges", "Legal", "HMRC"],
   "Marketing & Web": ["SEO consulting", "Tools & hosting", "Design & print", "Sponsorship"],
   "Office & Misc": ["Stationery & supplies", "Tools", "Food & meetings", "General"],
 };

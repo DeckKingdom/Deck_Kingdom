@@ -140,6 +140,7 @@ export default function BankScreen({ crm, updateCrm, me, crmFull }) {
             let changed = false;
             if (String(t.description || "").length > String(up.description || "").length) { up.description = t.description; changed = true; }
             if ((up.balance === null || up.balance === undefined) && t.balance !== null && t.balance !== undefined) { up.balance = t.balance; changed = true; }
+            if (changed && (up.status === "review" || up.status === "new")) up.status = "new"; // re-match with the fuller description
             if (changed) enrich.set(have.id, up);
             continue;
           }
@@ -246,6 +247,18 @@ export default function BankScreen({ crm, updateCrm, me, crmFull }) {
             <button key={k} onClick={() => setView(k)} style={{ border: "1px solid " + (view === k ? NAVY : "#dfe4ec"), background: view === k ? NAVY : "#fff", color: view === k ? "#fff" : NAVY, borderRadius: 999, padding: "6px 14px", fontFamily: "inherit", fontWeight: 700, fontSize: 12.5, cursor: "pointer" }}>{l}</button>
           ))}
           <input style={{ ...inp, width: 220 }} placeholder="Search payee, amount…" value={q} onChange={(e) => setQ(e.target.value)} />
+          {(view === "review" || view === "sure") && review.length > 0 && (
+            <button disabled={!!busy} title="Run the matching again over everything still waiting — picks up new rules and anything added to the ledger since. Changes nothing until you apply."
+              onClick={async () => {
+                setBusy("Re-checking " + review.length + "…"); setErr("");
+                try { const res = await runMatching((rows || []).map((r) => (r.status === "review" ? { ...r, status: "new" } : r))); setNote("Re-checked: " + res.review + " still to check, " + res.sure + " of them sure · " + res.applied + " needed nothing changing."); }
+                catch (e) { setErr(String((e && e.message) || e)); }
+                setBusy("");
+              }}
+              style={{ border: "1px solid #dfe4ec", background: "#fff", color: NAVY, borderRadius: 999, padding: "6px 14px", fontFamily: "inherit", fontWeight: 700, fontSize: 12.5, cursor: "pointer" }}>
+              Re-check
+            </button>
+          )}
           {(view === "review" || view === "sure") && (
             <button onClick={() => setByPayee((v) => !v)} title="One decision for every open transaction from the same payee"
               style={{ border: "1px solid " + (byPayee ? GOLD_D : "#dfe4ec"), background: byPayee ? "#fdf4e3" : "#fff", color: NAVY, borderRadius: 999, padding: "6px 14px", fontFamily: "inherit", fontWeight: 700, fontSize: 12.5, cursor: "pointer" }}>
