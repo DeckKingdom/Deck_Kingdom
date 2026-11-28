@@ -66,6 +66,8 @@ export default function BankScreen({ crm, updateCrm, me, crmFull }) {
   const [q, setQ] = useState("");
   const [choice, setChoice] = useState({}); // row id -> { action, person, supplier }
   const [byPayee, setByPayee] = useState(false); // review grouped: one decision per payee
+  const [dir, setDir] = useState("all");          // all | in | out
+  const [bulk, setBulk] = useState("covered");    // what "Mark all shown" sets
   const [gChoice, setGChoice] = useState({});    // payee key -> { action, person, supplier }
   const fileRef = useRef(null);
 
@@ -220,6 +222,7 @@ export default function BankScreen({ crm, updateCrm, me, crmFull }) {
   }, [rows]);
   const isOpen = (r) => r.status === "review" || r.status === "new";
   const shown = (rows || []).filter((r) => (view === "review" ? isOpen(r) : view === "sure" ? isOpen(r) && r.note === "sure" : view === "matched" ? r.status === "matched" || r.status === "ignored" : true))
+    .filter((r) => dir === "all" || (dir === "in" ? Number(r.amount) > 0 : Number(r.amount) < 0))
     .filter((r) => !q || (r.description + " " + r.match_label + " " + r.amount).toLowerCase().includes(q.toLowerCase()));
   const supNames = useMemo(() => (crm.suppliers || []).map((s) => s.name).filter(Boolean).sort(), [crm]);
 
@@ -246,6 +249,9 @@ export default function BankScreen({ crm, updateCrm, me, crmFull }) {
           {[["review", "To check (" + review.length + ")"], ["sure", "Sure matches (" + review.filter((r) => r.note === "sure").length + ")"], ["matched", "Assigned"], ["all", "All"]].map(([k, l]) => (
             <button key={k} onClick={() => setView(k)} style={{ border: "1px solid " + (view === k ? NAVY : "#dfe4ec"), background: view === k ? NAVY : "#fff", color: view === k ? "#fff" : NAVY, borderRadius: 999, padding: "6px 14px", fontFamily: "inherit", fontWeight: 700, fontSize: 12.5, cursor: "pointer" }}>{l}</button>
           ))}
+          <select style={{ ...inp, width: 130, padding: "6px 8px" }} value={dir} onChange={(e) => setDir(e.target.value)}>
+            <option value="all">In and out</option><option value="in">Money in</option><option value="out">Money out</option>
+          </select>
           <input style={{ ...inp, width: 220 }} placeholder="Search payee, amount…" value={q} onChange={(e) => setQ(e.target.value)} />
           {(view === "review" || view === "sure") && review.length > 0 && (
             <button disabled={!!busy} title="Run the matching again over everything still waiting — picks up new rules and anything added to the ledger since. Changes nothing until you apply."
@@ -266,6 +272,20 @@ export default function BankScreen({ crm, updateCrm, me, crmFull }) {
             </button>
           )}
           <span style={{ flex: 1 }} />
+          {(view === "review" || view === "sure") && shown.length > 0 && (
+            <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+              <select style={{ ...inp, width: 190, padding: "6px 8px" }} value={bulk} onChange={(e) => setBulk(e.target.value)}>
+                <option value="covered">Already on the ledger / paid</option>
+                <option value="takings">Takings</option>
+                <option value="transfer">Own money / transfer</option>
+                <option value="ignore">Ignore</option>
+              </select>
+              <button style={btn} disabled={!!busy} title="Mark every row in the list as it's filtered now. Nothing on the ledger, invoices or wages changes."
+                onClick={() => applyRows(shown.map((row) => ({ row, ch: { action: bulk } })))}>
+                Mark all {shown.length} shown
+              </button>
+            </span>
+          )}
           {(view === "review" || view === "sure") && shown.some((r) => r.match_kind && r.match_kind !== "review") && (
             <button style={goldBtn} disabled={!!busy} title="Accept every suggestion in the list as it's filtered now (rows with no suggestion are left) — check them first"
               onClick={() => applyRows(shown.filter((r) => r.match_kind && r.match_kind !== "review").map((row) => ({ row, ch: choice[row.id] })))}>
