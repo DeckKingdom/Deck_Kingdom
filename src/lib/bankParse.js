@@ -19,7 +19,7 @@ export const parseDate = (s) => {
   }
   m = t.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})$/);
   if (m) { const y = m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3]); return y + "-" + pad(m[2]) + "-" + pad(m[1]); }
-  m = t.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  m = t.match(/^(\d{4})-?(\d{2})-?(\d{2})/); // 2026-08-03 or 20260803
   return m ? m[1] + "-" + m[2] + "-" + m[3] : "";
 };
 
@@ -98,7 +98,22 @@ const splitCsv = (line) => {
   return out.map((s) => s.trim());
 };
 export function parseStatementCsv(text) {
-  const rows = String(text || "").split(/\r?\n/).filter((l) => l.trim());
+  const rows = String(text || "").replace(/^\uFEFF/, "").split(/\r?\n/).filter((l) => l.trim());
+  // Virgin Money business export: no header, newest first —
+  // date(YYYYMMDD), , account, , DR/CR, AAA, type, signed amount, "description", "reference", , currency
+  if (rows.length && /^\d{8}\s*,/.test(rows[0])) {
+    const out = [];
+    rows.forEach((r) => {
+      const f = splitCsv(r);
+      const date = parseDate(f[0]);
+      const amount = Math.round(Number(f[7]) * 100) / 100;
+      if (!date || !isFinite(amount) || !amount) return;
+      out.push({ date, description: (f[8] || "").trim(), type: (f[6] || "").trim(), amount, balance: null, seq: 0 });
+    });
+    out.reverse(); // oldest first
+    out.forEach((t, i) => (t.seq = i));
+    return out;
+  }
   const hi = rows.findIndex((r) => /date/i.test(r) && /(amount|debit|credit|paid in|paid out|money in|money out)/i.test(r));
   if (hi < 0) throw new Error("Couldn't find a header row with Date and Amount (or Debit/Credit) columns.");
   const H = splitCsv(rows[hi]).map((h) => h.toLowerCase());
@@ -126,9 +141,12 @@ export function parseStatementCsv(text) {
   return out;
 }
 
-// stable id: the same transaction from a PDF or a re-import lands on the same row
-export async function txId(t) {
-  const key = [t.date, t.amount.toFixed(2), t.balance === null || t.balance === undefined ? "" : Number(t.balance).toFixed(2), String(t.description || "").replace(/\s+/g, " ").trim().toLowerCase().slice(0, 60)].join("|");
+// the same transaction can arrive from a PDF statement and from a CSV export, described
+// differently: what stays the same is the day, the amount, and which of that day's
+// same-amount payments it is (the first £250, the second £250 …)
+export const txKey = (t) => t.date + "|" + Number(t.amount).toFixed(2);
+export async function txId(t, occ) {
+  const key = txKey(t) + "|" + (occ || 0);
   const buf = await crypto.subtle.digest("SHA-1", new TextEncoder().encode(key));
   return "bt-" + [...new Uint8Array(buf)].slice(0, 10).map((b) => b.toString(16).padStart(2, "0")).join("");
 }

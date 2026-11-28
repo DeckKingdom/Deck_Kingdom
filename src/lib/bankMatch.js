@@ -21,7 +21,7 @@ export const payeeOf = (desc) => {
   return parts[0] || String(desc || "");
 };
 
-const TAKINGS = /worldpay|world pay|stripe|teya|paypal|sumup|square|klarna|cashback|amex/i;
+const TAKINGS = /worldpay|world pay|stripe|teya|paypal|sumup|square|klarna|cashback|amex|woocommerce|woo payments/i;
 const OWN = /deck ?kingdom/i;
 const FUEL_CARD = /allstar/i; // weekly fuel-card DD: every fill-up is already in the ledger under Fuel
 
