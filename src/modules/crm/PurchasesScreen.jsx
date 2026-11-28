@@ -26,6 +26,7 @@ export default function PurchasesScreen({ crm, updateCrm, askConfirm, selId, set
   const [search, setSearch] = useState("");
   const [when, setWhen] = useState("This month");
   const [cat, setCat] = useState("");
+  const [cc, setCc] = useState(""); // cost centre, or "Centre|Sub"
   const [notice, setNotice] = useState("");
   const [supQuery, setSupQuery] = useState("");
   const [supDraft, setSupDraft] = useState(null);
@@ -79,6 +80,7 @@ export default function PurchasesScreen({ crm, updateCrm, askConfirm, selId, set
       .filter((x) => {
         if (filterSup && x.supplierId !== filterSup.id) return false;
         if (cat && x.category !== cat) return false;
+        if (cc && (cc.includes("|") ? (x.costCentre || "") + "|" + (x.costSub || "") !== cc : (x.costCentre || "") !== cc)) return false;
         const d = pDate(x);
         if (when === "Unpaid" && purchaseIsPaid(x)) return false;
         if (when === "This month" && d.slice(0, 7) !== month) return false;
@@ -88,11 +90,12 @@ export default function PurchasesScreen({ crm, updateCrm, askConfirm, selId, set
         const s = supById[x.supplierId];
         return [String(x.poNo || ""), x.invNo, x.invDetail, s && s.name, x.category, x.purchasedBy].some((v) => String(v || "").toLowerCase().includes(q));
       });
+    // the summary bar follows the filters: period, search, category, cost centre, supplier
     const tot = rows.reduce((a, x) => { const t = purchaseTotals(x); a.sub += t.sub; a.vat += t.vat; a.total += t.total; return a; }, { sub: 0, vat: 0, total: 0 });
-    const unpaid = purchases.filter((x) => !purchaseIsPaid(x));
+    const unpaid = rows.filter((x) => !purchaseIsPaid(x));
     const unpaidTotal = unpaid.reduce((a, x) => a + purchaseBalance(x), 0);
-    const monthRows = purchases.filter((x) => pDate(x).slice(0, 7) === month);
-    const monthTot = monthRows.reduce((a, x) => { const t = purchaseTotals(x); a.total += t.total; a.vat += t.vat; return a; }, { total: 0, vat: 0 });
+    const filtered = !!(q || cat || cc || filterSup);
+    const scope = (when === "All" ? "All time" : when) + (filtered ? " · filtered" : "");
     const shown = rows.slice(0, 80);
 
     const exportXlsx = () => {
@@ -131,9 +134,9 @@ export default function PurchasesScreen({ crm, updateCrm, askConfirm, selId, set
 
         <ListHero title="Purchases" sub={purchases.length.toLocaleString("en-GB") + " purchase" + (purchases.length === 1 ? "" : "s") + " · newest first"}
           action={<HeroAdd title="New purchase" onClick={create} disabled={!ready} />}>
-          <HeroStat label="Spent this month" value={gbp(monthTot.total)} sub={monthRows.length + " purchase" + (monthRows.length === 1 ? "" : "s") + " · inc VAT"} />
-          <HeroStat label="VAT this month" value={gbp(monthTot.vat)} sub="on purchase invoices" />
-          <HeroStat label="Unpaid" value={gbp(unpaidTotal)} tone={unpaid.length ? "#f6c48a" : undefined} sub={unpaid.length + " invoice" + (unpaid.length === 1 ? "" : "s") + (unpaid.length ? " · click to list" : "")} onClick={unpaid.length ? () => setWhen("Unpaid") : undefined} />
+          <HeroStat label={"Spent · " + scope} value={gbp(tot.total)} sub={rows.length.toLocaleString("en-GB") + " purchase" + (rows.length === 1 ? "" : "s") + " · inc VAT · " + gbp(tot.sub) + " net"} />
+          <HeroStat label={"VAT · " + scope} value={gbp(tot.vat)} sub="on these purchase invoices" />
+          <HeroStat label={"Unpaid · " + scope} value={gbp(unpaidTotal)} tone={unpaid.length ? "#f6c48a" : undefined} sub={unpaid.length + " invoice" + (unpaid.length === 1 ? "" : "s") + (unpaid.length && when !== "Unpaid" ? " · click to list" : "")} onClick={unpaid.length && when !== "Unpaid" ? () => setWhen("Unpaid") : undefined} />
         </ListHero>
 
         <div style={{ ...card, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "10px 14px" }}>
@@ -142,6 +145,13 @@ export default function PurchasesScreen({ crm, updateCrm, askConfirm, selId, set
           <select style={{ ...inp, width: "auto", fontSize: 13, fontWeight: 700 }} value={cat} onChange={(e) => setCat(e.target.value)}>
             <option value="">All categories</option>
             {categories.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <select style={{ ...inp, width: "auto", fontSize: 13, fontWeight: 700 }} value={cc} onChange={(e) => setCc(e.target.value)}>
+            <option value="">All cost centres</option>
+            {COST_CENTRE_LIST.map((c) => [
+              <option key={c} value={c}>{c}</option>,
+              ...(COST_CENTRES[c] || []).map((sub) => <option key={c + "|" + sub} value={c + "|" + sub}>{"\u00a0\u00a0\u00a0" + sub}</option>),
+            ])}
           </select>
           <span style={{ flex: 1 }} />
           <button style={btn} onClick={exportXlsx} disabled={!rows.length} title="Download the rows shown as an Excel file"><Icon name="doc" />Export</button>

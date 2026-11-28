@@ -483,7 +483,7 @@ export default function run(React, renderToString) {
     assert(findSupplierByName(pc, "TUDA GRASS LTD") === tuda && !findSupplierByName(pc, "Cladco"), "duplicate supplier match");
     const pprops = { crm: pc, updateCrm: noop, askConfirm: noop, setSelId: noop, me: "x", goSupplier: noop, filter: null, setFilter: noop };
     html = renderToString(React.createElement(PurchasesScreen, { ...pprops, selId: null }));
-    assert(html.includes("Spent this month") && html.includes("New purchase") && html.includes("Unpaid"), "purchases list renders");
+    assert(html.includes("Spent · This month") && html.includes("New purchase") && html.includes("Unpaid"), "purchases list renders");
     html = renderToString(React.createElement(PurchasesScreen, { ...pprops, selId: "po1" }));
     assert(html.includes("PO# 3798") && html.includes("Tuda Grass") && html.includes("DK001") && html.includes("106163") && html.includes("£897.60"), "purchase entry renders");
     const sprops = { crm: pc, updateCrm: noop, askConfirm: noop, setSelId: noop, me: "x", openPurchase: noop, newPurchase: noop, openCollection: noop };
