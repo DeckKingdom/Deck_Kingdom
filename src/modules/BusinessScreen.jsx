@@ -3,7 +3,7 @@
 // purchase ledger grouped by cost centre (075), wages from the admin-only
 // wages table, due & upcoming from unpaid purchases + container balances.
 import { useEffect, useMemo, useState } from "react";
-import { NAVY, GOLD, addMonths, addDays, prettyDate } from "../lib/core.js";
+import { NAVY, GOLD, addMonths, addDays, prettyDate, linePieces } from "../lib/core.js";
 import { invoiceTotals, isVoidInvoice, purchaseTotals, purchaseIsPaid, gbp, supplierById, today } from "../lib/crmCore.js";
 import { COST_CENTRE_LIST, isOverhead, assignCostCentre } from "../lib/costCentres.js";
 import { sect, card, ListHero, HeroStat } from "./crm/ui.jsx";
@@ -63,8 +63,9 @@ export default function BusinessScreen({ crm, data, setTab }) {
   const containers = useMemo(() => {
     const out = [];
     ((data && data.shipments) || []).forEach((s) => {
-      if (s.balancePaidDate) return;
-      const val = Number(s.valueUsd) || 0;
+      if (s.balancePaidDate || s.status === "Paid") return;
+      // value: the header field when filled, else priced up from the lines
+      const val = Number(s.valueUsd) || (s.lines || []).reduce((t, l) => t + linePieces(l) * (Number(l.cost) || 0), 0);
       if (!val) return;
       const owedUsd = Math.max(0, val - (Number(s.depositUsd) || 0) - (Number(s.balanceUsd) || 0));
       if (owedUsd <= 0) return;
